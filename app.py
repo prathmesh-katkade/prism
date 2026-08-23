@@ -25,6 +25,7 @@ import streamlit as st
 from modules import (
     ai_analyst,
     anomaly,
+    app_db,
     atlas,
     auto_analyst,
     auto_insights,
@@ -147,6 +148,12 @@ _DEFAULTS = {
                                          # generate_sql() prompt for live-only tables the local dataset knows nothing about
     "db_pending_confirm_sql": None,  # SQL staged by the manual-UI destructive-statement gate, awaiting confirm —
                                       # DOES reset on a dataset swap (stale staged SQL against a replaced context shouldn't fire)
+    "visitor_id": None,  # anonymous per-browser identity for MySQL-backed persistence (saved
+                          # queries/recipes/session snapshots) — resolved once per session by
+                          # modules.app_db.get_visitor_id() from a long-lived cookie (or a fresh
+                          # uuid4, written back via a components.html() cookie-setter); NOT
+                          # re-read from st.context.cookies after that first resolution, since
+                          # cookies are only snapshotted at WebSocket-connect time
     "second_df": None,  # second file uploaded in the Combine tab (raw, uncleaned)
     "second_file_name": None,  # detects a new second-file upload vs. a plain rerun
     "combine_preview_df": None,  # last previewed join result
@@ -1408,9 +1415,25 @@ with st.sidebar:
         # recipe, or apply a previously saved one to this dataset. ------------------
         st.divider()
         with st.expander("🧪 Cleaning Recipes", expanded=False):
+            def _apply_recipe_and_log(loaded_recipe: dict) -> None:
+                """Shared by the upload-a-file path and the account-saved-
+                recipes list below — both must produce identical undo-stack
+                and cleaning-history behavior."""
+                push_undo_snapshot()
+                recipe_result_df, recipe_step_log = recipes.apply_recipe(working_df, loaded_recipe)
+                st.session_state.working_df = recipe_result_df
+                st.session_state.column_types = data_engine.detect_column_types(recipe_result_df)
+                st.session_state.recipe_apply_log = recipe_step_log
+                log_step(
+                    f"Applied recipe '{loaded_recipe.get('name', 'unnamed')}'",
+                    f"# Applied recipe: {loaded_recipe.get('name', 'unnamed')}",
+                )
+                st.toast(f"Applied recipe '{loaded_recipe.get('name', 'unnamed')}'. 🧪")
+
             recipe_name_input = st.text_input("Recipe name", value="my_cleaning_recipe", key="recipe_name_input")
             recipe_json_text = recipes.save_recipe(recipe_name_input, st.session_state.cleaning_log)
-            st.download_button(
+            dl_col, acct_col = st.columns(2)
+            dl_col.download_button(
                 "Save Recipe",
                 data=recipe_json_text.encode("utf-8"),
                 file_name=f"{recipe_name_input or 'prism_recipe'}.json",
@@ -1418,6 +1441,21 @@ with st.sidebar:
                 use_container_width=True,
                 disabled=not st.session_state.cleaning_log,
             )
+            # ---- Persisted across sessions (MySQL-backed, optional) --------
+            # Recipes have no "list of my saved recipes" concept without this
+            # — normally it's generate-fresh-and-download only. Renders
+            # nothing at all when MySQL isn't configured.
+            if app_db.is_configured():
+                if acct_col.button(
+                    "☁️ Save to My Account", key="recipe_save_to_account",
+                    use_container_width=True, disabled=not st.session_state.cleaning_log,
+                ):
+                    visitor_id = app_db.get_visitor_id()
+                    acct_ok, acct_err = app_db.save_recipe_to_db(visitor_id, recipe_name_input, recipe_json_text)
+                    if acct_ok:
+                        st.toast("Saved to your account. ☁️")
+                    else:
+                        st.error(acct_err)
 
             recipe_file = st.file_uploader("Apply a recipe to this dataset", type=["json"], key="recipe_uploader")
             if recipe_file is not None:
@@ -1425,16 +1463,29 @@ with st.sidebar:
                 if recipe_load_error:
                     st.error(recipe_load_error)
                 elif st.button("Apply Recipe", use_container_width=True, key="apply_recipe_btn"):
-                    push_undo_snapshot()
-                    recipe_result_df, recipe_step_log = recipes.apply_recipe(working_df, loaded_recipe)
-                    st.session_state.working_df = recipe_result_df
-                    st.session_state.column_types = data_engine.detect_column_types(recipe_result_df)
-                    st.session_state.recipe_apply_log = recipe_step_log
-                    log_step(
-                        f"Applied recipe '{loaded_recipe.get('name', 'unnamed')}'",
-                        f"# Applied recipe: {loaded_recipe.get('name', 'unnamed')}",
-                    )
-                    st.toast(f"Applied recipe '{loaded_recipe.get('name', 'unnamed')}'. 🧪")
+                    _apply_recipe_and_log(loaded_recipe)
+
+            if app_db.is_configured():
+                visitor_id = app_db.get_visitor_id()
+                account_recipes = app_db.list_recipes(visitor_id)
+                if account_recipes:
+                    st.markdown("**Your saved recipes**")
+                    for r in account_recipes:
+                        rcol, applycol, delcol = st.columns([4, 2, 1])
+                        rcol.markdown(r["name"])
+                        if applycol.button("Apply", key=f"recipe_db_apply_{r['id']}", use_container_width=True):
+                            recipe_json, recipe_err = app_db.load_recipe_from_db(visitor_id, r["id"])
+                            if recipe_err:
+                                st.error(recipe_err)
+                            else:
+                                loaded_recipe, recipe_load_error = recipes.load_recipe(recipe_json)
+                                if recipe_load_error:
+                                    st.error(recipe_load_error)
+                                else:
+                                    _apply_recipe_and_log(loaded_recipe)
+                        if delcol.button("🗑️", key=f"recipe_db_del_{r['id']}"):
+                            app_db.delete_recipe(visitor_id, r["id"])
+                            st.rerun()
 
             if st.session_state.recipe_apply_log:
                 st.markdown("**Recipe apply log**")
@@ -1456,6 +1507,23 @@ with st.sidebar:
             mime="application/json",
             use_container_width=True,
         )
+
+        # ---- Persisted across sessions (MySQL-backed, optional) --------
+        # Renders nothing at all when MySQL isn't configured.
+        if app_db.is_configured():
+            snapshot_name_input = st.text_input(
+                "Name this snapshot", value=f"session_{datetime.now():%Y-%m-%d_%H%M}",
+                key="session_snapshot_name_input", label_visibility="collapsed",
+            )
+            if st.button("☁️ Save to My Account", key="session_save_to_account", use_container_width=True):
+                visitor_id = app_db.get_visitor_id()
+                acct_ok, acct_err = app_db.save_session_snapshot(
+                    visitor_id, snapshot_name_input, session_json, len(st.session_state.working_df),
+                )
+                if acct_ok:
+                    st.toast("Saved to your account. ☁️")
+                else:
+                    st.error(acct_err)
 
         st.divider()
         st.markdown("### 🤖 AI Analyst")
@@ -1722,6 +1790,32 @@ if st.session_state.working_df is None:
             )
             st.toast("Session restored. 📂")
             st.rerun()
+
+    # ---- Restore from account (MySQL-backed, optional) ---------------------
+    # Renders nothing at all when MySQL isn't configured.
+    if app_db.is_configured():
+        account_visitor_id = app_db.get_visitor_id()
+        account_snapshots = app_db.list_session_snapshots(account_visitor_id)
+        if account_snapshots:
+            st.markdown("**Or restore from your account**")
+            for snap in account_snapshots:
+                scol, rcol = st.columns([4, 1])
+                scol.markdown(f"{snap['name']} · {snap['row_count']:,} rows · {snap['created_at']:%Y-%m-%d %H:%M}")
+                if rcol.button("Restore", key=f"session_db_restore_{snap['id']}", use_container_width=True):
+                    snap_json, snap_err = app_db.load_session_snapshot(account_visitor_id, snap["id"])
+                    if snap_err:
+                        st.error(snap_err)
+                    else:
+                        snap_bundle, snap_load_error = session_io.load_session(snap_json.encode("utf-8"))
+                        if snap_load_error:
+                            st.error(snap_load_error)
+                        else:
+                            set_active_dataset(
+                                snap_bundle["raw_df"], snap_bundle["working_df"], "restored_session.csv",
+                                cleaning_log=snap_bundle["cleaning_log"], chat_history=snap_bundle["chat_history"],
+                            )
+                            st.toast("Session restored. 📂")
+                            st.rerun()
 
     ui.render_footer()
     # Safe to process here: the landing page has no keyed nav widget for an
@@ -4212,6 +4306,34 @@ elif st.session_state.active_section == "SQL Lab":
                     for q in st.session_state.sql_lab_saved_queries:
                         if st.button(q["name"], key=f"sql_lab_saved_pick_{q['name']}", use_container_width=True):
                             _sql_lab_inject(q["sql"])
+
+                # ---- Persisted across sessions (MySQL-backed, optional) ----
+                # A separate button (not piggybacked on the download button
+                # above) so a plain local-file save never has a surprising
+                # server-side side effect. Renders nothing at all when MySQL
+                # isn't configured — see modules/app_db.py's docstring.
+                if app_db.is_configured():
+                    visitor_id = app_db.get_visitor_id()
+                    if st.button(
+                        "☁️ Save to My Account", key="sql_lab_save_to_account", use_container_width=True,
+                    ):
+                        acct_ok, acct_err = app_db.save_saved_query(
+                            visitor_id, query_name or active_tab["name"], active_tab["sql"],
+                        )
+                        if acct_ok:
+                            st.toast("Saved to your account. ☁️")
+                        else:
+                            st.error(acct_err)
+                    account_queries = app_db.list_saved_queries(visitor_id)
+                    if account_queries:
+                        st.markdown("**Saved to your account**")
+                        for q in account_queries:
+                            qcol, delcol = st.columns([5, 1])
+                            if qcol.button(q["name"], key=f"sql_lab_db_pick_{q['id']}", use_container_width=True):
+                                _sql_lab_inject(q["sql_text"])
+                            if delcol.button("🗑️", key=f"sql_lab_db_del_{q['id']}"):
+                                app_db.delete_saved_query(visitor_id, q["id"])
+                                st.rerun()
 
             # ---- Query History ----------------------------------------------
             with st.expander(f"🕘 Query History ({len(st.session_state.sql_lab_history)})", expanded=False):

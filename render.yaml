@@ -9,3 +9,16 @@ services:
     envVars:
       - key: GEMINI_API_KEY
         sync: false
+      # Optional — Saved Queries / Cleaning Recipes / Session Snapshots
+      # persistence. Leave unset in the Render dashboard and the app runs
+      # exactly as it does today (session-only for those three features).
+      - key: MYSQL_HOST
+        sync: false
+      - key: MYSQL_PORT
+        sync: false
+      - key: MYSQL_USER
+        sync: false
+      - key: MYSQL_PASSWORD
+        sync: false
+      - key: MYSQL_DATABASE
+        sync: false
