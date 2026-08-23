@@ -94,10 +94,15 @@ def build_attach_clause(engine_type: str, params: dict, alias: str = "live") -> 
     """DuckDB ATTACH clause for mysql/postgres/sqlite. Raises ValueError for
     sqlserver — that engine has no DuckDB extension, use build_sqlalchemy_url."""
     if engine_type == "mysql":
+        # DuckDB's mysql extension parses this as a libmysqlclient-style DSN —
+        # its accepted keys are host/user/passwd/db/port/socket, NOT the
+        # password=/database= spelling postgres uses below. Confirmed via the
+        # engine's own error: 'expected options are host, user, passwd, db,
+        # port, socket'. Do not "fix" this back to password=/database=.
         conn_str = (
             f"host={params.get('host', '')} port={params.get('port') or ENGINE_DEFAULT_PORTS['mysql']} "
-            f"user={params.get('user', '')} password={params.get('password', '')} "
-            f"database={params.get('database', '')}"
+            f"user={params.get('user', '')} passwd={params.get('password', '')} "
+            f"db={params.get('database', '')}"
         )
         return f"ATTACH '{_escape_sql_literal(conn_str)}' AS {alias} (TYPE mysql)"
     if engine_type == "postgres":
@@ -273,8 +278,18 @@ def get_live_table_names(engine_type: str, conn, alias: str = "live") -> list[st
         # attached catalog type (confirmed: raises "Unsupported catalog type" against
         # an attached sqlite database) — information_schema.tables works uniformly
         # across mysql/postgres/sqlite attachments instead.
+        #
+        # table_schema is also filtered: a MySQL ATTACH exposes every schema on
+        # the server (information_schema, mysql, performance_schema, sys, ...)
+        # under this one table_catalog, not just the target database — confirmed
+        # live (a fresh db with one user table listed ~80 tables without this
+        # filter). Harmless no-op for sqlite/postgres, which don't expose those
+        # schema names under a normal connection.
         rows = conn.execute(
-            "SELECT table_name FROM information_schema.tables WHERE table_catalog = ?", [alias]
+            "SELECT table_name FROM information_schema.tables "
+            "WHERE table_catalog = ? AND table_schema NOT IN "
+            "('information_schema', 'pg_catalog', 'mysql', 'performance_schema', 'sys')",
+            [alias],
         ).fetchall()
         return [r[0] for r in rows]
     except Exception:
