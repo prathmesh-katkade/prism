@@ -3764,30 +3764,53 @@ elif st.session_state.active_section == "SQL Lab":
                         "deploy to add it). Works locally if the driver is installed on your machine."
                     )
 
-                conn_params: dict = {}
-                if engine_type == "sqlite":
-                    st.caption("SQLite is a local file, not a network service — upload the .db file to query it.")
-                    sqlite_file = st.file_uploader(
-                        "Upload a .sqlite/.db file", type=["sqlite", "db", "sqlite3"], key="db_conn_sqlite_file",
-                    )
-                    if sqlite_file is not None:
-                        conn_params["path"] = _materialize_sqlite_upload(sqlite_file)
-                else:
-                    pcol1, pcol2 = st.columns(2)
-                    conn_params["host"] = pcol1.text_input("Host", key="db_conn_host")
-                    conn_params["port"] = pcol2.number_input(
-                        "Port", key="db_conn_port", value=db_connect.ENGINE_DEFAULT_PORTS[engine_type], step=1,
-                    )
-                    conn_params["user"] = st.text_input("Username", key="db_conn_user")
-                    conn_params["password"] = st.text_input("Password", type="password", key="db_conn_password")
-                    conn_params["database"] = st.text_input("Database name", key="db_conn_database")
+                # Host/Port/Username/Password/Database live inside a form so
+                # Streamlit only syncs their values to the backend once, atomically,
+                # when a submit button is clicked — not on each field's own blur.
+                # Without this, clicking Test Connection/Connect right after typing
+                # (or tabbing between fields with a mouse click instead of Tab) can
+                # race Streamlit's per-widget sync and submit stale/empty values,
+                # surfacing as a confusing raw DuckDB error ('Unrecognized
+                # configuration parameter ""') that reads like the app crashed —
+                # confirmed live, not hypothetical: reproduced with real field
+                # values that were dropped to "" by this exact race.
+                with st.form(key="db_conn_form", border=False):
+                    conn_params: dict = {}
+                    if engine_type == "sqlite":
+                        st.caption("SQLite is a local file, not a network service — upload the .db file to query it.")
+                        sqlite_file = st.file_uploader(
+                            "Upload a .sqlite/.db file", type=["sqlite", "db", "sqlite3"], key="db_conn_sqlite_file",
+                        )
+                        if sqlite_file is not None:
+                            conn_params["path"] = _materialize_sqlite_upload(sqlite_file)
+                    else:
+                        pcol1, pcol2 = st.columns(2)
+                        conn_params["host"] = pcol1.text_input("Host", key="db_conn_host")
+                        conn_params["port"] = pcol2.number_input(
+                            "Port", key="db_conn_port", value=db_connect.ENGINE_DEFAULT_PORTS[engine_type], step=1,
+                        )
+                        conn_params["user"] = st.text_input("Username", key="db_conn_user")
+                        conn_params["password"] = st.text_input("Password", type="password", key="db_conn_password")
+                        conn_params["database"] = st.text_input("Database name", key="db_conn_database")
 
-                test_col, connect_col, disconnect_col = st.columns(3)
+                    test_col, connect_col = st.columns(2)
+                    test_clicked = test_col.form_submit_button("Test Connection", use_container_width=True)
+                    connect_clicked = connect_col.form_submit_button(
+                        "Connect", type="primary", use_container_width=True,
+                    )
+
                 sqlite_missing = engine_type == "sqlite" and not conn_params.get("path")
+                # Required-field check runs even though the form-sync race above is
+                # fixed — a user can still legitimately submit blanks, and this
+                # turns that into one clear sentence instead of DuckDB's raw
+                # "Unrecognized configuration parameter" error.
+                required_missing = engine_type != "sqlite" and (not conn_params.get("host") or not conn_params.get("database"))
 
-                if test_col.button("Test Connection", use_container_width=True, key="db_conn_test_btn"):
+                if test_clicked:
                     if sqlite_missing:
                         st.warning("Upload a .sqlite/.db file first.")
+                    elif required_missing:
+                        st.warning("Host and Database name are required.")
                     else:
                         with st.spinner("Testing connection..."):
                             test_ok, test_err = db_connect.test_connection(engine_type, conn_params)
@@ -3796,9 +3819,11 @@ elif st.session_state.active_section == "SQL Lab":
                         else:
                             st.error(test_err)
 
-                if connect_col.button("Connect", type="primary", use_container_width=True, key="db_conn_connect_btn"):
+                if connect_clicked:
                     if sqlite_missing:
                         st.warning("Upload a .sqlite/.db file first.")
+                    elif required_missing:
+                        st.warning("Host and Database name are required.")
                     else:
                         with st.spinner("Connecting..."):
                             connect_ok, connect_err = db_connect.test_connection(engine_type, conn_params)
@@ -3837,7 +3862,7 @@ elif st.session_state.active_section == "SQL Lab":
                             st.toast(f"Connected to {engine_choice} — {len(table_names)} table(s) visible. 🔌")
                             st.rerun()
 
-                if live_conn and disconnect_col.button("Disconnect", use_container_width=True, key="db_conn_disconnect_btn"):
+                if live_conn and st.button("Disconnect", use_container_width=True, key="db_conn_disconnect_btn"):
                     db_connect.disconnect(live_conn["engine_type"])
                     st.session_state.db_connection = None
                     st.session_state.db_connection_tables = []
