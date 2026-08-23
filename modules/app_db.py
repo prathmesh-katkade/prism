@@ -160,6 +160,30 @@ def _ensure_schema(engine) -> None:
                 INDEX idx_visitor (visitor_id)
             )
         """))
+        # SQL Lab's *external* live-database connections (db_connect.py) —
+        # deliberately a separate table from the three above: this one stores
+        # someone else's database credentials, not Prism's own app data. Column
+        # named db_name, not "database" — DATABASE is a reserved word in MySQL
+        # and would need backtick-quoting everywhere otherwise. sqlite has no
+        # row here — its "connection" is an uploaded file materialized to a
+        # process-local temp path (see app._materialize_sqlite_upload), which
+        # isn't durable/meaningful to save across sessions.
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS prism_saved_connections (
+                id           BIGINT AUTO_INCREMENT PRIMARY KEY,
+                visitor_id   VARCHAR(36)  NOT NULL,
+                name         VARCHAR(255) NOT NULL,
+                engine_type  VARCHAR(20)  NOT NULL,
+                host         VARCHAR(255) NULL,
+                port         INT NULL,
+                user         VARCHAR(255) NULL,
+                password     VARCHAR(255) NULL,
+                db_name      VARCHAR(255) NULL,
+                created_at   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                UNIQUE KEY uq_visitor_connection_name (visitor_id, name)
+            )
+        """))
 
 
 # ---------------------------------------------------------------------------
@@ -407,3 +431,91 @@ def load_session_snapshot(visitor_id: str, snapshot_id: int) -> tuple[Optional[s
         return row[0], None
     except Exception as e:
         return None, str(e)
+
+
+# ---------------------------------------------------------------------------
+# Saved external-database connections — SQL Lab's "🔌 Database Connection"
+# panel (modules/db_connect.py), NOT Prism's own data. Stores the password
+# in plain text, same as everything else in this table's neighbors (no
+# field-level encryption anywhere in this app) and consistent with this
+# app's existing trust model for the *live* connection already held in
+# st.session_state.db_connection for the session's duration — this just
+# extends that same plaintext-credential posture across sessions instead of
+# adding a new one. mysql/postgres/sqlserver only; sqlite has nothing
+# meaningful to save here (see _ensure_schema's comment on this table).
+# ---------------------------------------------------------------------------
+def list_saved_connections(visitor_id: str) -> list[dict]:
+    """Does NOT include the password — this is for the picker list, not for
+    actually connecting. Use load_connection() to get the full row."""
+    engine = get_engine()
+    if engine is None:
+        return []
+    try:
+        with engine.connect() as conn:
+            rows = conn.execute(
+                text("SELECT id, name, engine_type, host, port, user, db_name, updated_at "
+                     "FROM prism_saved_connections WHERE visitor_id = :vid ORDER BY updated_at DESC"),
+                {"vid": visitor_id},
+            ).mappings().all()
+        return [dict(r) for r in rows]
+    except Exception:
+        return []
+
+
+def save_connection(
+    visitor_id: str, name: str, engine_type: str, host: str, port: int, user: str, password: str, db_name: str,
+) -> tuple[bool, Optional[str]]:
+    engine = get_engine()
+    if engine is None:
+        return False, "MySQL isn't configured or isn't reachable right now — this connection won't be remembered."
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("""
+                INSERT INTO prism_saved_connections
+                    (visitor_id, name, engine_type, host, port, user, password, db_name)
+                VALUES (:vid, :name, :engine_type, :host, :port, :user, :password, :db_name)
+                ON DUPLICATE KEY UPDATE
+                    engine_type = :engine_type, host = :host, port = :port, user = :user,
+                    password = :password, db_name = :db_name, updated_at = CURRENT_TIMESTAMP
+            """), {
+                "vid": visitor_id, "name": name, "engine_type": engine_type, "host": host,
+                "port": port, "user": user, "password": password, "db_name": db_name,
+            })
+        return True, None
+    except Exception as e:
+        return False, str(e)
+
+
+def load_connection(visitor_id: str, connection_id: int) -> tuple[Optional[dict], Optional[str]]:
+    """Returns the FULL row including password — only call this right before
+    actually connecting, never to populate a list display."""
+    engine = get_engine()
+    if engine is None:
+        return None, "MySQL isn't configured or isn't reachable right now."
+    try:
+        with engine.connect() as conn:
+            row = conn.execute(
+                text("SELECT engine_type, host, port, user, password, db_name FROM prism_saved_connections "
+                     "WHERE id = :id AND visitor_id = :vid"),
+                {"id": connection_id, "vid": visitor_id},
+            ).mappings().first()
+        if row is None:
+            return None, "That saved connection wasn't found — it may have been deleted."
+        return dict(row), None
+    except Exception as e:
+        return None, str(e)
+
+
+def delete_connection(visitor_id: str, connection_id: int) -> tuple[bool, Optional[str]]:
+    engine = get_engine()
+    if engine is None:
+        return False, "MySQL isn't configured or isn't reachable right now."
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text("DELETE FROM prism_saved_connections WHERE id = :id AND visitor_id = :vid"),
+                {"id": connection_id, "vid": visitor_id},
+            )
+        return True, None
+    except Exception as e:
+        return False, str(e)

@@ -3750,6 +3750,44 @@ elif st.session_state.active_section == "SQL Lab":
             tables = sql_lab_all_tables()
 
             # ---- Database Connection ---------------------------------------
+            def _connect_to_live_db(engine_type: str, conn_params: dict, engine_label: str) -> bool:
+                """Shared by the form's Connect button and a saved connection's
+                one-click Connect button — both must produce identical
+                session_state and identical table/schema-sampling behavior.
+                Returns True on success (caller still owns the st.rerun())."""
+                with st.spinner("Connecting..."):
+                    connect_ok, connect_err = db_connect.test_connection(engine_type, conn_params)
+                if not connect_ok:
+                    st.error(connect_err)
+                    return False
+                params_key = db_connect.build_connection_params_key(engine_type, conn_params)
+                try:
+                    if engine_type == "sqlserver":
+                        conn_obj = db_connect.get_sqlserver_engine(params_key)
+                    else:
+                        conn_obj = db_connect.get_duckdb_attach_connection(engine_type, params_key)
+                    table_names = db_connect.get_live_table_names(engine_type, conn_obj)
+                except Exception as e:
+                    st.error(f"Connected, but couldn't list tables: {e}")
+                    table_names = []
+                # Cache a small column-schema sample per table now, once, instead
+                # of re-sampling on every Atlas SQL question — this is what lets
+                # generate_sql() describe live-only tables the local dataset
+                # knows nothing about.
+                table_schemas: dict[str, str] = {}
+                for _tname in table_names[:8]:  # cap — a live DB could have hundreds
+                    _sample_df, _sample_err = db_connect.get_live_table_sample(engine_type, conn_obj, _tname, n=5)
+                    if _sample_df is not None:
+                        table_schemas[_tname] = ", ".join(f"{c} ({_sample_df[c].dtype})" for c in _sample_df.columns)
+                st.session_state.db_connection = {
+                    "engine_type": engine_type, "params": conn_params, "params_key": params_key,
+                    "status": "connected", "error": None,
+                }
+                st.session_state.db_connection_tables = table_names
+                st.session_state.db_connection_table_schemas = table_schemas
+                st.toast(f"Connected to {engine_label} — {len(table_names)} table(s) visible. 🔌")
+                return True
+
             with st.expander(_db_connection_expander_label(), expanded=False):
                 live_conn = st.session_state.db_connection
                 engine_labels = ["MySQL", "PostgreSQL", "SQLite", "SQL Server"]
@@ -3824,43 +3862,37 @@ elif st.session_state.active_section == "SQL Lab":
                         st.warning("Upload a .sqlite/.db file first.")
                     elif required_missing:
                         st.warning("Host and Database name are required.")
-                    else:
-                        with st.spinner("Connecting..."):
-                            connect_ok, connect_err = db_connect.test_connection(engine_type, conn_params)
-                        if not connect_ok:
-                            st.error(connect_err)
+                    elif _connect_to_live_db(engine_type, conn_params, engine_choice):
+                        st.rerun()
+
+                # ---- Save this connection --------------------------------
+                # sqlite is excluded — it's an uploaded file, not reusable
+                # credentials; nothing meaningful to save.
+                if engine_type != "sqlite" and app_db.is_configured():
+                    with st.form(key="db_conn_save_form", border=False):
+                        save_name_col, save_btn_col = st.columns([3, 1])
+                        save_conn_name = save_name_col.text_input(
+                            "Name this connection to save it", key="db_conn_save_name", placeholder="e.g. Prod MySQL",
+                        )
+                        save_conn_clicked = save_btn_col.form_submit_button("💾 Save", use_container_width=True)
+                    if save_conn_clicked:
+                        if not save_conn_name.strip():
+                            st.warning("Give the connection a name first.")
+                        elif sqlite_missing or required_missing:
+                            st.warning("Host and Database name are required.")
                         else:
-                            params_key = db_connect.build_connection_params_key(engine_type, conn_params)
-                            try:
-                                if engine_type == "sqlserver":
-                                    conn_obj = db_connect.get_sqlserver_engine(params_key)
-                                else:
-                                    conn_obj = db_connect.get_duckdb_attach_connection(engine_type, params_key)
-                                table_names = db_connect.get_live_table_names(engine_type, conn_obj)
-                            except Exception as e:
-                                st.error(f"Connected, but couldn't list tables: {e}")
-                                table_names = []
-                            # Cache a small column-schema sample per table now, once,
-                            # instead of re-sampling on every Atlas SQL question — this
-                            # is what lets generate_sql() describe live-only tables
-                            # (ones the local active dataset knows nothing about).
-                            table_schemas: dict[str, str] = {}
-                            for _tname in table_names[:8]:  # cap — a live DB could have hundreds
-                                _sample_df, _sample_err = db_connect.get_live_table_sample(
-                                    engine_type, conn_obj, _tname, n=5
-                                )
-                                if _sample_df is not None:
-                                    table_schemas[_tname] = ", ".join(
-                                        f"{c} ({_sample_df[c].dtype})" for c in _sample_df.columns
-                                    )
-                            st.session_state.db_connection = {
-                                "engine_type": engine_type, "params": conn_params, "params_key": params_key,
-                                "status": "connected", "error": None,
-                            }
-                            st.session_state.db_connection_tables = table_names
-                            st.session_state.db_connection_table_schemas = table_schemas
-                            st.toast(f"Connected to {engine_choice} — {len(table_names)} table(s) visible. 🔌")
-                            st.rerun()
+                            visitor_id = app_db.get_visitor_id()
+                            save_ok, save_err = app_db.save_connection(
+                                visitor_id, save_conn_name.strip(), engine_type,
+                                conn_params.get("host", ""), conn_params.get("port"),
+                                conn_params.get("user", ""), conn_params.get("password", ""),
+                                conn_params.get("database", ""),
+                            )
+                            if save_ok:
+                                st.toast(f'Saved "{save_conn_name.strip()}" ✓')
+                                st.rerun()
+                            else:
+                                st.error(save_err)
 
                 if live_conn and st.button("Disconnect", use_container_width=True, key="db_conn_disconnect_btn"):
                     db_connect.disconnect(live_conn["engine_type"])
@@ -3875,6 +3907,36 @@ elif st.session_state.active_section == "SQL Lab":
                     st.caption(f"🟢 Connected · {live_label} · {len(st.session_state.db_connection_tables)} table(s) visible")
                     if st.session_state.db_connection_tables:
                         st.caption(", ".join(f"`{t}`" for t in st.session_state.db_connection_tables[:20]))
+
+                # ---- Your saved connections --------------------------------
+                if app_db.is_configured():
+                    _visitor_id = app_db.get_visitor_id()
+                    _saved_conns = app_db.list_saved_connections(_visitor_id)
+                    if _saved_conns:
+                        st.markdown("**Your saved connections**")
+                        for _sc in _saved_conns:
+                            _sc_label = db_connect.ENGINE_LABELS.get(_sc["engine_type"], _sc["engine_type"])
+                            _row_name, _row_connect, _row_del = st.columns([5, 2, 1])
+                            _row_name.caption(f'**{_sc["name"]}** — {_sc_label} · `{_sc["host"]}/{_sc["db_name"]}`')
+                            if _row_connect.button("Connect", key=f"db_conn_load_{_sc['id']}", use_container_width=True):
+                                _full_row, _load_err = app_db.load_connection(_visitor_id, _sc["id"])
+                                if _load_err:
+                                    st.error(_load_err)
+                                else:
+                                    _load_params = {
+                                        "host": _full_row["host"], "port": _full_row["port"],
+                                        "user": _full_row["user"], "password": _full_row["password"],
+                                        "database": _full_row["db_name"],
+                                    }
+                                    if _connect_to_live_db(_full_row["engine_type"], _load_params, _sc_label):
+                                        st.rerun()
+                            if _row_del.button("🗑️", key=f"db_conn_del_{_sc['id']}", help="Delete this saved connection"):
+                                _del_ok, _del_err = app_db.delete_connection(_visitor_id, _sc["id"])
+                                if _del_ok:
+                                    st.toast(f'Deleted "{_sc["name"]}".')
+                                    st.rerun()
+                                else:
+                                    st.error(_del_err)
 
             # ---- Registered Tables ---------------------------------------
             with st.expander(f"Registered Tables ({len(tables)})", expanded=False):
