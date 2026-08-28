@@ -1,0 +1,40 @@
+{
+  "name": "prism-platform",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/web",
+    "apps/desktop-shell",
+    "packages/*/typescript"
+  ],
+  "scripts": {
+    "dev:web": "npm run dev --workspace=@prism/web",
+    "build:web": "npm run build --workspace=@prism/web",
+    "test:web": "vitest run --config apps/web/vitest.config.ts",
+    "test:web:watch": "vitest --config apps/web/vitest.config.ts",
+    "test:visual": "playwright test --config apps/web/playwright.config.ts",
+    "test:e2e:live": "playwright test --config apps/web/playwright.live.config.ts",
+    "lint": "eslint --max-warnings=0 apps packages",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "a11y:baseline": "node tools/check-a11y-baseline.mjs",
+    "boundaries": "python tools/check_boundaries.py",
+    "contract:generate": "python tools/generate_typescript_contracts.py",
+    "contract:check": "python tools/generate_typescript_contracts.py --check"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.24.0",
+    "@playwright/test": "1.62.1",
+    "@testing-library/jest-dom": "6.6.3",
+    "@testing-library/react": "16.3.0",
+    "@types/node": "22.15.3",
+    "@types/react": "19.1.2",
+    "@types/react-dom": "19.1.2",
+    "eslint": "9.24.0",
+    "eslint-plugin-jsx-a11y": "6.10.2",
+    "globals": "16.1.0",
+    "jsdom": "26.1.0",
+    "typescript": "5.8.3",
+    "typescript-eslint": "8.29.0",
+    "vitest": "3.1.2"
+  }
+}

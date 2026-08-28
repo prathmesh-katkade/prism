@@ -215,6 +215,15 @@ _CSS_TEMPLATE = Template(
 @keyframes prismFadeInUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes prismShimmer { 0% { background-position: 0% 50%; } 100% { background-position: 200% 50%; } }
 @keyframes prismPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+@keyframes prismBreathe {
+    0%, 100% { transform: translate3d(0, 0, 0) scale(.96); opacity: .46; }
+    50% { transform: translate3d(0, -8px, 0) scale(1.08); opacity: .78; }
+}
+@keyframes prismOrbit { to { transform: rotate(360deg); } }
+@keyframes prismFloat {
+    0%, 100% { transform: perspective(900px) rotateX(1.5deg) translateY(0); }
+    50% { transform: perspective(900px) rotateX(0deg) translateY(-5px); }
+}
 
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {
@@ -464,6 +473,61 @@ code { color: $accent; }
     background-size: 200% auto;
     -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
     animation: prismShimmer 7s linear infinite;
+}
+
+/* Landing hero — restrained depth rather than a busy "3D" gimmick. The
+   surface floats, two blurred lights breathe, and tiny orbiting particles
+   provide depth cues. All motion collapses under prefers-reduced-motion. */
+.prism-hero {
+    position: relative; isolation: isolate; overflow: hidden;
+    min-height: 430px; display: grid; place-items: center;
+    margin: 1rem 0 1.2rem; padding: 3.6rem 1.5rem 3.2rem;
+    border: 1px solid rgba($accent_rgb, .20); border-radius: 32px;
+    background:
+        linear-gradient(135deg, rgba($accent_rgb,.09), transparent 38%),
+        linear-gradient(315deg, rgba($accent2_rgb,.09), transparent 42%),
+        $surface;
+    box-shadow: 0 34px 80px -48px rgba($accent_rgb,.62), inset 0 1px 0 rgba(255,255,255,.06);
+    transform-style: preserve-3d;
+    animation: prismFloat 7s ease-in-out infinite;
+}
+.prism-hero::before {
+    content: ""; position: absolute; inset: 0; z-index: -1; opacity: .20;
+    background-image: linear-gradient(rgba($accent_rgb,.16) 1px, transparent 1px),
+                      linear-gradient(90deg, rgba($accent_rgb,.16) 1px, transparent 1px);
+    background-size: 48px 48px;
+    mask-image: radial-gradient(circle at center, black, transparent 72%);
+}
+.prism-hero-content { position: relative; z-index: 2; text-align: center; max-width: 780px; }
+.prism-ready { gap: .4rem; box-shadow: 0 0 24px rgba($accent_rgb,.12); }
+.prism-kicker { margin-top: 1.3rem; color: $accent; font: 600 .72rem/1 var(--prism-mono-font); letter-spacing: .24em; }
+.prism-hero .prism-hero-title { margin: .65rem 0 0; font-size: clamp(4.4rem, 11vw, 8.2rem); letter-spacing: -.065em; filter: drop-shadow(0 15px 22px rgba($accent_rgb,.20)); }
+.prism-hero-subtitle { color: $text; font: 600 clamp(1.25rem, 2.3vw, 1.65rem)/1.25 'Space Grotesk', sans-serif; }
+.prism-hero-copy { max-width: 670px; margin: .9rem auto 1.2rem; color: $text_muted; font-size: 1rem; line-height: 1.7; }
+.prism-hero-pills { display: flex; justify-content: center; gap: .55rem; flex-wrap: wrap; }
+.prism-hero-pills span { padding: .4rem .75rem; color: $text; background: rgba($accent_rgb,.07); border: 1px solid $border; border-radius: 999px; font-size: .76rem; font-weight: 600; }
+.prism-hero-glow { position: absolute; z-index: -1; width: 250px; height: 250px; border-radius: 50%; filter: blur(58px); animation: prismBreathe 6s ease-in-out infinite; }
+.prism-hero-glow.glow-one { top: -70px; left: 5%; background: rgba($accent_rgb,.30); }
+.prism-hero-glow.glow-two { right: 3%; bottom: -95px; background: rgba($accent2_rgb,.27); animation-delay: -3s; }
+.prism-orbit { position: absolute; z-index: 1; border: 1px solid rgba($accent_rgb,.16); border-radius: 50%; animation: prismOrbit 24s linear infinite; }
+.prism-orbit i { position: absolute; width: 7px; height: 7px; top: -4px; left: 50%; border-radius: 50%; background: $accent; box-shadow: 0 0 14px $accent; }
+.orbit-one { width: 330px; height: 330px; left: -170px; top: 36px; }
+.orbit-two { width: 270px; height: 270px; right: -135px; bottom: -30px; animation-direction: reverse; animation-duration: 19s; }
+
+.prism-workflow { display: flex; align-items: center; margin: 0 auto 1.4rem; padding: .8rem 1rem; max-width: 960px; }
+.prism-workflow-step { display: flex; align-items: center; gap: .7rem; min-width: 0; }
+.prism-workflow-step > b { color: $accent; font: 600 .7rem var(--prism-mono-font); }
+.prism-workflow-step span { display: flex; flex-direction: column; }
+.prism-workflow-step strong { color: $text; font-size: .82rem; white-space: nowrap; }
+.prism-workflow-step small { color: $text_muted; font-size: .68rem; margin-top: .15rem; white-space: nowrap; }
+.prism-workflow-line { height: 1px; min-width: 24px; flex: 1; margin: 0 1rem; background: linear-gradient(90deg, $border, rgba($accent_rgb,.55), $border); }
+
+@media (max-width: 760px) {
+    .prism-hero { min-height: 390px; padding: 2.8rem 1rem; border-radius: 24px; }
+    .prism-hero .prism-hero-title { font-size: clamp(4rem, 24vw, 6.2rem); }
+    .prism-workflow { align-items: stretch; flex-direction: column; gap: .65rem; padding-left: 1.4rem; }
+    .prism-workflow-line { width: 1px; min-width: 1px; height: 18px; flex: none; margin: 0 0 0 .36rem; }
+    .prism-workflow-step small, .prism-workflow-step strong { white-space: normal; }
 }
 
 .prism-live-dot {

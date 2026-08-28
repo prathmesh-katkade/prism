@@ -1,0 +1,31 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = [
+  "apps/api/src",
+  "packages/api-contracts/python",
+  "packages/analytical-schemas/python",
+  "packages/atlas-interfaces/python",
+  "packages/config/python",
+  "packages/test-utils/python",
+  "packages/overview-analytics/python",
+  "packages/sql-lab-runtime/python",
+]
+
+[tool.ruff]
+target-version = "py39"
+line-length = 100
+extend-exclude = [".venv", "node_modules"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.9"
+strict = true
+files = ["apps/api/src", "packages"]
+exclude = ['(^|/)(node_modules|\.venv|legacy-streamlit)(/|$)']
+
+[[tool.mypy.overrides]]
+module = ["pandas", "numpy"]
+ignore_missing_imports = true

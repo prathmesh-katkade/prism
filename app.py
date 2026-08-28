@@ -85,6 +85,17 @@ _DEFAULTS = {
     "sql_exec_time": None,  # last query's execution time in seconds
     "sql_explanation": "",  # last "Explain this query" output
     "sql_explanation_error": None,  # error from the last "Explain this query" attempt, if any
+    "sql_source": "Local dataset",  # SQL Lab source selector — "Local dataset" or "MySQL database"
+    "mysql_engine": None,  # live SQLAlchemy Engine for the connected MySQL database, if any
+    "mysql_connection_label": None,  # "user@host:port/database" shown once connected — never includes the password
+    "mysql_connect_error": None,  # error from the last connection attempt, if any
+    "mysql_tables": [],  # table names visible to the connected MySQL user
+    "mysql_sql_editor": "",  # MySQL SQL Lab's query text (bound to its text_area's key)
+    "mysql_allow_writes": False,  # opt-in checkbox — when False, non-SELECT statements are refused client-side
+    "mysql_result_df": None,  # last successful MySQL query result
+    "mysql_query_error": None,  # last MySQL query's error message, if any
+    "mysql_exec_time": None,  # last MySQL query's execution time in seconds
+    "mysql_truncated": False,  # True if the last result was cut off at sql_lab.MYSQL_MAX_ROWS
     "second_df": None,  # second file uploaded in the Combine tab (raw, uncleaned)
     "second_file_name": None,  # detects a new second-file upload vs. a plain rerun
     "combine_preview_df": None,  # last previewed join result
@@ -1115,6 +1126,7 @@ if st.session_state.working_df is None:
     # Landing screen — shown before any dataset is active.
     # ---------------------------------------------------------------------
     ui.render_hero()
+    ui.render_workflow_strip()
     ui.render_feature_cards()
     st.divider()
 
@@ -2428,76 +2440,202 @@ elif st.session_state.active_section == "Visualize":
 # --------------------------------------------------------------------------
 elif st.session_state.active_section == "SQL Lab":
     ui.render_help_expander(
-        "Run raw SQL against your active dataset via DuckDB — registered as a table named `data`."
+        "Run raw SQL against your active dataset via DuckDB, or connect to a live MySQL "
+        "database and query it directly."
     )
 
     st.subheader("SQL Lab")
 
-    if sql_lab.duckdb is None:
-        st.warning("The `duckdb` package isn't installed. Run `pip install -r requirements.txt` and restart the app.")
-    else:
-        st.caption('Your active dataset is registered as a table named `data`. Any DuckDB SQL works.')
+    st.session_state.sql_source = st.radio(
+        "Source", ["Local dataset", "MySQL database"],
+        index=["Local dataset", "MySQL database"].index(st.session_state.sql_source),
+        horizontal=True, label_visibility="collapsed",
+    )
 
-        examples = sql_lab.build_example_queries(df, column_types)
-        st.markdown("**Example Queries**")
-        example_cols = st.columns(len(examples))
-        for ex_col, (label, example_sql) in zip(example_cols, examples.items()):
-            with ex_col:
-                if st.button(label, key=f"sql_example_{label}", use_container_width=True):
-                    st.session_state.sql_editor = example_sql
-
-        st.text_area(
-            "SQL query", key="sql_editor", height=140,
-            placeholder="SELECT * FROM data LIMIT 10;",
-        )
-
-        run_col, explain_col = st.columns(2)
-        with run_col:
-            run_clicked = st.button("Run Query", type="primary", use_container_width=True)
-        with explain_col:
-            explain_clicked = st.button("Explain This Query", use_container_width=True)
-
-        if run_clicked:
-            query_text = st.session_state.sql_editor.strip()
-            if not query_text:
-                st.warning("Write a query first — the editor is empty.")
-            else:
-                sql_result, sql_error, sql_elapsed = sql_lab.run_query(df, query_text)
-                st.session_state.sql_result_df = sql_result
-                st.session_state.sql_error = sql_error
-                st.session_state.sql_exec_time = sql_elapsed
-
-        if st.session_state.sql_error:
-            st.error(st.session_state.sql_error)
-        elif st.session_state.sql_result_df is not None:
-            st.caption(
-                f"{len(st.session_state.sql_result_df):,} rows · "
-                f"{st.session_state.sql_exec_time * 1000:.1f} ms"
-            )
-            st.dataframe(st.session_state.sql_result_df, use_container_width=True)
+    # ----------------------------------------------------------------
+    # Local dataset — unchanged DuckDB-backed SQL Lab
+    # ----------------------------------------------------------------
+    if st.session_state.sql_source == "Local dataset":
+        if sql_lab.duckdb is None:
+            st.warning("The `duckdb` package isn't installed. Run `pip install -r requirements.txt` and restart the app.")
         else:
-            ui.render_empty_state(
-                "🗄️", "No query run yet", "Try an example query above, or write your own and click \"Run Query\"."
+            st.caption('Your active dataset is registered as a table named `data`. Any DuckDB SQL works.')
+
+            examples = sql_lab.build_example_queries(df, column_types)
+            st.markdown("**Example Queries**")
+            example_cols = st.columns(len(examples))
+            for ex_col, (label, example_sql) in zip(example_cols, examples.items()):
+                with ex_col:
+                    if st.button(label, key=f"sql_example_{label}", use_container_width=True):
+                        st.session_state.sql_editor = example_sql
+
+            st.text_area(
+                "SQL query", key="sql_editor", height=140,
+                placeholder="SELECT * FROM data LIMIT 10;",
             )
 
-        if explain_clicked:
-            query_text = st.session_state.sql_editor.strip()
-            if not query_text:
-                st.warning("Write a query first — the editor is empty.")
-            else:
-                sql_gemini_model = ai_analyst.get_model()
-                if sql_gemini_model is None:
-                    st.warning(ai_analyst.GEMINI_SETUP_HELP)
-                else:
-                    with st.spinner(ui.get_loading_message()):
-                        explanation, explain_error = ai_analyst.explain_sql(sql_gemini_model, query_text)
-                    st.session_state.sql_explanation = explanation
-                    st.session_state.sql_explanation_error = explain_error
+            run_col, explain_col = st.columns(2)
+            with run_col:
+                run_clicked = st.button("Run Query", type="primary", use_container_width=True)
+            with explain_col:
+                explain_clicked = st.button("Explain This Query", use_container_width=True)
 
-        if st.session_state.sql_explanation_error:
-            st.error(st.session_state.sql_explanation_error)
-        elif st.session_state.sql_explanation:
-            st.info(st.session_state.sql_explanation)
+            if run_clicked:
+                query_text = st.session_state.sql_editor.strip()
+                if not query_text:
+                    st.warning("Write a query first — the editor is empty.")
+                else:
+                    sql_result, sql_error, sql_elapsed = sql_lab.run_query(df, query_text)
+                    st.session_state.sql_result_df = sql_result
+                    st.session_state.sql_error = sql_error
+                    st.session_state.sql_exec_time = sql_elapsed
+
+            if st.session_state.sql_error:
+                st.error(st.session_state.sql_error)
+            elif st.session_state.sql_result_df is not None:
+                st.caption(
+                    f"{len(st.session_state.sql_result_df):,} rows · "
+                    f"{st.session_state.sql_exec_time * 1000:.1f} ms"
+                )
+                st.dataframe(st.session_state.sql_result_df, use_container_width=True)
+            else:
+                ui.render_empty_state(
+                    "🗄️", "No query run yet", "Try an example query above, or write your own and click \"Run Query\"."
+                )
+
+            if explain_clicked:
+                query_text = st.session_state.sql_editor.strip()
+                if not query_text:
+                    st.warning("Write a query first — the editor is empty.")
+                else:
+                    sql_gemini_model = ai_analyst.get_model()
+                    if sql_gemini_model is None:
+                        st.warning(ai_analyst.GEMINI_SETUP_HELP)
+                    else:
+                        with st.spinner(ui.get_loading_message()):
+                            explanation, explain_error = ai_analyst.explain_sql(sql_gemini_model, query_text)
+                        st.session_state.sql_explanation = explanation
+                        st.session_state.sql_explanation_error = explain_error
+
+            if st.session_state.sql_explanation_error:
+                st.error(st.session_state.sql_explanation_error)
+            elif st.session_state.sql_explanation:
+                st.info(st.session_state.sql_explanation)
+
+    # ----------------------------------------------------------------
+    # MySQL database — live connection, opt-in, read-only by default.
+    # Credentials are entered fresh each session and live only in
+    # st.session_state (server-side memory) for as long as this browser
+    # session is open; they're never written to disk, committed, or
+    # included in "Save session" exports. See modules/sql_lab.py.
+    # ----------------------------------------------------------------
+    else:
+        if not sql_lab.mysql_available():
+            st.warning(
+                "MySQL support needs the `sqlalchemy`, `pymysql`, and `cryptography` packages — "
+                "run `pip install -r requirements.txt` and restart the app."
+            )
+        elif st.session_state.mysql_engine is None:
+            st.caption(
+                "Connect to a MySQL database for this session only. For safety, connect with a "
+                "**read-only** MySQL user scoped to just the schema you need, rather than `root` — "
+                "SQL Lab also blocks write queries by default regardless of the account's privileges."
+            )
+            with st.form("mysql_connect_form"):
+                c1, c2 = st.columns([3, 1])
+                host = c1.text_input("Host", placeholder="127.0.0.1")
+                port = c2.number_input("Port", min_value=1, max_value=65535, value=sql_lab.MYSQL_DEFAULT_PORT)
+                database = st.text_input("Database", placeholder="my_database")
+                c3, c4 = st.columns(2)
+                user = c3.text_input("Username", placeholder="root")
+                password = c4.text_input("Password", type="password")
+                connect_clicked = st.form_submit_button("Connect", type="primary", use_container_width=True)
+
+            if connect_clicked:
+                info = sql_lab.MySQLConnectionInfo(
+                    host=host, port=int(port), database=database, user=user, password=password
+                )
+                with st.spinner("Connecting..."):
+                    engine, connect_error = sql_lab.build_mysql_engine(info)
+                if connect_error:
+                    st.session_state.mysql_connect_error = connect_error
+                else:
+                    st.session_state.mysql_engine = engine
+                    st.session_state.mysql_connect_error = None
+                    st.session_state.mysql_connection_label = f"{user}@{host}:{int(port)}/{database}"
+                    tables, tables_error = sql_lab.list_mysql_tables(engine)
+                    st.session_state.mysql_tables = tables
+                    if tables_error:
+                        st.session_state.mysql_connect_error = tables_error
+                    st.rerun()
+
+            if st.session_state.mysql_connect_error:
+                st.error(st.session_state.mysql_connect_error)
+
+            if host == "127.0.0.1" or host == "localhost":
+                st.info(
+                    "Host is `127.0.0.1`/`localhost` — that only resolves if this Prism instance "
+                    "itself is running on the same machine as MySQL. A Prism instance deployed on "
+                    "Render (or anywhere else remote) can't reach a database on your own computer "
+                    "at that address unless it's exposed via a tunnel or public endpoint."
+                )
+        else:
+            st.success(f"Connected — `{st.session_state.mysql_connection_label}`")
+            disc_col, _ = st.columns([1, 3])
+            if disc_col.button("Disconnect", use_container_width=True):
+                sql_lab.close_mysql_engine(st.session_state.mysql_engine)
+                st.session_state.mysql_engine = None
+                st.session_state.mysql_connection_label = None
+                st.session_state.mysql_tables = []
+                st.session_state.mysql_result_df = None
+                st.session_state.mysql_query_error = None
+                st.rerun()
+
+            if st.session_state.mysql_tables:
+                with st.expander(f"Tables ({len(st.session_state.mysql_tables)})"):
+                    for table_name in st.session_state.mysql_tables:
+                        if st.button(table_name, key=f"mysql_table_{table_name}", use_container_width=True):
+                            st.session_state.mysql_sql_editor = f"SELECT *\nFROM `{table_name}`\nLIMIT 10;"
+
+            st.text_area(
+                "SQL query", key="mysql_sql_editor", height=140,
+                placeholder="SELECT * FROM my_table LIMIT 10;",
+            )
+
+            st.session_state.mysql_allow_writes = st.checkbox(
+                "Allow write queries (INSERT/UPDATE/DELETE/...)", value=st.session_state.mysql_allow_writes,
+                help="Off by default. SQL Lab refuses anything that isn't a plain read unless this is checked.",
+            )
+
+            if st.button("Run Query", type="primary", use_container_width=True, key="mysql_run_query"):
+                query_text = st.session_state.mysql_sql_editor.strip()
+                if not query_text:
+                    st.warning("Write a query first — the editor is empty.")
+                else:
+                    result_df, query_error, elapsed, truncated = sql_lab.run_mysql_query(
+                        st.session_state.mysql_engine, query_text,
+                        allow_writes=st.session_state.mysql_allow_writes,
+                    )
+                    st.session_state.mysql_result_df = result_df
+                    st.session_state.mysql_query_error = query_error
+                    st.session_state.mysql_exec_time = elapsed
+                    st.session_state.mysql_truncated = truncated
+
+            if st.session_state.mysql_query_error:
+                st.error(st.session_state.mysql_query_error)
+            elif st.session_state.mysql_result_df is not None:
+                st.caption(
+                    f"{len(st.session_state.mysql_result_df):,} rows · "
+                    f"{st.session_state.mysql_exec_time * 1000:.1f} ms"
+                )
+                if st.session_state.mysql_truncated:
+                    st.warning(f"Result truncated at {sql_lab.MYSQL_MAX_ROWS:,} rows.")
+                st.dataframe(st.session_state.mysql_result_df, use_container_width=True)
+            else:
+                ui.render_empty_state(
+                    "🗄️", "No query run yet",
+                    "Pick a table above, or write your own query and click \"Run Query\"."
+                )
 
 # --------------------------------------------------------------------------
 # AI Analyst tab — key insights + natural-language chat over the dataframe

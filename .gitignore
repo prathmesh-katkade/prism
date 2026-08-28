@@ -4,7 +4,17 @@
 # Python
 __pycache__/
 *.pyc
+*.egg-info/
 .venv/
+node_modules/
+.next/
+.turbo/
+.prism/work/
+.prism/runtime/
+**/.prism/work/
+**/.prism/runtime/
+test-results/
+playwright-report/
 venv/
 
 # Streamlit

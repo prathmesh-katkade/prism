@@ -6,7 +6,7 @@ on:
   pull_request:
 
 jobs:
-  test:
+  legacy-regression:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -23,3 +23,108 @@ jobs:
 
       - name: Auto Cleaner eval suite (deterministic, no network/API key needed)
         run: python eval/autocleaner_eval.py
+
+  phase-1-python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Phase 1 dependencies
+        run: |
+          pip install -r apps/api/requirements.txt
+          for package in packages/*/python; do pip install -e "$package"; done
+
+      - name: Lint and type-check contracts and API boundary
+        run: |
+          ruff check apps/api/src packages tools/check_boundaries.py tools/generate_typescript_contracts.py tools/check_secrets.py tests
+          mypy
+
+      - name: Run deterministic API contracts and migration parity hooks
+        run: pytest tests
+
+      - name: Verify generated OpenAPI TypeScript contract
+        run: python tools/generate_typescript_contracts.py --check
+
+      - name: Enforce dependency boundaries and local secret patterns
+        run: |
+          python tools/check_boundaries.py
+          python tools/check_secrets.py
+
+  phase-1-web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install web workspace tooling
+        run: npm ci
+
+      - name: Lint, type-check, and enforce accessibility baseline
+        run: |
+          npm run lint
+          npm run typecheck
+          npm run a11y:baseline
+          npm run test:web
+          npm run build:web
+
+  phase-4-live-e2e:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+          MYSQL_DATABASE: prism_phase4
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      PRISM_PHASE4_MYSQL_URL: mysql+pymysql://root@127.0.0.1:3306/prism_phase4
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install Phase 4 runtimes
+        run: |
+          pip install -r apps/api/requirements.txt
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Seed MySQL parity source
+        run: >-
+          python -c "from sqlalchemy import create_engine, text; engine=create_engine('mysql+pymysql://root@127.0.0.1:3306/prism_phase4'); connection=engine.connect(); connection.execute(text('CREATE TABLE sales (id INT PRIMARY KEY, region VARCHAR(32), revenue DECIMAL(10,2) NULL)')); connection.execute(text(\"INSERT INTO sales VALUES (1,'North',10.50),(2,'South',NULL),(3,'North',12.00)\")); connection.commit(); connection.close(); engine.dispose()"
+
+      - name: Run real MySQL parity and browser-to-API flow
+        run: |
+          pytest tests/sql_lab/test_mysql_connector_parity.py
+          npm run test:e2e:live
+
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Scan repository history for secrets
+        uses: gitleaks/gitleaks-action@v2
