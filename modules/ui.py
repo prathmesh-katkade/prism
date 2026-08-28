@@ -16,7 +16,6 @@ from pathlib import Path
 from typing import Optional
 
 import pandas as pd
-
 import streamlit as st
 
 DEVELOPER_NAME = "Prathmesh Katkade"
@@ -458,12 +457,12 @@ def render_column_profiler_grid(
                         from modules import india
                         is_currency = any(hint in col.lower() for hint in _CURRENCY_NAME_HINTS)
 
-                        def _fmt(v: float) -> str:
+                        def _fmt(v: float, format_currency: bool = is_currency) -> str:
                             # Indian grouping is a no-op under 1,000 — for small
                             # stats (e.g. an average of 7.4), prefer the plain
                             # decimal over india.indian_comma_group() rounding
                             # it away to "7".
-                            if is_currency:
+                            if format_currency:
                                 return india.format_inr(v)
                             if abs(v) >= 1000:
                                 return india.indian_comma_group(v)

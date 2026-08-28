@@ -39,8 +39,10 @@ def handle_nulls(df: pd.DataFrame, column: str, strategy: str, custom_value: Opt
         if pd.api.types.is_numeric_dtype(new_df[column]):
             try:
                 cast_value = float(custom_value)
-            except (TypeError, ValueError):
-                raise ValueError(f"'{custom_value}' is not a valid number for numeric column '{column}'.")
+            except (TypeError, ValueError) as error:
+                raise ValueError(
+                    f"'{custom_value}' is not a valid number for numeric column '{column}'."
+                ) from error
         new_df[column] = new_df[column].fillna(cast_value)
     else:
         raise ValueError(f"Unknown null-handling strategy: {strategy}")

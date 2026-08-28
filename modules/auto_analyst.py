@@ -19,7 +19,12 @@ from typing import Optional
 
 import pandas as pd
 
-from modules.ai_analyst import ask_and_execute, build_data_context, call_gemini, parse_numbered_bullets
+from modules.ai_analyst import (
+    ask_and_execute,
+    build_data_context,
+    call_gemini,
+    parse_numbered_bullets,
+)
 
 PLAN_SYSTEM_PROMPT = (
     "You are a senior data analyst planning an exploratory analysis of a pandas "

@@ -3353,8 +3353,8 @@ elif st.session_state.active_section == "Geo Lens":
                     log_step(
                         f"Titan Enrichment: merged weather for {len(enrich_report['locations_enriched'])} "
                         f"location(s) via '{enrich_location_col}' + '{enrich_date_col}'",
-                        f"# Titan Enrichment ran interactively — geocoding + Open-Meteo weather lookup,\n"
-                        f"# not reproducible as a static pandas script.",
+                        "# Titan Enrichment ran interactively — geocoding + Open-Meteo weather lookup,\n"
+                        "# not reproducible as a static pandas script.",
                     )
                     st.toast(f"Enriched {enrich_report['rows_matched']} row(s) with weather data. ✨")
                 st.rerun()
