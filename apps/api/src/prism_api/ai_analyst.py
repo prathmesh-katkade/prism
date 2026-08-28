@@ -49,6 +49,11 @@ def _quoted_identifier(name: str) -> str:
     return '"' + name.replace('"', '""') + '"'
 
 
+def _mentions_any(text: str, terms: tuple[str, ...]) -> bool:
+    """Match analytical intent as complete words or phrases, not substrings."""
+    return any(re.search(rf"(?<!\w){re.escape(term)}(?!\w)", text, re.IGNORECASE) for term in terms)
+
+
 def _choose_dataset(dataset_id: Optional[str]) -> str:
     if dataset_id is not None:
         return dataset_id
@@ -134,8 +139,8 @@ def analyze(request: AiAnalystRequest, request_id: Optional[str] = None) -> AiAn
     evidence.extend(sql_evidence)
     question = _compact(request.question, 4_000)
     lower = question.lower()
-    causal = any(term in lower for term in ("cause", "causal", "causes", "effect of", "impact of"))
-    sql_intent = any(term in lower for term in ("sql", "query", "count", "group", "segment", "total", "sum"))
+    causal = _mentions_any(lower, ("cause", "causal", "causes", "effect of", "impact of"))
+    sql_intent = _mentions_any(lower, ("sql", "query", "count", "group", "segment", "total", "sum"))
     provider_requested = os.environ.get("PRISM_AI_PROVIDER", "deterministic").lower()
     ollama_ready = _try_ollama(context, question)
     provider = (

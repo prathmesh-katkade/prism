@@ -101,6 +101,20 @@ def test_ai_sql_draft_rejects_hallucinated_schema_identifiers() -> None:
     assert draft.json()["sql_draft"] == "SELECT COUNT(*) AS row_count\nFROM \"data\";"
 
 
+def test_ai_intent_routing_does_not_match_keywords_inside_other_words() -> None:
+    client = TestClient(create_app())
+    dataset_id = _dataset(client)
+
+    response = client.post(
+        "/api/v1/ai-analyst/analyze",
+        json={"dataset_id": dataset_id, "question": "Summarize the evidence because it is important."},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["outcome"] == "answered"
+    assert response.json().get("sql_draft") is None
+
+
 def test_ai_stream_emits_incremental_state_token_tool_wait_and_completion() -> None:
     client = TestClient(create_app())
     dataset_id = _dataset(client)
