@@ -19,6 +19,7 @@ import pandas as pd
 import plotly.graph_objects as go
 from fpdf import FPDF
 
+from modules import insight_verifier
 from modules.ai_analyst import build_data_context, call_gemini, generate_key_insights
 
 _JSON_OBJECT_RE = re.compile(r"\{.*\}", re.DOTALL)
@@ -116,21 +117,53 @@ def build_report_content(
     top_correlations: Optional[list[tuple[str, str, float]]] = None,
 ) -> dict:
     """Assemble everything the HTML/PDF renderers need: the narrative, up to
-    5 key findings (reusing ai_analyst.generate_key_insights), and up to 3
+    5 key findings (reusing ai_analyst.generate_key_insights), a fact-check
+    pass over those findings (modules.insight_verifier — same safety net
+    already wired into Auto Analyst's "Run Full Analysis" (Run 10) and the
+    AI Analyst tab's "Generate Key Insights" (Run 14)), and up to 3
     representative charts to embed alongside them.
+
+    This is the third independent call site for generate_key_insights()'s
+    exact "quote a number straight from the data" findings shape — and the
+    only one whose output leaves the app as a downloadable artifact (HTML/PDF
+    a user might hand to someone else), which is exactly why it's worth
+    fact-checking here too rather than assuming the in-app badge coverage was
+    "close enough."
     """
     narrative = generate_report_narrative(model, df, quality_report, column_types)
     findings, findings_error = generate_key_insights(model, df, quality_report, column_types, top_correlations)
+    findings_verification = _verify_findings(df, column_types, findings)
     return {
         "executive_summary": narrative["executive_summary"],
         "recommendations": narrative["recommendations"],
         "quality_report": quality_report,
         "findings": findings,
+        "findings_verification": findings_verification,
         "findings_error": findings_error,
         "chart_items": list(charts.items())[:3],
         "n_rows": df.shape[0],
         "n_cols": df.shape[1],
     }
+
+
+def _verify_findings(
+    df: pd.DataFrame, column_types: dict[str, str], findings: list[str]
+) -> Optional[list[dict]]:
+    """Wraps insight_verifier.verify_findings() — returns None (not an empty
+    list) when there's nothing to verify, so callers can tell "verification
+    ran and found nothing to badge" apart from "verification never ran" and
+    skip rendering a caption/badges entirely in the latter case.
+    insight_verifier.verify_findings() already never raises on its own (see
+    its docstring); this wrapper exists only to turn a caller mistake (a
+    None/malformed column_types) into "no verification" instead of a report-
+    generation crash.
+    """
+    if not findings:
+        return None
+    try:
+        return insight_verifier.verify_findings(df, column_types or {}, findings)
+    except Exception:
+        return None
 
 
 _HTML_CSS = f"""
@@ -143,6 +176,11 @@ _HTML_CSS = f"""
   h2 {{ color: {BRAND_ACCENT}; border-left: 3px solid {BRAND_ACCENT}; padding-left: 0.6rem; margin-top: 2.5rem; }}
   .card {{ background: #111827; border: 1px solid #1c2942; border-left: 3px solid {BRAND_ACCENT}; border-radius: 8px;
            padding: 1rem 1.4rem; margin-bottom: 0.8rem; }}
+  .verify-caption {{ color: {BRAND_MUTED}; font-size: 0.85rem; margin: -0.2rem 0 0.9rem; }}
+  .badge {{ display: inline-block; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.03em;
+            padding: 0.12rem 0.5rem; border-radius: 999px; margin-left: 0.5rem; vertical-align: middle; }}
+  .badge-ok {{ background: rgba(34,197,94,0.15); color: #4ade80; border: 1px solid rgba(34,197,94,0.4); }}
+  .badge-warn {{ background: rgba(239,68,68,0.15); color: #f87171; border: 1px solid rgba(239,68,68,0.4); }}
   table {{ border-collapse: collapse; width: 100%; margin: 1rem 0; }}
   th, td {{ border: 1px solid #26344a; padding: 6px 10px; text-align: left; font-size: 0.9rem; }}
   th {{ background: #111827; color: {BRAND_ACCENT}; }}
@@ -153,6 +191,50 @@ _HTML_CSS = f"""
 """
 
 
+_HTML_BADGES = {
+    "confirmed": '<span class="badge badge-ok" title="Every number in this finding matches a value '
+    'recomputed directly from the data.">VERIFIED</span>',
+    "flagged": '<span class="badge badge-warn" title="At least one number here could not be matched to a '
+    'recomputed value — double-check before citing.">UNCONFIRMED</span>',
+}
+
+
+def _verification_caption(verification: Optional[list[dict]]) -> Optional[str]:
+    """One-line fact-check summary, e.g. "Fact-checked against the data: 3
+    finding(s) confirmed, 1 unconfirmed — verify before citing." Returns None
+    when there's nothing worth captioning: verification never ran, or every
+    finding was "unverifiable" (no numeric claim to check at all). Same
+    convention as modules.ui.build_verification_caption's in-app equivalent,
+    kept as a local, dependency-free copy here since this module renders a
+    standalone export (no Streamlit, no shared CSS classes) rather than an
+    in-app panel.
+    """
+    if not verification:
+        return None
+    confirmed = sum(1 for v in verification if v.get("status") == "confirmed")
+    flagged = sum(1 for v in verification if v.get("status") == "flagged")
+    if not confirmed and not flagged:
+        return None
+    tail = f", {flagged} unconfirmed — verify before citing." if flagged else "."
+    return f"Fact-checked against the data: {confirmed} finding(s) confirmed{tail}"
+
+
+def _findings_html(findings: list[str], verification: Optional[list[dict]]) -> str:
+    """Build the "Key Findings" card list, badging each finding with its
+    insight_verifier status when verification is available. A finding past
+    the end of `verification` (or when verification is None entirely) simply
+    renders without a badge — a badge is a nice-to-have annotation, never a
+    precondition for showing the finding itself, matching modules.ui's
+    in-app builder.
+    """
+    cards = []
+    for i, finding in enumerate(findings):
+        status = verification[i]["status"] if verification and i < len(verification) else None
+        badge = f" {_HTML_BADGES[status]}" if status in _HTML_BADGES else ""
+        cards.append(f'<div class="card">{finding}{badge}</div>')
+    return "".join(cards)
+
+
 def generate_html_report(report_content: dict, dataset_name: str) -> str:
     """Render report_content (from build_report_content()) as a standalone,
     Prism-branded HTML file — charts stay interactive (Plotly JS embedded).
@@ -160,9 +242,12 @@ def generate_html_report(report_content: dict, dataset_name: str) -> str:
     generated_at = datetime.now().strftime("%Y-%m-%d %H:%M")
     quality = report_content["quality_report"]
 
-    findings_html = "".join(f'<div class="card">{finding}</div>' for finding in report_content["findings"]) or (
+    verification = report_content.get("findings_verification")
+    findings_html = _findings_html(report_content["findings"], verification) or (
         f"<p>{report_content.get('findings_error') or 'No findings generated.'}</p>"
     )
+    caption = _verification_caption(verification)
+    caption_html = f'<p class="verify-caption">{caption}</p>' if caption else ""
     recs_html = "".join(f"<li>{r}</li>" for r in report_content["recommendations"])
 
     charts_html_parts = []
@@ -198,6 +283,7 @@ def generate_html_report(report_content: dict, dataset_name: str) -> str:
     </table>
 
     <h2>Key Findings</h2>
+    {caption_html}
     {findings_html}
     {charts_html}
 
@@ -251,6 +337,29 @@ def _add_section_title(pdf: FPDF, title: str) -> None:
     pdf.set_font("Helvetica", "", 11)
 
 
+_PDF_TAGS = {
+    "confirmed": "[VERIFIED]",
+    "flagged": "[UNCONFIRMED - verify before citing]",
+}
+
+
+def _build_findings_pdf_lines(findings: list[str], verification: Optional[list[dict]]) -> list[str]:
+    """Build the "1. <finding> [VERIFIED]" text lines for the PDF export.
+
+    fpdf2's core Helvetica font can't render the checkmark/warning glyphs the
+    in-app HTML badges use (latin-1 only — see _sanitize_for_pdf), so the PDF
+    gets a plain-ASCII bracketed tag instead of a colored badge. A finding
+    past the end of `verification` (or verification=None entirely) gets no
+    tag, same graceful-degradation rule the HTML badge builder follows.
+    """
+    lines = []
+    for i, finding in enumerate(findings, 1):
+        status = verification[i - 1]["status"] if verification and i - 1 < len(verification) else None
+        tag = f" {_PDF_TAGS[status]}" if status in _PDF_TAGS else ""
+        lines.append(f"{i}. {finding}{tag}")
+    return lines
+
+
 def generate_pdf_report(report_content: dict, dataset_name: str) -> bytes:
     """Render the same report content as a downloadable PDF via fpdf2, with
     charts rasterized to PNG via kaleido (fpdf2 can't embed interactive charts).
@@ -291,8 +400,16 @@ def generate_pdf_report(report_content: dict, dataset_name: str) -> bytes:
 
     _add_section_title(pdf, "Key Findings")
     if report_content["findings"]:
-        for i, finding in enumerate(report_content["findings"], 1):
-            pdf.multi_cell(0, 6, _sanitize_for_pdf(f"{i}. {finding}"), new_x="LMARGIN", new_y="NEXT")
+        caption = _verification_caption(report_content.get("findings_verification"))
+        if caption:
+            pdf.set_font("Helvetica", "I", 9)
+            pdf.set_text_color(100, 110, 125)
+            pdf.multi_cell(0, 5, _sanitize_for_pdf(caption), new_x="LMARGIN", new_y="NEXT")
+            pdf.set_text_color(20, 20, 20)
+            pdf.set_font("Helvetica", "", 11)
+            pdf.ln(1)
+        for line in _build_findings_pdf_lines(report_content["findings"], report_content.get("findings_verification")):
+            pdf.multi_cell(0, 6, _sanitize_for_pdf(line), new_x="LMARGIN", new_y="NEXT")
     else:
         pdf.multi_cell(
             0, 6, _sanitize_for_pdf(report_content.get("findings_error") or "No findings generated."),

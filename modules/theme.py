@@ -732,6 +732,21 @@ h1, h2, h3, h4, .prism-heading {
     background: var(--prism-surface); border-left: 1px solid var(--prism-border);
     backdrop-filter: blur(10px); overflow-y: auto; padding: 14px 16px 8px;
 }
+/* Mobile/narrow-tablet reflow: the fixed 328px column above eats most of a
+   ~390px phone viewport and squeezes the main content into an unreadable
+   sliver (confirmed via screenshot during the 2026-08-07 and 2026-08-10
+   audits — flagged twice, fixed here). Below 768px the panel drops out of
+   the fixed right rail entirely and becomes a normal block that stacks
+   below the main content instead of overlapping it. */
+@media (max-width: 768px) {
+    .st-key-atlas_side_panel {
+        position: static; width: 100%; height: auto; max-height: 420px;
+        top: auto; right: auto; bottom: auto;
+        border-left: none; border-top: 1px solid var(--prism-border);
+        border-radius: var(--prism-radius) var(--prism-radius) 0 0;
+        margin-top: 20px;
+    }
+}
 .atlas-panel-hd { display: flex; align-items: center; gap: 10px; padding-bottom: 12px; border-bottom: 1px solid var(--prism-border); margin-bottom: 10px; }
 .atlas-orb-sm.atlas-orb { width: 26px; height: 26px; animation-duration: 2.2s; flex-shrink: 0; }
 .atlas-panel-hd .t { font-family: var(--prism-hud-font); font-weight: 700; font-size: 15px; letter-spacing: .28em; color: var(--prism-text); }
@@ -762,6 +777,38 @@ div[data-testid="stSegmentedControl"] label[data-baseweb="radio"][aria-checked="
 div[data-testid="stSegmentedControl"] label[aria-selected="true"] {
     box-shadow: inset 0 -2px 0 0 var(--prism-accent2);
 }
+
+/* SQL Lab data-test badges — same .prism-badge pattern as b-num/b-cat/b-dt/b-txt above. */
+.prism-badge.b-pass { color: var(--prism-success); border-color: var(--prism-success); }
+.prism-badge.b-fail { color: var(--prism-danger); border-color: var(--prism-danger); }
+.prism-badge.b-err  { color: var(--prism-warning); border-color: var(--prism-warning); }
+
+.prism-test-summary {
+    font-family: var(--prism-hud-font); font-size: 12px; letter-spacing: .06em;
+    color: var(--prism-text-muted); margin: 4px 0 8px;
+}
+.prism-test-list { display: flex; flex-direction: column; gap: 6px; }
+.prism-test-row {
+    display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+    background: var(--prism-surface); border: 1px solid var(--prism-border); border-radius: var(--prism-radius);
+}
+.prism-test-row .tn { font-family: var(--prism-mono-font); font-size: 12.5px; color: var(--prism-text); flex-shrink: 0; }
+.prism-test-row .td { font-size: 11.5px; color: var(--prism-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* SQL Lab console — a distinct terminal-style wrapper scoped to the SQL Lab
+   tab only, via the .st-key-<container key> technique (same trick
+   .st-key-atlas_side_panel above uses) — still driven by the shared
+   --prism-* tokens, not a parallel theming system. */
+.st-key-sql_lab_console {
+    background: linear-gradient(180deg, rgba(0,0,0,.14), transparent 140px), var(--prism-bg);
+    border: 1px solid var(--prism-border); border-radius: var(--prism-radius);
+    padding: 18px 20px 6px;
+}
+.st-key-sql_lab_console::before {
+    content: "PRISM SQL LAB · DUCKDB CONSOLE";
+    display: block; font-family: var(--prism-mono-font); font-size: 10px; letter-spacing: .22em;
+    color: var(--prism-accent); opacity: .75; margin-bottom: 12px;
+}
 </style>
 """
 )
@@ -772,6 +819,35 @@ def apply_custom_theme(theme_key: str = DEFAULT_THEME) -> None:
     after set_page_config, before any other UI is rendered.
     """
     st.markdown(_CSS_TEMPLATE.substitute(_tokens(theme_key), ease="var(--prism-ease)"), unsafe_allow_html=True)
+
+
+def sync_native_theme(theme_key: str = DEFAULT_THEME) -> None:
+    """Push this theme's colors into Streamlit's own runtime theme config,
+    not just the injected CSS.
+
+    st.dataframe/st.table render through glide-data-grid, a <canvas>
+    element whose fill colors come from Streamlit's theme.base/backgroundColor
+    /etc. config options, not from any CSS this app injects — CSS can style
+    HTML around a canvas but can't reach inside it. .streamlit/config.toml
+    only sets those options once, at first paint, hardcoded to dark — so
+    every dataframe kept dark row/header styling even after switching to
+    Arctic (Light) in the sidebar (found during 2026-08-10 Phase 5 review).
+
+    Streamlit has no public API for changing the active theme at runtime,
+    so this uses the same `st._config.set_option` most theme-toggle
+    implementations rely on — guarded in a try/except so a Streamlit
+    version that removes/renames this private hook degrades to "dataframes
+    stay dark," not a crash.
+    """
+    tokens = _tokens(theme_key)
+    try:
+        st._config.set_option("theme.base", tokens["mode"])
+        st._config.set_option("theme.backgroundColor", tokens["bg"])
+        st._config.set_option("theme.secondaryBackgroundColor", tokens["surface"])
+        st._config.set_option("theme.textColor", tokens["text"])
+        st._config.set_option("theme.primaryColor", tokens["accent"])
+    except Exception:
+        pass
 
 
 def _build_template(tokens: dict) -> go.layout.Template:

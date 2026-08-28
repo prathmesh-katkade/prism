@@ -4,7 +4,11 @@ Atlas — Prism's JARVIS-style voice operator.
 Architecture (the intent router is the core; everything else hangs off it):
 
     utterance (voice or typed)
-        --> classify_intent(): ONE Gemini call, strict JSON out
+        --> classify_intent_fast(): zero-Gemini keyword match for a small,
+            context-free command set (navigate, demo/story mode, next/
+            previous, cancel) — returns None on no match
+        --> classify_intent(): ONE Gemini call, strict JSON out (only
+            reached when the fast path didn't match)
         --> {"type": APP_COMMAND | DATA_QUESTION | CHITCHAT, "action", "target",
              "question", "spoken_reply"}
 
@@ -18,6 +22,11 @@ Architecture (the intent router is the core; everything else hangs off it):
                      ask_and_execute() pipeline — unchanged, so voice and
                      typed questions get identical, already-battle-tested
                      handling and share the same chat_history.
+    SQL_QUESTION --> same non-execution treatment as DATA_QUESTION: atlas.py
+                     only classifies it (plus a "single"|"multi" complexity
+                     field), app.py's _process_atlas_sql_question() generates
+                     and runs the SQL via modules/sql_lab.py and writes the
+                     reserved Atlas tab in SQL Lab.
     CHITCHAT     --> spoken_reply only, nothing executes.
 
 Malformed JSON gets exactly one retry (explicitly asking Gemini to return
@@ -39,12 +48,7 @@ from typing import Callable, Optional
 
 import streamlit as st
 
-from modules.ai_analyst import MODEL_NAME, call_gemini, get_api_key
-
-try:
-    import google.generativeai as genai
-except ImportError:  # pragma: no cover - the app should still load without it
-    genai = None
+from modules.ai_analyst import MODEL_NAME, build_model, call_gemini
 
 try:
     import edge_tts
@@ -60,11 +64,15 @@ except ImportError:  # pragma: no cover
 VOICE_NAME = "en-GB-RyanNeural"  # calm, precise — the closest free neural voice to the persona
 
 PERSONA = (
-    "You are Atlas, the voice operator embedded in Prism — an auto-EDA and AI analyst "
-    "tool built by Prathmesh Katkade. Your personality: calm, precise, lightly witty — "
-    "JARVIS energy, not a chatbot. You are terse and confident, you never pad a reply "
-    "with filler, and you never claim to have done something you haven't. Address the "
-    "user directly, in second person."
+    "You are Atlas, embedded in Prism — Prathmesh's copilot for this session, not a tool "
+    "he opens and closes. He's actually chatting with you while he works the data, so talk "
+    "like Claude would, in Atlas's voice: thoughtful, direct, genuinely warm — not a stiff "
+    "JARVIS-butler reciting status updates. Have real personality: dry wit, an occasional "
+    "sharp remark when the data actually earns it (a genuinely ugly column of nulls, a wild "
+    "outlier, a duplicate-riddled mess) — humour as a real trait, not a footnote bolted onto "
+    "the 'real' answer. Terse because spoken replies have to stay short, never because "
+    "you're being flat — those are different things. Confident, never claims to have done "
+    "something it hasn't. Address the user directly, in second person."
 )
 
 TAB_NAMES = [
@@ -78,12 +86,14 @@ Every message you receive is one utterance from the user (typed or transcribed f
 voice) inside Prism. Classify it and respond with STRICT JSON only — no prose, no
 markdown code fences, just the JSON object — matching exactly this shape:
 
-{{"type": "APP_COMMAND" | "DATA_QUESTION" | "CHITCHAT",
+{{"type": "APP_COMMAND" | "DATA_QUESTION" | "SQL_QUESTION" | "CHITCHAT",
   "action": "navigate" | "load_sample" | "clean_nulls" | "auto_clean" | "generate_dictionary" |
              "propose_plan" | "execute_plan" | "generate_report" | "build_dashboard" | "run_recipe" |
-             "start_story_mode" | "demo_mode" | "next" | "previous" | "confirm" | "cancel" | "none",
-  "target": "<tab name, column name, or null>",
-  "question": "<the data question if type is DATA_QUESTION, else null>",
+             "start_story_mode" | "demo_mode" | "next" | "previous" | "confirm" | "cancel" |
+             "save_sql_query" | "none",
+  "target": "<tab name, column name, saved-query name, or null>",
+  "question": "<the data/SQL question if type is DATA_QUESTION or SQL_QUESTION, else null>",
+  "complexity": "<if type is SQL_QUESTION: 'single' or 'multi', else null>",
   "spoken_reply": "<1-2 sentences, in character, said aloud>"}}
 
 Rules:
@@ -108,10 +118,22 @@ Rules:
   conversation shows Atlas was proposing or discussing an analysis plan — if Atlas's last
   message was instead asking to confirm a destructive cleaning action, those same words
   mean "confirm" (see the next rule), not "execute_plan".
-- DATA_QUESTION: the user is asking something about THEIR loaded data ("what's the
-  average revenue by region", "show me nulls in the age column", "now by month" as a
-  follow-up to a prior question). Set "question" to the verbatim question; action is
-  "none".
+- SQL_QUESTION: the user wants an answer computable via SQL over the tabular data —
+  filter/aggregate/sort/group/join/count ("what were sales by region last quarter",
+  "top 10 customers by revenue", "how many orders had a null shipping_date"). Set
+  "question" to the verbatim question (or a cleaned-up version); action "none". Set
+  "complexity" to "single" for one direct ask, "multi" for open-ended/diagnostic asks
+  that need several queries chained together to answer ("what's going wrong with
+  revenue this quarter", "find my biggest data quality issue", "why did churn
+  spike"). Prefer SQL_QUESTION over DATA_QUESTION whenever the question is
+  expressible as filter/aggregate/sort/group/join/count.
+- DATA_QUESTION: the user is asking something about their data that is NOT
+  SQL-expressible — a chart/plot request, statistics/ML (correlation, regression,
+  clustering, forecasting), or a free-form pandas transform. Set "question" to the
+  verbatim question; action is "none".
+- "save_sql_query": the user wants to save the query currently in SQL Lab under a
+  name ("save this as my weekly report", "save this query", "save it as churn_check").
+  Set "target" to the name if one was given, else null (a default name gets assigned).
 - CHITCHAT: greetings, small talk, or anything unrelated to the app or the data.
   action is "none", question is null, spoken_reply carries the whole response.
 - If the user is responding to a pending confirmation with agreement ("yes", "do it",
@@ -128,6 +150,74 @@ Rules:
   screen, not in speech.
 """
 
+# ═══════════════════════════════════════════════════════════════════════
+# KEYWORD FAST PATH — a small, deliberately-conservative set of utterances
+# with exactly one correct interpretation regardless of conversation
+# context, matched with zero Gemini calls. Everything context-sensitive
+# (the router's own "go"/"do it"/"start" confirm-vs-execute_plan overlap,
+# data questions, chitchat, anything not an exact phrasing below) falls
+# through to classify_intent()'s Gemini call unchanged — this never
+# guesses. Cuts latency and API quota for the handful of commands used
+# every session (navigation, demo/story mode, slide stepping, cancel) and,
+# as a side effect, makes those commands exercisable in this sandbox
+# without a live GEMINI_API_KEY (see Run 16's routine_log note).
+# ═══════════════════════════════════════════════════════════════════════
+_FAST_PATH_TAB_ALIASES = {name.lower(): name for name in TAB_NAMES}
+
+_NAVIGATE_RE = re.compile(
+    r"^(?:go to|open|navigate to|show me)\s+(?:the\s+)?(.+?)(?:\s+tab)?$", re.I
+)
+
+_FAST_PATH_EXACT = {
+    "start demo mode": {"action": "demo_mode", "spoken_reply": "Starting demo mode."},
+    "demo mode": {"action": "demo_mode", "spoken_reply": "Starting demo mode."},
+    "run demo mode": {"action": "demo_mode", "spoken_reply": "Starting demo mode."},
+    "start story mode": {"action": "start_story_mode", "spoken_reply": "Let's tell this dataset's story."},
+    "story mode": {"action": "start_story_mode", "spoken_reply": "Let's tell this dataset's story."},
+    "next": {"action": "next", "spoken_reply": "Next."},
+    "next slide": {"action": "next", "spoken_reply": "Next."},
+    "previous": {"action": "previous", "spoken_reply": "Back one."},
+    "previous slide": {"action": "previous", "spoken_reply": "Back one."},
+    "go back": {"action": "previous", "spoken_reply": "Back one."},
+    "cancel": {"action": "cancel", "spoken_reply": "Cancelled."},
+    "stop": {"action": "cancel", "spoken_reply": "Cancelled."},
+    "never mind": {"action": "cancel", "spoken_reply": "Cancelled."},
+}
+
+
+def _fast_intent(action: str, target: Optional[str], spoken_reply: str) -> dict:
+    return {
+        "type": "APP_COMMAND", "action": action, "target": target,
+        "question": None, "spoken_reply": spoken_reply,
+    }
+
+
+def classify_intent_fast(utterance: Optional[str]) -> Optional[dict]:
+    """Zero-Gemini-call match for the conservative fast-path set above.
+    Returns a fully-formed intent dict (same shape classify_intent()
+    returns) on a match, else None so the caller falls back to the full
+    Gemini router. Never raises.
+    """
+    text = (utterance or "").strip()
+    if not text:
+        return None
+    text = re.sub(r"[.!?]+$", "", text).strip().lower()
+    if not text:
+        return None
+
+    exact = _FAST_PATH_EXACT.get(text)
+    if exact:
+        return _fast_intent(exact["action"], None, exact["spoken_reply"])
+
+    match = _NAVIGATE_RE.match(text)
+    if match:
+        target = _FAST_PATH_TAB_ALIASES.get(match.group(1).strip())
+        if target:
+            return _fast_intent("navigate", target, f"Opening {target}.")
+
+    return None
+
+
 FALLBACK_INTENT = {
     "type": "CHITCHAT",
     "action": "none",
@@ -143,11 +233,7 @@ _JSON_BLOCK_RE = re.compile(r"\{.*\}", re.DOTALL)
 # INTENT ROUTER (the core)
 # ═══════════════════════════════════════════════════════════════════════
 def _client():
-    key = get_api_key()
-    if not key or genai is None:
-        return None
-    genai.configure(api_key=key)
-    return genai.GenerativeModel(MODEL_NAME, system_instruction=ROUTER_SYSTEM_PROMPT)
+    return build_model(MODEL_NAME, system_instruction=ROUTER_SYSTEM_PROMPT)
 
 
 def _parse_intent_json(text: str) -> Optional[dict]:
@@ -158,11 +244,12 @@ def _parse_intent_json(text: str) -> Optional[dict]:
         data = json.loads(match.group(0))
     except json.JSONDecodeError:
         return None
-    if data.get("type") not in ("APP_COMMAND", "DATA_QUESTION", "CHITCHAT"):
+    if data.get("type") not in ("APP_COMMAND", "DATA_QUESTION", "SQL_QUESTION", "CHITCHAT"):
         return None
     data.setdefault("action", "none")
     data.setdefault("target", None)
     data.setdefault("question", None)
+    data.setdefault("complexity", "single")  # cheaper/safer default if the model omits it
     data.setdefault("spoken_reply", "")
     return data
 
@@ -336,8 +423,10 @@ def handle_utterance(utterance: str) -> dict:
     st.session_state.chat_history.append({"role": "user", "content": utterance})
     set_state("processing")
 
-    context = _recent_context()
-    intent = classify_intent(utterance, context)
+    intent = classify_intent_fast(utterance)
+    if intent is None:
+        context = _recent_context()
+        intent = classify_intent(utterance, context)
 
     if intent["type"] == "APP_COMMAND":
         handled = dispatch(intent["action"], intent.get("target"))
@@ -422,6 +511,48 @@ def set_state(state: str) -> None:
     st.session_state.atlas_orb_state = state
 
 
+def raise_alert(count: int) -> None:
+    """Proactive-insight HUD: light up the orb in its 'alert' visual state
+    with no user action required, whenever a fresh dataset load surfaces
+    `count` high-severity Auto-Insight findings (see app.py's
+    announce_ambient_insights(), which calls this right after computing
+    `auto_insights.generate_insights()` — zero extra Gemini calls, this is
+    purely a visual signal over data already computed).
+
+    A no-op when count <= 0 — nothing to alert about, so the orb's current
+    state (idle, or whatever the last real interaction left it in) is left
+    alone rather than forced.
+    """
+    if count <= 0:
+        return
+    st.session_state.atlas_alert_count = count
+    st.session_state.atlas_alert_fresh = True  # see clear_alert()'s docstring
+    set_state("alert")
+
+
+def clear_alert() -> None:
+    """Call whenever the Overview tab renders its Auto-Insights panel — the
+    point at which the user has actually seen the findings that may have
+    triggered raise_alert().
+
+    raise_alert() and this both run within the *same* Streamlit script pass
+    when a fresh upload lands while Overview is already the active tab
+    (Overview is the default section), since the whole script runs top to
+    bottom in one pass. Clearing unconditionally here would erase the alert
+    before the browser ever painted it. `atlas_alert_fresh` is a one-run
+    grace flag: raise_alert() sets it, and the first time this function
+    sees it set it just consumes it (leaving the alert visible for that
+    render) instead of clearing — only the *next* time Overview renders
+    (a later, separate rerun) does the alert actually clear.
+    """
+    if st.session_state.get("atlas_alert_fresh"):
+        st.session_state.atlas_alert_fresh = False
+        return
+    st.session_state.atlas_alert_count = 0
+    if st.session_state.get("atlas_orb_state") == "alert":
+        set_state("idle")
+
+
 _ORB_CSS = """
 <style>
 .atlas-orb-wrap {
@@ -461,6 +592,22 @@ _ORB_CSS = """
     border-top-color: transparent; border-right-color: transparent;
     animation: atlasSpin 0.9s linear infinite;
 }
+/* Proactive alert HUD: an unprompted amber pulse (distinct from the red
+   .listening ring and the cyan default) so a high-severity Auto-Insight
+   finding is visible even if the user never clicks anything — same sonar
+   mechanism as .speaking, just recolored and slower so it reads as "waiting
+   for you" rather than "actively talking". */
+.atlas-orb.alert { background: radial-gradient(circle at 35% 30%, var(--prism-warning, #FBBF24), var(--prism-accent2, #A78BFA)); }
+.atlas-orb.alert::after {
+    border-color: var(--prism-warning, #FBBF24);
+    animation: atlasSonar 2.2s ease-out infinite;
+}
+.atlas-orb.alert::before {
+    content: ""; position: absolute; inset: -8px; border-radius: 50%;
+    border: 2px solid rgba(251, 191, 36, 0.5);
+    animation: atlasSonar 2.2s ease-out infinite;
+    animation-delay: 1.1s;
+}
 @keyframes atlasPulse { 0%, 100% { transform: scale(1); opacity: 0.9; } 50% { transform: scale(1.08); opacity: 1; } }
 @keyframes atlasListen { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.15); } }
 @keyframes atlasRing { 0% { transform: scale(1); opacity: 0.9; } 100% { transform: scale(1.6); opacity: 0; } }
@@ -485,6 +632,140 @@ _ORB_CSS = """
 """
 
 
+_NEURON_BG_JS = """
+<script>
+(function() {
+    const win = window.parent;
+    const doc = win.document;
+    const panel = doc.querySelector('.st-key-atlas_side_panel');
+    if (!panel) return;
+    // Marker lives on the panel's own DOM node (not a global flag) so this
+    // survives Streamlit reruns cleanly: st.container(key=...) keeps the
+    // same node alive across reruns, so the marker (and the loop it guards)
+    // persists too — no duplicate animation loops piling up on every rerun.
+    if (panel.dataset.neuronInit) return;
+    panel.dataset.neuronInit = '1';
+
+    const canvas = doc.createElement('canvas');
+    canvas.style.cssText = 'position:absolute;inset:0;z-index:-1;pointer-events:none;opacity:0.55;';
+    panel.insertBefore(canvas, panel.firstChild);
+    const ctx = canvas.getContext('2d');
+    let w, h, dpr;
+
+    function resize() {
+        dpr = Math.min(win.devicePixelRatio || 1, 2);
+        w = panel.clientWidth; h = panel.clientHeight;
+        canvas.width = w * dpr; canvas.height = h * dpr;
+        canvas.style.width = w + 'px'; canvas.style.height = h + 'px';
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+    resize();
+    win.addEventListener('resize', resize);
+
+    const REDUCED = win.matchMedia && win.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const LINK_DIST = 110;
+    const COUNT = Math.min(40, Math.max(16, Math.floor((w * h) / 9000)));
+    let nodes = Array.from({ length: COUNT }, () => ({
+        x: Math.random() * w, y: Math.random() * h,
+        vx: (Math.random() - 0.5) * 0.1, vy: (Math.random() - 0.5) * 0.1,
+        r: Math.random() * 1.3 + 1,
+    }));
+    let pulses = [];
+
+    function accentRgb() {
+        // Reads Prism's own theme token so the mesh matches whichever theme
+        // (Graphite/Midnight/Arctic) is active, same trick as the rest of
+        // the app's CSS — no hardcoded color to fall out of sync.
+        const v = getComputedStyle(panel).getPropertyValue('--prism-accent-rgb').trim();
+        return v || '34,211,238';
+    }
+
+    function draw() {
+        const rgb = accentRgb();
+        ctx.clearRect(0, 0, w, h);
+        const links = [];
+        for (const n of nodes) {
+            n.x += n.vx; n.y += n.vy;
+            if (n.x < 0 || n.x > w) n.vx *= -1;
+            if (n.y < 0 || n.y > h) n.vy *= -1;
+            n.x = Math.max(0, Math.min(w, n.x));
+            n.y = Math.max(0, Math.min(h, n.y));
+        }
+        for (let i = 0; i < nodes.length; i++) {
+            for (let j = i + 1; j < nodes.length; j++) {
+                const a = nodes[i], b = nodes[j];
+                const dist = Math.hypot(a.x - b.x, a.y - b.y);
+                if (dist < LINK_DIST) {
+                    const alpha = (1 - dist / LINK_DIST) * 0.55;
+                    ctx.beginPath();
+                    ctx.strokeStyle = `rgba(${rgb},${alpha.toFixed(3)})`;
+                    ctx.lineWidth = 0.7;
+                    ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
+                    ctx.stroke();
+                    links.push({ a, b });
+                }
+            }
+        }
+        for (const n of nodes) {
+            ctx.beginPath();
+            ctx.fillStyle = `rgba(${rgb},0.6)`;
+            ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        if (!REDUCED && pulses.length < 2 && links.length && Math.random() < 0.025) {
+            const link = links[Math.floor(Math.random() * links.length)];
+            pulses.push({ a: link.a, b: link.b, t: 0, speed: 0.015 + Math.random() * 0.01 });
+        }
+        pulses = pulses.filter((p) => p.t <= 1);
+        for (const p of pulses) {
+            p.t += p.speed;
+            const x = p.a.x + (p.b.x - p.a.x) * p.t;
+            const y = p.a.y + (p.b.y - p.a.y) * p.t;
+            ctx.beginPath();
+            ctx.fillStyle = `rgba(${rgb},0.95)`;
+            ctx.shadowColor = `rgba(${rgb},0.95)`;
+            ctx.shadowBlur = 6;
+            ctx.arc(x, y, 2, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.shadowBlur = 0;
+        }
+    }
+
+    if (REDUCED) { draw(); return; }
+
+    function tick() {
+        // Panel gone (Demo/Story Mode took over the screen) — stop rather
+        // than spin forever against a detached node; a fresh loop starts
+        // cleanly next time the panel remounts, since the marker only
+        // lives on that (now-discarded) node.
+        if (!doc.body.contains(panel)) return;
+        if (doc.hidden) { win.requestAnimationFrame(tick); return; }
+        draw();
+        win.requestAnimationFrame(tick);
+    }
+    tick();
+})();
+</script>
+"""
+
+
+def render_neuron_bg() -> None:
+    """Animated neuron-network canvas behind the Atlas side panel's message
+    list — drifting nodes, fading synapse links when close, an occasional
+    bright pulse traveling a live connection. Injected via a zero-height
+    components.html() iframe reaching into window.parent.document (the same
+    technique modules/ui.py's render_tab_jump_script already uses) rather
+    than st.markdown(unsafe_allow_html=True): browsers never execute
+    <script> tags inserted via innerHTML (which is what Streamlit's markdown
+    path does under the hood), only ones present in a real document's
+    initial HTML — which is exactly what a components.html() iframe is.
+    Call once per rerun, right after the panel's header markdown.
+    """
+    import streamlit.components.v1 as components
+
+    components.html(_NEURON_BG_JS, height=0)
+
+
 def render_orb() -> None:
     """Draw the CSS orb, fixed in the bottom-right corner. Call once per
     rerun, on every screen (landing included) — orb state was last set by
@@ -496,9 +777,33 @@ def render_orb() -> None:
     playback state without a custom component, which is out of scope here.
     """
     state = st.session_state.get("atlas_orb_state", "idle")
-    st.markdown(_ORB_CSS, unsafe_allow_html=True)
+    if state == "alert":
+        count = st.session_state.get("atlas_alert_count", 0)
+        label = f"&#9888; {count} new insight{'s' if count != 1 else ''}" if count else "Atlas &middot; alert"
+    else:
+        label = f"Atlas &middot; {state}"
+    inject_orb_css()
     st.markdown(
         f'<div class="atlas-orb-wrap"><div class="atlas-orb {state}"></div>'
-        f'<div class="atlas-orb-label">Atlas &middot; {state}</div></div>',
+        f'<div class="atlas-orb-label">{label}</div></div>',
         unsafe_allow_html=True,
     )
+
+
+def inject_orb_css() -> None:
+    """Injects _ORB_CSS (the gradient/animation rules every `.atlas-orb`
+    element needs, including the small `.atlas-orb-sm` variant in the side
+    panel's header) onto the page.
+
+    render_orb() calls this itself, but render_orb() is only invoked for
+    the floating standalone orb (landing page, Story/Demo Mode — see its
+    call site in app.py). Once a dataset is active, the side panel replaces
+    the floating orb with its own small orb in the header — that markup is
+    written directly in app.py, not through render_orb(), so without a
+    separate call to this function the side panel's orb was a sized-but-
+    unstyled div: correct dimensions, no gradient/background, invisible
+    against the dark panel. Idempotent (repeated st.markdown(<style>) calls
+    just add redundant identical rules), so it's safe to call once per
+    rerun from both places.
+    """
+    st.markdown(_ORB_CSS, unsafe_allow_html=True)

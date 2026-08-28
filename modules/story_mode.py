@@ -24,7 +24,7 @@ from typing import Callable
 import streamlit as st
 import streamlit.components.v1 as components
 
-from modules import ai_analyst, atlas, cleaning, data_engine, visualization
+from modules import ai_analyst, atlas, cleaning, data_engine, insight_verifier, ui, visualization
 
 DEMO_DATASET_PATH = Path(__file__).resolve().parent.parent / "samples" / "indian_startup_funding_messy.csv"
 
@@ -46,6 +46,23 @@ def _narrate_and_pace(text: str) -> None:
     time.sleep(_speech_seconds(text))
 
 
+def _generate_and_verify_insights(model, df, column_types):
+    """generate_key_insights() + a modules.insight_verifier fact-check pass
+    over the result — the same static, zero-extra-Gemini-call verification
+    Run 10 wired into Auto Analyst's "Run Full Analysis" findings, extended
+    since to the AI Analyst tab's own "Generate Key Insights" button (Run 14)
+    and the Report Writer's HTML/PDF export (Run 15). Story Mode and Demo
+    Mode share this one helper rather than each hand-rolling the same two
+    calls, and it stays free of any `st.*` call so it's testable without a
+    running Streamlit session. Returns (insights, verification, err).
+    """
+    quality = data_engine.get_data_quality_report(df, column_types)
+    _, top_corr = visualization.plot_correlation_heatmap(df)
+    insights, err = ai_analyst.generate_key_insights(model, df, quality, column_types, top_corr)
+    verification = insight_verifier.verify_findings(df, column_types, insights) if insights else []
+    return insights, verification, err
+
+
 # ═══════════════════════════════════════════════════════════════════════
 # STORY MODE — voice-narrated slide deck over the AI Analyst's key insights
 # ═══════════════════════════════════════════════════════════════════════
@@ -59,11 +76,10 @@ def _ensure_insights() -> None:
         )
         return
     df, column_types = st.session_state.working_df, st.session_state.column_types
-    quality = data_engine.get_data_quality_report(df, column_types)
-    _, top_corr = visualization.plot_correlation_heatmap(df)
-    insights, err = ai_analyst.generate_key_insights(model, df, quality, column_types, top_corr)
+    insights, verification, err = _generate_and_verify_insights(model, df, column_types)
     st.session_state.key_insights = insights
     st.session_state.key_insights_error = err
+    st.session_state.key_insights_verification = verification
 
 
 def advance_slide(delta: int) -> None:
@@ -100,9 +116,16 @@ def render_story_mode() -> None:
     idx = max(0, min(len(insights) - 1, idx))
     st.session_state.story_slide_index = idx
     current = insights[idx]
+    verification = st.session_state.key_insights_verification
+    status = verification[idx]["status"] if idx < len(verification) else None
+    badge = ui.INSIGHT_VERIFICATION_BADGES.get(status, "") if status else ""
 
     with st.container(key="atlas_story_slide"):
-        st.caption(f"Finding {idx + 1} of {len(insights)}")
+        label = f"Finding {idx + 1} of {len(insights)}"
+        st.markdown(
+            f'<div class="insight-number">{label.upper()}{f" {badge}" if badge else ""}</div>',
+            unsafe_allow_html=True,
+        )
         st.markdown(f"### {current}")
 
     atlas.set_state("speaking")
@@ -203,12 +226,9 @@ def render_demo_mode(set_active_dataset: Callable) -> None:
             insights: list[str] = []
         else:
             step("Running auto-analysis.")
-            quality2 = data_engine.get_data_quality_report(working, st.session_state.column_types)
-            _, top_corr = visualization.plot_correlation_heatmap(working)
-            insights, err = ai_analyst.generate_key_insights(
-                model, working, quality2, st.session_state.column_types, top_corr
-            )
+            insights, verification, err = _generate_and_verify_insights(model, working, st.session_state.column_types)
             st.session_state.key_insights = insights
+            st.session_state.key_insights_verification = verification
             if err:
                 step(f"Analysis hit a snag: {err}")
                 insights = []
@@ -222,12 +242,16 @@ def render_demo_mode(set_active_dataset: Callable) -> None:
 
     st.success("Demo complete.")
     if st.session_state.key_insights:
-        cards_html = "".join(
-            f'<div class="insight-card"><div class="insight-number">FINDING {i + 1:02d}</div>'
-            f'<div class="insight-text">{finding}</div></div>'
-            for i, finding in enumerate(st.session_state.key_insights)
+        # Same insight-card + fact-check-badge markup every other
+        # generate_key_insights() call site uses (modules.ui, shared since
+        # Run 14) — Demo Mode used to hand-roll its own unverified copy.
+        caption = ui.build_verification_caption(st.session_state.key_insights_verification)
+        if caption:
+            st.caption(caption)
+        st.markdown(
+            ui.build_insight_cards_html(st.session_state.key_insights, st.session_state.key_insights_verification),
+            unsafe_allow_html=True,
         )
-        st.markdown(cards_html, unsafe_allow_html=True)
     if st.button("Exit Demo"):
         st.session_state.demo_mode_running = False
         st.session_state.demo_done = False

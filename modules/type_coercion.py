@@ -18,15 +18,28 @@ _NUMERIC_LIKE_RE = re.compile(
     rf"^\s*-?\s*[{_CURRENCY_SYMBOLS}]?\s*-?[\d,]*\.?\d+\s*%?\s*[KMB]?\s*$", re.IGNORECASE
 )
 
+# Accounting-style negatives — "(1,234.56)" meaning -1234.56 — are common
+# enough in financial exports (P&L statements, expense reports) to be worth
+# a dedicated check rather than folding parens into the main regex above,
+# which would make it noticeably harder to read.
+_PAREN_NEGATIVE_RE = re.compile(r"^\((.*)\)$")
+
 # A column qualifies as a "numeric candidate" if at least this share of its
 # non-null values match the pattern above.
 MATCH_THRESHOLD_PCT = 70.0
 
 
+def _strip_paren_negative(text: str) -> tuple[str, bool]:
+    """'(1,234.56)' -> ('1,234.56', True); anything else -> (text, False)."""
+    m = _PAREN_NEGATIVE_RE.match(text)
+    return (m.group(1), True) if m else (text, False)
+
+
 def _looks_numeric_like(value) -> bool:
     if not isinstance(value, str) or not value.strip():
         return False
-    return bool(_NUMERIC_LIKE_RE.match(value.strip()))
+    text, _ = _strip_paren_negative(value.strip())
+    return bool(_NUMERIC_LIKE_RE.match(text))
 
 
 def detect_numeric_candidates(df: pd.DataFrame, column_types: dict[str, str]) -> list[dict]:
@@ -58,7 +71,8 @@ def parse_one(value) -> float:
     if not text:
         return float("nan")
 
-    negative = text.startswith("-")
+    text, paren_negative = _strip_paren_negative(text)
+    negative = paren_negative or text.startswith("-")
     text = text.lstrip("-").strip()
     for sym in _CURRENCY_SYMBOLS:
         text = text.replace(sym, "")

@@ -241,6 +241,20 @@ The flagship v2 feature — one button, a full agentic analysis:
   pending → running → done, with its own generated code and result
 - Ends with an "Analysis Complete" card summarizing the top 5 findings,
   synthesized by Gemini from everything the steps actually found
+- **Insight Verifier**: every finding is fact-checked against the actual
+  DataFrame before it's shown — a deterministic pass (`modules/insight_
+  verifier.py`, no extra Gemini calls) recomputes real stats (row/column
+  counts, per-column means, category shares, correlations, group-by means)
+  and badges each finding ✓ verified or ⚠ unconfirmed depending on whether
+  its numbers match. Catches LLM narration drifting from the data it was
+  actually given.
+- **Suggested next hypothesis**: after a run, Prism looks at the loaded
+  data itself (not the LLM's prose) and suggests the single most promising
+  column pair for a real significance test — the strongest numeric/numeric
+  correlation if one clears a "worth testing" bar, else the numeric column
+  that varies most across a categorical column's groups (ranked by a
+  one-way ANOVA F-statistic). One click jumps straight into Stats Lab with
+  both columns pre-selected.
 
 ### Stats Lab
 - Pick two columns; Stats Lab suggests the statistically appropriate test
@@ -599,6 +613,13 @@ imputation-worthy missingness).
 
 **Deploying this yourself?** See [`DEPLOYMENT.md`](DEPLOYMENT.md) for exact
 steps to put it on Streamlit Community Cloud for free.
+
+**Running the test suite:**
+
+```bash
+pip install -r requirements-dev.txt
+pytest
+```
 
 ---
 

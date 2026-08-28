@@ -513,6 +513,102 @@ def render_column_profiler_grid(
     st.markdown(f'<div class="prism-col-grid">{"".join(cards)}</div>', unsafe_allow_html=True)
 
 
+def render_assertion_results(results: list[dict]) -> None:
+    """SQL Lab's Data Tests: one row per assertion — pass/fail/error badge,
+    name, and a one-line detail. Same per-item-HTML-string-then-single-
+    markdown-call construction as render_column_profiler_grid just above,
+    reusing the .prism-badge pattern with new b-pass/b-fail/b-err variants
+    (modules/theme.py) instead of inventing separate card CSS.
+    """
+    if not results:
+        return
+    badge_map = {"pass": ("b-pass", "PASS"), "fail": ("b-fail", "FAIL"), "error": ("b-err", "ERROR")}
+    rows = []
+    for r in results:
+        badge_cls, badge_txt = badge_map.get(r.get("status"), ("b-txt", "?"))
+        rows.append(
+            f'<div class="prism-test-row">'
+            f'<span class="prism-badge {badge_cls}">{badge_txt}</span>'
+            f'<span class="tn">{r.get("name", "")}</span>'
+            f'<span class="td">{r.get("detail", "")}</span>'
+            f"</div>"
+        )
+    n_pass = sum(1 for r in results if r.get("status") == "pass")
+    st.markdown(
+        f'<div class="prism-test-summary">{n_pass}/{len(results)} passed</div>'
+        f'<div class="prism-test-list">{"".join(rows)}</div>',
+        unsafe_allow_html=True,
+    )
+
+
+# Shared with app.py's two "insight card list" render sites — Auto
+# Analyst's "Run Full Analysis" findings (Run 10) and the AI Analyst tab's
+# standalone "Generate Key Insights" button (this run). Factored out here,
+# deliberately pure (no st.markdown call), so both call sites render
+# identical markup and the badge logic is unit-testable on its own.
+INSIGHT_VERIFICATION_BADGES = {
+    "confirmed": (
+        '<span class="prism-badge b-pass" title="Every number in this finding matches a '
+        'value recomputed directly from the data.">✓ verified</span>'
+    ),
+    "flagged": (
+        '<span class="prism-badge b-fail" title="At least one number here could not be '
+        'matched to a recomputed value — double-check before citing.">⚠ unconfirmed</span>'
+    ),
+    "unverifiable": "",
+}
+
+
+def build_insight_cards_html(findings: list[str], verification: Optional[list[dict]] = None) -> str:
+    """Render a list of Gemini-written findings as "insight-card" HTML,
+    optionally with a modules.insight_verifier fact-check badge next to each
+    finding number.
+
+    `verification` (if given) is the same-order, same-length-or-shorter list
+    of {"status": "confirmed"|"flagged"|"unverifiable", ...} dicts
+    insight_verifier.verify_findings() returns — a finding past the end of
+    `verification` (or with no verification passed at all) simply renders
+    without a badge rather than erroring, since a badge is a nice-to-have
+    annotation, never a precondition for showing the finding itself.
+
+    Returns "" for an empty findings list (nothing to render) and the raw
+    HTML string otherwise — callers pass it to st.markdown(..., unsafe_
+    allow_html=True) themselves, same as every other *_html builder in this
+    module family.
+    """
+    if not findings:
+        return ""
+    cards = []
+    for i, finding in enumerate(findings):
+        status = verification[i]["status"] if verification and i < len(verification) else None
+        badge = INSIGHT_VERIFICATION_BADGES.get(status, "") if status else ""
+        badge_html = f" {badge}" if badge else ""
+        cards.append(
+            f'<div class="insight-card"><div class="insight-number">FINDING {i + 1:02d}{badge_html}</div>'
+            f'<div class="insight-text">{finding}</div></div>'
+        )
+    return "".join(cards)
+
+
+def build_verification_caption(verification: list[dict]) -> Optional[str]:
+    """One-line summary of a verification pass, e.g. "🔎 Fact-checked
+    against the data: 3 finding(s) with confirmed figures, 1 with an
+    unconfirmed number — verify before citing." Returns None when there's
+    nothing worth captioning (empty list, or every finding unverifiable —
+    i.e. no numeric claims were checkable at all), so callers can skip
+    rendering a caption entirely rather than showing an empty/all-zero one.
+    """
+    confirmed_count = sum(1 for v in verification if v.get("status") == "confirmed")
+    flagged_count = sum(1 for v in verification if v.get("status") == "flagged")
+    if not confirmed_count and not flagged_count:
+        return None
+    tail = (
+        f", {flagged_count} with an unconfirmed number — verify before citing."
+        if flagged_count else "."
+    )
+    return f"🔎 Fact-checked against the data: {confirmed_count} finding(s) with confirmed figures{tail}"
+
+
 def render_empty_state(icon: str, title: str, message: str) -> None:
     """A designed "nothing here yet" block (icon + title + one-line
     guidance) used in place of a bare st.info() across every tab's

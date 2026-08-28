@@ -33,7 +33,7 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from modules import data_engine, profiling, sql_lab  # noqa: E402
+from modules import data_engine, profiling, sql_lab, type_coercion  # noqa: E402
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
@@ -73,17 +73,52 @@ def to_native(obj: Any) -> Any:
 class _UploadWrapper:
     """Adapts raw upload bytes to the (.name, .seek(), .read()) interface
     modules/data_engine.py expects — that module was built for Streamlit's
-    UploadedFile, this gives FastAPI's UploadFile the same shape."""
+    UploadedFile, this gives FastAPI's UploadFile the same shape.
+
+    Delegates everything else to the underlying BytesIO via __getattr__
+    rather than hand-picking methods: pandas' Excel engine (openpyxl,
+    reading .xlsx as a zip archive) reaches for .tell() internally, which a
+    seek()/read()-only shim doesn't provide — that gap silently broke every
+    Excel upload through this API (CSV never exercised that code path, so
+    it went unnoticed). Full delegation means any other BytesIO method a
+    future pandas/openpyxl version wants also just works.
+    """
 
     def __init__(self, filename: str, data: bytes):
         self.name = filename
         self._buf = io.BytesIO(data)
 
-    def seek(self, *a, **kw):
-        return self._buf.seek(*a, **kw)
+    def __getattr__(self, attr):
+        return getattr(self._buf, attr)
 
-    def read(self, *a, **kw):
-        return self._buf.read(*a, **kw)
+
+def _auto_convert_numeric_looking_columns(df: pd.DataFrame, column_types: dict[str, str]) -> tuple[pd.DataFrame, dict[str, str], list[str]]:
+    """The Streamlit app's Smart Type Coercion (modules/type_coercion.py) is
+    an opt-in, preview-before-you-commit Cleaning Controls action — there's
+    a human looking at a before/after sample before it applies. Atlas has no
+    equivalent confirmation step in a tool call, and the alternative is
+    worse: silently leaving "$1,234.56"/"85%"-style columns as text means
+    query_dataset/chart_dataset/profile_dataset just can't do anything
+    numeric with them. So the API path auto-applies every candidate
+    type_coercion finds and reports exactly what changed in the warnings
+    list — Atlas surfaces that in conversation, which is this app's version
+    of "showing the user what happened" without a UI to click through.
+    """
+    candidates = type_coercion.detect_numeric_candidates(df, column_types)
+    if not candidates:
+        return df, column_types, []
+
+    converted_names = []
+    for c in candidates:
+        df, _ = type_coercion.convert_column(df, c["column"])
+        converted_names.append(c["column"])
+
+    updated_types = data_engine.detect_column_types(df)
+    note = (
+        f"Converted {', '.join(repr(c) for c in converted_names)} to numeric "
+        "(they were formatted as currency/percent/thousands-separated text)."
+    )
+    return df, updated_types, [note]
 
 
 def _get_dataset(dataset_id: str) -> dict[str, Any]:
@@ -102,16 +137,33 @@ def health():
 
 
 @app.post("/upload")
-async def upload(file: UploadFile = File(...)):  # noqa: B008 - FastAPI dependency declaration
+async def upload(file: UploadFile = File(...), sheet: str | None = None):  # noqa: B008 - FastAPI dependency declaration
     raw = await file.read()
     wrapped = _UploadWrapper(file.filename or "upload.csv", raw)
-    df, error, warnings = data_engine.load_data(wrapped)
+    df, error, warnings = data_engine.load_data(wrapped, sheet_name=sheet if sheet else 0)
     if error:
         raise HTTPException(400, error)
 
+    sheet_names = data_engine.get_excel_sheet_names(_UploadWrapper(file.filename or "upload.csv", raw))
+    active_sheet = sheet if sheet else (sheet_names[0] if sheet_names else None)
+
     column_types = data_engine.detect_column_types(df)
+    df, column_types, coercion_warnings = _auto_convert_numeric_looking_columns(df, column_types)
+    warnings = warnings + coercion_warnings
+
     dataset_id = uuid.uuid4().hex[:12]
-    DATASETS[dataset_id] = {"df": df, "column_types": column_types, "name": file.filename}
+    # raw bytes are kept (not just the parsed df) so switch_sheet can re-parse
+    # the same upload against a different sheet without Prathmesh re-picking
+    # the file from his device — Atlas can just ask for a different sheet by
+    # name mid-conversation.
+    DATASETS[dataset_id] = {
+        "df": df,
+        "column_types": column_types,
+        "name": file.filename,
+        "raw_bytes": raw,
+        "active_sheet": active_sheet,
+        "sheet_names": sheet_names,
+    }
 
     return to_native({
         "datasetId": dataset_id,
@@ -119,6 +171,46 @@ async def upload(file: UploadFile = File(...)):  # noqa: B008 - FastAPI dependen
         "rows": df.shape[0],
         "columns": list(df.columns),
         "warnings": warnings,
+        "sheetNames": sheet_names,
+        "activeSheet": active_sheet,
+    })
+
+
+class SwitchSheetRequest(BaseModel):
+    sheet: str
+
+
+@app.post("/switch-sheet/{dataset_id}")
+def switch_sheet(dataset_id: str, req: SwitchSheetRequest):
+    ds = _get_dataset(dataset_id)
+    if not ds.get("sheet_names"):
+        raise HTTPException(400, "This dataset isn't a multi-sheet workbook — nothing to switch.")
+    if req.sheet not in ds["sheet_names"]:
+        raise HTTPException(
+            400, f"Sheet '{req.sheet}' not found. Available sheets: {', '.join(ds['sheet_names'])}."
+        )
+
+    wrapped = _UploadWrapper(ds["name"] or "upload.xlsx", ds["raw_bytes"])
+    df, error, warnings = data_engine.load_data(wrapped, sheet_name=req.sheet)
+    if error:
+        raise HTTPException(400, error)
+
+    column_types = data_engine.detect_column_types(df)
+    df, column_types, coercion_warnings = _auto_convert_numeric_looking_columns(df, column_types)
+    warnings = warnings + coercion_warnings
+
+    ds["df"] = df
+    ds["column_types"] = column_types
+    ds["active_sheet"] = req.sheet
+
+    return to_native({
+        "datasetId": dataset_id,
+        "name": ds["name"],
+        "rows": df.shape[0],
+        "columns": list(df.columns),
+        "warnings": warnings,
+        "sheetNames": ds["sheet_names"],
+        "activeSheet": req.sheet,
     })
 
 

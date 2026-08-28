@@ -92,6 +92,47 @@ with a link to get one, instead of crashing.
 
 ---
 
+## 3.5. (Optional) Persist Saved Queries / Cleaning Recipes / Session Snapshots to MySQL
+
+By default these three features are session-only, same as everything else
+in Prism — reload the page and they're gone unless manually downloaded
+first. Pointing the app at a MySQL database makes them survive a reload,
+private per browser (an anonymous cookie-backed id, no login).
+
+**You need to provision the MySQL database yourself** — Claude/this tooling
+cannot create a cloud account on your behalf. Any MySQL 8+ host works (a
+free tier from PlanetScale, Aiven, Railway, or similar is enough); it just
+needs to be reachable from wherever the app runs, and its firewall/IP
+allowlist needs to permit your deploy platform's outbound connections
+(provider-specific — check their docs).
+
+1. Create an empty database (e.g. `prism`) on your MySQL host — the app
+   creates its own tables inside it automatically on first connect
+   (`CREATE TABLE IF NOT EXISTS`, never `CREATE DATABASE`), but the
+   database itself must already exist.
+2. Add a `[mysql]` block to the same Streamlit Cloud Secrets TOML from
+   step 3:
+
+   ```toml
+   GEMINI_API_KEY = "your_key_here"
+
+   [mysql]
+   host = "your-cloud-mysql-host"
+   port = 3306
+   user = "your_user"
+   password = "your_password"
+   database = "prism"
+   ```
+
+3. Click **Save** — the app restarts with the secret available.
+
+**Without this step**, the app still deploys and runs completely — Saved
+Queries, Cleaning Recipes, and Session Snapshots simply stay session-only,
+exactly like today, with no visible sign anything is missing (the "Save to
+My Account" buttons just don't render).
+
+---
+
 ## 4. Verify the deployment
 
 Open the app's public URL and check:
@@ -135,7 +176,10 @@ useful if you're already hosting other services (like Atlas, or Prism's
 2. Open the new service's **Environment** tab and set `GEMINI_API_KEY` (it's
    declared with `sync: false` in `render.yaml`, meaning Render provisions
    the variable slot but won't auto-fill it from anywhere — you paste the
-   value in yourself, same idea as a Streamlit Cloud secret).
+   value in yourself, same idea as a Streamlit Cloud secret). Optionally
+   also set `MYSQL_HOST`/`MYSQL_PORT`/`MYSQL_USER`/`MYSQL_PASSWORD`/
+   `MYSQL_DATABASE` the same way for the persistence layer described in
+   step 3.5 above — same "still runs completely fine without it" fallback.
 3. Trigger a deploy (pushing to the connected branch does this automatically
    afterward, same as Streamlit Cloud).
 

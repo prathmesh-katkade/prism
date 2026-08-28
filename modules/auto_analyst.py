@@ -18,6 +18,7 @@ import re
 from typing import Optional
 
 import pandas as pd
+from scipy import stats as scipy_stats
 
 from modules.ai_analyst import (
     ask_and_execute,
@@ -25,6 +26,7 @@ from modules.ai_analyst import (
     call_gemini,
     parse_numbered_bullets,
 )
+from modules.stats_lab import MAX_GROUPS_FOR_TEST
 
 PLAN_SYSTEM_PROMPT = (
     "You are a senior data analyst planning an exploratory analysis of a pandas "
@@ -162,12 +164,25 @@ def run_plan_step(model, df: pd.DataFrame, column_types: dict[str, str], step: d
 
 
 def _summarize_result(result) -> str:
-    """Stringify a step's result compactly enough to fit in a follow-up prompt."""
+    """Stringify a step's result compactly enough to fit in a follow-up prompt.
+
+    Wide DataFrames (many columns) are truncated to avoid blowing up the
+    Gemini token budget for the synthesis prompt.
+    """
     if result is None:
         return "(no result)"
-    if isinstance(result, (pd.DataFrame, pd.Series)):
+    if isinstance(result, pd.DataFrame):
+        truncated = result.head(10)
+        if truncated.shape[1] > 20:
+            truncated = truncated.iloc[:, :20]
+            return truncated.to_string() + f"\n... ({result.shape[1] - 20} more columns omitted)"
+        return truncated.to_string()
+    if isinstance(result, pd.Series):
         return result.head(10).to_string()
-    return str(result)
+    text = str(result)
+    if len(text) > 3000:
+        return text[:3000] + "\n... (truncated)"
+    return text
 
 
 def synthesize_findings(model, step_outcomes: list[dict]) -> tuple[list[str], Optional[str]]:
@@ -192,3 +207,80 @@ def synthesize_findings(model, step_outcomes: list[dict]) -> tuple[list[str], Op
     if error:
         return [], error
     return parse_numbered_bullets(text), None
+
+
+# Below the strongest-correlation bar, a "relationship" is really just noise —
+# suggesting a test on it would send the user chasing nothing.
+_MIN_CORRELATION_TO_SUGGEST = 0.3
+
+
+def suggest_followup_hypothesis(df: pd.DataFrame, column_types: dict[str, str]) -> Optional[dict]:
+    """Look at the loaded data directly (not the LLM's prose) and suggest the
+    single most promising column pair for a real significance test in Stats
+    Lab — a concrete next hypothesis to formally test, not just a summary.
+
+    Ranks candidates deterministically so the suggestion is reproducible:
+      1. the numeric/numeric pair with the strongest absolute correlation,
+         if it clears _MIN_CORRELATION_TO_SUGGEST
+      2. else the numeric/categorical pair with the largest one-way ANOVA
+         F-statistic among viable pairs (2..MAX_GROUPS_FOR_TEST groups)
+
+    Returns None if nothing clears the bar — a suggestion nobody would act
+    on is worse than no suggestion. Never raises: any column combination
+    that can't be scored is skipped rather than blowing up the caller.
+    """
+    numeric_cols = [c for c, t in column_types.items() if t == "numeric" and c in df.columns]
+    categorical_cols = [c for c, t in column_types.items() if t == "categorical" and c in df.columns]
+
+    if len(numeric_cols) >= 2:
+        try:
+            corr = df[numeric_cols].corr(numeric_only=True).abs()
+        except Exception:
+            corr = None
+        if corr is not None:
+            best_r, best_pair = 0.0, None
+            for i, col_a in enumerate(numeric_cols):
+                for col_b in numeric_cols[i + 1 :]:
+                    r = corr.loc[col_a, col_b]
+                    if pd.notna(r) and r > best_r:
+                        best_r, best_pair = float(r), (col_a, col_b)
+            if best_pair and best_r >= _MIN_CORRELATION_TO_SUGGEST:
+                col_a, col_b = best_pair
+                return {
+                    "col_a": col_a,
+                    "col_b": col_b,
+                    "reason": (
+                        f"'{col_a}' and '{col_b}' show the strongest relationship in the data "
+                        f"(r={best_r:.2f}) — worth confirming with a real significance test."
+                    ),
+                }
+
+    best_f, best_cat_pair = 0.0, None
+    for cat_col in categorical_cols:
+        n_groups = df[cat_col].dropna().nunique()
+        if n_groups < 2 or n_groups > MAX_GROUPS_FOR_TEST:
+            continue
+        for num_col in numeric_cols:
+            try:
+                groups = [g.dropna().to_numpy() for _, g in df.groupby(cat_col)[num_col]]
+                groups = [g for g in groups if len(g) >= 2]
+                if len(groups) < 2:
+                    continue
+                f_stat, _ = scipy_stats.f_oneway(*groups)
+            except Exception:
+                continue
+            if pd.notna(f_stat) and f_stat > best_f:
+                best_f, best_cat_pair = float(f_stat), (num_col, cat_col)
+
+    if best_cat_pair:
+        num_col, cat_col = best_cat_pair
+        return {
+            "col_a": num_col,
+            "col_b": cat_col,
+            "reason": (
+                f"'{num_col}' looks like it varies meaningfully across '{cat_col}' groups — "
+                "worth confirming with a real significance test."
+            ),
+        }
+
+    return None

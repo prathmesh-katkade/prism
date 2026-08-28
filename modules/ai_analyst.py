@@ -20,6 +20,7 @@ Setup: put GEMINI_API_KEY=... in a .env file at the project root (see
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import threading
@@ -32,11 +33,11 @@ import plotly.graph_objects as go
 from dotenv import load_dotenv
 
 try:
-    import google.generativeai as genai
-    from google.api_core import exceptions as google_exceptions
+    from google import genai as genai_client
+    from google.genai import types as genai_types
 except ImportError:  # the app should still load even if the package isn't installed yet
-    genai = None
-    google_exceptions = None
+    genai_client = None
+    genai_types = None
 
 # Populate os.environ from a .env file in the project root, if one exists.
 # Safe to call even when no .env is present — it's then a no-op.
@@ -183,13 +184,73 @@ def get_api_key() -> str:
     return os.getenv("GEMINI_API_KEY", "")
 
 
+class _GeminiModel:
+    """Adapter presenting the old `google-generativeai` GenerativeModel
+    interface (`model.generate_content(contents) -> response` with a
+    `.text` property) on top of the current `google-genai` Client SDK.
+
+    Why this exists: `google-generativeai` ended upstream support (it now
+    raises a FutureWarning on import) and its successor, `google-genai`, has
+    a different shape — a single `Client` you call `client.models.generate_
+    content(model=..., contents=..., config=...)` on, rather than a
+    per-model object. Every one of the ~15 call sites across the app only
+    ever touches `model.generate_content(contents)` (never SDK internals
+    directly — `call_gemini()` is the sole choke point), so wrapping the new
+    Client behind this adapter kept the migration to this file and
+    `modules/atlas.py`'s router model, instead of a rewrite of every caller.
+    """
+
+    __slots__ = ("_client", "_model_name", "_system_instruction")
+
+    def __init__(self, client, model_name: str, system_instruction: Optional[str] = None):
+        self._client = client
+        self._model_name = model_name
+        self._system_instruction = system_instruction
+
+    def generate_content(self, contents):
+        config = (
+            genai_types.GenerateContentConfig(system_instruction=self._system_instruction)
+            if self._system_instruction
+            else None
+        )
+        return self._client.models.generate_content(
+            model=self._model_name, contents=contents, config=config
+        )
+
+
+def build_model(model_name: str, system_instruction: Optional[str] = None, api_key: Optional[str] = None):
+    """Generic model factory — build a Client-backed `_GeminiModel` for any
+    model name/system instruction, or None if unavailable (no key, or the
+    google-genai package isn't installed). get_model()/get_sql_model() below
+    are this app's two standing configurations; modules.atlas's intent
+    router calls this directly for its own system prompt.
+    """
+    key = get_api_key() if api_key is None else api_key
+    if not key or genai_client is None:
+        return None
+    return _GeminiModel(genai_client.Client(api_key=key), model_name, system_instruction)
+
+
 def get_model(api_key: Optional[str] = None):
     """Build a configured Gemini model instance, or None if unavailable."""
-    key = api_key or get_api_key()
-    if not key or genai is None:
-        return None
-    genai.configure(api_key=key)
-    return genai.GenerativeModel(MODEL_NAME, system_instruction=CODE_SYSTEM_PROMPT)
+    return build_model(MODEL_NAME, system_instruction=CODE_SYSTEM_PROMPT, api_key=api_key)
+
+
+def get_sql_model(api_key: Optional[str] = None):
+    """A second model instance for SQL Lab's AI features (explain_sql,
+    generate_sql, suggest_sql_fix) — deliberately WITHOUT CODE_SYSTEM_PROMPT.
+
+    That system instruction hard-codes "write Python code... assign to a
+    variable named `result`... return ONLY a python code block" — fine for
+    ask_question's pandas pipeline, but it overrides a plain per-request
+    prompt asking for SQL instead: generate_sql/suggest_sql_fix were
+    observed returning pandas snippets (`result = df[...]`) instead of SQL
+    when built on get_model(), because the system instruction outranks a
+    same-shaped "return only code" request in the user turn. Each of these
+    three functions puts its full task instructions directly in the prompt,
+    so no system instruction is needed here at all.
+    """
+    return build_model(MODEL_NAME, system_instruction=None, api_key=api_key)
 
 
 def generate_df_metadata(df: pd.DataFrame, column_types: Optional[dict[str, str]] = None) -> str:
@@ -296,7 +357,7 @@ def history_to_contents(chat_history: list[dict]) -> list[dict]:
     contents = []
     for msg in chat_history:
         if msg["role"] == "user":
-            contents.append({"role": "user", "parts": [msg["content"]]})
+            contents.append({"role": "user", "parts": [{"text": msg["content"]}]})
         else:
             if msg.get("ask_error"):
                 text = "(The previous request failed and was not shown to the user.)"
@@ -304,7 +365,7 @@ def history_to_contents(chat_history: list[dict]) -> list[dict]:
                 text = f"```python\n{msg['code']}\n```"
             else:
                 text = "(no code generated)"
-            contents.append({"role": "model", "parts": [text]})
+            contents.append({"role": "model", "parts": [{"text": text}]})
     return contents
 
 
@@ -380,23 +441,39 @@ def call_gemini(model, contents) -> tuple[str, Optional[str]]:
         return "", limit_error
     try:
         response = model.generate_content(contents)
-    except google_exceptions.ResourceExhausted:
-        return "", (
-            "Daily free-tier quota exceeded for the Gemini API. Try again later, "
-            "or check your usage at https://aistudio.google.com/."
-        )
-    except (google_exceptions.PermissionDenied, google_exceptions.Unauthenticated, google_exceptions.InvalidArgument):
-        return "", (
-            "Gemini rejected the request — GEMINI_API_KEY is set but isn't a valid Generative "
-            "Language API key (these start with 'AIzaSy...'; a Google OAuth token or another "
-            "kind of credential pasted in by mistake will fail the same way). Get a fresh one "
-            "at https://aistudio.google.com/apikey and update it wherever this app reads it "
-            "from — a local .env file, or Settings → Secrets on Streamlit Community Cloud, or "
-            "your host's environment variables."
-        )
     except Exception as e:
+        # google.genai.errors.APIError (and its ClientError/ServerError
+        # subclasses) carry the HTTP-style status as `.code` — matching on
+        # that is simpler and more robust than importing every specific
+        # exception subclass, and degrades gracefully (falls through to the
+        # generic message below) for exceptions that don't have one at all
+        # (network errors, or the SDK being unavailable in a way that still
+        # let a call reach here).
+        code = getattr(e, "code", None)
+        if code == 429:
+            return "", (
+                "Daily free-tier quota exceeded for the Gemini API. Try again later, "
+                "or check your usage at https://aistudio.google.com/."
+            )
+        if code in (400, 401, 403):
+            return "", (
+                "Gemini rejected the request — GEMINI_API_KEY is set but isn't a valid Generative "
+                "Language API key (these start with 'AIzaSy...'; a Google OAuth token or another "
+                "kind of credential pasted in by mistake will fail the same way). Get a fresh one "
+                "at https://aistudio.google.com/apikey and update it wherever this app reads it "
+                "from — a local .env file, or Settings → Secrets on Streamlit Community Cloud, or "
+                "your host's environment variables."
+            )
         return "", f"Gemini request failed: {e}"
-    return response.text, None
+    # Guard against safety-filtered or empty responses. Unlike the old SDK
+    # (which raised ValueError/AttributeError on `.text` access), google-genai's
+    # `.text` property returns None outright when every candidate was
+    # safety-filtered or the response has no text parts — check the value,
+    # not for an exception.
+    text = getattr(response, "text", None)
+    if not text:
+        return "", "Gemini returned an empty or safety-filtered response — try rephrasing your question."
+    return text, None
 
 
 def explain_sql(model, sql: str) -> tuple[str, Optional[str]]:
@@ -408,6 +485,172 @@ def explain_sql(model, sql: str) -> tuple[str, Optional[str]]:
         "Explain what the following SQL query does, in plain English, in 2-4 sentences, "
         "for a non-technical stakeholder. Do not restate the raw SQL back verbatim.\n\n"
         f"```sql\n{sql}\n```"
+    )
+    text, error = call_gemini(model, prompt)
+    if error:
+        return "", error
+    return text.strip(), None
+
+
+def _strip_sql_fence(text: str) -> str:
+    """Defensive cleanup for generate_sql/suggest_sql_fix: both prompts ask
+    for raw SQL with no markdown fences, but models don't always comply.
+    extract_code() isn't reusable here — its regex only optionally strips a
+    'python' tag, not 'sql', and would leave a literal "sql\\n" behind.
+    """
+    stripped = text.strip()
+    if stripped.startswith("```"):
+        stripped = re.sub(r"^```(?:sql)?\s*", "", stripped)
+        stripped = re.sub(r"\s*```$", "", stripped)
+    return stripped.strip()
+
+
+def generate_sql(
+    model, df: pd.DataFrame, column_types: dict[str, str], question: str, table_name: str = "data"
+) -> tuple[str, Optional[str]]:
+    """Natural-language-to-SQL for the SQL Lab tab's "Generate SQL" button.
+    One-shot prompt-in/text-out, same minimal shape as explain_sql — not
+    ask_question's multi-turn pandas pipeline, since this only has to
+    produce a query, not run one.
+    """
+    context = build_data_context(df, column_types)
+    prompt = (
+        f"You write DuckDB SQL. The dataset is registered as a table named `{table_name}`.\n\n"
+        f"{context}\n\n"
+        f"Write a single DuckDB SQL query that answers this question: {question}\n\n"
+        "Return ONLY the raw SQL query — no explanation, no markdown code fences, no comments."
+    )
+    text, error = call_gemini(model, prompt)
+    if error:
+        return "", error
+    return _strip_sql_fence(text), None
+
+
+def suggest_sql_fix(model, sql: str, error_message: str, table_name: str = "data") -> tuple[str, Optional[str]]:
+    """Given a query that failed and DuckDB's own error text, ask for a
+    corrected query — the SQL Lab tab's "Suggest a Fix" button, shown
+    alongside the existing error banner rather than replacing it."""
+    prompt = (
+        f"The following DuckDB SQL query (against a table named `{table_name}`) failed.\n\n"
+        f"```sql\n{sql}\n```\n\n"
+        f"DuckDB's error message:\n{error_message}\n\n"
+        "Return ONLY the corrected raw SQL query — no explanation, no markdown code fences, no comments."
+    )
+    text, error = call_gemini(model, prompt)
+    if error:
+        return "", error
+    return _strip_sql_fence(text), None
+
+
+_SQL_PLAN_JSON_ARRAY_RE = re.compile(r"\[.*\]", re.DOTALL)
+
+
+def generate_sql_plan(model, df: pd.DataFrame, column_types: dict[str, str], goal: str, table_name: str = "data") -> list[dict]:
+    """SQL-flavored sibling of auto_analyst.generate_analysis_plan: ask Gemini
+    for 2-4 ordered {"title","question"} steps that together answer an
+    open-ended/diagnostic `goal` via SQL against `table_name` — the Atlas
+    "multi" chained-query path. Same never-fails shape as
+    generate_analysis_plan: falls back to a single step wrapping `goal`
+    itself (a degraded "multi" run that's really a "single" run) on any
+    parse/model failure, since a plan-generation hiccup shouldn't block
+    the whole request.
+    """
+    fallback = [{"title": (goal[:40] or "Query"), "question": goal}]
+    if model is None:
+        return fallback
+
+    context = build_data_context(df, column_types)
+    prompt = (
+        "You are a senior data analyst breaking an open-ended question into 2 to 4 "
+        "ordered SQL sub-questions that together answer it. Each sub-question must be "
+        f"answerable as a single DuckDB SQL query against a table named `{table_name}`.\n\n"
+        f"{context}\n\n"
+        f'Open-ended question: "{goal}"\n\n'
+        'Return ONLY a JSON array, each element {"title": "3-6 words", "question": '
+        '"a specific, self-contained question answerable with one SQL query"}. '
+        "No prose, no markdown code fences."
+    )
+    text, error = call_gemini(model, prompt)
+    if error:
+        return fallback
+
+    match = _SQL_PLAN_JSON_ARRAY_RE.search(text)
+    if not match:
+        return fallback
+    try:
+        raw_plan = json.loads(match.group(0))
+    except json.JSONDecodeError:
+        return fallback
+
+    cleaned = [
+        {"title": str(step.get("title") or f"Step {i + 1}"), "question": str(step["question"])}
+        for i, step in enumerate(raw_plan)
+        if isinstance(step, dict) and step.get("question")
+    ]
+    return cleaned or fallback
+
+
+def _summarize_sql_result(result_df: Optional[pd.DataFrame]) -> str:
+    """Stringify a chained-query step's result compactly for a follow-up prompt."""
+    if result_df is None:
+        return "(no result)"
+    return result_df.head(10).to_string()
+
+
+def synthesize_sql_findings(model, step_outcomes: list[dict]) -> tuple[str, Optional[str]]:
+    """Turn a chained-SQL run's step outcomes ({"title","sql","result_df","error"},
+    one per modules.sql_lab.run_query_multi call) into ONE short spoken
+    paragraph. Unlike auto_analyst.synthesize_findings' 5 numbered bullets,
+    this gets read aloud by Atlas, so it must be continuous prose (2-4
+    sentences) citing concrete numbers from the results — not a list.
+    Steps that errored are excluded from the summary prompt, same
+    discipline as synthesize_findings. Returns (narrative, error);
+    narrative is "" only when every step failed.
+    """
+    if model is None:
+        return "", "No Gemini model available."
+
+    summaries = [
+        f"- {outcome['title']} (`{outcome.get('sql', '')}`): {_summarize_sql_result(outcome.get('result_df'))}"
+        for outcome in step_outcomes
+        if not outcome.get("error")
+    ]
+    if not summaries:
+        return "", "No successful queries to summarize."
+
+    prompt = (
+        "You just ran the following SQL queries against a dataset and got these "
+        f"results:\n\n{chr(10).join(summaries)}\n\n"
+        "You are a senior data analyst speaking your findings out loud to someone who "
+        "can't see the screen. Summarize the overall answer in 2 to 4 continuous "
+        "sentences of plain spoken prose, citing the concrete numbers from the results "
+        "above. No bullet points, no markdown, no headers — just the sentences as "
+        "you'd say them."
+    )
+    text, error = call_gemini(model, prompt)
+    if error:
+        return "", error
+    return text.strip(), None
+
+
+def summarize_sql_result(model, question: str, result_df: Optional[pd.DataFrame]) -> tuple[str, Optional[str]]:
+    """Given the question and a single query's result, return ONE spoken
+    sentence stating the actual number/finding — not a description of the
+    query or its shape. Used for the "single" complexity voice narration
+    after an Atlas-triggered SQL query runs (see app.py's
+    _process_atlas_sql_question).
+    """
+    if model is None:
+        return "", "No Gemini model available."
+    if result_df is None or result_df.empty:
+        return "That query didn't return any rows.", None
+
+    prompt = (
+        f'Question: "{question}"\n\n'
+        f"Query result:\n{result_df.head(20).to_string()}\n\n"
+        "Answer the question in exactly ONE spoken sentence, stating the actual "
+        "number or finding from the result above — not a description of the query. "
+        "No markdown, just the sentence as you'd say it out loud."
     )
     text, error = call_gemini(model, prompt)
     if error:
@@ -432,7 +675,7 @@ def ask_question(
     see build_data_context. dataset_fingerprint — see build_data_context.
     """
     context = build_data_context(df, column_types, pii_findings, strict_mode, dataset_fingerprint)
-    user_turn = {"role": "user", "parts": [f"Data context:\n{context}\n\nQuestion: {question}"]}
+    user_turn = {"role": "user", "parts": [{"text": f"Data context:\n{context}\n\nQuestion: {question}"}]}
     contents = history_to_contents(chat_history) + [user_turn]
 
     text, error = call_gemini(model, contents)
@@ -545,7 +788,7 @@ def ask_and_execute(
         "```python code block)."
     )
     contents = history_to_contents(chat_history + [{"role": "user", "content": question}])
-    contents.append({"role": "user", "parts": [retry_prompt]})
+    contents.append({"role": "user", "parts": [{"text": retry_prompt}]})
 
     text, retry_ask_error = call_gemini(model, contents)
     if retry_ask_error:

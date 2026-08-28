@@ -1,0 +1,6 @@
+mobile-dark console:error: Failed to load resource: net::ERR_CONNECTION_RESET
+mobile-light theme switch failed: Locator.click: Timeout 5000ms exceeded.
+Call log:
+  - waiting for locator("[data-testid=\"stSidebarCollapsedControl\"] button").first
+
+mobile-light console:error: Failed to load resource: net::ERR_CONNECTION_RESET
