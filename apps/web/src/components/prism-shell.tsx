@@ -91,6 +91,38 @@ export function PrismShell() {
     if (activeTabId === id) setActiveTabId(baseTab.id);
   }
 
+  function selectTab(id: string) {
+    setActiveTabId(id);
+    setSelectedContext(null);
+  }
+
+  /** Roving-tabindex arrow navigation for the tablist (WAI-ARIA tabs pattern, automatic activation).
+   * Delete/Backspace closes the focused tab: the visual "×" button is a pointer-only shortcut
+   * (aria-hidden, not in the tab order) so the tablist's accessible children stay exclusively
+   * role="tab" elements with no nested focusable control - keyboard users close via this
+   * shortcut on the tab itself instead. */
+  function onTabListKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+    const currentIndex = tabs.findIndex((tab) => tab.id === activeTabId);
+    if (currentIndex === -1) return;
+    if (event.key === "Delete" || event.key === "Backspace") {
+      const current = tabs[currentIndex]!;
+      if (!current.closeable) return;
+      event.preventDefault();
+      closeTab(current.id);
+      return;
+    }
+    let nextIndex: number | null = null;
+    if (event.key === "ArrowRight") nextIndex = (currentIndex + 1) % tabs.length;
+    else if (event.key === "ArrowLeft") nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+    else if (event.key === "Home") nextIndex = 0;
+    else if (event.key === "End") nextIndex = tabs.length - 1;
+    if (nextIndex === null) return;
+    event.preventDefault();
+    const nextTab = tabs[nextIndex]!;
+    selectTab(nextTab.id);
+    document.getElementById(`tab-${nextTab.id}`)?.focus();
+  }
+
   const commands = useMemo<readonly CommandItem[]>(() => [
     { id: "open-project", label: "Open project desk", description: "Return to the shell overview", shortcut: "G P", run: () => { setActiveTabId(baseTab.id); setStatus("project-loaded"); } },
     { id: "toggle-inspector", label: layout.inspectorOpen ? "Hide inspector" : "Show inspector", description: "Toggle the contextual object panel", shortcut: "⌘ I", run: () => updateLayout({ inspectorOpen: !layout.inspectorOpen }) },
@@ -126,8 +158,8 @@ export function PrismShell() {
         {!layout.railCollapsed ? <ResizeHandle panel="rail" value={layout.railWidth} onPointerDown={startResize} onKeyboardResize={(delta) => updateLayout({ railWidth: Math.max(180, Math.min(360, layout.railWidth + delta)) })} /> : <div className="resize-spacer" />}
         <section id="workspace" className="workspace-area" aria-label="Central tabbed workspace">
           <div className="workspace-tabs">
-            <div className="workspace-tablist" role="tablist" aria-label="Open workspace tabs">
-              {tabs.map((tab) => <div key={tab.id} className={tab.id === activeTabId ? "tab is-active" : "tab"} role="presentation"><button id={`tab-${tab.id}`} role="tab" aria-selected={tab.id === activeTabId} aria-controls={`panel-${tab.id}`} onClick={() => { setActiveTabId(tab.id); setSelectedContext(null); }}>{tab.label}</button>{tab.closeable ? <button className="tab-close" aria-label={`Close ${tab.label}`} onClick={() => closeTab(tab.id)}><Icon name="close" /></button> : null}</div>)}
+            <div className="workspace-tablist" role="tablist" aria-label="Open workspace tabs" onKeyDown={onTabListKeyDown}>
+              {tabs.map((tab) => <div key={tab.id} id={`tab-${tab.id}`} className={tab.id === activeTabId ? "tab is-active" : "tab"} role="tab" aria-selected={tab.id === activeTabId} aria-controls={`panel-${tab.id}`} aria-keyshortcuts={tab.closeable ? "Delete" : undefined} tabIndex={tab.id === activeTabId ? 0 : -1} onClick={() => selectTab(tab.id)}><span>{tab.label}</span>{tab.closeable ? <span className="tab-close" aria-hidden="true" onClick={(event) => { event.stopPropagation(); closeTab(tab.id); }}><Icon name="close" /></span> : null}</div>)}
             </div>
             <div className="workspace-tab-actions"><button className="tab-add" aria-label="Open command surface" onClick={() => setCommandOpen(true)}>+</button><button className={layout.splitView ? "tab-tool is-active" : "tab-tool"} aria-label="Toggle split view" aria-pressed={layout.splitView} onClick={() => updateLayout({ splitView: !layout.splitView })}><Icon name="split" /></button></div>
           </div>

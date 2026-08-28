@@ -13,10 +13,24 @@ async function files(directory) {
   }))).flat();
 }
 
+// A <div>/<span> with onClick is only flagged when its opening tag lacks all of: an explicit
+// ARIA role + tabIndex (a deliberately built custom interactive control, e.g. role="tab" for a
+// roving-tabindex widget), or aria-hidden="true" (a pointer-only affordance intentionally kept
+// out of the accessibility tree, e.g. a redundant close "x" alongside a keyboard shortcut).
+const OPENING_TAG = /<(div|span)\b[^>]*>/g;
+
 for (const path of await files(sourceRoot)) {
   if (!path.endsWith(".tsx")) continue;
   const source = await readFile(path, "utf8");
-  if (/<(div|span)[^>]+onClick=/.test(source)) errors.push(`${path}: non-semantic click target`);
+  for (const [tag] of source.matchAll(OPENING_TAG)) {
+    if (!/\bonClick=/.test(tag)) continue;
+    const isCustomWidget = /\brole=/.test(tag) && /\btabIndex=/.test(tag);
+    const isHiddenFromA11yTree = /\baria-hidden="true"/.test(tag);
+    if (!isCustomWidget && !isHiddenFromA11yTree) {
+      errors.push(`${path}: non-semantic click target`);
+      break;
+    }
+  }
   if (/<img(?![^>]*\balt=)/.test(source)) errors.push(`${path}: image without alt text`);
 }
 

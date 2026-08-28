@@ -10,6 +10,46 @@ test("native shell has no automated axe accessibility violations", async ({ page
   expect(violations).toEqual([]);
 });
 
+test("workspace tab bar stays a valid ARIA tablist with 2+ tabs open, and arrow keys move between them", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: /Overview native/i }).click();
+  await page.getByRole("button", { name: /SQL Lab native/i }).click();
+
+  // Two closeable tabs are now open (plus the non-closeable Project desk tab): exactly the DOM
+  // shape that previously broke the tablist's ARIA structure.
+  const tabs = page.getByRole("tab");
+  await expect(tabs).toHaveCount(3);
+  await expect(page.getByRole("tab", { name: "SQL Lab" })).toHaveAttribute("aria-selected", "true");
+
+  // Scoped to the tab bar itself: this test is about the tablist's ARIA structure, not the
+  // content of whichever workspace happens to be open (that's covered by each workspace's own
+  // tests) - the native shell's page-level axe baseline is asserted separately, above.
+  await page.addScriptTag({ path: "node_modules/axe-core/axe.min.js" });
+  const violations = await page.evaluate(async () => (await (window as typeof window & { axe: { run(context: unknown): Promise<{ violations: unknown[] }> } }).axe.run(document.querySelector(".workspace-tabs"))).violations);
+  expect(violations).toEqual([]);
+
+  // Keyboard: arrow-key roving tabindex moves focus and selection between tabs.
+  await page.getByRole("tab", { name: "SQL Lab" }).focus();
+  await page.keyboard.press("ArrowLeft");
+  await expect(page.getByRole("tab", { name: "Overview" })).toBeFocused();
+  await expect(page.getByRole("tab", { name: "Overview" })).toHaveAttribute("aria-selected", "true");
+  await page.keyboard.press("Home");
+  await expect(page.getByRole("tab", { name: "Project desk" })).toBeFocused();
+  await page.keyboard.press("End");
+  await expect(page.getByRole("tab", { name: "SQL Lab" })).toBeFocused();
+
+  // Keyboard: Delete on a focused, closeable tab closes it (the visual × button is a
+  // pointer-only shortcut, intentionally out of the tab order - see the component's comment).
+  await page.getByRole("tab", { name: "SQL Lab" }).focus();
+  await page.keyboard.press("Delete");
+  await expect(page.getByRole("tab", { name: "SQL Lab" })).toHaveCount(0);
+
+  // Mouse: the visual × button still closes a tab by click.
+  await page.getByRole("button", { name: /Overview native/i }).click();
+  await page.locator(".tab.is-active .tab-close").click();
+  await expect(page.getByRole("tab", { name: "Overview" })).toHaveCount(0);
+});
+
 test("shell visual baseline and keyboard command surface", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("main")).toBeVisible();
@@ -37,6 +77,33 @@ test("native SQL Lab has a stable keyboard-first query studio surface", async ({
   await expect(page.getByText("revenue")).toBeVisible();
   await expect(page.locator(".monaco-editor")).toBeVisible();
   await expect(page).toHaveScreenshot("sql-lab-dark.png", { animations: "disabled", fullPage: true, maxDiffPixelRatio: 0.01 });
+});
+
+test("SQL Lab's query editor works with no CDN reachable, and is genuinely interactive", async ({ page }) => {
+  // Registered first so Playwright tries it last: every other host is blocked, simulating a
+  // network-restricted enterprise/offline deployment. Monaco's default AMD loader would hang
+  // forever here; the bundled-package loader (query-editor.tsx) must not make any such request.
+  const blockedRequests: string[] = [];
+  await page.route("**/*", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.hostname === "127.0.0.1" || url.hostname === "localhost") return route.continue();
+    blockedRequests.push(route.request().url());
+    return route.abort("blockedbyclient");
+  });
+
+  await page.route("**/api/v1/sql-lab/connections", async (route) => route.fulfill({ json: [{ connection_id: "local:ds_sales", label: "sales.csv · local dataset", source_type: "local_dataset", dialect: "duckdb", status: "ready", capabilities: [{ name: "query_execution", supported: true }], source_fingerprint: "a".repeat(64) }] }));
+  await page.route("**/api/v1/sql-lab/snippets", async (route) => route.fulfill({ json: [] }));
+  await page.route("**/api/v1/sql-lab/connections/local%3Ads_sales/schema", async (route) => route.fulfill({ json: { connection: { connection_id: "local:ds_sales", label: "sales.csv · local dataset", source_type: "local_dataset", dialect: "duckdb", status: "ready", capabilities: [{ name: "query_execution", supported: true }], source_fingerprint: "a".repeat(64) }, tables: [{ name: "data", columns: [{ name: "revenue", data_type: "float64", nullable: true, sample_count: 2 }] }], schema_fingerprint: "b".repeat(64) } }));
+
+  await page.goto("/");
+  await page.getByRole("button", { name: /SQL Lab native/i }).click();
+  await expect(page.locator(".monaco-editor")).toBeVisible();
+
+  await page.locator(".monaco-editor").click();
+  await page.keyboard.type("SELECT 1");
+  await expect(page.locator(".monaco-editor")).toContainText("SELECT 1");
+
+  expect(blockedRequests, `Monaco (or anything else) must never reach an external host offline; blocked: ${blockedRequests.join(", ")}`).toEqual([]);
 });
 
 const cleanDataset = { dataset_id: "ds_sales", revision: 0, source_name: "sales.csv", source_fingerprint: "a".repeat(64), row_count: 5, column_count: 3 };

@@ -2,15 +2,10 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import type { AtlasOverviewAction, AtlasOverviewResponse, DatasetRowsResponse, OverviewColumn, OverviewProfileResponse } from "@prism/api-contracts";
+import { apiUrl } from "../config/api";
 import type { InspectorObjectState } from "../state/shell-model";
 
-const API_BASE = process.env.NEXT_PUBLIC_PRISM_API_URL ?? "http://127.0.0.1:8000";
-
 type OverviewState = "empty" | "uploading" | "ready" | "degraded" | "error";
-
-function apiUrl(path: string): string {
-  return new URL(path, API_BASE).toString();
-}
 
 function formatPercent(value: number): string {
   return `${value.toFixed(value % 1 === 0 ? 0 : 1)}%`;

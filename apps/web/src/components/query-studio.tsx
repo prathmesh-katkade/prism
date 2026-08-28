@@ -3,12 +3,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { AtlasSqlAction, AtlasSqlResponse, SqlConnectionSummary, SqlPlanResponse, SqlResultPageResponse, SqlResultPromotionResponse, SqlRunResponse, SqlSchemaResponse, SqlSnippet } from "@prism/api-contracts";
+import { apiUrl } from "../config/api";
 import type { InspectorObjectState } from "../state/shell-model";
 import { QueryEditor } from "./query-editor";
-
-const API_BASE = process.env.NEXT_PUBLIC_PRISM_API_URL ?? "http://127.0.0.1:8000";
-
-function apiUrl(path: string): string { return new URL(path, API_BASE).toString(); }
 
 type StudioState = "loading" | "empty" | "ready" | "running" | "degraded" | "error";
 type ResultTab = "results" | "plan" | "history";

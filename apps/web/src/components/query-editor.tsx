@@ -3,7 +3,18 @@
 import dynamic from "next/dynamic";
 import React from "react";
 
-const MonacoEditor = dynamic(() => import("@monaco-editor/react"), {
+/**
+ * Load Monaco from the bundled npm package instead of @monaco-editor/react's default AMD/CDN
+ * loader. Both imports stay inside this client-only dynamic() factory (never at module top
+ * level) so nothing monaco-related touches the server render, and loader.config() always runs
+ * before the Editor component's own effect calls loader.init() - a real CDN dependency here
+ * means Query Studio hangs on "Loading…" forever on any network-restricted deployment.
+ */
+const MonacoEditor = dynamic(async () => {
+  const [monaco, reactModule] = await Promise.all([import("monaco-editor"), import("@monaco-editor/react")]);
+  reactModule.loader.config({ monaco });
+  return reactModule;
+}, {
   ssr: false,
   loading: () => <textarea className="query-editor-fallback" aria-label="SQL query editor loading" readOnly value="Loading Query Studio editor…" />
 });
