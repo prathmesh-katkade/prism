@@ -3,7 +3,7 @@ from prism_api.main import create_app
 from prism_api_contracts import HealthResponse, ReleaseChannel
 
 
-def test_health_contract_reports_phase_5_ai_analyst_as_enabled() -> None:
+def test_health_contract_reports_phase_6_clean_and_visualize_as_enabled() -> None:
     client = TestClient(create_app())
 
     response = client.get("/api/v1/platform/health")
@@ -11,12 +11,14 @@ def test_health_contract_reports_phase_5_ai_analyst_as_enabled() -> None:
     assert response.status_code == 200
     payload = HealthResponse.model_validate(response.json())
     assert payload.contract_version == "v1"
-    assert {item.workflow for item in payload.migrations} == {"overview", "sql-lab", "ai-analyst"}
+    assert {item.workflow for item in payload.migrations} == {"overview", "sql-lab", "ai-analyst", "clean", "visualize"}
     channels = {item.workflow: item.channel for item in payload.migrations}
     assert channels == {
         "overview": ReleaseChannel.ENABLED,
         "sql-lab": ReleaseChannel.ENABLED,
         "ai-analyst": ReleaseChannel.ENABLED,
+        "clean": ReleaseChannel.ENABLED,
+        "visualize": ReleaseChannel.ENABLED,
     }
 
 

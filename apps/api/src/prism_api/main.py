@@ -11,10 +11,12 @@ from prism_api_contracts import HealthResponse
 from prism_config.settings import get_settings
 
 from .ai_analyst import router as ai_analyst_router
+from .clean import router as clean_router
 from .migration import PHASE_1_MIGRATIONS
 from .overview import router as overview_router
 from .sql_lab import router as sql_lab_router
 from .transport import phase_1_event_stream, sse_response
+from .visualize import router as visualize_router
 
 REQUEST_ID = re.compile(r"^[A-Za-z0-9._:-]{8,128}$")
 
@@ -38,6 +40,8 @@ def create_app() -> FastAPI:
     app.include_router(overview_router)
     app.include_router(sql_lab_router)
     app.include_router(ai_analyst_router)
+    app.include_router(clean_router)
+    app.include_router(visualize_router)
 
     @app.middleware("http")
     async def trace_requests(

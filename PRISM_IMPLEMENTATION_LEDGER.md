@@ -7,6 +7,77 @@ verification units that don't belong to a single phase checkpoint.
 
 ---
 
+## Unit: Phase 6A/6B — native Clean and Visualize vertical slices
+
+**Objective:** Migrate Clean and Visualize from the Streamlit reference into native, deeply
+integrated vertical slices (Overview/SQL Lab/AI Analyst/Atlas/provenance), per
+`PHASE6_IMPLEMENTATION_LEDGER.md`.
+
+**Files changed:** `apps/api/src/prism_api/{clean,visualize}.py` (new), `overview.py` (additive
+`DatasetStore` revision history), `main.py`/`migration.py` (routers + enabled channels),
+`packages/api-contracts/python/prism_api_contracts/{models,__init__}.py` (new contracts),
+`packages/api-contracts/typescript/src/generated.ts` (regenerated),
+`apps/web/src/components/{clean,visualize}-workspace.tsx` (new),
+`apps/web/src/components/prism-shell.tsx`/`overview-workspace.tsx`/`state/shell-model.ts`
+(wiring), `apps/web/app/prism.css` (new component styles, reusing existing design tokens),
+`tests/api/test_{clean,visualize}.py`, `apps/web/src/components/{clean,visualize}-workspace.test.tsx`,
+`apps/web/e2e/shell.spec.ts` (2 new specs), plus two Phase-5-era exact-set tests updated to
+include the newly-enabled workflows (expected evolution, not a broken guardrail).
+
+**Contracts changed:** Additive only — `Clean*`/`AtlasClean*`/`Visualization*`/`Viz*`/
+`AtlasVisualize*` models. `DatasetStore.add_revision`/`revert`/`revisions` added; `put`/`get`/
+`latest` unchanged (verified via the full pre-existing Overview/SQL Lab/AI Analyst suite passing
+unmodified after the change).
+
+**Tests:** 652 Python passed / 4 skipped (was 637/4 before this unit — 15 new tests, 0
+regressions). 10 Vitest passed (was 5 before). 2 new Playwright specs, verified live in this
+sandbox with a substituted Chromium executable path (not committed — see
+`RECOVERY_REPORT.md`/`PHASE5_FINAL_REPORT.md` for why) including a real axe-core accessibility
+scan. Ruff, mypy (CI invocation), boundary scan, secret scan, TS contract freshness, ESLint,
+tsc, a11y baseline, Next build: all clean.
+
+**Parity:** Legacy `modules/cleaning.py`, `modules/autocleaner.py`, `modules/visualization.py`
+untouched; capability parity documented in `PHASE6_IMPLEMENTATION_LEDGER.md` (datetime feature
+extraction, join, export-as-script deliberately not ported in this slice — noted, not silently
+dropped).
+
+**Performance:** No raw dataset reaches the browser from either workspace. Clean previews sample
+10 rows; Visualize aggregates server-side with an explicit category cap and scatter sampling,
+reusing the same server-side execution pattern SQL Lab already established.
+
+**Security:** `tools/check_secrets.py` and `tools/check_boundaries.py` re-run clean. No new
+external dependency introduced (Visualize's renderer is dependency-free inline SVG).
+
+**Architecture decision:** Extend the existing `overview.store` with revision history rather than
+building a separate Clean-specific dataset store, so Overview/SQL Lab/AI Analyst get Clean's
+output for free through the store they already query — verified by an integration test that
+cleans a dataset then queries it live through SQL Lab and reads the cleaned state back through
+Overview. Visualize's renderer is decoupled from its analytical spec (`VisualizationSpec`)
+specifically so a real charting library can replace the current inline-SVG renderer later without
+touching `visualize.py`.
+
+**Risk:** `DatasetStore.revert` truncates revision history past the reverted point (a linear undo
+stack, not a branching version tree) — documented in code and the checkpoint; a future "redo"
+feature would need a real design decision, not an assumption.
+
+**Technical debt surfaced (not fixed in this unit, filed separately):**
+- `task_8c392fdd` — workspace tab bar's close button breaks the ARIA tablist pattern with 2+ tabs
+  open (pre-existing Phase 2 shell chrome, only surfaced by this unit's own accessibility testing).
+- `task_2fd6fb0f` — SQL Lab's Monaco editor has no offline asset fallback (pre-existing Phase 4).
+- Visualize's `box` mark is accepted by the spec/suggestion alternatives but not yet given a true
+  quartile-based aggregation in `_aggregate`; it currently falls through to the generic groupby
+  path. Not selected by default suggestion, so no user-facing gap today, but worth a real box-plot
+  aggregation before `box` is offered as a first-class suggested mark.
+
+**Rollback:** Set `clean`/`visualize` to `legacy` in `migration.py` and `shell-model.ts`, remove
+the additive routes/contracts/components/tests/checkpoint. `DatasetStore`'s revision-history
+additions are backward compatible and safe to keep regardless.
+
+**Remaining gates:** See `PHASE6_IMPLEMENTATION_LEDGER.md` definition-of-done table — all PASS.
+Phase 7 not started.
+
+---
+
 ## Unit: Phase 5 lineage recovery + verification
 
 **Objective:** Recover the true migration branch (previous environments had lost

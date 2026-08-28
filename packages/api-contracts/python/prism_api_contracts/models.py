@@ -391,3 +391,190 @@ class AiAnalystResponse(ContractModel):
     sql_draft: Optional[str] = Field(default=None, max_length=250_000)
     sql_connection_id: Optional[str] = None
     provenance: dict[str, Any] = Field(default_factory=dict)
+
+
+# --- Phase 6A: Clean ---------------------------------------------------------
+
+
+class CleanIssueKind(str, Enum):
+    MISSING_VALUES = "missing_values"
+    DUPLICATE_ROWS = "duplicate_rows"
+    ALL_NULL_COLUMN = "all_null_column"
+    TYPE_MISMATCH = "type_mismatch"
+    OUTLIER_BURDEN = "outlier_burden"
+
+
+class CleanOperation(str, Enum):
+    DROP_DUPLICATES = "drop_duplicates"
+    FILL_MISSING = "fill_missing"
+    DROP_MISSING_ROWS = "drop_missing_rows"
+    CONVERT_TYPE = "convert_type"
+    RENAME_COLUMN = "rename_column"
+    DROP_COLUMN = "drop_column"
+    TRIM_WHITESPACE = "trim_whitespace"
+    NORMALIZE_CASE = "normalize_case"
+
+
+class FillStrategy(str, Enum):
+    MEAN = "mean"
+    MEDIAN = "median"
+    MODE = "mode"
+    CONSTANT = "constant"
+    FORWARD_FILL = "forward_fill"
+
+
+class CleanIssue(ContractModel):
+    issue_id: str = Field(min_length=1)
+    kind: CleanIssueKind
+    column: Optional[str] = None
+    severity: Literal["low", "medium", "high"]
+    affected_rows: int = Field(ge=0)
+    description: str = Field(min_length=1)
+    suggested_operation: Optional[CleanOperation] = None
+
+
+class CleanTransformationRequest(ContractModel):
+    operation: CleanOperation
+    column: Optional[str] = Field(default=None, min_length=1)
+    new_name: Optional[str] = Field(default=None, min_length=1, max_length=200)
+    target_type: Optional[Literal["numeric", "text", "datetime", "boolean"]] = None
+    fill_strategy: Optional[FillStrategy] = None
+    fill_value: Optional[str] = None
+    case: Optional[Literal["lower", "upper", "title"]] = None
+
+
+class CleanTransformation(ContractModel):
+    transformation_id: str = Field(min_length=1)
+    operation: CleanOperation
+    column: Optional[str] = None
+    parameters: dict[str, Any] = Field(default_factory=dict)
+    affected_rows: int = Field(ge=0)
+    affected_columns: list[str] = Field(default_factory=list)
+    source_revision: int = Field(ge=0)
+    resulting_revision: int = Field(ge=0)
+    source_fingerprint: str = Field(min_length=16)
+    resulting_fingerprint: str = Field(min_length=16)
+    reversible: bool = True
+    created_at: datetime
+
+
+class CleanPreviewResponse(ContractModel):
+    operation: CleanOperation
+    affected_rows: int = Field(ge=0)
+    affected_columns: list[str] = Field(default_factory=list)
+    before_sample: list[dict[str, Optional[Any]]]
+    after_sample: list[dict[str, Optional[Any]]]
+    warnings: list[str] = Field(default_factory=list)
+    projected_health: OverviewHealth
+
+
+class CleanApplyResponse(ContractModel):
+    dataset: OverviewDataset
+    transformation: CleanTransformation
+    issues: list[CleanIssue]
+    health: OverviewHealth
+
+
+class CleanStateResponse(ContractModel):
+    dataset: OverviewDataset
+    issues: list[CleanIssue]
+    history: list[CleanTransformation]
+    health: OverviewHealth
+
+
+class CleanUndoRequest(ContractModel):
+    to_revision: int = Field(ge=0)
+
+
+class AtlasCleanAction(str, Enum):
+    EXPLAIN_ISSUE = "explain_issue"
+    PROPOSE_FIX = "propose_fix"
+    COMPARE_BEFORE_AFTER = "compare_before_after"
+
+
+class AtlasCleanRequest(ContractModel):
+    action: AtlasCleanAction
+    issue_id: Optional[str] = None
+
+
+class AtlasCleanResponse(ContractModel):
+    action: AtlasCleanAction
+    summary: str = Field(min_length=1)
+    uncertainty: str = Field(min_length=1)
+    evidence: list[AtlasEvidence]
+    proposed_operation: Optional[CleanTransformationRequest] = None
+
+
+# --- Phase 6B: Visualize ------------------------------------------------------
+
+
+class VizMark(str, Enum):
+    BAR = "bar"
+    LINE = "line"
+    SCATTER = "scatter"
+    HISTOGRAM = "histogram"
+    BOX = "box"
+
+
+class VizIntent(str, Enum):
+    COMPARISON = "comparison"
+    DISTRIBUTION = "distribution"
+    RELATIONSHIP = "relationship"
+    COMPOSITION = "composition"
+    TREND = "trend"
+    RANKING = "ranking"
+
+
+class VizAggregation(str, Enum):
+    COUNT = "count"
+    SUM = "sum"
+    MEAN = "mean"
+    MEDIAN = "median"
+    NONE = "none"
+
+
+class VisualizationSpec(ContractModel):
+    mark: VizMark
+    intent: VizIntent
+    dimension: Optional[str] = None
+    measure: Optional[str] = None
+    aggregation: VizAggregation
+    filters: dict[str, Any] = Field(default_factory=dict)
+    max_categories: int = Field(default=20, ge=1, le=200)
+
+
+class VisualizationSuggestion(ContractModel):
+    spec: VisualizationSpec
+    rationale: str = Field(min_length=1)
+    alternatives: list[VizMark] = Field(default_factory=list)
+
+
+class VisualizationDatum(ContractModel):
+    label: str
+    value: float
+
+
+class VisualizationDataResponse(ContractModel):
+    spec: VisualizationSpec
+    data: list[VisualizationDatum]
+    truncated: bool
+    warnings: list[str] = Field(default_factory=list)
+    provenance: OverviewProvenance
+
+
+class AtlasVisualizeAction(str, Enum):
+    EXPLAIN_CHART = "explain_chart"
+    IDENTIFY_ANOMALY = "identify_anomaly"
+    PROPOSE_ALTERNATIVE = "propose_alternative"
+
+
+class AtlasVisualizeRequest(ContractModel):
+    action: AtlasVisualizeAction
+    spec: VisualizationSpec
+
+
+class AtlasVisualizeResponse(ContractModel):
+    action: AtlasVisualizeAction
+    summary: str = Field(min_length=1)
+    uncertainty: str = Field(min_length=1)
+    evidence: list[AtlasEvidence]

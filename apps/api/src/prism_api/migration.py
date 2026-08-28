@@ -18,4 +18,14 @@ PHASE_1_MIGRATIONS: tuple[MigrationState, ...] = (
         channel=ReleaseChannel.ENABLED,
         legacy_reference="modules/ai_analyst.py",
     ),
+    MigrationState(
+        workflow="clean",
+        channel=ReleaseChannel.ENABLED,
+        legacy_reference="modules/cleaning.py",
+    ),
+    MigrationState(
+        workflow="visualize",
+        channel=ReleaseChannel.ENABLED,
+        legacy_reference="modules/visualization.py",
+    ),
 )

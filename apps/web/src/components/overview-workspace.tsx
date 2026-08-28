@@ -16,7 +16,7 @@ function formatPercent(value: number): string {
   return `${value.toFixed(value % 1 === 0 ? 0 : 1)}%`;
 }
 
-export function OverviewWorkspace({ onSelectContext, onOpenWorkflow }: { onSelectContext(state: InspectorObjectState): void; onOpenWorkflow(workflow: string): void }) {
+export function OverviewWorkspace({ onSelectContext, onOpenWorkflow, onDatasetReady }: { onSelectContext(state: InspectorObjectState): void; onOpenWorkflow(workflow: string): void; onDatasetReady?(datasetId: string): void }) {
   const [state, setState] = useState<OverviewState>("empty");
   const [profile, setProfile] = useState<OverviewProfileResponse | null>(null);
   const [datasetId, setDatasetId] = useState<string | null>(null);
@@ -53,6 +53,7 @@ export function OverviewWorkspace({ onSelectContext, onOpenWorkflow }: { onSelec
       if (!profiled.ok) throw new Error("The dataset uploaded, but its Overview profile could not be computed.");
       const nextProfile = await profiled.json() as OverviewProfileResponse;
       setDatasetId(dataset.dataset_id); setProfile(nextProfile); setState("ready");
+      onDatasetReady?.(dataset.dataset_id);
       onSelectContext({ objectId: dataset.dataset_id, label: nextProfile.dataset.source_name, type: "dataset", state: "ready", actions: [{ id: "trace-source", label: "Trace source" }, { id: "summarize-risks", label: "Summarize key risks" }], metadata: [`${nextProfile.quality.n_rows.toLocaleString()} rows`, `${nextProfile.quality.n_cols} columns`, `Health ${nextProfile.health.total}/100`] });
       await loadRows(dataset.dataset_id);
     } catch (reason) {
