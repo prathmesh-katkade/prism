@@ -36,6 +36,7 @@ jobs:
       - name: Install Phase 1 dependencies
         run: |
           pip install -r requirements.txt
+          pip install -r apps/api/requirements.txt
           for package in packages/*/python; do pip install -e "$package"; done
 
       - name: Lint and type-check contracts and API boundary
@@ -106,6 +107,7 @@ jobs:
 
       - name: Install Phase 4 runtimes
         run: |
+          pip install -r requirements.txt
           pip install -r apps/api/requirements.txt
           npm ci
           npx playwright install --with-deps chromium
