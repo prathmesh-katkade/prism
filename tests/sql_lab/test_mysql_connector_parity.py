@@ -21,6 +21,39 @@ from modules import sql_lab as legacy_sql_lab
 MYSQL_URL = os.environ.get("PRISM_PHASE4_MYSQL_URL")
 
 
+def test_mysql_attach_omits_an_empty_password_option() -> None:
+    clause = db_connect.build_attach_clause(
+        "mysql",
+        {
+            "host": "127.0.0.1",
+            "port": 3306,
+            "user": "root",
+            "password": "",
+            "database": "prism_phase4",
+        },
+        alias="live",
+    )
+
+    assert "passwd=" not in clause
+    assert "user=root db=prism_phase4" in clause
+
+
+def test_mysql_attach_includes_a_configured_password() -> None:
+    clause = db_connect.build_attach_clause(
+        "mysql",
+        {
+            "host": "127.0.0.1",
+            "port": 3306,
+            "user": "prism",
+            "password": "configured-secret",
+            "database": "prism_phase4",
+        },
+        alias="live",
+    )
+
+    assert "passwd=configured-secret" in clause
+
+
 @pytest.mark.skipif(not MYSQL_URL, reason="Phase 4 MySQL parity source is not configured")
 def test_mysql_results_schema_nulls_order_plan_and_legacy_parity() -> None:
     assert MYSQL_URL is not None

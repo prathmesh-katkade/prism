@@ -99,11 +99,18 @@ def build_attach_clause(engine_type: str, params: dict, alias: str = "live") -> 
         # password=/database= spelling postgres uses below. Confirmed via the
         # engine's own error: 'expected options are host, user, passwd, db,
         # port, socket'. Do not "fix" this back to password=/database=.
-        conn_str = (
-            f"host={params.get('host', '')} port={params.get('port') or ENGINE_DEFAULT_PORTS['mysql']} "
-            f"user={params.get('user', '')} passwd={params.get('password', '')} "
-            f"db={params.get('database', '')}"
-        )
+        # DuckDB's mysql extension rejects an empty ``passwd=`` token as an
+        # unnamed configuration option. Omitting the optional token preserves
+        # passwordless MySQL support while retaining configured credentials.
+        conn_parts = [
+            f"host={params.get('host', '')}",
+            f"port={params.get('port') or ENGINE_DEFAULT_PORTS['mysql']}",
+            f"user={params.get('user', '')}",
+        ]
+        if params.get("password"):
+            conn_parts.append(f"passwd={params['password']}")
+        conn_parts.append(f"db={params.get('database', '')}")
+        conn_str = " ".join(conn_parts)
         return f"ATTACH '{_escape_sql_literal(conn_str)}' AS {alias} (TYPE mysql)"
     if engine_type == "postgres":
         conn_str = (
