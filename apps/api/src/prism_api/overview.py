@@ -38,17 +38,28 @@ class StoredDataset:
 
 
 class DatasetStore:
-    """Deliberately process-local for Phase 3; no browser receives the full dataset."""
+    """Deliberately process-local for Phase 3; no browser receives the full dataset.
+
+    Phase 6 (Clean) adds revision history on top of the same store: applying a
+    transformation does not mutate a dataset in place, it appends a new revision
+    under the same ``dataset_id``. Every existing consumer (Overview, SQL Lab,
+    AI Analyst) reads through ``get()``/``latest()``, which always resolve to the
+    current revision, so a Clean transformation is immediately visible everywhere
+    without those modules needing to know revisions exist.
+    """
 
     def __init__(self) -> None:
         self._datasets: dict[str, StoredDataset] = {}
+        self._history: dict[str, list[StoredDataset]] = {}
 
     def put(self, frame: pd.DataFrame, source_name: str, source_fingerprint: str) -> OverviewDataset:
         dataset = OverviewDataset(
             dataset_id=f"ds_{uuid.uuid4().hex}", revision=0, source_name=source_name,
             source_fingerprint=source_fingerprint, row_count=len(frame), column_count=len(frame.columns),
         )
-        self._datasets[dataset.dataset_id] = StoredDataset(dataset, frame, source_fingerprint)
+        stored = StoredDataset(dataset, frame, source_fingerprint)
+        self._datasets[dataset.dataset_id] = stored
+        self._history[dataset.dataset_id] = [stored]
         return dataset
 
     def get(self, dataset_id: str) -> StoredDataset:
@@ -60,6 +71,37 @@ class DatasetStore:
     def latest(self) -> StoredDataset | None:
         """The current process has one active research context in Phase 3/4."""
         return next(reversed(self._datasets.values()), None) if self._datasets else None
+
+    def revisions(self, dataset_id: str) -> list[StoredDataset]:
+        self.get(dataset_id)
+        return list(self._history.get(dataset_id, []))
+
+    def add_revision(self, dataset_id: str, frame: pd.DataFrame, fingerprint: str) -> OverviewDataset:
+        """Append a new revision of ``dataset_id`` (e.g. after a Clean transformation)."""
+        current = self.get(dataset_id)
+        dataset = OverviewDataset(
+            dataset_id=dataset_id, revision=current.dataset.revision + 1, source_name=current.dataset.source_name,
+            source_fingerprint=fingerprint, row_count=len(frame), column_count=len(frame.columns),
+        )
+        stored = StoredDataset(dataset, frame, fingerprint)
+        self._datasets[dataset_id] = stored
+        self._history.setdefault(dataset_id, []).append(stored)
+        return dataset
+
+    def revert(self, dataset_id: str, revision: int) -> OverviewDataset:
+        """Undo: make ``revision`` current again and drop any later revisions.
+
+        This is a linear undo stack, not a branching version tree: reverting then
+        applying a new transformation starts a fresh path from ``revision`` rather
+        than colliding with the revision numbers of the discarded branch.
+        """
+        history = self._history.get(dataset_id) or []
+        target = next((item for item in history if item.dataset.revision == revision), None)
+        if target is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Revision {revision} was not found for this dataset.")
+        self._datasets[dataset_id] = target
+        self._history[dataset_id] = [item for item in history if item.dataset.revision <= revision]
+        return target.dataset
 
 
 store = DatasetStore()

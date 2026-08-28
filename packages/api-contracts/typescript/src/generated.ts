@@ -45,6 +45,21 @@ export interface AiEvidence {
 
 export type AiProviderStatus = "deterministic" | "ollama" | "fallback";
 
+export type AtlasCleanAction = "explain_issue" | "propose_fix" | "compare_before_after";
+
+export interface AtlasCleanRequest {
+  action: AtlasCleanAction;
+  issue_id?: string;
+}
+
+export interface AtlasCleanResponse {
+  action: AtlasCleanAction;
+  summary: string;
+  uncertainty: string;
+  evidence: AtlasEvidence[];
+  proposed_operation?: CleanTransformationRequest;
+}
+
 export interface AtlasEvidence {
   label: string;
   value: string;
@@ -86,8 +101,89 @@ export interface AtlasSqlResponse {
   executable?: boolean;
 }
 
+export type AtlasVisualizeAction = "explain_chart" | "identify_anomaly" | "propose_alternative";
+
+export interface AtlasVisualizeRequest {
+  action: AtlasVisualizeAction;
+  spec: VisualizationSpec;
+}
+
+export interface AtlasVisualizeResponse {
+  action: AtlasVisualizeAction;
+  summary: string;
+  uncertainty: string;
+  evidence: AtlasEvidence[];
+}
+
 export interface Body_upload_dataset_api_v1_overview_datasets_post {
   file: string;
+}
+
+export interface CleanApplyResponse {
+  dataset: OverviewDataset;
+  transformation: CleanTransformation;
+  issues: CleanIssue[];
+  health: OverviewHealth;
+}
+
+export interface CleanIssue {
+  issue_id: string;
+  kind: CleanIssueKind;
+  column?: string;
+  severity: "low" | "medium" | "high";
+  affected_rows: number;
+  description: string;
+  suggested_operation?: CleanOperation;
+}
+
+export type CleanIssueKind = "missing_values" | "duplicate_rows" | "all_null_column" | "type_mismatch" | "outlier_burden";
+
+export type CleanOperation = "drop_duplicates" | "fill_missing" | "drop_missing_rows" | "convert_type" | "rename_column" | "drop_column" | "trim_whitespace" | "normalize_case";
+
+export interface CleanPreviewResponse {
+  operation: CleanOperation;
+  affected_rows: number;
+  affected_columns?: string[];
+  before_sample: Record<string, unknown>[];
+  after_sample: Record<string, unknown>[];
+  warnings?: string[];
+  projected_health: OverviewHealth;
+}
+
+export interface CleanStateResponse {
+  dataset: OverviewDataset;
+  issues: CleanIssue[];
+  history: CleanTransformation[];
+  health: OverviewHealth;
+}
+
+export interface CleanTransformation {
+  transformation_id: string;
+  operation: CleanOperation;
+  column?: string;
+  parameters?: Record<string, unknown>;
+  affected_rows: number;
+  affected_columns?: string[];
+  source_revision: number;
+  resulting_revision: number;
+  source_fingerprint: string;
+  resulting_fingerprint: string;
+  reversible?: boolean;
+  created_at: string;
+}
+
+export interface CleanTransformationRequest {
+  operation: CleanOperation;
+  column?: string;
+  new_name?: string;
+  target_type?: "numeric" | "text" | "datetime" | "boolean";
+  fill_strategy?: FillStrategy;
+  fill_value?: string;
+  case?: "lower" | "upper" | "title";
+}
+
+export interface CleanUndoRequest {
+  to_revision: number;
 }
 
 export interface CorrelationFinding {
@@ -109,6 +205,8 @@ export interface DistributionBucket {
   label: unknown;
   count: number;
 }
+
+export type FillStrategy = "mean" | "median" | "mode" | "constant" | "forward_fill";
 
 export interface HTTPValidationError {
   detail?: ValidationError[];
@@ -335,6 +433,41 @@ export interface ValidationError {
   msg: string;
   type: string;
 }
+
+export interface VisualizationDataResponse {
+  spec: VisualizationSpec;
+  data: VisualizationDatum[];
+  truncated: boolean;
+  warnings?: string[];
+  provenance: OverviewProvenance;
+}
+
+export interface VisualizationDatum {
+  label: string;
+  value: number;
+}
+
+export interface VisualizationSpec {
+  mark: VizMark;
+  intent: VizIntent;
+  dimension?: string;
+  measure?: string;
+  aggregation: VizAggregation;
+  filters?: Record<string, unknown>;
+  max_categories?: number;
+}
+
+export interface VisualizationSuggestion {
+  spec: VisualizationSpec;
+  rationale: string;
+  alternatives?: VizMark[];
+}
+
+export type VizAggregation = "count" | "sum" | "mean" | "median" | "none";
+
+export type VizIntent = "comparison" | "distribution" | "relationship" | "composition" | "trend" | "ranking";
+
+export type VizMark = "bar" | "line" | "scatter" | "histogram" | "box";
 
 export interface ApiTransport {
   request<TResponse>(request: ApiRequest): Promise<TResponse>;
