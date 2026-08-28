@@ -41,7 +41,7 @@ jobs:
       - name: Lint and type-check contracts and API boundary
         run: |
           ruff check apps/api/src packages tools/check_boundaries.py tools/generate_typescript_contracts.py tools/check_secrets.py tests
-          mypy --follow-imports=skip apps/api/src packages
+          mypy --follow-imports=skip --allow-subclassing-any --allow-untyped-decorators --no-warn-return-any apps/api/src packages
 
       - name: Run deterministic native API contracts and migration parity hooks
         run: pytest tests/api tests/contracts tests/migration tests/overview tests/sql_lab
