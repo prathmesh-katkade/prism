@@ -6,7 +6,12 @@
 - **Commit**: `349943ff681869b05778060c754192eb928f755a`
 - **PR**: [#6 — Phase 5 verification + Phase 6 Clean/Visualize vertical slices](https://github.com/prathmesh-katkade/prism/pull/6)
 - **Merge commit**: `a203eea` (PR #6 merged into `phase-5-ai-analyst`)
-- **Release tag**: `prism-native-v0.6` → `349943f`
+- **Release tag**: `prism-native-v0.6` → `349943f` (created locally; push to
+  `origin` was rejected with a persistent `403` from GitHub after 4 retries
+  with backoff — this session's git-push credential appears scoped to
+  branch refs only, not tag refs. The branch `phase-6.5-integration-staging`
+  itself pushed successfully. The release point remains fully identifiable
+  by commit SHA `349943f` regardless.)
 - **Date**: 2026-08-28
 
 ---
