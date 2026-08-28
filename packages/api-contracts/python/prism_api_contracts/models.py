@@ -31,6 +31,24 @@ class HealthResponse(ContractModel):
     migrations: tuple[MigrationState, ...]
 
 
+class ProviderReadiness(ContractModel):
+    """Diagnostic configuration status for one optional dependency — never a live network probe
+    (a readiness check must stay fast and must not itself hang on an external service), and never
+    used to fail readiness on its own: PRISM's deterministic path works with every optional
+    provider unconfigured or unreachable."""
+
+    name: str = Field(min_length=1)
+    status: Literal["configured", "not_configured"]
+    detail: str = Field(min_length=1)
+
+
+class ReadinessResponse(ContractModel):
+    status: Literal["ready"] = "ready"
+    contract_version: str = "v1"
+    generated_at: datetime
+    providers: tuple[ProviderReadiness, ...]
+
+
 class ApiError(ContractModel):
     code: str = Field(min_length=1)
     message: str = Field(min_length=1)

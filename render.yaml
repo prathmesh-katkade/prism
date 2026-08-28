@@ -22,3 +22,43 @@ services:
         sync: false
       - key: MYSQL_DATABASE
         sync: false
+
+  # --- Native PRISM (Next.js + FastAPI) — staging, additive to the service above -------------
+  # Free-tier, minimal by design: no database service is declared here because none of the
+  # native workflows (Overview, SQL Lab, AI Analyst, Clean, Visualize) require persistent
+  # storage — server-held datasets live in the API process for the session, matching apps/api's
+  # current architecture. Add a managed database only if a future phase genuinely needs one.
+
+  - type: web
+    name: prism-native-api-staging
+    runtime: python
+    plan: free
+    pythonVersion: "3.11.9"
+    buildCommand: >-
+      pip install -r apps/api/requirements.txt &&
+      for package in packages/*/python; do pip install -e "$package"; done
+    startCommand: uvicorn prism_api.main:app --host 0.0.0.0 --port $PORT --app-dir apps/api/src
+    envVars:
+      # The web service's deployed origin. Render free-tier services can wake slowly from idle;
+      # the frontend's fetches already handle a non-2xx/degraded response without crashing.
+      - key: PRISM_ALLOWED_ORIGINS
+        value: '["https://prism-native-web-staging.onrender.com"]'
+      # Deterministic by default — no AI provider is required for PRISM to work. Set to "ollama"
+      # only if a private, non-public Ollama endpoint you control is reachable from this service;
+      # never point it at a publicly exposed tunnel of a local machine.
+      - key: PRISM_AI_PROVIDER
+        value: deterministic
+
+  - type: web
+    name: prism-native-web-staging
+    runtime: node
+    plan: free
+    buildCommand: npm ci && npm run build --workspace=@prism/web
+    startCommand: npm run start --workspace=@prism/web
+    envVars:
+      # Points at the API service above. Render can wire this to the live service URL
+      # automatically (Dashboard → this service → Environment → "Add from service"); the literal
+      # value here is the expected staging origin so the blueprint is correct even before that
+      # manual link is made.
+      - key: NEXT_PUBLIC_PRISM_API_URL
+        value: https://prism-native-api-staging.onrender.com

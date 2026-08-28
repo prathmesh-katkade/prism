@@ -40,8 +40,10 @@ from .models import (
     OverviewProfileResponse,
     OverviewProvenance,
     OverviewQuality,
+    ProviderReadiness,
     QueryExecutionState,
     QueryRisk,
+    ReadinessResponse,
     ReleaseChannel,
     SqlCapability,
     SqlColumn,
@@ -81,4 +83,5 @@ __all__ = [
     "CleanTransformationRequest", "CleanUndoRequest", "FillStrategy", "OverviewColumn", "OverviewHealth", "OverviewQuality",
     "AtlasVisualizeAction", "AtlasVisualizeRequest", "AtlasVisualizeResponse", "VisualizationDataResponse",
     "VisualizationDatum", "VisualizationSpec", "VisualizationSuggestion", "VizAggregation", "VizIntent", "VizMark",
+    "ProviderReadiness", "ReadinessResponse",
 ]

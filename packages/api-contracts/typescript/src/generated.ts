@@ -305,9 +305,22 @@ export interface OverviewSuggestion {
   reason: string;
 }
 
+export interface ProviderReadiness {
+  name: string;
+  status: "configured" | "not_configured";
+  detail: string;
+}
+
 export type QueryExecutionState = "queued" | "running" | "succeeded" | "failed" | "cancelled" | "timed_out";
 
 export type QueryRisk = "safe_read" | "governed_write" | "unknown";
+
+export interface ReadinessResponse {
+  status?: string;
+  contract_version?: string;
+  generated_at: string;
+  providers: ProviderReadiness[];
+}
 
 export type ReleaseChannel = "legacy" | "shadow" | "enabled";
 
