@@ -7,6 +7,67 @@ verification units that don't belong to a single phase checkpoint.
 
 ---
 
+## Unit: Fix pre-existing MySQL parity dtype mismatch (int64/int32, Decimal/float)
+
+**Objective:** `tests/sql_lab/test_mysql_connector_parity.py::test_mysql_results_schema_nulls_order_plan_and_legacy_parity`
+failed deterministically in CI's `phase-4-live-e2e` job (100% of the last 11+ runs on
+`phase-5-ai-analyst`, pre-dating PR #6 entirely — see that PR's discussion for the original
+diagnosis). Root-caused and fixed rather than left as a filed-away follow-up.
+
+**Files changed:** `packages/sql-lab-runtime/python/prism_sql_lab_runtime/external.py` (new
+`_normalize_decimal_columns` helper, called from `execute_external_query`),
+`tests/sql_lab/test_mysql_connector_parity.py` (one new deterministic unit test; the live-DB
+parity test's assertion relaxed from `check_dtype=True` to `check_dtype=False` plus an explicit
+integer-kind check, with the reasoning in a code comment).
+
+**Root cause:** Two genuinely separate dtype gaps between the native (pymysql/SQLAlchemy) and
+legacy (DuckDB `mysql_scanner`) query paths for the same MySQL row:
+1. `execute_external_query` built its DataFrame straight from raw DB-API values — a MySQL
+   `DECIMAL` column arrives as `decimal.Decimal` objects, which pandas leaves as an opaque
+   `object` column, while DuckDB's own DECIMAL→pandas conversion produces `float64`.
+2. A MySQL `INT` column comes back as pandas' default `int64` via pymysql, while DuckDB maps
+   MySQL's 4-byte `INT` to its own `INTEGER` (`int32`) and preserves that width through its own
+   DataFrame conversion — two different engines, two different (individually correct) integer
+   widths for the same declared SQL type.
+
+**How this was verified (not guessed):** This sandbox's Docker registry pull was blocked by
+organization egress policy (`production.cloudfront.docker.com` — reported, not retried, per the
+agent-proxy README). Installed `mysql-server-8.0` via `apt` instead (matching CI's MySQL 8.0.46
+exactly) and started `mysqld` manually (no systemd in this sandbox). Reproduced the native path's
+exact dtypes against that live instance (`id: int64`, `revenue: object` of `Decimal`s — confirmed
+empirically). DuckDB's `mysql_scanner` extension download was *also* blocked by the same egress
+policy, so the literal legacy code path couldn't run here; instead, verified DuckDB's own
+DECIMAL→`float64` and INTEGER→`int32` conversion behavior directly against a plain DuckDB table
+with identical data (no MySQL scanner involved — this isolates the exact conversion behavior the
+fix needs to match), then ran the *actual* new test assertion logic against a native/legacy pair
+built from those two verified sources, confirming it passes. Fix 1 (Decimal→float64) was verified
+end-to-end against the live MySQL instance directly. Full regression suite: 655 passed (656 with
+the 3 previously-skipped live-MySQL tests unlocked by a configured `PRISM_PHASE4_MYSQL_URL`)
+against 0 failures other than the one CI step that needs the actual `mysql_scanner` extension
+download this sandbox's policy blocks — not a regression, the same pre-existing sandbox
+limitation noted in `PHASE5_FINAL_REPORT.md`.
+
+**Tests:** New deterministic unit test
+(`test_normalize_decimal_columns_converts_decimal_to_float_but_preserves_other_null_columns`,
+no live DB required — runs in the `phase-1-python` CI job) plus a corrected version of the
+existing live-DB parity test. Also verified the fix doesn't over-eagerly cast: an all-`None`
+non-numeric column stays `object` rather than being force-cast to `float64` (an edge case the
+first draft of the fix missed and this session caught and corrected before pushing).
+
+**Risk:** `_normalize_decimal_columns` runs for every dialect `execute_external_query` serves
+(MySQL, PostgreSQL, SQL Server), not just MySQL — intentional, since the same
+Decimal-vs-numeric-dtype gap applies to any DECIMAL/NUMERIC column regardless of source dialect,
+and the full regression suite covers all three. Not verified against a live Postgres/SQL Server
+instance in this sandbox (none available); the fix only inspects Python value types
+(`decimal.Decimal`), not dialect-specific behavior, so it should generalize, but flagging the
+unverified breadth honestly rather than claiming full cross-dialect proof.
+
+**Rollback:** Revert `_normalize_decimal_columns` and its call site; revert the test's
+`check_dtype=False` back to `check_dtype=True` (this restores the original failing state, not a
+safe rollback target on its own).
+
+---
+
 ## Unit: Phase 6A/6B — native Clean and Visualize vertical slices
 
 **Objective:** Migrate Clean and Visualize from the Streamlit reference into native, deeply

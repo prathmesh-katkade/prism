@@ -10,6 +10,7 @@ import json
 import re
 import time
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import Callable, Mapping, Optional
 
 import pandas as pd
@@ -120,6 +121,23 @@ def external_driver_error(source: ExternalSource) -> Optional[str]:
         return str(error)
 
 
+def _normalize_decimal_columns(frame: pd.DataFrame) -> pd.DataFrame:
+    """DB-API drivers (pymysql included) return SQL DECIMAL/NUMERIC as ``decimal.Decimal``,
+    which pandas leaves as an opaque ``object`` column instead of a numeric dtype. Every other
+    numeric path in PRISM (Overview's quality/health scoring, Visualize's aggregation) expects a
+    real numeric dtype, and DuckDB's own DECIMAL -> pandas conversion already produces ``float64``
+    — so normalize here rather than let each caller re-discover this per column.
+    """
+    for column in frame.columns:
+        series = frame[column]
+        if series.dtype != object:
+            continue
+        non_null = series[series.notna()]
+        if not non_null.empty and non_null.map(lambda value: isinstance(value, Decimal)).all():
+            frame[column] = series.astype(float)
+    return frame
+
+
 def _bounded_sql(sql: str, dialect: str, maximum_rows: int) -> str:
     statement = sql.rstrip().rstrip(";")
     if dialect == "sqlserver":
@@ -148,6 +166,7 @@ def execute_external_query(
         result = connection.execute(text(_bounded_sql(sql, source.dialect, max_result_rows)), parameters or {})
         rows = result.fetchmany(max_result_rows) if result.returns_rows else []
         frame = pd.DataFrame(rows, columns=list(result.keys()) if result.returns_rows else [])
+        frame = _normalize_decimal_columns(frame)
         return frame, None, int((time.perf_counter() - started) * 1_000)
     except Exception as error:
         return None, scrub_connector_error(str(error)), int((time.perf_counter() - started) * 1_000)
