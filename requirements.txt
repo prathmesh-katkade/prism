@@ -29,6 +29,5 @@ shap==0.49.1
 matplotlib==3.9.4
 streamlit-ace==0.1.1
 pyarrow==21.0.0
-sqlalchemy==2.0.44
 pyodbc==5.2.0
 pymysql==1.1.1
