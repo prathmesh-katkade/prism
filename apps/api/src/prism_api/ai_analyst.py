@@ -61,10 +61,17 @@ def _choose_dataset(dataset_id: Optional[str]) -> str:
     return latest.dataset.dataset_id
 
 
-def _sql_evidence(result_run_id: Optional[str]) -> tuple[list[AiEvidence], Optional[str]]:
+def _sql_evidence(result_run_id: Optional[str], active_source_fingerprint: str) -> tuple[list[AiEvidence], Optional[str]]:
     if result_run_id is None:
         return [], None
     run = sql_store.get_run(result_run_id).response
+    if run.provenance.source_fingerprint != active_source_fingerprint:
+        return [AiEvidence(
+            kind="limitation",
+            label="SQL result",
+            value="The selected SQL result belongs to a different dataset and was excluded from this analysis.",
+            provenance_ref=result_run_id,
+        )], None
     if run.state.value != "succeeded":
         return [AiEvidence(kind="limitation", label="SQL result", value="The selected SQL run did not succeed.", provenance_ref=result_run_id)], result_run_id
     fingerprint = run.provenance.result_fingerprint or "unavailable"
@@ -107,6 +114,7 @@ def analyze(request: AiAnalystRequest, request_id: Optional[str] = None) -> AiAn
     dataset_id = _choose_dataset(request.dataset_id)
     profile = get_profile(dataset_id)
     columns = [column.name for column in profile.columns]
+    sql_evidence, selected_run = _sql_evidence(request.result_run_id, profile.provenance.source_fingerprint)
     context = AiContextPacket(
         dataset_id=dataset_id,
         source_fingerprint=profile.provenance.source_fingerprint,
@@ -116,14 +124,13 @@ def analyze(request: AiAnalystRequest, request_id: Optional[str] = None) -> AiAn
         token_budget=MAX_CONTEXT_CHARS,
         prompt_version=PROMPT_VERSION,
         config_version=CONFIG_VERSION,
-        result_run_id=request.result_run_id,
+        result_run_id=selected_run,
     )
     evidence = [
         AiEvidence(kind="dataset", label="Dataset", value=f"{profile.quality.n_rows:,} rows × {profile.quality.n_cols} columns", provenance_ref=dataset_id),
         AiEvidence(kind="quality", label="Data health", value=f"{profile.health.total}/100; {profile.quality.total_missing_pct:.2f}% missing cells", provenance_ref="overview-profile"),
     ]
     evidence.extend(AiEvidence(kind="column", label=column.name, value=f"{column.semantic_type}; {column.missing_pct:.2f}% missing; {column.unique_count:,} unique", provenance_ref="overview-profile") for column in profile.columns[:20])
-    sql_evidence, selected_run = _sql_evidence(request.result_run_id)
     evidence.extend(sql_evidence)
     question = _compact(request.question, 4_000)
     lower = question.lower()
@@ -212,7 +219,14 @@ async def stream_analysis(payload: AiAnalystRequest, http_request: Request):  # 
             if cancelled.is_set() or await http_request.is_disconnected():
                 yield ServerSentEvent(event="atlas.cancelled", id=request_id, data={"request_id": request_id}).encode()
                 return
-            response = analyze(payload, request_id=request_id)
+            analysis_task = asyncio.create_task(asyncio.to_thread(analyze, payload, request_id=request_id))
+            while not analysis_task.done():
+                if cancelled.is_set() or await http_request.is_disconnected():
+                    analysis_task.cancel()
+                    yield ServerSentEvent(event="atlas.cancelled", id=request_id, data={"request_id": request_id}).encode()
+                    return
+                await asyncio.sleep(0.02)
+            response = await analysis_task
             yield ServerSentEvent(event="atlas.state", id=request_id, data={"request_id": request_id, "state": "routing", "provider": response.provider.value}).encode()
             for token in response.answer.split(" "):
                 if cancelled.is_set() or await http_request.is_disconnected():

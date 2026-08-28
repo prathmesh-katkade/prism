@@ -57,3 +57,10 @@ def test_classifier_blocks_stacked_statements_and_mutating_ctes_without_false_li
     assert not classify_query("WITH changed AS (DELETE FROM data RETURNING *) SELECT * FROM changed").is_read_only
     assert classify_query("SELECT 'drop table data' AS harmless FROM data").is_read_only
     assert classify_query('SELECT "update" FROM data').is_read_only
+
+
+def test_local_query_disables_duckdb_external_file_access() -> None:
+    result, error, _elapsed = execute_local_query(representative_frame(), "SELECT read_text('nonexistent-secret.txt')")
+
+    assert result is None
+    assert error is not None

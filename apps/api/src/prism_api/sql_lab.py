@@ -333,8 +333,11 @@ def _unavailable_connections(configured: set[SqlSourceType]) -> list[SqlConnecti
 
 
 def _connection(connection_id: str) -> ConnectionTarget:
-    dataset = overview_store.latest()
-    if dataset is not None and connection_id == f"local:{dataset.dataset.dataset_id}":
+    if connection_id.startswith("local:"):
+        dataset_id = connection_id.removeprefix("local:")
+        if not dataset_id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="SQL Lab local dataset ID was not provided.")
+        dataset = overview_store.get(dataset_id)
         return ConnectionTarget(connection=_local_connection(dataset), dataset=dataset)
     for target in _configured_sqlite_sources():
         if target.connection.connection_id == connection_id:
@@ -397,7 +400,7 @@ def _provenance(connection: SqlConnectionSummary, schema: SqlSchemaResponse, req
         connection_id=connection.connection_id, source_fingerprint=connection.source_fingerprint or _fingerprint(connection.connection_id),
         schema_fingerprint=schema.schema_fingerprint, sql_fingerprint=_fingerprint(request.sql), dialect=connection.dialect,
         parameters=_safe_parameters(request.parameters), service_version=SQL_LAB_SERVICE_VERSION, executed_at=datetime.now(timezone.utc),
-        result_fingerprint=None if result is None else _fingerprint({"columns": list(result.columns), "rows": result.head(RESULT_PAGE_LIMIT).to_dict(orient="records")}),
+        result_fingerprint=None if result is None else _fingerprint({"columns": list(result.columns), "rows": result.to_dict(orient="records")}),
     )
 
 

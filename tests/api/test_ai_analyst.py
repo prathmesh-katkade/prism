@@ -62,6 +62,30 @@ def test_ai_sql_draft_round_trips_only_through_sql_lab_and_back_as_evidence() ->
     assert any(item["kind"] == "sql_result" and item["provenance_ref"] == run["run_id"] for item in reused.json()["evidence"])
 
 
+def test_ai_analyst_excludes_sql_evidence_from_a_different_dataset() -> None:
+    client = TestClient(create_app())
+    first_dataset_id = _dataset(client)
+    submitted = client.post(
+        "/api/v1/sql-lab/runs",
+        json={"connection_id": f"local:{first_dataset_id}", "sql": "SELECT COUNT(*) AS row_count FROM data"},
+    )
+    run = _terminal_run(client, submitted.json()["run_id"])
+    second_dataset = client.post(
+        "/api/v1/overview/datasets",
+        files={"file": ("other.csv", b"category,amount\nx,99\n", "text/csv")},
+    ).json()["dataset_id"]
+
+    response = client.post(
+        "/api/v1/ai-analyst/analyze",
+        json={"dataset_id": second_dataset, "result_run_id": run["run_id"], "question": "What evidence is available?"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["context"]["result_run_id"] is None
+    assert not any(item["kind"] == "sql_result" for item in response.json()["evidence"])
+    assert any("different dataset" in item["value"] for item in response.json()["evidence"])
+
+
 def test_ai_sql_draft_rejects_hallucinated_schema_identifiers() -> None:
     client = TestClient(create_app())
     dataset_id = _dataset(client)

@@ -125,7 +125,7 @@ def execute_local_query(
         return None, "DuckDB is unavailable in this PRISM runtime.", int((time.perf_counter() - started) * 1000)
     connection: Any = None
     try:
-        connection = duckdb.connect(database=":memory:")
+        connection = duckdb.connect(database=":memory:", config={"enable_external_access": "false"})
         if on_connection is not None:
             if bool(on_connection(connection.interrupt)):
                 return None, "Query cancelled before execution.", int((time.perf_counter() - started) * 1000)

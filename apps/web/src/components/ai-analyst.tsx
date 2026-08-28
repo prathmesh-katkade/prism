@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { AiAnalystResponse } from "@prism/api-contracts";
 
-const apiBase = process.env.NEXT_PUBLIC_PRISM_API_BASE_URL ?? "http://127.0.0.1:8000";
+const apiBase = process.env.NEXT_PUBLIC_PRISM_API_URL ?? "http://127.0.0.1:8000";
 const apiUrl = (path: string) => new URL(path, apiBase).toString();
 
 export function AiAnalyst({ resultRunId, onSqlDraft }: { resultRunId: string | undefined; onSqlDraft(sql: string): void }) {

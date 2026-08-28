@@ -98,6 +98,41 @@ def test_run_idempotency_export_promotion_and_request_tracing() -> None:
     assert conflict.status_code == 409
 
 
+def test_local_connection_remains_bound_to_its_dataset_after_another_upload() -> None:
+    client = TestClient(create_app())
+    first_dataset_id = upload(client)
+    upload(client)
+
+    schema = client.get(f"/api/v1/sql-lab/connections/local:{first_dataset_id}/schema")
+    submitted = client.post(
+        "/api/v1/sql-lab/runs",
+        json={"connection_id": f"local:{first_dataset_id}", "sql": "SELECT COUNT(*) AS row_count FROM data"},
+    )
+    run = terminal_run(client, submitted.json()["run_id"])
+
+    assert schema.status_code == 200
+    assert run.state.value == "succeeded"
+
+
+def test_result_provenance_hashes_all_materialized_rows() -> None:
+    client = TestClient(create_app())
+    rows = "\n".join(f"{index}" for index in range(1_001))
+    dataset_id = client.post(
+        "/api/v1/overview/datasets",
+        files={"file": ("many.csv", f"id\n{rows}\n".encode(), "text/csv")},
+    ).json()["dataset_id"]
+    first = terminal_run(client, client.post(
+        "/api/v1/sql-lab/runs",
+        json={"connection_id": f"local:{dataset_id}", "sql": "SELECT id FROM data ORDER BY id", "result_limit": 2_000},
+    ).json()["run_id"])
+    second = terminal_run(client, client.post(
+        "/api/v1/sql-lab/runs",
+        json={"connection_id": f"local:{dataset_id}", "sql": "SELECT CASE WHEN id = 1000 THEN -1 ELSE id END AS id FROM data ORDER BY id", "result_limit": 2_000},
+    ).json()["run_id"])
+
+    assert first.provenance.result_fingerprint != second.provenance.result_fingerprint
+
+
 def test_sql_lab_blocks_writes_and_never_reflects_credentials() -> None:
     client = TestClient(create_app())
     dataset_id = upload(client)
