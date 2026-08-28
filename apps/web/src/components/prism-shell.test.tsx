@@ -1,9 +1,11 @@
 import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { PrismShell } from "./prism-shell";
 
 describe("PRISM shell", () => {
+  afterEach(() => vi.restoreAllMocks());
+
   it("opens the universal command surface with the keyboard", async () => {
     render(<PrismShell />);
     fireEvent.keyDown(window, { key: "k", ctrlKey: true });
@@ -43,4 +45,37 @@ describe("PRISM shell", () => {
     upload.focus();
     expect(upload).toHaveFocus();
   });
+
+  it("remembers the active dataset in Overview across a tab switch instead of resetting to the upload prompt", async () => {
+    const dataset = { dataset_id: "ds_1", revision: 0, source_name: "sales.csv", source_fingerprint: "a".repeat(64), row_count: 3, column_count: 2 };
+    const provenance = { source_fingerprint: dataset.source_fingerprint, dataset_revision: 0, parameters: {}, service_version: "x", computed_at: "2026-08-28T00:00:00Z" };
+    const profile = { dataset, provenance, quality: { n_rows: 3, n_cols: 2, missing_by_column: {}, total_missing_cells: 0, total_missing_pct: 0, duplicate_rows: 0, memory_usage: "1KB", outliers: {}, all_null_columns: [] }, health: { completeness: 30, consistency: 25, uniqueness: 15, validity: 15, outlier_burden: 15, total: 100 }, columns: [], correlations: [], suggestions: [] };
+    const fetchMock = vi.fn(async (input: string | URL) => {
+      const path = String(input);
+      if (path.includes("/overview/datasets") && !path.includes("/rows") && !path.endsWith("/datasets")) return json(profile);
+      if (path.endsWith("/datasets")) return json(dataset, 201);
+      if (path.includes("/rows")) return json({ dataset, offset: 0, limit: 20, total_rows: 3, rows: [], provenance });
+      if (path.includes("/sql-lab/connections")) return json([]);
+      if (path.includes("/sql-lab/snippets")) return json([]);
+      return json({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<PrismShell />);
+    fireEvent.click(screen.getAllByRole("button", { name: /Overview native/i })[0]!);
+    const file = new File(["segment,revenue\na,1\n"], "sales.csv", { type: "text/csv" });
+    fireEvent.change(screen.getByLabelText("Choose dataset"), { target: { files: [file] } });
+    await waitFor(() => expect(screen.getByRole("heading", { name: "sales.csv" })).toBeInTheDocument());
+
+    fireEvent.click(screen.getAllByRole("button", { name: /SQL Lab native/i })[0]!);
+    expect(screen.queryByRole("heading", { name: "sales.csv" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByRole("button", { name: /Overview native/i })[0]!);
+    await waitFor(() => expect(screen.getByRole("heading", { name: "sales.csv" })).toBeInTheDocument());
+    expect(screen.queryByText("Start with the dataset, then follow the evidence.")).not.toBeInTheDocument();
+  });
 });
+
+function json(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+}

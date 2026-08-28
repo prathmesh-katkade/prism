@@ -182,7 +182,7 @@ function ResizeHandle({ panel, value, onPointerDown, onKeyboardResize }: { panel
 }
 
 function WorkspaceSurface({ tab, status, onStatusChange, onOpenCommand, onSelectContext, onOpenWorkflow, sqlDraft, analystResultRunId, activeDatasetId, onDatasetReady, onSqlDraft, onUseAsEvidence }: { tab: WorkspaceTab; status: ShellStatus; onStatusChange(status: ShellStatus): void; onOpenCommand(): void; onSelectContext(state: InspectorObjectState): void; onOpenWorkflow(workflow: string): void; sqlDraft: string | undefined; analystResultRunId: string | undefined; activeDatasetId: string | undefined; onDatasetReady(datasetId: string): void; onSqlDraft(draft: string): void; onUseAsEvidence(runId: string): void }) {
-  if (tab.kind === "overview") return <OverviewWorkspace onSelectContext={onSelectContext} onOpenWorkflow={onOpenWorkflow} onDatasetReady={onDatasetReady} />;
+  if (tab.kind === "overview") return <OverviewWorkspace activeDatasetId={activeDatasetId} onSelectContext={onSelectContext} onOpenWorkflow={onOpenWorkflow} onDatasetReady={onDatasetReady} />;
   if (tab.kind === "sql-lab") return <QueryStudio onSelectContext={onSelectContext} {...(sqlDraft ? { initialSql: sqlDraft } : {})} onUseAsEvidence={onUseAsEvidence} />;
   if (tab.kind === "ai-analyst") return <AiAnalyst resultRunId={analystResultRunId} onSqlDraft={onSqlDraft} />;
   if (tab.kind === "clean") return <CleanWorkspace datasetId={activeDatasetId} onSelectContext={onSelectContext} onOpenWorkflow={onOpenWorkflow} />;

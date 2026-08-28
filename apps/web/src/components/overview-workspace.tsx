@@ -11,7 +11,7 @@ function formatPercent(value: number): string {
   return `${value.toFixed(value % 1 === 0 ? 0 : 1)}%`;
 }
 
-export function OverviewWorkspace({ onSelectContext, onOpenWorkflow, onDatasetReady }: { onSelectContext(state: InspectorObjectState): void; onOpenWorkflow(workflow: string): void; onDatasetReady?(datasetId: string): void }) {
+export function OverviewWorkspace({ activeDatasetId, onSelectContext, onOpenWorkflow, onDatasetReady }: { activeDatasetId: string | undefined; onSelectContext(state: InspectorObjectState): void; onOpenWorkflow(workflow: string): void; onDatasetReady?(datasetId: string): void }) {
   const [state, setState] = useState<OverviewState>("empty");
   const [profile, setProfile] = useState<OverviewProfileResponse | null>(null);
   const [datasetId, setDatasetId] = useState<string | null>(null);
@@ -24,6 +24,30 @@ export function OverviewWorkspace({ onSelectContext, onOpenWorkflow, onDatasetRe
     if (!response.ok) throw new Error("Preview rows are unavailable.");
     setRows(await response.json() as DatasetRowsResponse);
   }, []);
+
+  const loadDataset = useCallback(async (id: string) => {
+    setState("uploading"); setError(null); setAtlas(null); setRows(null);
+    try {
+      const profiled = await fetch(apiUrl(`/api/v1/overview/datasets/${id}/profile`));
+      if (!profiled.ok) throw new Error("This dataset's Overview profile could not be loaded.");
+      const nextProfile = await profiled.json() as OverviewProfileResponse;
+      setDatasetId(id); setProfile(nextProfile); setState("ready");
+      onSelectContext({ objectId: id, label: nextProfile.dataset.source_name, type: "dataset", state: "ready", actions: [{ id: "trace-source", label: "Trace source" }, { id: "summarize-risks", label: "Summarize key risks" }], metadata: [`${nextProfile.quality.n_rows.toLocaleString()} rows`, `${nextProfile.quality.n_cols} columns`, `Health ${nextProfile.health.total}/100`] });
+      await loadRows(id);
+    } catch (reason) {
+      setState("error"); setError(reason instanceof Error ? reason.message : "Overview could not profile this dataset.");
+    }
+  }, [loadRows, onSelectContext]);
+
+  // Every other native workspace (SQL Lab, AI Analyst, Clean, Visualize) resolves the active
+  // dataset through shared shell state rather than local component state, so it survives a tab
+  // switch. Overview used to be the exception - unmounting on tab switch reset it to the upload
+  // prompt even though the shell already knew which dataset was active. Restore it (including
+  // after a Clean transformation elsewhere produces a new revision) whenever the shell's active
+  // dataset differs from what this instance currently shows.
+  useEffect(() => {
+    if (activeDatasetId && activeDatasetId !== datasetId) void loadDataset(activeDatasetId);
+  }, [activeDatasetId, datasetId, loadDataset]);
 
   const selectColumn = useCallback((column: OverviewColumn) => {
     onSelectContext({
@@ -44,13 +68,8 @@ export function OverviewWorkspace({ onSelectContext, onOpenWorkflow, onDatasetRe
       const uploaded = await fetch(apiUrl("/api/v1/overview/datasets"), { method: "POST", body });
       if (!uploaded.ok) throw new Error((await uploaded.json() as { detail?: string }).detail ?? "Dataset upload failed.");
       const dataset = await uploaded.json() as { dataset_id: string };
-      const profiled = await fetch(apiUrl(`/api/v1/overview/datasets/${dataset.dataset_id}/profile`));
-      if (!profiled.ok) throw new Error("The dataset uploaded, but its Overview profile could not be computed.");
-      const nextProfile = await profiled.json() as OverviewProfileResponse;
-      setDatasetId(dataset.dataset_id); setProfile(nextProfile); setState("ready");
       onDatasetReady?.(dataset.dataset_id);
-      onSelectContext({ objectId: dataset.dataset_id, label: nextProfile.dataset.source_name, type: "dataset", state: "ready", actions: [{ id: "trace-source", label: "Trace source" }, { id: "summarize-risks", label: "Summarize key risks" }], metadata: [`${nextProfile.quality.n_rows.toLocaleString()} rows`, `${nextProfile.quality.n_cols} columns`, `Health ${nextProfile.health.total}/100`] });
-      await loadRows(dataset.dataset_id);
+      await loadDataset(dataset.dataset_id);
     } catch (reason) {
       setState("error"); setError(reason instanceof Error ? reason.message : "Overview could not profile this dataset.");
     }
