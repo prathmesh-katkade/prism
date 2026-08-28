@@ -222,6 +222,11 @@ async def stream_analysis(payload: AiAnalystRequest, http_request: Request):  # 
                 await asyncio.sleep(0)
             if response.outcome is AiAnalystOutcome.SQL_READY:
                 yield ServerSentEvent(event="atlas.tool_wait", id=request_id, data={"request_id": request_id, "tool": "sql-lab", "state": "review_required"}).encode()
+            yield ServerSentEvent(
+                event="atlas.state",
+                id=request_id,
+                data={"request_id": request_id, "state": "verifying", "verification": "evidence_and_provenance"},
+            ).encode()
             yield ServerSentEvent(event="atlas.complete", id=request_id, data=response.model_dump(mode="json")).encode()
         except HTTPException as error:
             yield ServerSentEvent(event="atlas.failure", id=request_id, data={"request_id": request_id, "detail": str(error.detail), "fallback": "none"}).encode()

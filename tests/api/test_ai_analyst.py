@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import asyncio
+import re
 import time
 
 from fastapi.testclient import TestClient
 from prism_api import ai_analyst
 from prism_api.main import create_app
+from prism_api_contracts import AiAnalystRequest
 
 
 def _dataset(client: TestClient) -> str:
@@ -69,6 +72,7 @@ def test_ai_stream_emits_incremental_state_token_tool_wait_and_completion() -> N
     assert "event: atlas.state" in response.text
     assert "event: atlas.token" in response.text
     assert "event: atlas.tool_wait" in response.text
+    assert '"state":"verifying"' in response.text
     assert "event: atlas.complete" in response.text
 
 
@@ -96,3 +100,49 @@ def test_cancellation_endpoint_marks_an_active_stream_request() -> None:
     finally:
         with ai_analyst._runs_lock:  # noqa: SLF001
             ai_analyst._runs.pop(request_id, None)  # noqa: SLF001
+
+
+def test_ai_stream_stops_after_a_cancellation_signal() -> None:
+    client = TestClient(create_app())
+    dataset_id = _dataset(client)
+
+    class ConnectedRequest:
+        async def is_disconnected(self) -> bool:
+            return False
+
+    async def collect() -> str:
+        response = await ai_analyst.stream_analysis(
+            AiAnalystRequest(dataset_id=dataset_id, question="What can this dataset support?"),
+            ConnectedRequest(),  # type: ignore[arg-type] - narrow request seam used only for disconnect state
+        )
+        events = response.body_iterator.__aiter__()
+        first = await events.__anext__()
+        match = re.search(r"id: (ai_[A-Za-z0-9]+)", first)
+        assert match is not None
+        with ai_analyst._runs_lock:  # noqa: SLF001 - cancellation is a public endpoint contract
+            ai_analyst._runs[match.group(1)].set()  # noqa: SLF001
+        return str(first) + "".join([str(chunk) async for chunk in events])
+
+    events = asyncio.run(collect())
+    assert "event: atlas.cancelled" in events
+    assert "event: atlas.complete" not in events
+
+
+def test_ai_stream_stops_when_the_client_disconnects() -> None:
+    client = TestClient(create_app())
+    dataset_id = _dataset(client)
+
+    class DisconnectedRequest:
+        async def is_disconnected(self) -> bool:
+            return True
+
+    async def collect() -> str:
+        response = await ai_analyst.stream_analysis(
+            AiAnalystRequest(dataset_id=dataset_id, question="What can this dataset support?"),
+            DisconnectedRequest(),  # type: ignore[arg-type] - narrow request seam used only for disconnect state
+        )
+        return "".join([str(chunk) async for chunk in response.body_iterator])
+
+    events = asyncio.run(collect())
+    assert "event: atlas.cancelled" in events
+    assert "event: atlas.complete" not in events

@@ -19,17 +19,17 @@ governance, desktop, and all Phase 6 work untouched.
 
 ## Local acceptance evidence
 
-- Python suite: 32 passed, 4 intentionally skipped environment-dependent tests.
-- AI Analyst coverage: compact/privacy context, causal refusal, SQL round trip, SSE tokens/tool wait/completion, fallback, cancellation.
+- Python suite: 34 passed, 4 intentionally skipped environment-dependent tests.
+- AI Analyst coverage: compact/privacy context, causal refusal, SQL round trip, SSE tokens/tool-wait/verification/completion, fallback, cancellation, and client disconnect.
 - Mypy, Ruff, generated-contract freshness, boundary scan, and secret scan: PASS.
-- TypeScript, ESLint, Vitest, accessibility baseline, Next production build, and Playwright visual/keyboard suite: PASS.
+- TypeScript, ESLint, Vitest, accessibility baseline, Next production build, and Playwright visual/keyboard suite: PASS. A live Chrome → FastAPI test verifies SSE → SQL Lab → SQL-result evidence hand-back.
 
 ## Provider evidence
 
 - Ollama was live-verified through the PRISM adapter with local `qwen3:4b-q4_K_M`.
-- The adapter sent a compact synthetic-dataset summary only (zero raw sample rows) and completed in
-  3.68 seconds after model warm-up. Cold model loading can take longer, so the server-only timeout
-  is configurable and defaults to 45 seconds; failure falls back deterministically.
+- The adapter sent a compact synthetic-dataset summary only (zero raw sample rows). Cold model
+  loading can take longer, so the server-only timeout is configurable and defaults to 45 seconds;
+  failure falls back deterministically.
 
 ## External release gates
 
