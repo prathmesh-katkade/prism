@@ -62,6 +62,21 @@ def test_ai_sql_draft_round_trips_only_through_sql_lab_and_back_as_evidence() ->
     assert any(item["kind"] == "sql_result" and item["provenance_ref"] == run["run_id"] for item in reused.json()["evidence"])
 
 
+def test_ai_sql_draft_rejects_hallucinated_schema_identifiers() -> None:
+    client = TestClient(create_app())
+    dataset_id = _dataset(client)
+
+    draft = client.post(
+        "/api/v1/ai-analyst/analyze",
+        json={"dataset_id": dataset_id, "question": "Use SQL to group by imaginary_profit_center."},
+    )
+
+    assert draft.status_code == 200
+    assert draft.json()["outcome"] == "sql_ready"
+    assert "imaginary_profit_center" not in draft.json()["sql_draft"]
+    assert draft.json()["sql_draft"] == "SELECT COUNT(*) AS row_count\nFROM \"data\";"
+
+
 def test_ai_stream_emits_incremental_state_token_tool_wait_and_completion() -> None:
     client = TestClient(create_app())
     dataset_id = _dataset(client)
