@@ -15,6 +15,7 @@ from prism_sql_lab_runtime import (
     external_schema,
 )
 
+from modules import db_connect
 from modules import sql_lab as legacy_sql_lab
 
 MYSQL_URL = os.environ.get("PRISM_PHASE4_MYSQL_URL")
@@ -25,33 +26,33 @@ def test_mysql_results_schema_nulls_order_plan_and_legacy_parity() -> None:
     assert MYSQL_URL is not None
     parsed = urlparse(MYSQL_URL)
     database = parsed.path.lstrip("/")
-    info = legacy_sql_lab.MySQLConnectionInfo(
-        host=parsed.hostname or "127.0.0.1",
-        port=parsed.port or 3306,
-        database=database,
-        user=parsed.username or "root",
-        password=parsed.password or "",
-        label="Phase 4 parity",
-    )
-    engine, engine_error = legacy_sql_lab.build_mysql_engine(info)
-    assert engine_error is None
-    assert engine is not None
+    legacy_params = {
+        "host": parsed.hostname or "127.0.0.1",
+        "port": parsed.port or 3306,
+        "database": database,
+        "user": parsed.username or "root",
+        "password": parsed.password or "",
+    }
     source = ExternalSource("phase4", "Phase 4 MySQL", "mysql", MYSQL_URL)
     sql = "SELECT id, region, revenue FROM sales ORDER BY id"
 
-    try:
-        legacy, legacy_error, _elapsed, legacy_truncated = legacy_sql_lab.run_mysql_query(engine, sql)
-        native, native_error, _duration = execute_external_query(source, sql, max_result_rows=101)
-        schema = external_schema(source)
-        plan, plan_error = external_plan(source, sql)
-    finally:
-        legacy_sql_lab.close_mysql_engine(engine)
+    legacy_outcome = legacy_sql_lab.run_query_multi(
+        {},
+        "SELECT id, region, revenue FROM live.sales ORDER BY id",
+        attach_clause=db_connect.build_attach_clause("mysql", legacy_params, alias="live"),
+        attach_extension=db_connect.extension_for_engine("mysql"),
+    )
+    legacy = legacy_outcome["result_df"]
+    legacy_error = legacy_outcome["error"]
+    native, native_error, _duration = execute_external_query(source, sql, max_result_rows=101)
+    schema = external_schema(source)
+    plan, plan_error = external_plan(source, sql)
 
     assert legacy_error is None
     assert native_error is None
     assert legacy is not None
     assert native is not None
-    assert not legacy_truncated
+    assert not legacy_outcome["truncated"]
     pd.testing.assert_frame_equal(native, legacy, check_dtype=True)
     assert schema[0]["name"] == "sales"
     assert [column["name"] for column in schema[0]["columns"]] == ["id", "region", "revenue"]
