@@ -82,9 +82,25 @@ Phase 5 (AI Analyst + Atlas):      PARTIAL — .prism/checkpoints/phase-5.md sel
   (root, apps/web, apps/desktop-shell, packages/api-contracts/typescript,
   packages/design-system/typescript, and one more workspace package).
 - `git diff --stat origin/main...origin/phase-5-ai-analyst` → 172 files changed,
-  +13,736/−170, entirely additive (new `apps/`, `packages/`, `tests/api`,
-  `tests/overview`, `tests/sql_lab`, `tests/migration`, `tools/` scripts); no legacy
-  Streamlit files were deleted, satisfying "Streamlit remains the parity reference."
+  +13,736/−170, mostly additive (new `apps/`, `packages/`, `tests/api`,
+  `tests/overview`, `tests/sql_lab`, `tests/migration`, `tools/` scripts). **Correction**
+  (flagged by review, verified): this is *not* entirely additive — 19 pre-existing
+  Streamlit/legacy files were also modified (`app.py`, `api/main.py`, 15 files under
+  `modules/`, 3 under `eval/`), typically 1–20 line diffs. Inspecting each: the large
+  majority are non-behavioral (ruff-driven formatting, lambda→`def`, exception
+  chaining via `raise ... from error`, import reordering, an unnecessary f-string
+  prefix removed) — `modules/ai_analyst.py`, `modules/sql_lab.py`,
+  `modules/cleaning.py`, and `modules/autocleaner.py` (the Phase 5/6 parity
+  references) all fall in this category, confirmed functionally identical by
+  reading each diff. `modules/visualization.py` has zero diff — genuinely
+  untouched. The one *substantive* change is `modules/ui.py` (+`modules/theme.py`,
+  64 new lines of CSS): a real landing-hero visual redesign, unrelated to any
+  Phase 5/6 parity workflow. No file was deleted (`git diff --diff-filter=D`
+  is empty). "Streamlit remains the parity reference" holds for every workflow
+  this migration branch's Phase 5/6 checkpoints depend on, but the earlier
+  "entirely additive" / "no legacy files were deleted or modified" phrasing
+  in this report and in `PHASE5_FINAL_REPORT.md` was inaccurate and has been
+  corrected.
 - `docs/migration/CURRENT_PHASE.md` on this branch: "Phase 5.1 — AI Analyst
   stabilization complete locally... Still forbidden: Clean, Visualize, Stats,
   Forecasting, ML, full autonomous Atlas behavior, governance, desktop, and

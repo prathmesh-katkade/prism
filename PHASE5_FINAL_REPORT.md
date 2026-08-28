@@ -141,9 +141,17 @@ SQL Lab keyboard spec (Monaco CDN blocked by sandbox network policy).
   `tests/api/test_sql_jobs.py` pass; MySQL-parity and live-MySQL specs are
   unaffected but could not be re-run here (`BLOCKED_EXTERNAL`, no container
   runtime).
-- **Streamlit reference:** untouched by this branch's diff against `main`
-  (172 files changed, all additive: new `apps/`, `packages/`, and `tests/`
-  trees; no legacy file was deleted or modified).
+- **Streamlit reference:** `modules/ai_analyst.py` and `modules/sql_lab.py` (this
+  phase's parity references) carry small non-behavioral diffs against `main`
+  (import reordering, a lambda rewritten as `def`, `raise ... from error`
+  exception chaining — no logic changed, confirmed by reading each diff and by
+  the unmodified legacy test suite still passing at 637/652). **Correction**: an
+  earlier version of this report and of `RECOVERY_REPORT.md` claimed the
+  migration branch's diff against `main` was "entirely additive" with "no legacy
+  file... deleted or modified" — that was wrong; 19 legacy files have small diffs,
+  see `RECOVERY_REPORT.md`'s corrected Evidence section for the full accounting
+  (no file was deleted; the one substantive change, `modules/ui.py`/`theme.py`'s
+  landing-hero redesign, is unrelated to any Phase 5 parity workflow).
 
 ## Git
 - **Commit:** this report's commit on `claude/prism-phase-5-6-95ai73`

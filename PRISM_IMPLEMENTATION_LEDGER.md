@@ -36,8 +36,11 @@ sandbox with a substituted Chromium executable path (not committed — see
 scan. Ruff, mypy (CI invocation), boundary scan, secret scan, TS contract freshness, ESLint,
 tsc, a11y baseline, Next build: all clean.
 
-**Parity:** Legacy `modules/cleaning.py`, `modules/autocleaner.py`, `modules/visualization.py`
-untouched; capability parity documented in `PHASE6_IMPLEMENTATION_LEDGER.md` (datetime feature
+**Parity:** Legacy `modules/visualization.py` is genuinely untouched (zero diff against `main`).
+`modules/cleaning.py` and `modules/autocleaner.py` carry trivial non-behavioral diffs already on
+the migration branch before this unit (exception chaining, an unnecessary f-string prefix removed
+— confirmed functionally identical by reading each diff; not introduced by this unit). Capability
+parity documented in `PHASE6_IMPLEMENTATION_LEDGER.md` (datetime feature
 extraction, join, export-as-script deliberately not ported in this slice — noted, not silently
 dropped).
 
@@ -105,7 +108,10 @@ Ollama live check — this sandbox's loopback is not the user's machine; Monaco 
 — sandbox network policy; staging deploy — no existing infra for the migrated
 stack, not created unilaterally).
 
-**Parity:** No Streamlit files touched; parity reference untouched.
+**Parity:** This unit's own diff touched no Streamlit files (it only added the three report
+files above) — see the corrected Evidence section in `RECOVERY_REPORT.md` for the accounting of
+what the wider migration branch's diff against `main` actually contains, which is not entirely
+additive as first reported.
 
 **Performance:** N/A (verification unit).
 
