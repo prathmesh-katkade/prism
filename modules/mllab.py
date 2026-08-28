@@ -191,7 +191,13 @@ def run_baseline_models(
     from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
     from sklearn.impute import SimpleImputer
     from sklearn.linear_model import LinearRegression, LogisticRegression
-    from sklearn.metrics import accuracy_score, confusion_matrix, f1_score, mean_squared_error, r2_score
+    from sklearn.metrics import (
+        accuracy_score,
+        confusion_matrix,
+        f1_score,
+        mean_squared_error,
+        r2_score,
+    )
     from sklearn.model_selection import train_test_split
     from sklearn.pipeline import Pipeline
     from sklearn.preprocessing import OneHotEncoder, StandardScaler

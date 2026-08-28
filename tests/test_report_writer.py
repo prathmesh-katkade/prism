@@ -12,7 +12,6 @@ wiring modules.insight_verifier into it.
 from __future__ import annotations
 
 import pandas as pd
-import pytest
 
 from modules import data_engine, report_writer
 

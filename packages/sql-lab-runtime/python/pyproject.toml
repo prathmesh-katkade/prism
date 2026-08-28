@@ -1,0 +1,8 @@
+[project]
+name = "prism-sql-lab-runtime"
+version = "0.1.0"
+requires-python = ">=3.9"
+dependencies = ["pandas", "duckdb", "sqlalchemy==2.0.36", "greenlet==3.1.1", "pymysql==1.1.1"]
+
+[tool.setuptools.packages.find]
+where = ["."]

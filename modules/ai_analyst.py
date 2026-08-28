@@ -225,7 +225,7 @@ def build_model(model_name: str, system_instruction: Optional[str] = None, api_k
     are this app's two standing configurations; modules.atlas's intent
     router calls this directly for its own system prompt.
     """
-    key = api_key or get_api_key()
+    key = get_api_key() if api_key is None else api_key
     if not key or genai_client is None:
         return None
     return _GeminiModel(genai_client.Client(api_key=key), model_name, system_instruction)
@@ -286,7 +286,10 @@ def generate_df_metadata(df: pd.DataFrame, column_types: Optional[dict[str, str]
             if series.empty:
                 lines.append(f"- {col}: (no non-null values)")
             else:
-                fmt = lambda v: f"{int(v):,}" if float(v).is_integer() else f"{v:,.2f}"  # ':.4g' flips to 5e+04-style scientific notation on ordinary round salary/revenue figures — this app's core data
+                def fmt(v: float) -> str:
+                    # ':.4g' flips to scientific notation on ordinary round salary/revenue figures.
+                    return f"{int(v):,}" if float(v).is_integer() else f"{v:,.2f}"
+
                 lines.append(f"- {col}: {fmt(series.min())} / {fmt(series.mean())} / {fmt(series.max())}")
 
     if column_types:

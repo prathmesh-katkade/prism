@@ -20,7 +20,12 @@ from typing import Optional
 import pandas as pd
 from scipy import stats as scipy_stats
 
-from modules.ai_analyst import ask_and_execute, build_data_context, call_gemini, parse_numbered_bullets
+from modules.ai_analyst import (
+    ask_and_execute,
+    build_data_context,
+    call_gemini,
+    parse_numbered_bullets,
+)
 from modules.stats_lab import MAX_GROUPS_FOR_TEST
 
 PLAN_SYSTEM_PROMPT = (

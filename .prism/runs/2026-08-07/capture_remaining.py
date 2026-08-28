@@ -54,7 +54,7 @@ def open_advanced_tab(page, tab_label):
     sibling element right after page load."""
     page.wait_for_timeout(800)
     last_err = None
-    for attempt in range(3):
+    for _attempt in range(3):
         try:
             page.click('button:has-text("Advanced Tools")', timeout=6000, force=True)
             page.wait_for_timeout(700)

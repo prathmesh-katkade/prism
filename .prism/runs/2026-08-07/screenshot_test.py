@@ -1,5 +1,4 @@
 """Playwright screenshot script for Prism's new features (Phase 5 verification)."""
-import time
 from playwright.sync_api import sync_playwright
 
 BASE_URL = "http://localhost:8501"

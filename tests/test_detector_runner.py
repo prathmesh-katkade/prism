@@ -7,9 +7,7 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-import pytest
 
-from modules import detector_runner
 from modules.detector_runner import (
     MAX_AUTORUN_COLUMNS,
     MAX_AUTORUN_ROWS,

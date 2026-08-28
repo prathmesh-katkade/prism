@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import streamlit as st
 
-from modules.atlas import clear_alert, raise_alert, set_state
+from modules.atlas import classify_intent_fast, clear_alert, raise_alert, set_state
 
 
 def setup_function(_fn):
@@ -78,9 +78,6 @@ def test_clear_alert_when_never_raised_is_safe():
 # ═══════════════════════════════════════════════════════════════════════
 # classify_intent_fast — zero-Gemini keyword fast path (Run 17)
 # ═══════════════════════════════════════════════════════════════════════
-from modules.atlas import classify_intent_fast
-
-
 def test_fast_path_navigate_matches_exact_tab_name():
     intent = classify_intent_fast("go to Stats Lab")
     assert intent is not None

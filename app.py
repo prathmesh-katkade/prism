@@ -2208,7 +2208,9 @@ elif st.session_state.active_section == "Overview":
         n_med = sum(1 for i in insights_list if i["severity"] == "medium")
         n_low = sum(1 for i in insights_list if i["severity"] == "low")
         severity_summary = ", ".join(
-            f"{c} {l}" for c, l in [(n_high, "critical"), (n_med, "notable"), (n_low, "minor")] if c
+            f"{count} {label}"
+            for count, label in [(n_high, "critical"), (n_med, "notable"), (n_low, "minor")]
+            if count
         )
         with st.container(border=True):
             st.markdown(f"#### 🔍 Auto-Insights  •  {len(insights_list)} finding{'s' if len(insights_list) != 1 else ''}  ({severity_summary})")
@@ -5631,8 +5633,8 @@ elif st.session_state.active_section == "Geo Lens":
                     log_step(
                         f"Titan Enrichment: merged weather for {len(enrich_report['locations_enriched'])} "
                         f"location(s) via '{enrich_location_col}' + '{enrich_date_col}'",
-                        f"# Titan Enrichment ran interactively — geocoding + Open-Meteo weather lookup,\n"
-                        f"# not reproducible as a static pandas script.",
+                        "# Titan Enrichment ran interactively — geocoding + Open-Meteo weather lookup,\n"
+                        "# not reproducible as a static pandas script.",
                     )
                     st.toast(f"Enriched {enrich_report['rows_matched']} row(s) with weather data. ✨")
                 st.rerun()

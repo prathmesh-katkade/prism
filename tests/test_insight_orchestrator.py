@@ -22,7 +22,6 @@ from modules.insight_orchestrator import (
     verify_narration,
 )
 
-
 # ─────────────────────────────────────────────────────────────────────────
 # Fixtures — synthetic raw detector outputs
 # ─────────────────────────────────────────────────────────────────────────

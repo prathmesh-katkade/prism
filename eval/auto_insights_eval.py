@@ -6,25 +6,24 @@ not the Gemini narration layer).
 Usage:  python eval/auto_insights_eval.py
 """
 
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import numpy as np
 import pandas as pd
+
 from modules.auto_insights import (
-    generate_insights,
-    format_insights_text,
-    severity_icon,
-    category_label,
-    _iqr_outlier_pct,
     _detect_distribution_insights,
-    _detect_correlation_insights,
-    _detect_missing_insights,
-    _detect_outlier_insights,
-    _detect_structural_insights,
     _detect_duplicate_rows,
+    _detect_missing_insights,
+    _detect_structural_insights,
+    _iqr_outlier_pct,
+    category_label,
+    format_insights_text,
+    generate_insights,
+    severity_icon,
 )
 
 passed, failed = 0, 0

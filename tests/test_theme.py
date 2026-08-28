@@ -12,7 +12,6 @@ import streamlit as st
 
 from modules.theme import DEFAULT_THEME, THEMES, sync_native_theme, theme_options
 
-
 REQUIRED_TOKEN_KEYS = {
     "label", "mode", "bg", "bg_end", "surface", "surface_hover", "border",
     "text", "text_muted", "accent", "accent_rgb", "accent2", "accent2_rgb",

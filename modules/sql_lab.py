@@ -299,7 +299,9 @@ def suggest_assertions(df: pd.DataFrame, column_types: dict[str, str], quality: 
     every id-like column, and a no-null check for every column currently at
     0% missing. Purely advisory — the caller edits/removes before running.
     """
-    from modules.profiling import get_id_like_columns  # local import keeps sql_lab light for callers that only need run_query
+    from modules.profiling import (
+        get_id_like_columns,  # local import keeps sql_lab light for callers that only need run_query
+    )
 
     suggestions: list[dict] = [{
         "name": "row_count_min", "type": "row_count_min", "table": "data",

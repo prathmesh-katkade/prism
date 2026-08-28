@@ -9,6 +9,7 @@ role="radio"), not st.tabs — labels are emoji + "\n\n" + text.
 Usage: PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers python3 screenshot_run15.py
 """
 import os
+
 from playwright.sync_api import sync_playwright
 
 BASE_URL = "http://localhost:8501"

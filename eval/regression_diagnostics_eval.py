@@ -5,25 +5,26 @@ Runs without an API key (pure statsmodels/scipy computation, no Gemini).
 Usage:  python eval/regression_diagnostics_eval.py
 """
 
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import numpy as np
 import pandas as pd
+
 from modules.regression_diagnostics import (
-    fit_ols,
-    summarize_fit,
+    MIN_ROWS_REQUIRED,
     coefficient_table,
     compute_vif,
-    run_diagnostics,
     diagnostics_verdict,
-    plot_residuals_vs_fitted,
+    fit_ols,
     plot_qq,
+    plot_residuals_vs_fitted,
     plot_scale_location,
     plot_vif_chart,
-    MIN_ROWS_REQUIRED,
+    run_diagnostics,
+    summarize_fit,
 )
 
 passed, failed = 0, 0
