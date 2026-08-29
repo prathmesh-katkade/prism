@@ -75,6 +75,39 @@ describe("ML Lab workspace", () => {
     expect(screen.getByText("Leakage protection")).toBeInTheDocument();
     expect(screen.getByText(baselineResult.leakage_note)).toBeInTheDocument();
   });
+
+  it("drops the previous target from the selected features when the target column changes", async () => {
+    const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
+      void init;
+      const path = String(input);
+      if (path.includes("/profile")) return json(profile);
+      if (path.includes("/suggest-features")) return json(suggestions);
+      if (path.includes("/detect-task")) return json({ target_col: "label", task_type: "classification", reason: "Non-numeric target." });
+      if (path.includes("/imbalance")) return json({ target_col: "label", counts: { yes: 20, no: 20 }, proportions_pct: { yes: 50, no: 50 }, minority_pct: 50, is_imbalanced: false, explanation: "Balanced." });
+      if (path.endsWith("/baseline")) return json({ ...baselineResult, task_type: "regression" });
+      return json({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<MlLabWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText(/Numeric feature — standardizing/)).toBeInTheDocument());
+
+    // Default target is the last column ("label"); features start as x1+x2. Switching the
+    // target to x1 must drop x1 from the selected features - otherwise it is submitted as
+    // both the target and a feature (duplicate columns / leakage into the model).
+    fireEvent.change(screen.getByLabelText("Target column"), { target: { value: "x1" } });
+    expect(screen.getByText("FEATURES (1 selected)")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Analysis"), { target: { value: "baseline" } });
+    fireEvent.click(screen.getByRole("button", { name: "Run baseline models" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/baseline"), expect.objectContaining({ method: "POST" })));
+    const call = fetchMock.mock.calls.find((args) => String(args[0]).endsWith("/baseline"));
+    const init = call?.[1] as RequestInit | undefined;
+    const body = JSON.parse(init?.body as string) as { feature_cols: string[]; target_col: string };
+    expect(body.target_col).toBe("x1");
+    expect(body.feature_cols).toEqual(["x2"]);
+  });
 });
 
 function json(body: unknown, status = 200): Response {

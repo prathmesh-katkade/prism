@@ -138,7 +138,7 @@ export function MlLabWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
   return <article className="mllab-workspace three-pane">
     <nav className="mllab-fields" aria-label="Target, features, and analysis" tabIndex={0}>
       <div className="section-title"><span className="eyebrow">TARGET</span><h2>{profile.dataset.source_name}</h2></div>
-      <label>Target column<select value={targetCol} onChange={(event) => setTargetCol(event.target.value)}>{profile.columns.map((c) => <option key={c.name} value={c.name}>{c.name}</option>)}</select></label>
+      <label>Target column<select value={targetCol} onChange={(event) => { const next = event.target.value; setTargetCol(next); setFeatureCols((previous) => previous.filter((name) => name !== next)); }}>{profile.columns.map((c) => <option key={c.name} value={c.name}>{c.name}</option>)}</select></label>
       {taskType ? <p className="quiet-note">Detected: {taskType}</p> : null}
       <label>Analysis<select value={mode} onChange={(event) => setMode(event.target.value as Mode)}>{MODES.map((m) => <option key={m} value={m}>{m}</option>)}</select></label>
       {mode === "baseline" && taskType === "classification" ? <label className="mllab-checkbox"><input type="checkbox" checked={useSmote} onChange={(event) => setUseSmote(event.target.checked)} /> Use SMOTE on training set</label> : null}

@@ -153,10 +153,10 @@ export function PrismShell() {
             {navigation.map((item) => {
               const migration = findMigration(item.workflow);
               const presentation = migrationPresentation(migration);
-              return <button key={item.workflow} className={activeTab.workflow === item.workflow ? "nav-item is-active" : "nav-item"} onClick={() => openWorkflow(item.workflow)} title={layout.railCollapsed ? item.label : undefined}><Icon name={item.icon} /><span>{item.label}</span><i className={`migration-chip ${presentation}`}>{presentation}</i></button>;
+              return <button key={item.workflow} className={activeTab.workflow === item.workflow ? "nav-item is-active" : "nav-item"} onClick={() => openWorkflow(item.workflow)} title={layout.railCollapsed ? item.label : undefined} aria-label={`${item.label} ${presentation}`}><Icon name={item.icon} /><span>{item.label}</span><i className={`migration-chip ${presentation}`}>{presentation}</i></button>;
             })}
           </nav>
-          <div className="rail-footer"><button className="object-button" onClick={() => { setActiveTabId(baseTab.id); setStatus("project-loaded"); }}><Icon name="database" /><span>Data objects</span></button><small>Phase 7 complete · ML Lab native (enabled)</small></div>
+          <div className="rail-footer"><button className="object-button" aria-label="Data objects" onClick={() => { setActiveTabId(baseTab.id); setStatus("project-loaded"); }}><Icon name="database" /><span>Data objects</span></button><small>Phase 7 complete · ML Lab native (enabled)</small></div>
         </aside>
         {!layout.railCollapsed ? <ResizeHandle panel="rail" value={layout.railWidth} onPointerDown={startResize} onKeyboardResize={(delta) => updateLayout({ railWidth: Math.max(180, Math.min(360, layout.railWidth + delta)) })} /> : <div className="resize-spacer" />}
         <section id="workspace" className="workspace-area" aria-label="Central tabbed workspace">
@@ -181,7 +181,7 @@ export function PrismShell() {
 }
 
 function ResizeHandle({ panel, value, onPointerDown, onKeyboardResize }: { panel: "rail" | "inspector"; value: number; onPointerDown(panel: "rail" | "inspector", event: React.PointerEvent<HTMLDivElement>): void; onKeyboardResize(delta: number): void }) {
-  return <div className={`resize-handle ${panel}`} role="separator" aria-label={`Resize ${panel === "rail" ? "navigation" : "inspector"}`} aria-orientation="vertical" aria-valuemin={panel === "rail" ? 180 : 240} aria-valuemax={panel === "rail" ? 360 : 420} aria-valuenow={value} tabIndex={0} onPointerDown={(event) => onPointerDown(panel, event)} onKeyDown={(event) => { if (event.key === "ArrowLeft") onKeyboardResize(-12); if (event.key === "ArrowRight") onKeyboardResize(12); }} />;
+  return <div className={`resize-handle resize-handle-${panel}`} role="separator" aria-label={`Resize ${panel === "rail" ? "navigation" : "inspector"}`} aria-orientation="vertical" aria-valuemin={panel === "rail" ? 180 : 240} aria-valuemax={panel === "rail" ? 360 : 420} aria-valuenow={value} tabIndex={0} onPointerDown={(event) => onPointerDown(panel, event)} onKeyDown={(event) => { if (event.key === "ArrowLeft") onKeyboardResize(-12); if (event.key === "ArrowRight") onKeyboardResize(12); }} />;
 }
 
 function WorkspaceSurface({ tab, status, onStatusChange, onOpenCommand, onSelectContext, onOpenWorkflow, sqlDraft, analystResultRunId, activeDatasetId, onDatasetReady, onSqlDraft, onUseAsEvidence }: { tab: WorkspaceTab; status: ShellStatus; onStatusChange(status: ShellStatus): void; onOpenCommand(): void; onSelectContext(state: InspectorObjectState): void; onOpenWorkflow(workflow: string): void; sqlDraft: string | undefined; analystResultRunId: string | undefined; activeDatasetId: string | undefined; onDatasetReady(datasetId: string): void; onSqlDraft(draft: string): void; onUseAsEvidence(runId: string): void }) {

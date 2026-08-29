@@ -111,5 +111,5 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
 function SampleTable({ rows }: { rows: readonly Record<string, unknown>[] }) {
   if (!rows.length) return <p className="quiet-note">No rows.</p>;
   const columns = Object.keys(rows[0] ?? {});
-  return <div className="data-table-wrap"><table><thead><tr>{columns.map((key) => <th key={key}>{key}</th>)}</tr></thead><tbody>{rows.map((row, index) => <tr key={index}>{columns.map((key) => <td key={key}>{row[key] === null || row[key] === undefined ? "—" : String(row[key])}</td>)}</tr>)}</tbody></table></div>;
+  return <div className="data-table-wrap" tabIndex={0}><table><thead><tr>{columns.map((key) => <th key={key}>{key}</th>)}</tr></thead><tbody>{rows.map((row, index) => <tr key={index}>{columns.map((key) => <td key={key}>{row[key] === null || row[key] === undefined ? "—" : String(row[key])}</td>)}</tr>)}</tbody></table></div>;
 }

@@ -91,7 +91,7 @@ export function StatsWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
       </> : <>
         <p className="clean-preview-summary">{result.interpretation}</p>
         <aside className="stat-evidence" aria-live="polite"><strong>{result.significant ? "Evidence found" : "Insufficient evidence"}</strong><small>{result.evidence_statement}</small></aside>
-        {Object.keys(result.means ?? {}).length ? <div className="data-table-wrap"><table><thead><tr><th>Group</th><th>n</th><th>Mean</th></tr></thead><tbody>{Object.keys(result.groups ?? {}).map((name) => <tr key={name}><td>{name}</td><td>{result.groups?.[name]}</td><td>{result.means?.[name]?.toFixed(3) ?? "—"}</td></tr>)}</tbody></table></div> : null}
+        {Object.keys(result.means ?? {}).length ? <div className="data-table-wrap" tabIndex={0}><table><thead><tr><th>Group</th><th>n</th><th>Mean</th></tr></thead><tbody>{Object.keys(result.groups ?? {}).map((name) => <tr key={name}><td>{name}</td><td>{result.groups?.[name]}</td><td>{result.means?.[name]?.toFixed(3) ?? "—"}</td></tr>)}</tbody></table></div> : null}
         {(result.warnings ?? []).length ? <ul className="clean-warnings">{(result.warnings ?? []).map((warning) => <li key={warning}>{warning}</li>)}</ul> : null}
         <div className="inspector-actions"><button className="secondary" onClick={() => { setResult(null); setAtlas(null); }}>Run a different test</button></div>
       </>}
