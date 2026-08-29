@@ -1,7 +1,7 @@
 # Current migration phase
 
-**Phase:** 6.5 complete, native staging LIVE and verified; Phase 7A (Stats Lab) COMPLETE and
-ENABLED. Phase 7B (Forecasting) not yet started.
+**Phase:** 6.5 complete, native staging LIVE and verified; Phase 7A (Stats Lab) and Phase 7B
+(Forecasting) both COMPLETE and ENABLED. Phase 7C (ML Lab) not yet started.
 
 **Enabled:** native Overview, native SQL Lab, native AI Analyst, native Clean, and native Visualize.
 Clean and Visualize both operate on the same server-held `overview.store` dataset that Overview,
@@ -32,17 +32,18 @@ Python-runtime pin (`render.yaml`), has been folded into `phase-6.5-integration-
 locally at `349943f` (tag-ref push to origin is blocked by this session's credential scope; branch
 pushes work).
 
-**Phase 7** (`phase-7-advanced-analytics` branch): **7A Stats Lab is COMPLETE and `ENABLED`** —
-native API (`apps/api/src/prism_api/stats.py`), native workspace
-(`apps/web/src/components/stats-workspace.tsx`), full parity/accessibility/performance/Atlas gate
-passed (`.prism/checkpoints/phase-7a.md`, `PHASE7_IMPLEMENTATION_LEDGER.md`). **7B Forecasting**
-and **7C ML Lab** are not started. `PHASE7_BRIEF.md` on this branch has the full migration plan and
-sequencing rationale for both. See `CLAUDE_SESSION_HANDOFF.md` for the exact next implementation
-task.
+**Phase 7** (`phase-7-advanced-analytics` branch): **7A Stats Lab and 7B Forecasting are both
+COMPLETE and `ENABLED`** — native APIs (`apps/api/src/prism_api/stats.py`,
+`apps/api/src/prism_api/forecasting.py`), native workspaces
+(`apps/web/src/components/stats-workspace.tsx`, `forecasting-workspace.tsx`), full
+parity/accessibility/performance/Atlas gates passed for both
+(`.prism/checkpoints/phase-7a.md`, `.prism/checkpoints/phase-7b.md`,
+`PHASE7_IMPLEMENTATION_LEDGER.md`). **7C ML Lab** is not started. `PHASE7_BRIEF.md` on this branch
+has the full migration plan and sequencing rationale. See `CLAUDE_SESSION_HANDOFF.md` for the
+exact next implementation task.
 
-**Still forbidden until implemented and gated:** Stats, Forecasting, ML, full autonomous Atlas
-orchestration, governance, desktop, and publication work. Streamlit Clean/Visualize
-(`modules/cleaning.py`, `modules/visualization.py`, `modules/autocleaner.py`) remain the
-parity/rollback reference. Streamlit AI Analyst, SQL Lab, Stats Lab (`modules/stats_lab.py`),
-Forecasting (`modules/forecasting.py`), and ML Lab (`modules/mllab.py`) remain available as
-parity/rollback references.
+**Still forbidden until implemented and gated:** ML, full autonomous Atlas orchestration,
+governance, desktop, and publication work. Streamlit Clean/Visualize (`modules/cleaning.py`,
+`modules/visualization.py`, `modules/autocleaner.py`) remain the parity/rollback reference.
+Streamlit AI Analyst, SQL Lab, Stats Lab, Forecasting, and ML Lab (`modules/mllab.py`) remain
+available as parity/rollback references.

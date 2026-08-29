@@ -120,11 +120,129 @@ contract layer.
 
 ---
 
-## 7B — Forecasting (NOT STARTED)
+## 7B — Forecasting (COMPLETE, ENABLED)
 
-Not implemented in this session. See `PHASE7_BRIEF.md` for the planned
-scope (`modules/forecasting.py`: series prep, decomposition, forecast
-generation with intervals, changepoint detection) and sequencing rationale.
+**Objective**: Give an analyst a bounded, deterministic path from a raw time
+series to a forecast with visible uncertainty, a trend/seasonality
+breakdown, and structural-break detection — never a point estimate
+presented as certainty.
+
+**Legacy reference**: `modules/forecasting.py` (453 lines) —
+`prepare_series`, `run_forecast`, `forecast_caveat`, `can_decompose`,
+`decompose_series`, `decomposition_verdict`, `detect_changepoints`,
+`changepoint_verdict`, `_best_split`, `_segment_ss`.
+
+**Files changed**:
+- `packages/api-contracts/python/prism_api_contracts/models.py`,
+  `__init__.py` — new contracts (below).
+- `packages/api-contracts/typescript/src/generated.ts` — regenerated.
+- `apps/api/src/prism_api/forecasting.py` (new) — the native router.
+- `apps/api/src/prism_api/main.py` — router registration.
+- `apps/api/src/prism_api/migration.py` — `forecasting` entry, `SHADOW` → `ENABLED`.
+- `apps/api/requirements.txt` — `statsmodels==0.14.6` added *before*
+  writing the router (applying 7A's own lesson), verified with a
+  clean-venv install.
+- `apps/web/src/components/forecasting-workspace.tsx` (new) — the workspace.
+- `apps/web/src/components/prism-shell.tsx` — wired into `nativeKinds` and
+  the workspace-surface dispatch.
+- `apps/web/src/state/shell-model.ts` — `WorkspaceTab.kind` gained
+  `"forecasting"`; `phaseTwoMigrations`' entry corrected `legacy` →
+  `shadow` → `enabled`.
+- `apps/web/app/prism.css` — `.forecasting-fields`, `.forecasting-canvas`,
+  chart band/line/marker classes.
+- `pyproject.toml` — `statsmodels`/`statsmodels.*` added to mypy's
+  ignore-missing-imports.
+- Tests: `tests/api/test_forecasting.py` (new, 17), `tests/api/test_contracts.py`
+  and `tests/migration/test_phase_1_parity_hooks.py` (updated),
+  `apps/web/src/components/forecasting-workspace.test.tsx` (new, 4),
+  `apps/web/src/components/prism-shell.test.tsx` (updated),
+  `apps/web/e2e/shell.spec.ts` (new Forecasting e2e test).
+
+**Contracts**: `ForecastPoint`, `ForecastInterval`, `ForecastMetrics`,
+`ForecastRequest`, `ForecastResult`, `DecomposeRequest`,
+`DecompositionResult`, `ChangepointRequest`, `ChangepointFinding`,
+`ChangepointResult`, `AtlasForecastAction/Request/Response`. Every result
+reuses `OverviewProvenance`. Structured point/interval data only — legacy's
+`build_forecast_chart`/`build_decomposition_chart`/`build_changepoint_chart`
+(server-rendered Plotly figures) were deliberately **not** ported; the
+frontend renders from this structured data instead, per rule 19.
+
+**Analytical method**: `run_forecast()` tries Exponential Smoothing (ETS,
+with a seasonal component when the series has ≥2 full seasonal cycles at
+its inferred frequency) first, falling back to SARIMAX(1,1,1) on failure —
+both ported verbatim, including the exact seasonal-period-by-frequency
+table. `decompose_series()` runs STL (Seasonal-Trend decomposition using
+LOESS) and computes trend/seasonal "strength" via the Hyndman &
+Athanasopoulos variance-ratio heuristic. `detect_changepoints()` is a
+from-scratch, dependency-free penalized binary segmentation (no `ruptures`
+package), vectorized via prefix sums, with a BIC-style penalty as the
+stopping rule.
+
+**Assumptions**: Time-series validation happens before any model runs
+(rule 20): duplicate timestamps are averaged, gaps are interpolated after
+resampling to an inferred regular frequency, and a series with too few
+distinct timestamps, an unparseable datetime column, or (for decomposition)
+fewer than 2 full seasonal cycles fails as HTTP 422 with a specific reason.
+
+**Parity**: Direct, in-process tests import `modules.forecasting` and
+compare the native API's output against the legacy functions' own return
+values on identical fixture series. Point-forecast values and STL
+strengths matched to `pytest.approx(abs=1e-6)`; the forecast caveat's exact
+wording matched (same function called with the same arguments — legitimately
+exact, not a tolerance case); changepoint positions matched exactly (same
+deterministic algorithm). No intentional behavioral corrections were made.
+One genuine addition beyond legacy: a single train/test holdout (not k-fold,
+per rule 37's bounded-compute constraint) that reuses `run_forecast()`
+itself to compute MAE/RMSE/MAPE-when-not-degenerate as a diagnostic never
+presented as the forecast itself.
+
+**Tests**: 17 backend (`tests/api/test_forecasting.py`) + 4 frontend
+component (`forecasting-workspace.test.tsx`) + 1 Playwright e2e with
+axe-core (0 violations) + 2 updated cross-cutting migration-state
+regression tests.
+
+**Provenance**: Every result's `provenance` binds `source_fingerprint`/
+`dataset_revision` to the exact revision the analysis ran against, via the
+same shared `DatasetStore` every other workflow reads.
+
+**Atlas**: Five actions — `explain_method` (why ETS vs. SARIMAX, with or
+without seasonality), `explain_trend`, `explain_seasonality` (both reuse
+`decompose_series()`'s own output), `explain_changepoints` (reuses
+`detect_changepoints()`'s own output — cross-checked in tests against the
+dedicated changepoints endpoint's result), `explain_intervals` (explicitly
+states a point forecast without its band "is not the full picture" — never
+hides uncertainty, per rule 23). Atlas never computes or alters a value.
+
+**Accessibility**: 0 axe-core violations scoped to `.forecasting-workspace`
+— native `<select>`/`<input>` elements for the series/mode/horizon
+pickers, consistent with Stats' choice to avoid a custom widget where a
+plain form control is the more accessible default.
+
+**Performance**: No regression. Applied 7A's lesson from the start —
+`statsmodels` imported at module load, verified with a direct timing check
+that the very first request in a fresh process (~75ms) is in line with
+every subsequent one (~71ms), i.e. no cold-import tax. The ~70ms itself is
+legitimate ETS-fit compute time on a 10-point series, not a regression.
+
+**Risks**: Medium (higher than Stats' low, matching the brief's original
+risk assessment) — statsmodels' MLE fitting can occasionally raise
+`ConvergenceWarning` on short or near-degenerate synthetic series (observed
+in tests, not a failure — the fit still returns a usable result, matching
+legacy's own tolerance for this). Real-world series with more natural
+variation are less likely to trigger this than the clean synthetic
+fixtures used in tests.
+
+**Technical debt**: The `ForecastMetrics` diagnostic (holdout MAE/RMSE/MAPE)
+has no legacy equivalent — it is a deliberate, bounded addition (rule 21),
+not a gap. `AtlasForecastAction` was trimmed from rule 24's full seven-item
+list to five (dropped `identify_weak_conditions` and
+`suggest_alternative_horizon`) as under-scoped for this slice's first pass;
+revisit if a future session finds analysts asking for them.
+
+**Rollback**: Flip `forecasting`'s `channel` to `SHADOW`/`LEGACY` in
+`migration.py` and `shell-model.ts` — no data migration, no code removal.
+
+---
 
 ## 7C — ML Lab (NOT STARTED)
 
