@@ -1,6 +1,9 @@
 # Current migration phase
 
-**Phase:** 6A/6B — Clean and Visualize vertical slices complete locally
+**Phase:** 6.5 complete, native staging LIVE and verified; **Phase 7 (Stats Lab, Forecasting,
+ML Lab) is COMPLETE — all three slices ENABLED.** Every navigation workflow in the shell now
+opens a native surface. Phase 8 is not started and out of scope for this session; see
+`PHASE8_HANDOFF.md`.
 
 **Enabled:** native Overview, native SQL Lab, native AI Analyst, native Clean, and native Visualize.
 Clean and Visualize both operate on the same server-held `overview.store` dataset that Overview,
@@ -14,7 +17,34 @@ aggregates data server-side (the browser never receives raw rows), and flags tru
 Atlas as contextual, evidence-grounded actions — explain an issue/chart, propose a fix,
 identify anomalies — never as autonomous unattended mutation.
 
-**Still forbidden:** Stats, Forecasting, ML, full autonomous Atlas orchestration, governance,
-desktop, and publication work. Streamlit Clean/Visualize (`modules/cleaning.py`,
+**Phase 6.5** (`phase-6.5-integration-staging`, merged history through `ee17be4`) added: workspace
+tablist ARIA fix (0 axe violations), Monaco's CDN dependency removed (bundled npm package, works
+fully offline), a single typed frontend API-config boundary, a `/api/v1/platform/ready` endpoint
+(config-only provider check, never a live probe), structured request logging, additive staging
+deployment config (`render.yaml`: `prism-native-api-staging` / `prism-native-web-staging`, free
+tier, legacy Streamlit `prism` service untouched), and a real integration bug fix (Overview losing
+its active dataset on tab switch). Live staging deployment is now **CONFIRMED LIVE**: a real
+authenticated Render session (2026-08-30, run directly by the user) deployed
+`prism-native-api-staging` and `prism-native-web-staging` and verified every native workflow in a
+real browser against the live URLs — full detail and gate flags
+(`NATIVE_STAGING_COMPLETE=YES`) in the "Live staging addendum" section of
+`PHASE6_5_RELEASE_REPORT.md` and `.prism/checkpoints/phase-6.5.md`. That evidence, plus a Render
+Python-runtime pin (`render.yaml`), has been folded into `phase-6.5-integration-staging` (now at
+`aaf5b7f`) and merged into `phase-7-advanced-analytics`. Release tag `prism-native-v0.6` exists
+locally at `349943f` (tag-ref push to origin is blocked by this session's credential scope; branch
+pushes work).
+
+**Phase 7** (`phase-7-advanced-analytics` branch, head `ec2a22a`): **7A Stats Lab, 7B
+Forecasting, and 7C ML Lab are all COMPLETE and `ENABLED`** — native APIs
+(`apps/api/src/prism_api/stats.py`, `forecasting.py`, `mllab.py`), native workspaces
+(`apps/web/src/components/stats-workspace.tsx`, `forecasting-workspace.tsx`,
+`mllab-workspace.tsx`), full parity/accessibility/performance/Atlas gates passed for all three
+(`.prism/checkpoints/phase-7a.md`, `phase-7b.md`, `phase-7c.md`, `PHASE7_IMPLEMENTATION_LEDGER.md`).
+See `PHASE7_FINAL_REPORT.md` for the full cross-slice summary and gate flags, and
+`PHASE8_HANDOFF.md` for minimal next-phase context (Phase 8 itself is not started).
+
+**Still forbidden:** full autonomous Atlas orchestration, governance, desktop, and publication
+work (none of these were in Phase 7's scope). Streamlit Clean/Visualize (`modules/cleaning.py`,
 `modules/visualization.py`, `modules/autocleaner.py`) remain the parity/rollback reference.
-Streamlit AI Analyst and SQL Lab remain available as parity/rollback references from Phase 5.
+Streamlit AI Analyst, SQL Lab, Stats Lab, Forecasting, and ML Lab (`modules/mllab.py`) remain
+available as parity/rollback references.

@@ -159,6 +159,102 @@ test("native Visualize workspace suggests a deterministic chart and explains it 
   await expect(page.getByText(/answers a comparison question/)).toBeVisible();
 });
 
+const statsProfile = { dataset: { ...cleanDataset, row_count: 40 }, provenance: { source_fingerprint: cleanDataset.source_fingerprint, dataset_revision: 0, parameters: {}, service_version: "x", computed_at: "2026-08-28T00:00:00Z" }, quality: { n_rows: 40, n_cols: 2, missing_by_column: {}, total_missing_cells: 0, total_missing_pct: 0, duplicate_rows: 0, memory_usage: "1KB", outliers: {}, all_null_columns: [] }, health: cleanHealth, columns: [{ name: "x", semantic_type: "numeric", missing_pct: 0, unique_count: 40, health: "good", issues: [], warnings: [], distribution: [] }, { name: "y", semantic_type: "numeric", missing_pct: 0, unique_count: 40, health: "good", issues: [], warnings: [], distribution: [] }], correlations: [], suggestions: [] };
+
+test("native Stats workspace suggests a deterministic test, runs it with an honest evidence statement, and explains it through Atlas", async ({ page }) => {
+  await page.route("**/api/v1/overview/datasets/*/profile", async (route) => route.fulfill({ json: statsProfile }));
+  await page.route("**/api/v1/overview/datasets/*/rows*", async (route) => route.fulfill({ json: { dataset: statsProfile.dataset, offset: 0, limit: 20, total_rows: 40, rows: [], provenance: statsProfile.provenance } }));
+  await page.route("**/api/v1/overview/datasets", async (route) => route.fulfill({ status: 201, json: statsProfile.dataset }));
+  await page.route("**/api/v1/stats/datasets/*/suggest*", async (route) => route.fulfill({ json: { col_a: "x", col_b: "y", test: "pearson", reason: "Both 'x' and 'y' are numeric — testing whether they're linearly correlated.", numeric_col: null, cat_col: null, error: null } }));
+  await page.route("**/api/v1/stats/datasets/*/run", async (route) => route.fulfill({ json: { test: "pearson", statistic: 0.87, p_value: 0.0001, effect_size: 0.87, effect_size_name: "Pearson r", effect_size_label: "large", groups: {}, means: {}, dof: null, n: 40, low_expected_pct: null, normality: [], significant: true, interpretation: "Significant correlation detected (p<0.0001, large effect, Pearson r=0.87).", evidence_statement: "This test found statistically significant evidence of a correlation in this sample. Statistical significance is not the same as practical importance or causation — read it together with the effect size, the assumption warnings below, and domain context.", warnings: [], provenance: statsProfile.provenance } }));
+  await page.route("**/api/v1/stats/datasets/*/atlas", async (route) => route.fulfill({ json: { action: "explain_test", summary: "Both 'x' and 'y' are numeric — testing whether they're linearly correlated.", uncertainty: "This explanation describes a deterministic statistical result; it does not establish causation, and Atlas cannot alter the underlying computation.", evidence: [{ label: "Selected test", value: "pearson" }] } }));
+
+  await page.goto("/");
+  await page.getByRole("button", { name: /Overview native/i }).click();
+  await page.setInputFiles("#overview-upload", { name: "sales.csv", mimeType: "text/csv", buffer: Buffer.from("x,y\n1,2\n2,4\n") });
+  await expect(page.getByRole("heading", { name: "sales.csv" }).first()).toBeVisible();
+  await page.getByRole("button", { name: /Stats/i }).click();
+  await expect(page.getByRole("button", { name: "Run test" })).toBeVisible();
+  await page.getByRole("button", { name: "Run test" }).click();
+  await expect(page.getByText("Significant correlation detected (p<0.0001, large effect, Pearson r=0.87).")).toBeVisible();
+  await expect(page.getByText("Evidence found")).toBeVisible();
+  await expect(page.getByText(/Statistical significance is not the same as practical importance/)).toBeVisible();
+
+  await page.getByRole("button", { name: "explain test" }).click();
+  await expect(page.getByText(/does not establish causation/)).toBeVisible();
+
+  // Scoped to Stats' own subtree: the shell chrome is covered by the page-level axe baseline above.
+  const violations = await page.addScriptTag({ path: "node_modules/axe-core/axe.min.js" }).then(() => page.evaluate(async () => (await (window as typeof window & { axe: { run(context: unknown): Promise<{ violations: unknown[] }> } }).axe.run(document.querySelector(".stats-workspace"))).violations));
+  expect(violations).toEqual([]);
+});
+
+const forecastingProfile = { dataset: { ...cleanDataset, row_count: 10 }, provenance: { source_fingerprint: cleanDataset.source_fingerprint, dataset_revision: 0, parameters: {}, service_version: "x", computed_at: "2026-08-28T00:00:00Z" }, quality: { n_rows: 10, n_cols: 2, missing_by_column: {}, total_missing_cells: 0, total_missing_pct: 0, duplicate_rows: 0, memory_usage: "1KB", outliers: {}, all_null_columns: [] }, health: cleanHealth, columns: [{ name: "date", semantic_type: "datetime", missing_pct: 0, unique_count: 10, health: "good", issues: [], warnings: [], distribution: [] }, { name: "revenue", semantic_type: "numeric", missing_pct: 0, unique_count: 10, health: "good", issues: [], warnings: [], distribution: [] }], correlations: [], suggestions: [] };
+const forecastResult = { datetime_col: "date", numeric_col: "revenue", frequency: "D", model_used: "Exponential Smoothing (ETS)", horizon: 3, observed: [{ timestamp: "2026-01-01T00:00:00", value: 10 }, { timestamp: "2026-01-02T00:00:00", value: 12 }], forecast: [{ timestamp: "2026-01-03T00:00:00", value: 14 }, { timestamp: "2026-01-04T00:00:00", value: 16 }, { timestamp: "2026-01-05T00:00:00", value: 18 }], intervals: [{ timestamp: "2026-01-03T00:00:00", lower: 12, upper: 16 }, { timestamp: "2026-01-04T00:00:00", lower: 13, upper: 19 }, { timestamp: "2026-01-05T00:00:00", lower: 14, upper: 22 }], metrics: { mae: 1.2, rmse: 1.5, mape: null, holdout_points: 2, note: "Computed by fitting on all but the last 2 point(s)." }, caveat: "Fit on 10 historical observations to project 3 periods ahead using Exponential Smoothing (ETS). Confidence in this forecast is **reasonable**.", warnings: [], provenance: forecastingProfile.provenance };
+
+test("native Forecasting workspace projects a point forecast with its interval, an honest caveat, and explains it through Atlas", async ({ page }) => {
+  await page.route("**/api/v1/overview/datasets/*/profile", async (route) => route.fulfill({ json: forecastingProfile }));
+  await page.route("**/api/v1/overview/datasets/*/rows*", async (route) => route.fulfill({ json: { dataset: forecastingProfile.dataset, offset: 0, limit: 20, total_rows: 10, rows: [], provenance: forecastingProfile.provenance } }));
+  await page.route("**/api/v1/overview/datasets", async (route) => route.fulfill({ status: 201, json: forecastingProfile.dataset }));
+  await page.route("**/api/v1/forecasting/datasets/*/forecast", async (route) => route.fulfill({ json: forecastResult }));
+  await page.route("**/api/v1/forecasting/datasets/*/atlas", async (route) => route.fulfill({ json: { action: "explain_intervals", summary: "The shaded band is a 95% confidence interval around the point forecast — it widens further into the future because uncertainty compounds with each additional step. A point forecast without this band is not the full picture; treat the band's width, not just its center, as the forecast.", uncertainty: "This explanation describes a deterministic time-series computation; it does not establish causation, and Atlas cannot alter the underlying model or its output.", evidence: [] } }));
+
+  await page.goto("/");
+  await page.getByRole("button", { name: /Overview native/i }).click();
+  await page.setInputFiles("#overview-upload", { name: "sales.csv", mimeType: "text/csv", buffer: Buffer.from("date,revenue\n2026-01-01,10\n2026-01-02,12\n") });
+  await expect(page.getByRole("heading", { name: "sales.csv" }).first()).toBeVisible();
+  await page.getByRole("button", { name: /Forecasting/i }).click();
+  await expect(page.getByLabel("Forecast canvas").getByText("Exponential Smoothing (ETS)", { exact: true })).toBeVisible();
+  await expect(page.getByText("Reliability caveat")).toBeVisible();
+  await expect(page.getByRole("img", { name: /Forecast chart/ })).toBeVisible();
+
+  await page.getByRole("button", { name: "explain intervals" }).click();
+  await expect(page.getByText(/not the full picture/)).toBeVisible();
+
+  // Scoped to Forecasting's own subtree: the shell chrome is covered by the page-level axe baseline above.
+  const violations = await page.addScriptTag({ path: "node_modules/axe-core/axe.min.js" }).then(() => page.evaluate(async () => (await (window as typeof window & { axe: { run(context: unknown): Promise<{ violations: unknown[] }> } }).axe.run(document.querySelector(".forecasting-workspace"))).violations));
+  expect(violations).toEqual([]);
+});
+
+const mllabProfile = { dataset: { ...cleanDataset, row_count: 40, column_count: 3 }, provenance: { source_fingerprint: cleanDataset.source_fingerprint, dataset_revision: 0, parameters: {}, service_version: "x", computed_at: "2026-08-28T00:00:00Z" }, quality: { n_rows: 40, n_cols: 3, missing_by_column: {}, total_missing_cells: 0, total_missing_pct: 0, duplicate_rows: 0, memory_usage: "1KB", outliers: {}, all_null_columns: [] }, health: cleanHealth, columns: [{ name: "x1", semantic_type: "numeric", missing_pct: 0, unique_count: 40, health: "good", issues: [], warnings: [], distribution: [] }, { name: "x2", semantic_type: "numeric", missing_pct: 0, unique_count: 40, health: "good", issues: [], warnings: [], distribution: [] }, { name: "label", semantic_type: "categorical", missing_pct: 0, unique_count: 2, health: "good", issues: [], warnings: [], distribution: [] }], correlations: [], suggestions: [] };
+const mllabBaseline = {
+  task_type: "classification", results: { Baseline: { accuracy: 0.8, f1: 0.79 }, "Random Forest": { accuracy: 0.85, f1: 0.84 } },
+  confusion_matrix: [[15, 2], [1, 14]], confusion_labels: ["no", "yes"],
+  feature_importances: [{ feature: "x1", importance: 0.6 }, { feature: "x2", importance: 0.4 }],
+  n_train: 32, n_test: 8, smote_before_after: null,
+  cv: { results: { Baseline: { accuracy: { mean: 0.78, std: 0.05 } }, "Random Forest": { accuracy: { mean: 0.82, std: 0.04 } } }, n_splits: 5 }, cv_error: null,
+  verdict: "Random Forest wins on F1 score (0.840 vs 0.790, 6% higher than the other model). Top driver: x1.",
+  leakage_note: "Preprocessing (imputation, scaling, one-hot encoding) is fit on the training split only, then applied unchanged to the test split — the test set never influences how features are transformed, so its score is not inflated by information the model would not have at prediction time.",
+  provenance: mllabProfile.provenance,
+};
+
+test("native ML Lab workspace runs baseline models with a leakage-protection note and explains model comparison through Atlas", async ({ page }) => {
+  await page.route("**/api/v1/overview/datasets/*/profile", async (route) => route.fulfill({ json: mllabProfile }));
+  await page.route("**/api/v1/overview/datasets/*/rows*", async (route) => route.fulfill({ json: { dataset: mllabProfile.dataset, offset: 0, limit: 20, total_rows: 40, rows: [], provenance: mllabProfile.provenance } }));
+  await page.route("**/api/v1/overview/datasets", async (route) => route.fulfill({ status: 201, json: mllabProfile.dataset }));
+  await page.route("**/api/v1/ml/datasets/*/suggest-features*", async (route) => route.fulfill({ json: { target_col: "label", suggestions: [{ kind: "scale", column: "x1", columns: null, method: "standard", reason: "Numeric feature — standardizing helps distance-based and linear models treat it fairly alongside other features." }] } }));
+  await page.route("**/api/v1/ml/datasets/*/detect-task*", async (route) => route.fulfill({ json: { target_col: "label", task_type: "classification", reason: "Non-numeric target." } }));
+  await page.route("**/api/v1/ml/datasets/*/imbalance*", async (route) => route.fulfill({ json: { target_col: "label", counts: { yes: 20, no: 20 }, proportions_pct: { yes: 50, no: 50 }, minority_pct: 50, is_imbalanced: false, explanation: "Balanced." } }));
+  await page.route("**/api/v1/ml/datasets/*/baseline", async (route) => route.fulfill({ json: mllabBaseline }));
+  await page.route("**/api/v1/ml/datasets/*/atlas", async (route) => route.fulfill({ json: { action: "compare_models", summary: mllabBaseline.verdict, uncertainty: "This explanation describes a deterministic model-evaluation result; it does not establish causation, and Atlas never retrains or alters a model outside an explicit PRISM command.", evidence: [] } }));
+
+  await page.goto("/");
+  await page.getByRole("button", { name: /Overview native/i }).click();
+  await page.setInputFiles("#overview-upload", { name: "ml.csv", mimeType: "text/csv", buffer: Buffer.from("x1,x2,label\n1,2,yes\n3,4,no\n") });
+  await expect(page.getByRole("heading", { name: "sales.csv" }).first()).toBeVisible();
+  await page.getByRole("button", { name: /ML/i }).click();
+  await page.getByRole("combobox", { name: "Analysis" }).selectOption("baseline");
+  await page.getByRole("button", { name: "Run baseline models" }).click();
+  await expect(page.getByLabel("Analysis results").getByText(mllabBaseline.verdict)).toBeVisible();
+  await expect(page.getByText("Leakage protection")).toBeVisible();
+
+  await page.getByRole("button", { name: "compare models", exact: true }).click();
+  await expect(page.getByLabel("Provenance and Atlas").getByText(mllabBaseline.verdict)).toBeVisible();
+
+  // Scoped to ML Lab's own subtree: the shell chrome is covered by the page-level axe baseline above.
+  const violations = await page.addScriptTag({ path: "node_modules/axe-core/axe.min.js" }).then(() => page.evaluate(async () => (await (window as typeof window & { axe: { run(context: unknown): Promise<{ violations: unknown[] }> } }).axe.run(document.querySelector(".mllab-workspace"))).violations));
+  expect(violations).toEqual([]);
+});
+
 test("native AI Analyst streams grounded evidence and requires SQL review", async ({ page }) => {
   await page.route("**/api/v1/ai-analyst/stream", async (route) => route.fulfill({
     contentType: "text/event-stream",

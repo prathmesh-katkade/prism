@@ -596,3 +596,349 @@ class AtlasVisualizeResponse(ContractModel):
     summary: str = Field(min_length=1)
     uncertainty: str = Field(min_length=1)
     evidence: list[AtlasEvidence]
+
+
+# --- Phase 7A: Stats Lab -------------------------------------------------------
+
+
+class StatTestKind(str, Enum):
+    TTEST = "ttest"
+    ANOVA = "anova"
+    CHI2 = "chi2"
+    PEARSON = "pearson"
+
+
+class StatNormalityCheck(ContractModel):
+    subject: str = Field(min_length=1)
+    p_value: Optional[float] = None
+    is_normal: Optional[bool] = None
+    note: str = ""
+
+
+class StatSuggestionResponse(ContractModel):
+    col_a: str = Field(min_length=1)
+    col_b: str = Field(min_length=1)
+    test: Optional[StatTestKind] = None
+    reason: Optional[str] = None
+    numeric_col: Optional[str] = None
+    cat_col: Optional[str] = None
+    error: Optional[str] = None
+
+
+class StatTestRequest(ContractModel):
+    test: StatTestKind
+    col_a: str = Field(min_length=1)
+    col_b: str = Field(min_length=1)
+    numeric_col: Optional[str] = None
+    cat_col: Optional[str] = None
+
+
+class StatTestResult(ContractModel):
+    test: StatTestKind
+    statistic: float
+    p_value: float = Field(ge=0, le=1)
+    effect_size: float
+    effect_size_name: str = Field(min_length=1)
+    effect_size_label: Literal["negligible", "small", "medium", "large"]
+    groups: dict[str, int] = Field(default_factory=dict)
+    means: dict[str, float] = Field(default_factory=dict)
+    dof: Optional[int] = None
+    n: Optional[int] = None
+    low_expected_pct: Optional[float] = None
+    normality: list[StatNormalityCheck] = Field(default_factory=list)
+    significant: bool
+    interpretation: str = Field(min_length=1)
+    evidence_statement: str = Field(min_length=1)
+    warnings: list[str] = Field(default_factory=list)
+    provenance: OverviewProvenance
+
+
+class AtlasStatsAction(str, Enum):
+    EXPLAIN_TEST = "explain_test"
+    EXPLAIN_ASSUMPTIONS = "explain_assumptions"
+    EXPLAIN_EFFECT_SIZE = "explain_effect_size"
+    RECOMMEND_NEXT_STEP = "recommend_next_step"
+
+
+class AtlasStatsRequest(ContractModel):
+    action: AtlasStatsAction
+    col_a: str = Field(min_length=1)
+    col_b: str = Field(min_length=1)
+
+
+class AtlasStatsResponse(ContractModel):
+    action: AtlasStatsAction
+    summary: str = Field(min_length=1)
+    uncertainty: str = Field(min_length=1)
+    evidence: list[AtlasEvidence]
+
+
+# --- Phase 7B: Forecasting -----------------------------------------------------
+
+
+class ForecastPoint(ContractModel):
+    timestamp: datetime
+    value: float
+
+
+class ForecastInterval(ContractModel):
+    timestamp: datetime
+    lower: float
+    upper: float
+
+
+class ForecastMetrics(ContractModel):
+    mae: Optional[float] = None
+    rmse: Optional[float] = None
+    mape: Optional[float] = None
+    holdout_points: int = Field(default=0, ge=0)
+    note: str = ""
+
+
+class ForecastRequest(ContractModel):
+    datetime_col: str = Field(min_length=1)
+    numeric_col: str = Field(min_length=1)
+    horizon: int = Field(default=12, ge=1, le=365)
+
+
+class ForecastResult(ContractModel):
+    datetime_col: str
+    numeric_col: str
+    frequency: str
+    model_used: str = Field(min_length=1)
+    horizon: int = Field(ge=1)
+    observed: list[ForecastPoint]
+    forecast: list[ForecastPoint]
+    intervals: list[ForecastInterval]
+    metrics: ForecastMetrics
+    caveat: str = Field(min_length=1)
+    warnings: list[str] = Field(default_factory=list)
+    provenance: OverviewProvenance
+
+
+class DecomposeRequest(ContractModel):
+    datetime_col: str = Field(min_length=1)
+    numeric_col: str = Field(min_length=1)
+
+
+class DecompositionResult(ContractModel):
+    datetime_col: str
+    numeric_col: str
+    seasonal_period: int = Field(ge=1)
+    trend_strength: float = Field(ge=0, le=1)
+    seasonal_strength: float = Field(ge=0, le=1)
+    observed: list[ForecastPoint]
+    trend: list[ForecastPoint]
+    seasonal: list[ForecastPoint]
+    resid: list[ForecastPoint]
+    verdict: str = Field(min_length=1)
+    provenance: OverviewProvenance
+
+
+class ChangepointRequest(ContractModel):
+    datetime_col: str = Field(min_length=1)
+    numeric_col: str = Field(min_length=1)
+    max_changepoints: int = Field(default=5, ge=1, le=20)
+
+
+class ChangepointFinding(ContractModel):
+    position: int = Field(ge=0)
+    timestamp: datetime
+    before_mean: float
+    after_mean: float
+    delta: float
+    pct_change: Optional[float] = None
+    before_n: int = Field(ge=0)
+    after_n: int = Field(ge=0)
+
+
+class ChangepointResult(ContractModel):
+    datetime_col: str
+    numeric_col: str
+    observed: list[ForecastPoint]
+    changepoints: list[ChangepointFinding]
+    n_segments: int = Field(ge=1)
+    verdict: str = Field(min_length=1)
+    provenance: OverviewProvenance
+
+
+class AtlasForecastAction(str, Enum):
+    EXPLAIN_METHOD = "explain_method"
+    EXPLAIN_TREND = "explain_trend"
+    EXPLAIN_SEASONALITY = "explain_seasonality"
+    EXPLAIN_CHANGEPOINTS = "explain_changepoints"
+    EXPLAIN_INTERVALS = "explain_intervals"
+
+
+class AtlasForecastRequest(ContractModel):
+    action: AtlasForecastAction
+    datetime_col: str = Field(min_length=1)
+    numeric_col: str = Field(min_length=1)
+
+
+class AtlasForecastResponse(ContractModel):
+    action: AtlasForecastAction
+    summary: str = Field(min_length=1)
+    uncertainty: str = Field(min_length=1)
+    evidence: list[AtlasEvidence]
+
+
+# --- Phase 7C: ML Lab -----------------------------------------------------------
+
+
+class MlSuggestionType(str, Enum):
+    ENCODE = "encode"
+    SCALE = "scale"
+    DATETIME_EXPAND = "datetime_expand"
+    INTERACTION = "interaction"
+
+
+class MlFeatureSuggestion(ContractModel):
+    kind: MlSuggestionType
+    column: Optional[str] = None
+    columns: Optional[list[str]] = None
+    method: Optional[str] = None
+    reason: str = Field(min_length=1)
+
+
+class MlFeatureSuggestionsResponse(ContractModel):
+    target_col: str
+    suggestions: list[MlFeatureSuggestion]
+
+
+class MlApplyFeatureRequest(ContractModel):
+    suggestion: MlFeatureSuggestion
+
+
+class MlApplyFeatureResponse(ContractModel):
+    dataset: OverviewDataset
+    description: str = Field(min_length=1)
+    provenance: OverviewProvenance
+
+
+class MlTaskType(str, Enum):
+    CLASSIFICATION = "classification"
+    REGRESSION = "regression"
+
+
+class MlTaskDetectionResponse(ContractModel):
+    target_col: str
+    task_type: MlTaskType
+    reason: str = Field(min_length=1)
+
+
+class MlImbalanceInfo(ContractModel):
+    target_col: str
+    counts: dict[str, int]
+    proportions_pct: dict[str, float]
+    minority_pct: float
+    is_imbalanced: bool
+    explanation: str = Field(min_length=1)
+
+
+class MlCvMetric(ContractModel):
+    mean: float
+    std: float
+
+
+class MlCvResult(ContractModel):
+    results: dict[str, dict[str, MlCvMetric]]
+    n_splits: int = Field(ge=2)
+
+
+class MlFeatureImportance(ContractModel):
+    feature: str
+    importance: float
+
+
+class MlBaselineRequest(ContractModel):
+    feature_cols: list[str] = Field(min_length=1)
+    target_col: str = Field(min_length=1)
+    task_type: Optional[MlTaskType] = None
+    use_smote: bool = False
+
+
+class MlBaselineResult(ContractModel):
+    task_type: MlTaskType
+    results: dict[str, dict[str, float]]
+    confusion_matrix: Optional[list[list[int]]] = None
+    confusion_labels: Optional[list[str]] = None
+    feature_importances: list[MlFeatureImportance]
+    n_train: int = Field(ge=0)
+    n_test: int = Field(ge=0)
+    smote_before_after: Optional[dict[str, Any]] = None
+    cv: Optional[MlCvResult] = None
+    cv_error: Optional[str] = None
+    verdict: str = Field(min_length=1)
+    leakage_note: str = Field(min_length=1)
+    provenance: OverviewProvenance
+
+
+class MlFeatureSelectionRequest(ContractModel):
+    feature_cols: list[str] = Field(min_length=1)
+    target_col: str = Field(min_length=1)
+    task_type: Optional[MlTaskType] = None
+    top_k: Optional[int] = Field(default=None, ge=1)
+
+
+class MlFeatureRankingRow(ContractModel):
+    feature: str
+    mutual_info: float
+    mutual_info_rank: float
+    l1_coef_abs: float
+    l1_rank: float
+    rfe_selected: bool
+    rfe_rank: float
+    consensus_votes: int = Field(ge=0, le=3)
+    consensus_rank: float
+
+
+class MlFeatureSelectionResult(ContractModel):
+    task_type: MlTaskType
+    top_k: int = Field(ge=1)
+    n_features: int = Field(ge=1)
+    ranking: list[MlFeatureRankingRow]
+    recommended_features: list[str]
+    provenance: OverviewProvenance
+
+
+class MlShapRequest(ContractModel):
+    feature_cols: list[str] = Field(min_length=1)
+    target_col: str = Field(min_length=1)
+    task_type: Optional[MlTaskType] = None
+
+
+class MlShapImportance(ContractModel):
+    feature: str
+    mean_abs_shap: float
+
+
+class MlShapResult(ContractModel):
+    task_type: MlTaskType
+    model_explained: str = Field(min_length=1)
+    global_importance: list[MlShapImportance]
+    note: str = Field(min_length=1)
+    provenance: OverviewProvenance
+
+
+class AtlasMlAction(str, Enum):
+    EXPLAIN_TASK_TYPE = "explain_task_type"
+    COMPARE_MODELS = "compare_models"
+    EXPLAIN_CROSS_VALIDATION = "explain_cross_validation"
+    EXPLAIN_IMBALANCE = "explain_imbalance"
+    EXPLAIN_FEATURE_IMPORTANCE = "explain_feature_importance"
+    IDENTIFY_OVERFITTING = "identify_overfitting"
+
+
+class AtlasMlRequest(ContractModel):
+    action: AtlasMlAction
+    feature_cols: list[str] = Field(min_length=1)
+    target_col: str = Field(min_length=1)
+    task_type: Optional[MlTaskType] = None
+
+
+class AtlasMlResponse(ContractModel):
+    action: AtlasMlAction
+    summary: str = Field(min_length=1)
+    uncertainty: str = Field(min_length=1)
+    evidence: list[AtlasEvidence]

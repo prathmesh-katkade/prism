@@ -28,4 +28,19 @@ PHASE_1_MIGRATIONS: tuple[MigrationState, ...] = (
         channel=ReleaseChannel.ENABLED,
         legacy_reference="modules/visualization.py",
     ),
+    MigrationState(
+        workflow="stats",
+        channel=ReleaseChannel.ENABLED,
+        legacy_reference="modules/stats_lab.py",
+    ),
+    MigrationState(
+        workflow="forecasting",
+        channel=ReleaseChannel.ENABLED,
+        legacy_reference="modules/forecasting.py",
+    ),
+    MigrationState(
+        workflow="ml",
+        channel=ReleaseChannel.ENABLED,
+        legacy_reference="modules/mllab.py",
+    ),
 )
