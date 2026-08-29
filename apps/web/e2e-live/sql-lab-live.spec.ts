@@ -21,8 +21,8 @@ test("SQL Lab completes a real browser to FastAPI analytical flow", async ({ pag
 
   const editorInput = page.locator(".monaco-editor textarea");
   await expect(editorInput).toBeVisible();
-  await editorInput.click();
-  await editorInput.press("ControlOrMeta+Enter");
+  await page.locator(".monaco-editor").click();
+  await page.keyboard.press("ControlOrMeta+Enter");
   await expect(page.getByText("3 returned / 3 total rows")).toBeVisible({ timeout: 10_000 });
   await expect(page.getByRole("button", { name: "Create dataset" })).toBeVisible();
   if (process.platform === "win32") {
@@ -59,8 +59,8 @@ test("AI Analyst streams through the live API and returns SQL Lab evidence", asy
   await expect(page.getByRole("heading", { name: "Write against evidence, not assumptions." })).toBeVisible();
   const editorInput = page.locator(".monaco-editor textarea");
   await expect(editorInput).toBeVisible();
-  await editorInput.click();
-  await editorInput.press("ControlOrMeta+Enter");
+  await page.locator(".monaco-editor").click();
+  await page.keyboard.press("ControlOrMeta+Enter");
   await expect(page.getByText("2 returned / 2 total rows")).toBeVisible({ timeout: 10_000 });
 
   await page.getByRole("button", { name: "Use as AI evidence" }).click();
