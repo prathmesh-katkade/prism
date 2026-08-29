@@ -39,6 +39,10 @@ services:
       for package in packages/*/python; do pip install -e "$package"; done
     startCommand: uvicorn prism_api.main:app --host 0.0.0.0 --port $PORT --app-dir apps/api/src
     envVars:
+      # Render's supported Python-version selector. Keep the native API on the
+      # version validated for this release instead of Render's moving default.
+      - key: PYTHON_VERSION
+        value: "3.11.9"
       # The web service's deployed origin. Render free-tier services can wake slowly from idle;
       # the frontend's fetches already handle a non-2xx/degraded response without crashing.
       - key: PRISM_ALLOWED_ORIGINS
