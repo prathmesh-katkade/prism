@@ -10,6 +10,7 @@ import { AiAnalyst } from "./ai-analyst";
 import { CleanWorkspace } from "./clean-workspace";
 import { VisualizeWorkspace } from "./visualize-workspace";
 import { StatsWorkspace } from "./stats-workspace";
+import { ForecastingWorkspace } from "./forecasting-workspace";
 import { migrationPresentation, phaseTwoMigrations, type InspectorObjectState, type ShellStatus, type WorkspaceTab } from "../state/shell-model";
 import { useLayoutState } from "../state/use-layout-state";
 
@@ -30,7 +31,7 @@ function findMigration(workflow: string): MigrationState {
   return phaseTwoMigrations.find((migration) => migration.workflow === workflow) ?? phaseTwoMigrations[0]!;
 }
 
-const nativeKinds: Record<string, WorkspaceTab["kind"]> = { overview: "overview", "sql-lab": "sql-lab", "ai-analyst": "ai-analyst", clean: "clean", visualize: "visualize", stats: "stats" };
+const nativeKinds: Record<string, WorkspaceTab["kind"]> = { overview: "overview", "sql-lab": "sql-lab", "ai-analyst": "ai-analyst", clean: "clean", visualize: "visualize", stats: "stats", forecasting: "forecasting" };
 
 function workflowTab(workflow: string): WorkspaceTab {
   return { id: `workspace:${workflow}`, label: navigation.find((item) => item.workflow === workflow)?.label ?? workflow, kind: nativeKinds[workflow] ?? "bridge", workflow, closeable: true };
@@ -154,7 +155,7 @@ export function PrismShell() {
               return <button key={item.workflow} className={activeTab.workflow === item.workflow ? "nav-item is-active" : "nav-item"} onClick={() => openWorkflow(item.workflow)} title={layout.railCollapsed ? item.label : undefined}><Icon name={item.icon} /><span>{item.label}</span><i className={`migration-chip ${presentation}`}>{presentation}</i></button>;
             })}
           </nav>
-          <div className="rail-footer"><button className="object-button" onClick={() => { setActiveTabId(baseTab.id); setStatus("project-loaded"); }}><Icon name="database" /><span>Data objects</span></button><small>Phase 7A · Stats Lab native (enabled)</small></div>
+          <div className="rail-footer"><button className="object-button" onClick={() => { setActiveTabId(baseTab.id); setStatus("project-loaded"); }}><Icon name="database" /><span>Data objects</span></button><small>Phase 7B · Forecasting native (shadow)</small></div>
         </aside>
         {!layout.railCollapsed ? <ResizeHandle panel="rail" value={layout.railWidth} onPointerDown={startResize} onKeyboardResize={(delta) => updateLayout({ railWidth: Math.max(180, Math.min(360, layout.railWidth + delta)) })} /> : <div className="resize-spacer" />}
         <section id="workspace" className="workspace-area" aria-label="Central tabbed workspace">
@@ -189,6 +190,7 @@ function WorkspaceSurface({ tab, status, onStatusChange, onOpenCommand, onSelect
   if (tab.kind === "clean") return <CleanWorkspace datasetId={activeDatasetId} onSelectContext={onSelectContext} onOpenWorkflow={onOpenWorkflow} />;
   if (tab.kind === "visualize") return <VisualizeWorkspace datasetId={activeDatasetId} onSelectContext={onSelectContext} onOpenWorkflow={onOpenWorkflow} />;
   if (tab.kind === "stats") return <StatsWorkspace datasetId={activeDatasetId} onSelectContext={onSelectContext} onOpenWorkflow={onOpenWorkflow} />;
+  if (tab.kind === "forecasting") return <ForecastingWorkspace datasetId={activeDatasetId} onSelectContext={onSelectContext} onOpenWorkflow={onOpenWorkflow} />;
   if (tab.kind === "bridge" && tab.workflow) {
     const migration = findMigration(tab.workflow);
     return <article className="bridge-surface"><span className="eyebrow">MIGRATION BRIDGE · {migrationPresentation(migration).toUpperCase()}</span><h1>{tab.label} remains in the reference system.</h1><p>This shell exposes a single migration-aware entry point without reimplementing or shadowing the underlying Streamlit workflow.</p><dl><div><dt>Reference</dt><dd><code>{migration.legacy_reference}</code></dd></div><div><dt>Parity gate</dt><dd>Required before this can become native.</dd></div><div><dt>Current channel</dt><dd><span className="migration-chip legacy">legacy</span></dd></div></dl><div className="bridge-actions"><button onClick={onOpenCommand}>Inspect migration controls</button><button className="secondary" onClick={() => onStatusChange("degraded")}>Preview degraded state</button></div></article>;

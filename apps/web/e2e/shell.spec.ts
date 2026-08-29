@@ -188,6 +188,33 @@ test("native Stats workspace suggests a deterministic test, runs it with an hone
   expect(violations).toEqual([]);
 });
 
+const forecastingProfile = { dataset: { ...cleanDataset, row_count: 10 }, provenance: { source_fingerprint: cleanDataset.source_fingerprint, dataset_revision: 0, parameters: {}, service_version: "x", computed_at: "2026-08-28T00:00:00Z" }, quality: { n_rows: 10, n_cols: 2, missing_by_column: {}, total_missing_cells: 0, total_missing_pct: 0, duplicate_rows: 0, memory_usage: "1KB", outliers: {}, all_null_columns: [] }, health: cleanHealth, columns: [{ name: "date", semantic_type: "datetime", missing_pct: 0, unique_count: 10, health: "good", issues: [], warnings: [], distribution: [] }, { name: "revenue", semantic_type: "numeric", missing_pct: 0, unique_count: 10, health: "good", issues: [], warnings: [], distribution: [] }], correlations: [], suggestions: [] };
+const forecastResult = { datetime_col: "date", numeric_col: "revenue", frequency: "D", model_used: "Exponential Smoothing (ETS)", horizon: 3, observed: [{ timestamp: "2026-01-01T00:00:00", value: 10 }, { timestamp: "2026-01-02T00:00:00", value: 12 }], forecast: [{ timestamp: "2026-01-03T00:00:00", value: 14 }, { timestamp: "2026-01-04T00:00:00", value: 16 }, { timestamp: "2026-01-05T00:00:00", value: 18 }], intervals: [{ timestamp: "2026-01-03T00:00:00", lower: 12, upper: 16 }, { timestamp: "2026-01-04T00:00:00", lower: 13, upper: 19 }, { timestamp: "2026-01-05T00:00:00", lower: 14, upper: 22 }], metrics: { mae: 1.2, rmse: 1.5, mape: null, holdout_points: 2, note: "Computed by fitting on all but the last 2 point(s)." }, caveat: "Fit on 10 historical observations to project 3 periods ahead using Exponential Smoothing (ETS). Confidence in this forecast is **reasonable**.", warnings: [], provenance: forecastingProfile.provenance };
+
+test("native Forecasting workspace projects a point forecast with its interval, an honest caveat, and explains it through Atlas", async ({ page }) => {
+  await page.route("**/api/v1/overview/datasets/*/profile", async (route) => route.fulfill({ json: forecastingProfile }));
+  await page.route("**/api/v1/overview/datasets/*/rows*", async (route) => route.fulfill({ json: { dataset: forecastingProfile.dataset, offset: 0, limit: 20, total_rows: 10, rows: [], provenance: forecastingProfile.provenance } }));
+  await page.route("**/api/v1/overview/datasets", async (route) => route.fulfill({ status: 201, json: forecastingProfile.dataset }));
+  await page.route("**/api/v1/forecasting/datasets/*/forecast", async (route) => route.fulfill({ json: forecastResult }));
+  await page.route("**/api/v1/forecasting/datasets/*/atlas", async (route) => route.fulfill({ json: { action: "explain_intervals", summary: "The shaded band is a 95% confidence interval around the point forecast — it widens further into the future because uncertainty compounds with each additional step. A point forecast without this band is not the full picture; treat the band's width, not just its center, as the forecast.", uncertainty: "This explanation describes a deterministic time-series computation; it does not establish causation, and Atlas cannot alter the underlying model or its output.", evidence: [] } }));
+
+  await page.goto("/");
+  await page.getByRole("button", { name: /Overview native/i }).click();
+  await page.setInputFiles("#overview-upload", { name: "sales.csv", mimeType: "text/csv", buffer: Buffer.from("date,revenue\n2026-01-01,10\n2026-01-02,12\n") });
+  await expect(page.getByRole("heading", { name: "sales.csv" }).first()).toBeVisible();
+  await page.getByRole("button", { name: /Forecasting/i }).click();
+  await expect(page.getByLabel("Forecast canvas").getByText("Exponential Smoothing (ETS)", { exact: true })).toBeVisible();
+  await expect(page.getByText("Reliability caveat")).toBeVisible();
+  await expect(page.getByRole("img", { name: /Forecast chart/ })).toBeVisible();
+
+  await page.getByRole("button", { name: "explain intervals" }).click();
+  await expect(page.getByText(/not the full picture/)).toBeVisible();
+
+  // Scoped to Forecasting's own subtree: the shell chrome is covered by the page-level axe baseline above.
+  const violations = await page.addScriptTag({ path: "node_modules/axe-core/axe.min.js" }).then(() => page.evaluate(async () => (await (window as typeof window & { axe: { run(context: unknown): Promise<{ violations: unknown[] }> } }).axe.run(document.querySelector(".forecasting-workspace"))).violations));
+  expect(violations).toEqual([]);
+});
+
 test("native AI Analyst streams grounded evidence and requires SQL review", async ({ page }) => {
   await page.route("**/api/v1/ai-analyst/stream", async (route) => route.fulfill({
     contentType: "text/event-stream",

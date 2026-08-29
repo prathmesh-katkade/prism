@@ -57,7 +57,7 @@ def test_health_contract_reports_phase_6_and_7a_workflows_as_enabled() -> None:
     assert response.status_code == 200
     payload = HealthResponse.model_validate(response.json())
     assert payload.contract_version == "v1"
-    assert {item.workflow for item in payload.migrations} == {"overview", "sql-lab", "ai-analyst", "clean", "visualize", "stats"}
+    assert {item.workflow for item in payload.migrations} == {"overview", "sql-lab", "ai-analyst", "clean", "visualize", "stats", "forecasting"}
     channels = {item.workflow: item.channel for item in payload.migrations}
     assert channels == {
         "overview": ReleaseChannel.ENABLED,
@@ -66,6 +66,7 @@ def test_health_contract_reports_phase_6_and_7a_workflows_as_enabled() -> None:
         "clean": ReleaseChannel.ENABLED,
         "visualize": ReleaseChannel.ENABLED,
         "stats": ReleaseChannel.ENABLED,
+        "forecasting": ReleaseChannel.SHADOW,
     }
 
 
