@@ -78,6 +78,7 @@ Playwright + axe-core scoped scans: 0 violations on the page-level shell baselin
 - Clean/Visualize/Stats/Forecasting/ML Lab unreadable (severe word-wrapping) at common laptop window widths (~1280–1350px) — `.three-pane`'s responsive breakpoints didn't account for the outer shell's own nav rail + inspector also being on screen. **Fixed** (breakpoints widened to match real available width; a container-query-based precise fix is documented as later polish, not attempted here per the no-redesign constraint).
 - Nav accessible-name gap at narrow/collapsed rail states. **Fixed** (see Accessibility above).
 - `.data-table-wrap` keyboard-focusability debt in Overview/Clean/Stats. **Fixed** (see Accessibility above).
+- ML Lab: changing the Target column left the newly-selected target inside the checked feature list — every subsequent baseline/feature-selection/SHAP/Atlas request submitted it as both `target_col` and inside `feature_cols` (duplicate columns break preprocessing; a successful case leaks the answer into the model). Found by an automated Codex review posted on PR #7 after it had already merged. **Fixed** in this branch, with a regression test.
 
 **P2**: None found beyond the above that weren't already straightforward P1 fixes.
 
@@ -99,8 +100,9 @@ All in [PR #8](https://github.com/prathmesh-katkade/prism/pull/8) (`phase-7-stag
 4. Added `tabIndex={0}` to `.data-table-wrap` in Overview, Clean, Stats (P1 — accessibility, named technical debt from Phase 7).
 5. Added `width:100%` hardening to `.workspace-area` (defensive, no observed effect in this sandbox — see UI/UX Audit).
 6. Added a favicon (`app/icon.svg`) (P3).
+7. Fixed ML Lab's target/feature-selection state bug (P1 — see UI/UX Audit above), found by an automated Codex review posted on PR #7 after it had already merged; addressed here with a regression test since the original PR could no longer take a push.
 
-Verified after each fix: full Python suite (707 passed, 4 pre-existing skips), `npm run test:web` (21/21), Playwright `shell.spec.ts` (12/12 including axe scans), `lint`/`typecheck` clean, and a full re-run of the genuine local-production-stack smoke suite (8/9 passed, 1 skipped — the Clean flow's specific fixture has no detectable issues to preview/apply, an expected skip not a failure).
+Verified after each fix: full Python suite (707 passed, 4 pre-existing skips), `npm run test:web` (22/22 after the ML Lab fix), Playwright `shell.spec.ts` (12/12 including axe scans), `lint`/`typecheck` clean, and a full re-run of the genuine local-production-stack smoke suite (8/9 passed, 1 skipped — the Clean flow's specific fixture has no detectable issues to preview/apply, an expected skip not a failure).
 
 ## Known limitations
 
@@ -108,6 +110,7 @@ Verified after each fix: full Python suite (707 passed, 4 pre-existing skips), `
 - `BLOCKED_EXTERNAL_TAG_PERMISSION`: `prism-native-v0.7` tag created locally at the merge commit; `git push origin prism-native-v0.7` returns HTTP 403 (same credential-scope limitation as `prism-native-v0.6` in the prior session). Does not block anything else in this release.
 - Two rendering-engine anomalies (light-theme text color, narrow-viewport zero-width collapse) were investigated in depth and attributed to this sandbox's specific pinned/version-mismatched Chromium build rather than PRISM's own code — see UI/UX Audit above for the full trace. Recommend a real-browser spot-check as follow-up.
 - A container-query-based fix for `.three-pane`'s responsive breakpoints (precise for any rail/inspector width combination, not just the common default) is documented as later polish, not attempted in this pass.
+- Four more findings from that same post-merge Codex review on PR #7 were verified real but **pre-existing in both the legacy and native code**, not introduced by Phase 7's native port: pandas 2.3's frequency-alias rename (`ME`/`QE-DEC`/`h` vs. the `M`/`Q`/`H` the seasonal-period map still keys on) silently disables seasonality detection for month-end/quarter-end/hourly series in both `modules/forecasting.py` and its native port; unvalidated `stratify=` in classification baselines can raise an uncaught `ValueError` (both `modules/mllab.py` and native); ANOVA's eta-squared is computed from a differently-filtered group set than the F-statistic when singleton groups exist (both `modules/stats_lab.py` and native); Pearson on a constant column returns `NaN` unguarded (same, both). Native is a deliberate, exact port of each — fixing only one side would break the parity tests that assert native's output against legacy's real function calls, and fixing both means touching the legacy Streamlit service, which this native-staging pass is deliberately leaving untouched. Left as a follow-up requiring a coordinated legacy+native fix, not attempted here. Full detail in the PR #7 comment thread.
 
 ## Legacy regression
 
