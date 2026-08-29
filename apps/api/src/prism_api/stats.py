@@ -31,6 +31,12 @@ from prism_api_contracts import (
 )
 from prism_overview_analytics import ANALYTICS_SERVICE_VERSION, detect_column_types
 
+# Imported at module load (server startup) rather than lazily inside each request
+# handler: scipy's first import is a genuinely slow (~300ms+) one-time cost, and
+# paying it at startup instead of on some user's first Stats request is the
+# difference between a real latency regression and normal process warmup.
+from scipy import stats as scipy_stats
+
 from .overview import StoredDataset
 from .overview import store as overview_store
 
@@ -76,8 +82,6 @@ def _shapiro_check(subject: str, values: "np.ndarray[Any, Any]") -> StatNormalit
     field exists so the frontend/Atlas can explain that nuance instead of a bare
     true/false verdict standing in for it.
     """
-    from scipy import stats as scipy_stats
-
     n = len(values)
     if n < 3:
         return StatNormalityCheck(subject=subject, note="Too few values to test normality.")
@@ -188,8 +192,6 @@ def _provenance(stored: StoredDataset, method: str, parameters: dict[str, Any]) 
 
 
 def _run_ttest(stored: StoredDataset, numeric_col: str, cat_col: str) -> StatTestResult:
-    from scipy import stats as scipy_stats
-
     frame = stored.frame
     clean = frame[[numeric_col, cat_col]].dropna()
     levels = sorted(clean[cat_col].unique(), key=str)
@@ -223,8 +225,6 @@ def _run_ttest(stored: StoredDataset, numeric_col: str, cat_col: str) -> StatTes
 
 
 def _run_anova(stored: StoredDataset, numeric_col: str, cat_col: str) -> StatTestResult:
-    from scipy import stats as scipy_stats
-
     frame = stored.frame
     clean = frame[[numeric_col, cat_col]].dropna()
     groups = {str(name): g[numeric_col].to_numpy() for name, g in clean.groupby(cat_col) if len(g) >= 2}
@@ -254,8 +254,6 @@ def _run_anova(stored: StoredDataset, numeric_col: str, cat_col: str) -> StatTes
 
 
 def _run_chi2(stored: StoredDataset, col_a: str, col_b: str) -> StatTestResult:
-    from scipy import stats as scipy_stats
-
     frame = stored.frame
     clean = frame[[col_a, col_b]].dropna()
     table = pd.crosstab(clean[col_a], clean[col_b])
@@ -289,8 +287,6 @@ def _run_chi2(stored: StoredDataset, col_a: str, col_b: str) -> StatTestResult:
 
 
 def _run_pearson(stored: StoredDataset, col_a: str, col_b: str) -> StatTestResult:
-    from scipy import stats as scipy_stats
-
     frame = stored.frame
     clean = frame[[col_a, col_b]].dropna()
     if len(clean) < 3:
