@@ -13,17 +13,18 @@ describe("PRISM shell", () => {
     await waitFor(() => expect(screen.getByRole("textbox", { name: "Search commands" })).toHaveFocus());
   });
 
-  it("opens native Overview and SQL Lab while remaining legacy workflows stay bridges", () => {
+  it("opens native Overview and SQL Lab", () => {
     render(<PrismShell />);
     fireEvent.click(screen.getAllByRole("button", { name: /Overview native/i })[0]!);
     expect(screen.getByText("Start with the dataset, then follow the evidence.")).toBeInTheDocument();
     fireEvent.click(screen.getAllByRole("button", { name: /SQL Lab native/i })[0]!);
     expect(screen.getByText("Preparing Query Studio")).toBeInTheDocument();
-    fireEvent.click(screen.getAllByRole("button", { name: /ML/i })[0]!);
-    expect(screen.getByText(/remains in the reference system/)).toBeInTheDocument();
   });
 
-  it("opens native Clean, Visualize, Stats, and Forecasting, prompting for a dataset before an object is loaded", () => {
+  // Phase 7C's ML Lab was the last workflow to move off the migration bridge — every
+  // navigation entry now opens a native workspace (some still `shadow`, not yet
+  // `enabled`, but reachable and fully interactive either way).
+  it("opens native Clean, Visualize, Stats, Forecasting, and ML Lab, prompting for a dataset before an object is loaded", () => {
     render(<PrismShell />);
     fireEvent.click(screen.getAllByRole("button", { name: /Clean native/i })[0]!);
     expect(screen.getByText("Load a dataset in Overview first.")).toBeInTheDocument();
@@ -32,6 +33,8 @@ describe("PRISM shell", () => {
     fireEvent.click(screen.getAllByRole("button", { name: /Stats/i })[0]!);
     expect(screen.getByText("Load a dataset in Overview first.")).toBeInTheDocument();
     fireEvent.click(screen.getAllByRole("button", { name: /Forecasting/i })[0]!);
+    expect(screen.getByText("Load a dataset in Overview first.")).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("button", { name: /ML/i })[0]!);
     expect(screen.getByText("Load a dataset in Overview first.")).toBeInTheDocument();
   });
 

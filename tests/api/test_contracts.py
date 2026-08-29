@@ -49,7 +49,7 @@ def test_requests_are_logged_with_request_id_status_and_duration_but_never_secre
         assert secret_marker not in logged_text
 
 
-def test_health_contract_reports_phase_6_7a_and_7b_workflows_as_enabled() -> None:
+def test_health_contract_reports_phase_6_7a_7b_and_7c_workflows_as_enabled() -> None:
     client = TestClient(create_app())
 
     response = client.get("/api/v1/platform/health")
@@ -57,7 +57,7 @@ def test_health_contract_reports_phase_6_7a_and_7b_workflows_as_enabled() -> Non
     assert response.status_code == 200
     payload = HealthResponse.model_validate(response.json())
     assert payload.contract_version == "v1"
-    assert {item.workflow for item in payload.migrations} == {"overview", "sql-lab", "ai-analyst", "clean", "visualize", "stats", "forecasting"}
+    assert {item.workflow for item in payload.migrations} == {"overview", "sql-lab", "ai-analyst", "clean", "visualize", "stats", "forecasting", "ml"}
     channels = {item.workflow: item.channel for item in payload.migrations}
     assert channels == {
         "overview": ReleaseChannel.ENABLED,
@@ -67,6 +67,7 @@ def test_health_contract_reports_phase_6_7a_and_7b_workflows_as_enabled() -> Non
         "visualize": ReleaseChannel.ENABLED,
         "stats": ReleaseChannel.ENABLED,
         "forecasting": ReleaseChannel.ENABLED,
+        "ml": ReleaseChannel.SHADOW,
     }
 
 

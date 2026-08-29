@@ -215,6 +215,46 @@ test("native Forecasting workspace projects a point forecast with its interval, 
   expect(violations).toEqual([]);
 });
 
+const mllabProfile = { dataset: { ...cleanDataset, row_count: 40, column_count: 3 }, provenance: { source_fingerprint: cleanDataset.source_fingerprint, dataset_revision: 0, parameters: {}, service_version: "x", computed_at: "2026-08-28T00:00:00Z" }, quality: { n_rows: 40, n_cols: 3, missing_by_column: {}, total_missing_cells: 0, total_missing_pct: 0, duplicate_rows: 0, memory_usage: "1KB", outliers: {}, all_null_columns: [] }, health: cleanHealth, columns: [{ name: "x1", semantic_type: "numeric", missing_pct: 0, unique_count: 40, health: "good", issues: [], warnings: [], distribution: [] }, { name: "x2", semantic_type: "numeric", missing_pct: 0, unique_count: 40, health: "good", issues: [], warnings: [], distribution: [] }, { name: "label", semantic_type: "categorical", missing_pct: 0, unique_count: 2, health: "good", issues: [], warnings: [], distribution: [] }], correlations: [], suggestions: [] };
+const mllabBaseline = {
+  task_type: "classification", results: { Baseline: { accuracy: 0.8, f1: 0.79 }, "Random Forest": { accuracy: 0.85, f1: 0.84 } },
+  confusion_matrix: [[15, 2], [1, 14]], confusion_labels: ["no", "yes"],
+  feature_importances: [{ feature: "x1", importance: 0.6 }, { feature: "x2", importance: 0.4 }],
+  n_train: 32, n_test: 8, smote_before_after: null,
+  cv: { results: { Baseline: { accuracy: { mean: 0.78, std: 0.05 } }, "Random Forest": { accuracy: { mean: 0.82, std: 0.04 } } }, n_splits: 5 }, cv_error: null,
+  verdict: "Random Forest wins on F1 score (0.840 vs 0.790, 6% higher than the other model). Top driver: x1.",
+  leakage_note: "Preprocessing (imputation, scaling, one-hot encoding) is fit on the training split only, then applied unchanged to the test split — the test set never influences how features are transformed, so its score is not inflated by information the model would not have at prediction time.",
+  provenance: mllabProfile.provenance,
+};
+
+test("native ML Lab workspace runs baseline models with a leakage-protection note and explains model comparison through Atlas", async ({ page }) => {
+  await page.route("**/api/v1/overview/datasets/*/profile", async (route) => route.fulfill({ json: mllabProfile }));
+  await page.route("**/api/v1/overview/datasets/*/rows*", async (route) => route.fulfill({ json: { dataset: mllabProfile.dataset, offset: 0, limit: 20, total_rows: 40, rows: [], provenance: mllabProfile.provenance } }));
+  await page.route("**/api/v1/overview/datasets", async (route) => route.fulfill({ status: 201, json: mllabProfile.dataset }));
+  await page.route("**/api/v1/ml/datasets/*/suggest-features*", async (route) => route.fulfill({ json: { target_col: "label", suggestions: [{ kind: "scale", column: "x1", columns: null, method: "standard", reason: "Numeric feature — standardizing helps distance-based and linear models treat it fairly alongside other features." }] } }));
+  await page.route("**/api/v1/ml/datasets/*/detect-task*", async (route) => route.fulfill({ json: { target_col: "label", task_type: "classification", reason: "Non-numeric target." } }));
+  await page.route("**/api/v1/ml/datasets/*/imbalance*", async (route) => route.fulfill({ json: { target_col: "label", counts: { yes: 20, no: 20 }, proportions_pct: { yes: 50, no: 50 }, minority_pct: 50, is_imbalanced: false, explanation: "Balanced." } }));
+  await page.route("**/api/v1/ml/datasets/*/baseline", async (route) => route.fulfill({ json: mllabBaseline }));
+  await page.route("**/api/v1/ml/datasets/*/atlas", async (route) => route.fulfill({ json: { action: "compare_models", summary: mllabBaseline.verdict, uncertainty: "This explanation describes a deterministic model-evaluation result; it does not establish causation, and Atlas never retrains or alters a model outside an explicit PRISM command.", evidence: [] } }));
+
+  await page.goto("/");
+  await page.getByRole("button", { name: /Overview native/i }).click();
+  await page.setInputFiles("#overview-upload", { name: "ml.csv", mimeType: "text/csv", buffer: Buffer.from("x1,x2,label\n1,2,yes\n3,4,no\n") });
+  await expect(page.getByRole("heading", { name: "sales.csv" }).first()).toBeVisible();
+  await page.getByRole("button", { name: /ML/i }).click();
+  await page.getByRole("combobox", { name: "Analysis" }).selectOption("baseline");
+  await page.getByRole("button", { name: "Run baseline models" }).click();
+  await expect(page.getByLabel("Analysis results").getByText(mllabBaseline.verdict)).toBeVisible();
+  await expect(page.getByText("Leakage protection")).toBeVisible();
+
+  await page.getByRole("button", { name: "compare models", exact: true }).click();
+  await expect(page.getByLabel("Provenance and Atlas").getByText(mllabBaseline.verdict)).toBeVisible();
+
+  // Scoped to ML Lab's own subtree: the shell chrome is covered by the page-level axe baseline above.
+  const violations = await page.addScriptTag({ path: "node_modules/axe-core/axe.min.js" }).then(() => page.evaluate(async () => (await (window as typeof window & { axe: { run(context: unknown): Promise<{ violations: unknown[] }> } }).axe.run(document.querySelector(".mllab-workspace"))).violations));
+  expect(violations).toEqual([]);
+});
+
 test("native AI Analyst streams grounded evidence and requires SQL review", async ({ page }) => {
   await page.route("**/api/v1/ai-analyst/stream", async (route) => route.fulfill({
     contentType: "text/event-stream",
