@@ -30,7 +30,7 @@ PHASE_1_MIGRATIONS: tuple[MigrationState, ...] = (
     ),
     MigrationState(
         workflow="stats",
-        channel=ReleaseChannel.SHADOW,
+        channel=ReleaseChannel.ENABLED,
         legacy_reference="modules/stats_lab.py",
     ),
 )

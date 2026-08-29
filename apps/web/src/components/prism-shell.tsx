@@ -154,7 +154,7 @@ export function PrismShell() {
               return <button key={item.workflow} className={activeTab.workflow === item.workflow ? "nav-item is-active" : "nav-item"} onClick={() => openWorkflow(item.workflow)} title={layout.railCollapsed ? item.label : undefined}><Icon name={item.icon} /><span>{item.label}</span><i className={`migration-chip ${presentation}`}>{presentation}</i></button>;
             })}
           </nav>
-          <div className="rail-footer"><button className="object-button" onClick={() => { setActiveTabId(baseTab.id); setStatus("project-loaded"); }}><Icon name="database" /><span>Data objects</span></button><small>Phase 7A · Stats Lab native (shadow)</small></div>
+          <div className="rail-footer"><button className="object-button" onClick={() => { setActiveTabId(baseTab.id); setStatus("project-loaded"); }}><Icon name="database" /><span>Data objects</span></button><small>Phase 7A · Stats Lab native (enabled)</small></div>
         </aside>
         {!layout.railCollapsed ? <ResizeHandle panel="rail" value={layout.railWidth} onPointerDown={startResize} onKeyboardResize={(delta) => updateLayout({ railWidth: Math.max(180, Math.min(360, layout.railWidth + delta)) })} /> : <div className="resize-spacer" />}
         <section id="workspace" className="workspace-area" aria-label="Central tabbed workspace">

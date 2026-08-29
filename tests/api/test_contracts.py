@@ -49,7 +49,7 @@ def test_requests_are_logged_with_request_id_status_and_duration_but_never_secre
         assert secret_marker not in logged_text
 
 
-def test_health_contract_reports_phase_6_clean_and_visualize_as_enabled() -> None:
+def test_health_contract_reports_phase_6_and_7a_workflows_as_enabled() -> None:
     client = TestClient(create_app())
 
     response = client.get("/api/v1/platform/health")
@@ -65,7 +65,7 @@ def test_health_contract_reports_phase_6_clean_and_visualize_as_enabled() -> Non
         "ai-analyst": ReleaseChannel.ENABLED,
         "clean": ReleaseChannel.ENABLED,
         "visualize": ReleaseChannel.ENABLED,
-        "stats": ReleaseChannel.SHADOW,
+        "stats": ReleaseChannel.ENABLED,
     }
 
 
