@@ -101,6 +101,21 @@ export interface AtlasSqlResponse {
   executable?: boolean;
 }
 
+export type AtlasStatsAction = "explain_test" | "explain_assumptions" | "explain_effect_size" | "recommend_next_step";
+
+export interface AtlasStatsRequest {
+  action: AtlasStatsAction;
+  col_a: string;
+  col_b: string;
+}
+
+export interface AtlasStatsResponse {
+  action: AtlasStatsAction;
+  summary: string;
+  uncertainty: string;
+  evidence: AtlasEvidence[];
+}
+
 export type AtlasVisualizeAction = "explain_chart" | "identify_anomaly" | "propose_alternative";
 
 export interface AtlasVisualizeRequest {
@@ -439,6 +454,53 @@ export type SqlSourceType = "local_dataset" | "mysql" | "postgresql" | "sqlserve
 export interface SqlTable {
   name: string;
   columns: SqlColumn[];
+}
+
+export interface StatNormalityCheck {
+  subject: string;
+  p_value?: number;
+  is_normal?: boolean;
+  note?: string;
+}
+
+export interface StatSuggestionResponse {
+  col_a: string;
+  col_b: string;
+  test?: StatTestKind;
+  reason?: string;
+  numeric_col?: string;
+  cat_col?: string;
+  error?: string;
+}
+
+export type StatTestKind = "ttest" | "anova" | "chi2" | "pearson";
+
+export interface StatTestRequest {
+  test: StatTestKind;
+  col_a: string;
+  col_b: string;
+  numeric_col?: string;
+  cat_col?: string;
+}
+
+export interface StatTestResult {
+  test: StatTestKind;
+  statistic: number;
+  p_value: number;
+  effect_size: number;
+  effect_size_name: string;
+  effect_size_label: "negligible" | "small" | "medium" | "large";
+  groups?: Record<string, number>;
+  means?: Record<string, number>;
+  dof?: number;
+  n?: number;
+  low_expected_pct?: number;
+  normality?: StatNormalityCheck[];
+  significant: boolean;
+  interpretation: string;
+  evidence_statement: string;
+  warnings?: string[];
+  provenance: OverviewProvenance;
 }
 
 export interface ValidationError {

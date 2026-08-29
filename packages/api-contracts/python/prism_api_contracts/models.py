@@ -596,3 +596,78 @@ class AtlasVisualizeResponse(ContractModel):
     summary: str = Field(min_length=1)
     uncertainty: str = Field(min_length=1)
     evidence: list[AtlasEvidence]
+
+
+# --- Phase 7A: Stats Lab -------------------------------------------------------
+
+
+class StatTestKind(str, Enum):
+    TTEST = "ttest"
+    ANOVA = "anova"
+    CHI2 = "chi2"
+    PEARSON = "pearson"
+
+
+class StatNormalityCheck(ContractModel):
+    subject: str = Field(min_length=1)
+    p_value: Optional[float] = None
+    is_normal: Optional[bool] = None
+    note: str = ""
+
+
+class StatSuggestionResponse(ContractModel):
+    col_a: str = Field(min_length=1)
+    col_b: str = Field(min_length=1)
+    test: Optional[StatTestKind] = None
+    reason: Optional[str] = None
+    numeric_col: Optional[str] = None
+    cat_col: Optional[str] = None
+    error: Optional[str] = None
+
+
+class StatTestRequest(ContractModel):
+    test: StatTestKind
+    col_a: str = Field(min_length=1)
+    col_b: str = Field(min_length=1)
+    numeric_col: Optional[str] = None
+    cat_col: Optional[str] = None
+
+
+class StatTestResult(ContractModel):
+    test: StatTestKind
+    statistic: float
+    p_value: float = Field(ge=0, le=1)
+    effect_size: float
+    effect_size_name: str = Field(min_length=1)
+    effect_size_label: Literal["negligible", "small", "medium", "large"]
+    groups: dict[str, int] = Field(default_factory=dict)
+    means: dict[str, float] = Field(default_factory=dict)
+    dof: Optional[int] = None
+    n: Optional[int] = None
+    low_expected_pct: Optional[float] = None
+    normality: list[StatNormalityCheck] = Field(default_factory=list)
+    significant: bool
+    interpretation: str = Field(min_length=1)
+    evidence_statement: str = Field(min_length=1)
+    warnings: list[str] = Field(default_factory=list)
+    provenance: OverviewProvenance
+
+
+class AtlasStatsAction(str, Enum):
+    EXPLAIN_TEST = "explain_test"
+    EXPLAIN_ASSUMPTIONS = "explain_assumptions"
+    EXPLAIN_EFFECT_SIZE = "explain_effect_size"
+    RECOMMEND_NEXT_STEP = "recommend_next_step"
+
+
+class AtlasStatsRequest(ContractModel):
+    action: AtlasStatsAction
+    col_a: str = Field(min_length=1)
+    col_b: str = Field(min_length=1)
+
+
+class AtlasStatsResponse(ContractModel):
+    action: AtlasStatsAction
+    summary: str = Field(min_length=1)
+    uncertainty: str = Field(min_length=1)
+    evidence: list[AtlasEvidence]
