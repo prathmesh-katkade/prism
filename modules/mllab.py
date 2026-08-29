@@ -11,6 +11,7 @@ pipeline — every result the UI shows should be paired with that framing.
 
 from __future__ import annotations
 
+import math
 from typing import Optional
 
 import numpy as np
@@ -175,6 +176,33 @@ def detect_task_type(series: pd.Series) -> str:
     return "classification"
 
 
+def validate_stratified_split(y: pd.Series, test_size: float = 0.2) -> Optional[str]:
+    """Return a user-actionable error when an 80/20 stratified split is impossible.
+
+    ``train_test_split`` otherwise raises implementation-specific ``ValueError``
+    messages.  Checking before preprocessing preserves the train-only fitting
+    boundary and gives the native port an exact analytical contract.
+    """
+    counts = y.value_counts(dropna=False)
+    class_count = len(counts)
+    if class_count < 2:
+        return "Classification baseline needs at least 2 target classes after excluding missing targets."
+
+    singleton_classes = counts[counts < 2]
+    if not singleton_classes.empty:
+        labels = ", ".join(f"{label!r} ({int(count)} row)" for label, count in singleton_classes.items())
+        return f"Cannot create a stratified 80/20 split: every class needs at least 2 rows; found {labels}."
+
+    n_test = math.ceil(len(y) * test_size)
+    n_train = len(y) - n_test
+    if n_test < class_count or n_train < class_count:
+        return (
+            "Cannot create a stratified 80/20 split: the resulting "
+            f"train/test sizes ({n_train}/{n_test}) cannot contain all {class_count} classes."
+        )
+    return None
+
+
 def run_baseline_models(
     df: pd.DataFrame, feature_cols: list[str], target_col: str, task_type: str, use_smote: bool = False
 ) -> dict:
@@ -205,6 +233,11 @@ def run_baseline_models(
     data = df[feature_cols + [target_col]].dropna(subset=[target_col])
     X = data[feature_cols]
     y = data[target_col]
+
+    if task_type == "classification":
+        split_error = validate_stratified_split(y)
+        if split_error:
+            return {"error": split_error}
 
     categorical_features = [c for c in feature_cols if not pd.api.types.is_numeric_dtype(X[c])]
     numeric_features = [c for c in feature_cols if pd.api.types.is_numeric_dtype(X[c])]

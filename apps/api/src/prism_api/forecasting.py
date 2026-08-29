@@ -55,7 +55,7 @@ router = APIRouter(prefix="/api/v1/forecasting", tags=["forecasting"])
 # Mirrors modules/forecasting.py's constants exactly.
 MIN_HISTORY_POINTS = 8
 MIN_CYCLES_FOR_STL = 2
-_SEASONAL_PERIODS_BY_FREQ = {"D": 7, "B": 5, "W": 52, "M": 12, "MS": 12, "Q": 4, "QS": 4, "A": 1, "Y": 1, "H": 24}
+_SEASONAL_PERIODS_BY_FREQ = {"D": 7, "B": 5, "W": 52, "ME": 12, "MS": 12, "QE": 4, "QS": 4, "YE": 1, "YS": 1, "h": 24}
 DEFAULT_MIN_SEGMENT_SIZE = 5
 CHANGEPOINT_PENALTY_SCALE = 2.0
 
@@ -70,8 +70,20 @@ MAX_HOLDOUT_POINTS = 12
 MIN_HOLDOUT_FRACTION = 0.2
 
 
+def _canonicalize_frequency(freq: str) -> str:
+    """Direct port of modules/forecasting.py::_canonicalize_frequency."""
+    raw = (freq or "D").strip()
+    base, separator, suffix = raw.partition("-")
+    canonical_base = {"M": "ME", "Q": "QE", "A": "YE", "Y": "YE", "H": "h"}.get(base, base)
+    candidate = canonical_base + (separator + suffix if separator else "")
+    try:
+        return str(pd.tseries.frequencies.to_offset(candidate).freqstr)
+    except ValueError:
+        return raw
+
+
 def _infer_seasonal_periods(freq: str) -> int:
-    base = (freq or "D").split("-")[0]
+    base = _canonicalize_frequency(freq).split("-")[0]
     return _SEASONAL_PERIODS_BY_FREQ.get(base, 0)
 
 
@@ -106,6 +118,8 @@ def prepare_series(frame: pd.DataFrame, datetime_col: str, numeric_col: str) -> 
             freq = "MS"
         else:
             freq = "QS"
+
+    freq = _canonicalize_frequency(freq)
 
     series = series.asfreq(freq).interpolate(limit_direction="both")
     return series, freq, None

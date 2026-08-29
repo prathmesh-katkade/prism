@@ -4,6 +4,7 @@ import pandas as pd
 import pytest
 from fastapi.testclient import TestClient
 from prism_api.main import create_app
+from scipy import stats as scipy_stats
 
 from modules import stats_lab as legacy_stats_lab
 
@@ -150,6 +151,34 @@ def test_run_test_anova_matches_legacy_stats_lab_on_a_fixture() -> None:
     assert native["effect_size"] == pytest.approx(legacy["effect_size"], abs=1e-6)
 
 
+def test_anova_effect_size_uses_only_the_same_non_singleton_groups_as_the_f_statistic() -> None:
+    frame = pd.DataFrame({
+        "score": [1.0, 2.0, 10.0, 11.0, 10_000.0],
+        "group": ["a", "a", "b", "b", "excluded_singleton"],
+    })
+    effective_groups = [frame.loc[frame["group"] == label, "score"].to_numpy() for label in ("a", "b")]
+    expected_stat, expected_p_value = scipy_stats.f_oneway(*effective_groups)
+    effective_values = pd.Series(effective_groups[0].tolist() + effective_groups[1].tolist())
+    grand_mean = effective_values.mean()
+    expected_eta_sq = sum(len(group) * (group.mean() - grand_mean) ** 2 for group in effective_groups) / ((effective_values - grand_mean) ** 2).sum()
+
+    legacy = legacy_stats_lab.run_anova(frame, "score", "group")
+    assert legacy["groups"] == {"a": 2, "b": 2}
+    assert legacy["statistic"] == pytest.approx(expected_stat)
+    assert legacy["p_value"] == pytest.approx(expected_p_value)
+    assert legacy["effect_size"] == pytest.approx(expected_eta_sq)
+
+    client = TestClient(create_app())
+    dataset_id = _dataset(client, frame.to_csv(index=False).encode(), "anova-singleton.csv")
+    response = client.post(f"/api/v1/stats/datasets/{dataset_id}/run", json={"test": "anova", "col_a": "score", "col_b": "group", "numeric_col": "score", "cat_col": "group"})
+    assert response.status_code == 200
+    native = response.json()
+    assert native["groups"] == legacy["groups"]
+    assert native["statistic"] == pytest.approx(legacy["statistic"])
+    assert native["p_value"] == pytest.approx(legacy["p_value"])
+    assert native["effect_size"] == pytest.approx(legacy["effect_size"])
+
+
 def test_run_test_chi_square_matches_legacy_stats_lab_on_a_fixture() -> None:
     client = TestClient(create_app())
     dataset_id = _dataset(client, CHI2_CSV)
@@ -211,6 +240,24 @@ def test_run_test_requires_at_least_three_paired_values_for_pearson() -> None:
     dataset_id = _dataset(client, csv)
     response = client.post(f"/api/v1/stats/datasets/{dataset_id}/run", json={"test": "pearson", "col_a": "a", "col_b": "b"})
     assert response.status_code == 422
+
+
+@pytest.mark.parametrize("constant_column", ["left", "right"])
+def test_pearson_rejects_a_constant_input_explicitly_in_legacy_and_native(constant_column: str) -> None:
+    frame = pd.DataFrame({"left": [5.0, 5.0, 5.0, 5.0], "right": [1.0, 2.0, 3.0, 4.0]})
+    if constant_column == "right":
+        frame = frame.rename(columns={"left": "right", "right": "left"})
+
+    legacy = legacy_stats_lab.run_pearson(frame, "left", "right")
+    assert "error" in legacy
+    assert "constant" in legacy["error"]
+    assert repr(constant_column) in legacy["error"]
+
+    client = TestClient(create_app())
+    dataset_id = _dataset(client, frame.to_csv(index=False).encode(), "constant-pearson.csv")
+    response = client.post(f"/api/v1/stats/datasets/{dataset_id}/run", json={"test": "pearson", "col_a": "left", "col_b": "right"})
+    assert response.status_code == 422
+    assert response.json()["detail"] == legacy["error"]
 
 
 def test_run_test_requires_exactly_two_categories_for_a_ttest() -> None:

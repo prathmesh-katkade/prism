@@ -202,6 +202,40 @@ def test_baseline_train_and_test_splits_are_disjoint_and_states_the_leakage_prot
     assert "training split only" in body["leakage_note"]
 
 
+@pytest.mark.parametrize(
+    ("frame", "expected_fragment"),
+    [
+        (pd.DataFrame({"feature": range(10), "label": ["rare"] + ["common"] * 9}), "every class needs at least 2 rows"),
+        (pd.DataFrame({"feature": range(6), "label": ["a", "a", "b", "b", "c", "c"]}), "cannot contain all 3 classes"),
+    ],
+)
+def test_baseline_rejects_impossible_stratification_with_matched_analytical_errors(frame: pd.DataFrame, expected_fragment: str) -> None:
+    legacy = legacy_mllab.run_baseline_models(frame, ["feature"], "label", "classification")
+    assert legacy["error"]
+    assert expected_fragment in legacy["error"]
+
+    client = TestClient(create_app())
+    dataset_id = _dataset(client, _csv(frame), "impossible-stratification.csv")
+    response = client.post(f"/api/v1/ml/datasets/{dataset_id}/baseline", json={"feature_cols": ["feature"], "target_col": "label", "task_type": "classification"})
+    assert response.status_code == 422
+    assert response.json()["detail"] == legacy["error"]
+
+
+def test_baseline_allows_a_small_feasible_stratified_classification_split() -> None:
+    frame = pd.DataFrame({"feature": range(10), "label": ["a"] * 5 + ["b"] * 5})
+    legacy = legacy_mllab.run_baseline_models(frame, ["feature"], "label", "classification")
+    assert "error" not in legacy
+    assert legacy["n_train"] == 8
+    assert legacy["n_test"] == 2
+
+    client = TestClient(create_app())
+    dataset_id = _dataset(client, _csv(frame), "feasible-stratification.csv")
+    response = client.post(f"/api/v1/ml/datasets/{dataset_id}/baseline", json={"feature_cols": ["feature"], "target_col": "label", "task_type": "classification"})
+    assert response.status_code == 200
+    assert response.json()["n_train"] == legacy["n_train"]
+    assert response.json()["n_test"] == legacy["n_test"]
+
+
 def test_baseline_includes_cross_validation_matching_legacy_fold_means() -> None:
     client = TestClient(create_app())
     dataset_id = _dataset(client, CLASSIFICATION_CSV)

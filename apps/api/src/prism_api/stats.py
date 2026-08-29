@@ -232,9 +232,10 @@ def _run_anova(stored: StoredDataset, numeric_col: str, cat_col: str) -> StatTes
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"Need at least 2 groups with 2+ values each in {cat_col!r}.")
 
     stat, p_value = scipy_stats.f_oneway(*groups.values())
-    grand_mean = clean[numeric_col].mean()
+    effective_values = np.concatenate(list(groups.values()))
+    grand_mean = effective_values.mean()
     ss_between = sum(len(g) * (g.mean() - grand_mean) ** 2 for g in groups.values())
-    ss_total = ((clean[numeric_col] - grand_mean) ** 2).sum()
+    ss_total = ((effective_values - grand_mean) ** 2).sum()
     eta_sq = float(ss_between / ss_total) if ss_total > 0 else 0.0
     normality = [_shapiro_check(name, g) for name, g in groups.items()]
     significant = bool(p_value < 0.05)
@@ -291,6 +292,11 @@ def _run_pearson(stored: StoredDataset, col_a: str, col_b: str) -> StatTestResul
     clean = frame[[col_a, col_b]].dropna()
     if len(clean) < 3:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Need at least 3 paired values to test correlation significance.")
+
+    constant_columns = [column for column in (col_a, col_b) if clean[column].nunique(dropna=True) < 2]
+    if constant_columns:
+        names = ", ".join(repr(column) for column in constant_columns)
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"Pearson correlation is undefined because {names} is constant after excluding missing paired values.")
 
     r, p_value = scipy_stats.pearsonr(clean[col_a], clean[col_b])
     normality = [_shapiro_check(col_a, clean[col_a].to_numpy()), _shapiro_check(col_b, clean[col_b].to_numpy())]
