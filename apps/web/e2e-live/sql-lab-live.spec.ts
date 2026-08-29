@@ -19,6 +19,8 @@ test("SQL Lab completes a real browser to FastAPI analytical flow", async ({ pag
   await expect(page.locator(".monaco-editor")).toBeVisible();
   expect(Date.now() - started).toBeLessThan(8_000);
 
+  const editorInput = page.locator(".monaco-editor textarea");
+  await expect(editorInput).toBeVisible();
   await page.locator(".monaco-editor").click();
   await page.keyboard.press("ControlOrMeta+Enter");
   await expect(page.getByText("3 returned / 3 total rows")).toBeVisible({ timeout: 10_000 });
@@ -55,6 +57,8 @@ test("AI Analyst streams through the live API and returns SQL Lab evidence", asy
 
   await page.getByRole("button", { name: "Open draft in SQL Lab" }).click();
   await expect(page.getByRole("heading", { name: "Write against evidence, not assumptions." })).toBeVisible();
+  const editorInput = page.locator(".monaco-editor textarea");
+  await expect(editorInput).toBeVisible();
   await page.locator(".monaco-editor").click();
   await page.keyboard.press("ControlOrMeta+Enter");
   await expect(page.getByText("2 returned / 2 total rows")).toBeVisible({ timeout: 10_000 });
@@ -62,6 +66,6 @@ test("AI Analyst streams through the live API and returns SQL Lab evidence", asy
   await page.getByRole("button", { name: "Use as AI evidence" }).click();
   await expect(page.getByText("Using SQL Lab result")).toBeVisible();
   await page.getByRole("button", { name: "Ask Atlas" }).click();
-  await expect(page.getByText("SQL Lab result")).toBeVisible();
+  await expect(page.getByText("SQL Lab result", { exact: true })).toBeVisible({ timeout: 10_000 });
   await expect(page.getByText(/raw sample rows sent/i)).toContainText("0 raw sample rows sent");
 });

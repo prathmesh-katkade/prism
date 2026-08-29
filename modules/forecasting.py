@@ -27,12 +27,32 @@ MIN_CYCLES_FOR_STL = 2
 
 # Roughly-standard seasonal cycle length per inferred pandas frequency code.
 _SEASONAL_PERIODS_BY_FREQ = {
-    "D": 7, "B": 5, "W": 52, "M": 12, "MS": 12, "Q": 4, "QS": 4, "A": 1, "Y": 1, "H": 24,
+    "D": 7, "B": 5, "W": 52, "ME": 12, "MS": 12, "QE": 4, "QS": 4, "YE": 1, "YS": 1, "h": 24,
 }
 
 
+def _canonicalize_frequency(freq: str) -> str:
+    """Return pandas' current offset spelling without deprecated-alias warnings.
+
+    pandas 2.3 canonicalizes ``M``/``Q``/``A``/``Y``/``H`` to
+    ``ME``/``QE``/``YE``/``YE``/``h``. Forecasting must use that same spelling
+    for both ``asfreq`` and seasonal-period selection; otherwise a valid
+    month-end or quarter-end series silently loses its seasonality.
+    """
+    raw = (freq or "D").strip()
+    base, separator, suffix = raw.partition("-")
+    canonical_base = {"M": "ME", "Q": "QE", "A": "YE", "Y": "YE", "H": "h"}.get(base, base)
+    candidate = canonical_base + (separator + suffix if separator else "")
+    try:
+        return str(pd.tseries.frequencies.to_offset(candidate).freqstr)
+    except ValueError:
+        # pd.infer_freq always returns a valid offset. Preserve an explicit
+        # caller-supplied value so unsupported input is never reclassified.
+        return raw
+
+
 def _infer_seasonal_periods(freq: str) -> int:
-    base = (freq or "D").split("-")[0]
+    base = _canonicalize_frequency(freq).split("-")[0]
     return _SEASONAL_PERIODS_BY_FREQ.get(base, 0)
 
 
@@ -77,6 +97,8 @@ def prepare_series(df: pd.DataFrame, datetime_col: str, numeric_col: str) -> tup
             freq = "MS"
         else:
             freq = "QS"
+
+    freq = _canonicalize_frequency(freq)
 
     series = series.asfreq(freq).interpolate(limit_direction="both")
     return series, freq, None

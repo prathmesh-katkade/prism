@@ -14,6 +14,7 @@ provenance, so it is reproducible from that configuration alone.
 
 from __future__ import annotations
 
+import math
 from datetime import datetime, timezone
 from typing import Any, Optional
 
@@ -256,6 +257,28 @@ def _feature_names(preprocessor: ColumnTransformer) -> list[str]:
     return [name.split("__", 1)[-1] for name in preprocessor.get_feature_names_out()]
 
 
+def validate_stratified_split(y: pd.Series, test_size: float = 0.2) -> Optional[str]:
+    """Direct port of modules/mllab.py::validate_stratified_split."""
+    counts = y.value_counts(dropna=False)
+    class_count = len(counts)
+    if class_count < 2:
+        return "Classification baseline needs at least 2 target classes after excluding missing targets."
+
+    singleton_classes = counts[counts < 2]
+    if not singleton_classes.empty:
+        labels = ", ".join(f"{label!r} ({int(count)} row)" for label, count in singleton_classes.items())
+        return f"Cannot create a stratified 80/20 split: every class needs at least 2 rows; found {labels}."
+
+    n_test = math.ceil(len(y) * test_size)
+    n_train = len(y) - n_test
+    if n_test < class_count or n_train < class_count:
+        return (
+            "Cannot create a stratified 80/20 split: the resulting "
+            f"train/test sizes ({n_train}/{n_test}) cannot contain all {class_count} classes."
+        )
+    return None
+
+
 def run_cross_validation(frame: pd.DataFrame, feature_cols: list[str], target_col: str, task_type: MlTaskType, n_splits: int = 5) -> dict[str, Any]:
     """Direct port of modules/mllab.py::run_cross_validation."""
     data = frame[[*feature_cols, target_col]].dropna(subset=[target_col])
@@ -298,6 +321,11 @@ def run_baseline_models(frame: pd.DataFrame, feature_cols: list[str], target_col
     HTTP boundary — rule 46)."""
     data = frame[[*feature_cols, target_col]].dropna(subset=[target_col])
     X, y = data[feature_cols], data[target_col]
+
+    if task_type is MlTaskType.CLASSIFICATION:
+        split_error = validate_stratified_split(y)
+        if split_error:
+            return {"error": split_error}
 
     preprocessor = _preprocessor(feature_cols, X)
     stratify = y if task_type is MlTaskType.CLASSIFICATION else None
@@ -389,6 +417,8 @@ def baseline(dataset_id: str, request: MlBaselineRequest) -> MlBaselineResult:
         task_type, _ = detect_task_type(stored.frame[request.target_col])
 
     result = run_baseline_models(stored.frame, request.feature_cols, request.target_col, task_type, request.use_smote)
+    if "error" in result:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=result["error"])
     verdict = build_verdict(result)
 
     importances = result["feature_importances"]
