@@ -14,6 +14,73 @@
   by commit SHA `349943f` regardless.)
 - **Date**: 2026-08-28
 
+## Live staging addendum — 2026-08-30 (authoritative for deployment status)
+
+This addendum supersedes the earlier `BLOCKED_EXTERNAL_DEPLOYMENT_ACCESS`
+statements in this report. Those statements were accurate when written; a
+subsequent authenticated Render session completed the real deployment without
+changing the legacy Streamlit service or starting Phase 7.
+
+| Item | Live evidence |
+|---|---|
+| Canonical migration lineage | `phase-6.5-integration-staging` (`ee17be4`, report-only successor to the tested release) |
+| Release-tested runtime commit | `349943ff681869b05778060c754192eb928f755a` |
+| API deployed commit | `fb78ae9cbde06fc2ae2707010427d31465c73f43` on `phase-6.5-staging-runtime-pin` — only `render.yaml` changed to pin `PYTHON_VERSION=3.11.9` |
+| Web deployed commit | `349943ff681869b05778060c754192eb928f755a` on `phase-6.5-staging-release-349943f` |
+| API service | `prism-native-api-staging` (`srv-da9j0gpf2nfc73fn9100`), deploy `dep-da9j3mlg1s2s73ajbdk0`, succeeded |
+| Web service | `prism-native-web-staging` (`srv-da9j1fh42hec7382k2bg`), deploy `dep-da9j1fp42hec7382k30g`, live |
+| API URL | `https://prism-native-api-staging.onrender.com` |
+| Web URL | `https://prism-native-web-staging.onrender.com` |
+| Legacy service | `prism` (`srv-d9achbm7r5hc73cghceg`) at `https://prism-vdef.onrender.com`, independently live |
+
+### Live verification
+
+- API health and readiness both returned HTTP 200. Readiness reports Ollama
+  `not_configured` and the deterministic provider path, with no public Ollama
+  endpoint or dependency.
+- A preflight from the exact web origin returned HTTP 200 with that origin
+  alone in `Access-Control-Allow-Origin`, `GET, POST, OPTIONS`, and `Vary:
+  Origin`; credentialed wildcard CORS is not in use.
+- A real browser upload/profile, SQL execution, AI Analyst SSE stream,
+  AI-generated reviewed SQL execution, Clean preview/apply/revision/undo,
+  Visualize render/provenance/Atlas trust check, tab persistence, navigation,
+  and theme checks all passed against the live URLs. The legacy Streamlit URL
+  separately returned HTTP 200 from Tornado/Streamlit.
+- SSE returned `Content-Type: text/event-stream; charset=utf-8` and
+  `Cache-Control: no-cache`. The browser visibly received partial token
+  content while the response state was `responding`, then a completed event;
+  Render's edge response did not forward `X-Accel-Buffering`, although the API
+  deliberately sets it to `no` and live incremental delivery was confirmed.
+- Production assets were served only from the deployed Next bundle. Monaco
+  mounted as `.monaco-editor` without an external CDN; the only browser
+  console output was Monaco's non-fatal web-worker fallback warning, with no
+  error-level console entries.
+- The live tablist exposes unique `id`/`aria-controls` pairs, roving
+  `tabIndex`, and ArrowLeft selection behavior. Local automated baseline
+  accessibility checks also pass.
+
+### Final staging gate
+
+`NATIVE_STAGING_CONFIGURED=YES`
+
+`NATIVE_API_LIVE=YES`
+
+`NATIVE_WEB_LIVE=YES`
+
+`LIVE_END_TO_END_VERIFIED=YES`
+
+`LEGACY_STREAMLIT_UNAFFECTED=YES`
+
+`NATIVE_STAGING_COMPLETE=YES`
+
+GitHub Actions is intentionally configured to run on pushes to `main` and
+pull requests, not direct staging-branch pushes; therefore no Actions run is
+attached to the deployed staging SHA. Equivalent local gates passed on the
+runtime-pinned commit: production web build, lint, TypeScript check, web unit
+tests (11), accessibility baseline, API tests (46), CI-equivalent mypy,
+boundary check, contract freshness, and local secret scan. This is recorded
+as a CI-coverage limitation, not as a claim of a GitHub Actions run.
+
 ---
 
 ## 1. Deployment

@@ -5,6 +5,25 @@
 - Tag: `prism-native-v0.6`
 - Date: 2026-08-28
 
+## Live staging update — 2026-08-30
+
+The prior external-access block is resolved. Native staging is live and was
+verified in a real browser. This update is documentation-only and lives on
+`phase-6.5-staging-live-evidence`, separate from the service deployment refs.
+
+| Service | Commit | URL | Result |
+|---|---|---|---|
+| Native API | `fb78ae9cbde06fc2ae2707010427d31465c73f43` | `https://prism-native-api-staging.onrender.com` | Live; health/ready/CORS/SSE verified |
+| Native Web | `349943ff681869b05778060c754192eb928f755a` | `https://prism-native-web-staging.onrender.com` | Live; full browser smoke verified |
+| Legacy Streamlit | `main` service unchanged | `https://prism-vdef.onrender.com` | Independently HTTP 200 |
+
+The API successor changes only `render.yaml`: it declares Render's supported
+`PYTHON_VERSION=3.11.9` selector, preventing the moving Python 3.14 default
+from attempting to build the pinned `pydantic-core`. The deployed service has
+that same environment value. No Phase 7 work was started.
+
+Final verdict: `NATIVE_STAGING_COMPLETE=YES`.
+
 ## Gate summary (PASS/FAIL)
 
 | Gate | Status | Notes |
