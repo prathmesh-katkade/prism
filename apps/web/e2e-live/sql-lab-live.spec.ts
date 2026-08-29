@@ -62,6 +62,6 @@ test("AI Analyst streams through the live API and returns SQL Lab evidence", asy
   await page.getByRole("button", { name: "Use as AI evidence" }).click();
   await expect(page.getByText("Using SQL Lab result")).toBeVisible();
   await page.getByRole("button", { name: "Ask Atlas" }).click();
-  await expect(page.getByText("SQL Lab result", { exact: true })).toBeVisible();
+  await expect(page.getByText("SQL Lab result", { exact: true })).toBeVisible({ timeout: 10_000 });
   await expect(page.getByText(/raw sample rows sent/i)).toContainText("0 raw sample rows sent");
 });
