@@ -159,6 +159,35 @@ test("native Visualize workspace suggests a deterministic chart and explains it 
   await expect(page.getByText(/answers a comparison question/)).toBeVisible();
 });
 
+const statsProfile = { dataset: { ...cleanDataset, row_count: 40 }, provenance: { source_fingerprint: cleanDataset.source_fingerprint, dataset_revision: 0, parameters: {}, service_version: "x", computed_at: "2026-08-28T00:00:00Z" }, quality: { n_rows: 40, n_cols: 2, missing_by_column: {}, total_missing_cells: 0, total_missing_pct: 0, duplicate_rows: 0, memory_usage: "1KB", outliers: {}, all_null_columns: [] }, health: cleanHealth, columns: [{ name: "x", semantic_type: "numeric", missing_pct: 0, unique_count: 40, health: "good", issues: [], warnings: [], distribution: [] }, { name: "y", semantic_type: "numeric", missing_pct: 0, unique_count: 40, health: "good", issues: [], warnings: [], distribution: [] }], correlations: [], suggestions: [] };
+
+test("native Stats workspace suggests a deterministic test, runs it with an honest evidence statement, and explains it through Atlas", async ({ page }) => {
+  await page.route("**/api/v1/overview/datasets/*/profile", async (route) => route.fulfill({ json: statsProfile }));
+  await page.route("**/api/v1/overview/datasets/*/rows*", async (route) => route.fulfill({ json: { dataset: statsProfile.dataset, offset: 0, limit: 20, total_rows: 40, rows: [], provenance: statsProfile.provenance } }));
+  await page.route("**/api/v1/overview/datasets", async (route) => route.fulfill({ status: 201, json: statsProfile.dataset }));
+  await page.route("**/api/v1/stats/datasets/*/suggest*", async (route) => route.fulfill({ json: { col_a: "x", col_b: "y", test: "pearson", reason: "Both 'x' and 'y' are numeric — testing whether they're linearly correlated.", numeric_col: null, cat_col: null, error: null } }));
+  await page.route("**/api/v1/stats/datasets/*/run", async (route) => route.fulfill({ json: { test: "pearson", statistic: 0.87, p_value: 0.0001, effect_size: 0.87, effect_size_name: "Pearson r", effect_size_label: "large", groups: {}, means: {}, dof: null, n: 40, low_expected_pct: null, normality: [], significant: true, interpretation: "Significant correlation detected (p<0.0001, large effect, Pearson r=0.87).", evidence_statement: "This test found statistically significant evidence of a correlation in this sample. Statistical significance is not the same as practical importance or causation — read it together with the effect size, the assumption warnings below, and domain context.", warnings: [], provenance: statsProfile.provenance } }));
+  await page.route("**/api/v1/stats/datasets/*/atlas", async (route) => route.fulfill({ json: { action: "explain_test", summary: "Both 'x' and 'y' are numeric — testing whether they're linearly correlated.", uncertainty: "This explanation describes a deterministic statistical result; it does not establish causation, and Atlas cannot alter the underlying computation.", evidence: [{ label: "Selected test", value: "pearson" }] } }));
+
+  await page.goto("/");
+  await page.getByRole("button", { name: /Overview native/i }).click();
+  await page.setInputFiles("#overview-upload", { name: "sales.csv", mimeType: "text/csv", buffer: Buffer.from("x,y\n1,2\n2,4\n") });
+  await expect(page.getByRole("heading", { name: "sales.csv" }).first()).toBeVisible();
+  await page.getByRole("button", { name: /Stats/i }).click();
+  await expect(page.getByRole("button", { name: "Run test" })).toBeVisible();
+  await page.getByRole("button", { name: "Run test" }).click();
+  await expect(page.getByText("Significant correlation detected (p<0.0001, large effect, Pearson r=0.87).")).toBeVisible();
+  await expect(page.getByText("Evidence found")).toBeVisible();
+  await expect(page.getByText(/Statistical significance is not the same as practical importance/)).toBeVisible();
+
+  await page.getByRole("button", { name: "explain test" }).click();
+  await expect(page.getByText(/does not establish causation/)).toBeVisible();
+
+  // Scoped to Stats' own subtree: the shell chrome is covered by the page-level axe baseline above.
+  const violations = await page.addScriptTag({ path: "node_modules/axe-core/axe.min.js" }).then(() => page.evaluate(async () => (await (window as typeof window & { axe: { run(context: unknown): Promise<{ violations: unknown[] }> } }).axe.run(document.querySelector(".stats-workspace"))).violations));
+  expect(violations).toEqual([]);
+});
+
 test("native AI Analyst streams grounded evidence and requires SQL review", async ({ page }) => {
   await page.route("**/api/v1/ai-analyst/stream", async (route) => route.fulfill({
     contentType: "text/event-stream",
