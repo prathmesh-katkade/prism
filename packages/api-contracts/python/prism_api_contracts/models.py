@@ -671,3 +671,113 @@ class AtlasStatsResponse(ContractModel):
     summary: str = Field(min_length=1)
     uncertainty: str = Field(min_length=1)
     evidence: list[AtlasEvidence]
+
+
+# --- Phase 7B: Forecasting -----------------------------------------------------
+
+
+class ForecastPoint(ContractModel):
+    timestamp: datetime
+    value: float
+
+
+class ForecastInterval(ContractModel):
+    timestamp: datetime
+    lower: float
+    upper: float
+
+
+class ForecastMetrics(ContractModel):
+    mae: Optional[float] = None
+    rmse: Optional[float] = None
+    mape: Optional[float] = None
+    holdout_points: int = Field(default=0, ge=0)
+    note: str = ""
+
+
+class ForecastRequest(ContractModel):
+    datetime_col: str = Field(min_length=1)
+    numeric_col: str = Field(min_length=1)
+    horizon: int = Field(default=12, ge=1, le=365)
+
+
+class ForecastResult(ContractModel):
+    datetime_col: str
+    numeric_col: str
+    frequency: str
+    model_used: str = Field(min_length=1)
+    horizon: int = Field(ge=1)
+    observed: list[ForecastPoint]
+    forecast: list[ForecastPoint]
+    intervals: list[ForecastInterval]
+    metrics: ForecastMetrics
+    caveat: str = Field(min_length=1)
+    warnings: list[str] = Field(default_factory=list)
+    provenance: OverviewProvenance
+
+
+class DecomposeRequest(ContractModel):
+    datetime_col: str = Field(min_length=1)
+    numeric_col: str = Field(min_length=1)
+
+
+class DecompositionResult(ContractModel):
+    datetime_col: str
+    numeric_col: str
+    seasonal_period: int = Field(ge=1)
+    trend_strength: float = Field(ge=0, le=1)
+    seasonal_strength: float = Field(ge=0, le=1)
+    observed: list[ForecastPoint]
+    trend: list[ForecastPoint]
+    seasonal: list[ForecastPoint]
+    resid: list[ForecastPoint]
+    verdict: str = Field(min_length=1)
+    provenance: OverviewProvenance
+
+
+class ChangepointRequest(ContractModel):
+    datetime_col: str = Field(min_length=1)
+    numeric_col: str = Field(min_length=1)
+    max_changepoints: int = Field(default=5, ge=1, le=20)
+
+
+class ChangepointFinding(ContractModel):
+    position: int = Field(ge=0)
+    timestamp: datetime
+    before_mean: float
+    after_mean: float
+    delta: float
+    pct_change: Optional[float] = None
+    before_n: int = Field(ge=0)
+    after_n: int = Field(ge=0)
+
+
+class ChangepointResult(ContractModel):
+    datetime_col: str
+    numeric_col: str
+    observed: list[ForecastPoint]
+    changepoints: list[ChangepointFinding]
+    n_segments: int = Field(ge=1)
+    verdict: str = Field(min_length=1)
+    provenance: OverviewProvenance
+
+
+class AtlasForecastAction(str, Enum):
+    EXPLAIN_METHOD = "explain_method"
+    EXPLAIN_TREND = "explain_trend"
+    EXPLAIN_SEASONALITY = "explain_seasonality"
+    EXPLAIN_CHANGEPOINTS = "explain_changepoints"
+    EXPLAIN_INTERVALS = "explain_intervals"
+
+
+class AtlasForecastRequest(ContractModel):
+    action: AtlasForecastAction
+    datetime_col: str = Field(min_length=1)
+    numeric_col: str = Field(min_length=1)
+
+
+class AtlasForecastResponse(ContractModel):
+    action: AtlasForecastAction
+    summary: str = Field(min_length=1)
+    uncertainty: str = Field(min_length=1)
+    evidence: list[AtlasEvidence]

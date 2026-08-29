@@ -27,5 +27,5 @@ files = ["apps/api/src", "packages"]
 exclude = ['(^|/)(node_modules|\.venv|legacy-streamlit)(/|$)']
 
 [[tool.mypy.overrides]]
-module = ["pandas", "numpy", "scipy", "scipy.*"]
+module = ["pandas", "numpy", "scipy", "scipy.*", "statsmodels", "statsmodels.*"]
 ignore_missing_imports = true

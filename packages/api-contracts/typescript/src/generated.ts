@@ -65,6 +65,21 @@ export interface AtlasEvidence {
   value: string;
 }
 
+export type AtlasForecastAction = "explain_method" | "explain_trend" | "explain_seasonality" | "explain_changepoints" | "explain_intervals";
+
+export interface AtlasForecastRequest {
+  action: AtlasForecastAction;
+  datetime_col: string;
+  numeric_col: string;
+}
+
+export interface AtlasForecastResponse {
+  action: AtlasForecastAction;
+  summary: string;
+  uncertainty: string;
+  evidence: AtlasEvidence[];
+}
+
 export type AtlasOverviewAction = "explain_dataset" | "diagnose_quality" | "inspect_anomaly" | "suggest_next_analysis" | "trace_source" | "compare_columns" | "summarize_risks";
 
 export interface AtlasOverviewRequest {
@@ -132,6 +147,33 @@ export interface AtlasVisualizeResponse {
 
 export interface Body_upload_dataset_api_v1_overview_datasets_post {
   file: string;
+}
+
+export interface ChangepointFinding {
+  position: number;
+  timestamp: string;
+  before_mean: number;
+  after_mean: number;
+  delta: number;
+  pct_change?: number;
+  before_n: number;
+  after_n: number;
+}
+
+export interface ChangepointRequest {
+  datetime_col: string;
+  numeric_col: string;
+  max_changepoints?: number;
+}
+
+export interface ChangepointResult {
+  datetime_col: string;
+  numeric_col: string;
+  observed: ForecastPoint[];
+  changepoints: ChangepointFinding[];
+  n_segments: number;
+  verdict: string;
+  provenance: OverviewProvenance;
 }
 
 export interface CleanApplyResponse {
@@ -216,12 +258,71 @@ export interface DatasetRowsResponse {
   provenance: OverviewProvenance;
 }
 
+export interface DecomposeRequest {
+  datetime_col: string;
+  numeric_col: string;
+}
+
+export interface DecompositionResult {
+  datetime_col: string;
+  numeric_col: string;
+  seasonal_period: number;
+  trend_strength: number;
+  seasonal_strength: number;
+  observed: ForecastPoint[];
+  trend: ForecastPoint[];
+  seasonal: ForecastPoint[];
+  resid: ForecastPoint[];
+  verdict: string;
+  provenance: OverviewProvenance;
+}
+
 export interface DistributionBucket {
   label: unknown;
   count: number;
 }
 
 export type FillStrategy = "mean" | "median" | "mode" | "constant" | "forward_fill";
+
+export interface ForecastInterval {
+  timestamp: string;
+  lower: number;
+  upper: number;
+}
+
+export interface ForecastMetrics {
+  mae?: number;
+  rmse?: number;
+  mape?: number;
+  holdout_points?: number;
+  note?: string;
+}
+
+export interface ForecastPoint {
+  timestamp: string;
+  value: number;
+}
+
+export interface ForecastRequest {
+  datetime_col: string;
+  numeric_col: string;
+  horizon?: number;
+}
+
+export interface ForecastResult {
+  datetime_col: string;
+  numeric_col: string;
+  frequency: string;
+  model_used: string;
+  horizon: number;
+  observed: ForecastPoint[];
+  forecast: ForecastPoint[];
+  intervals: ForecastInterval[];
+  metrics: ForecastMetrics;
+  caveat: string;
+  warnings?: string[];
+  provenance: OverviewProvenance;
+}
 
 export interface HTTPValidationError {
   detail?: ValidationError[];
