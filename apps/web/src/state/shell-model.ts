@@ -47,7 +47,7 @@ export const phaseTwoMigrations: readonly MigrationState[] = [
   { workflow: "clean", channel: "enabled", legacy_reference: "legacy://clean", parity_required: true },
   { workflow: "visualize", channel: "enabled", legacy_reference: "legacy://visualize", parity_required: true },
   { workflow: "stats", channel: "enabled", legacy_reference: "modules/stats_lab.py", parity_required: true },
-  { workflow: "forecasting", channel: "shadow", legacy_reference: "modules/forecasting.py", parity_required: true },
+  { workflow: "forecasting", channel: "enabled", legacy_reference: "modules/forecasting.py", parity_required: true },
   { workflow: "ml", channel: "legacy", legacy_reference: "legacy://ml", parity_required: true }
 ];
 

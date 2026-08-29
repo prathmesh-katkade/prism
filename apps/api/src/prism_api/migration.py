@@ -35,7 +35,7 @@ PHASE_1_MIGRATIONS: tuple[MigrationState, ...] = (
     ),
     MigrationState(
         workflow="forecasting",
-        channel=ReleaseChannel.SHADOW,
+        channel=ReleaseChannel.ENABLED,
         legacy_reference="modules/forecasting.py",
     ),
 )
