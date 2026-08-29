@@ -19,15 +19,17 @@ describe("PRISM shell", () => {
     expect(screen.getByText("Start with the dataset, then follow the evidence.")).toBeInTheDocument();
     fireEvent.click(screen.getAllByRole("button", { name: /SQL Lab native/i })[0]!);
     expect(screen.getByText("Preparing Query Studio")).toBeInTheDocument();
-    fireEvent.click(screen.getAllByRole("button", { name: /Stats/i })[0]!);
+    fireEvent.click(screen.getAllByRole("button", { name: /Forecasting/i })[0]!);
     expect(screen.getByText(/remains in the reference system/)).toBeInTheDocument();
   });
 
-  it("opens native Clean and Visualize, prompting for a dataset before an object is loaded", () => {
+  it("opens native Clean, Visualize, and Stats, prompting for a dataset before an object is loaded", () => {
     render(<PrismShell />);
     fireEvent.click(screen.getAllByRole("button", { name: /Clean native/i })[0]!);
     expect(screen.getByText("Load a dataset in Overview first.")).toBeInTheDocument();
     fireEvent.click(screen.getAllByRole("button", { name: /Visualize native/i })[0]!);
+    expect(screen.getByText("Load a dataset in Overview first.")).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("button", { name: /Stats/i })[0]!);
     expect(screen.getByText("Load a dataset in Overview first.")).toBeInTheDocument();
   });
 

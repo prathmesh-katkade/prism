@@ -29,3 +29,4 @@ corpus_cache/
 .idea/
 .DS_Store
 Thumbs.db
+*.tsbuildinfo

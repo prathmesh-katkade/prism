@@ -8,7 +8,7 @@ export type PanelId = "rail" | "inspector" | "atlas";
 export interface WorkspaceTab {
   id: string;
   label: string;
-  kind: "home" | "bridge" | "overview" | "sql-lab" | "ai-analyst" | "clean" | "visualize" | "atlas";
+  kind: "home" | "bridge" | "overview" | "sql-lab" | "ai-analyst" | "clean" | "visualize" | "stats" | "atlas";
   workflow?: string;
   closeable: boolean;
 }
