@@ -40,7 +40,7 @@ PHASE_1_MIGRATIONS: tuple[MigrationState, ...] = (
     ),
     MigrationState(
         workflow="ml",
-        channel=ReleaseChannel.SHADOW,
+        channel=ReleaseChannel.ENABLED,
         legacy_reference="modules/mllab.py",
     ),
 )

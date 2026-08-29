@@ -16,5 +16,5 @@ def test_phase_6_promotes_clean_and_visualize_after_their_own_parity_evidence() 
     assert channels["visualize"] is ReleaseChannel.ENABLED
     assert channels["stats"] is ReleaseChannel.ENABLED
     assert channels["forecasting"] is ReleaseChannel.ENABLED
-    assert channels["ml"] is ReleaseChannel.SHADOW
+    assert channels["ml"] is ReleaseChannel.ENABLED
     assert all(state.parity_required for state in PHASE_1_MIGRATIONS)
