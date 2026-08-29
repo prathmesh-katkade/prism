@@ -781,3 +781,164 @@ class AtlasForecastResponse(ContractModel):
     summary: str = Field(min_length=1)
     uncertainty: str = Field(min_length=1)
     evidence: list[AtlasEvidence]
+
+
+# --- Phase 7C: ML Lab -----------------------------------------------------------
+
+
+class MlSuggestionType(str, Enum):
+    ENCODE = "encode"
+    SCALE = "scale"
+    DATETIME_EXPAND = "datetime_expand"
+    INTERACTION = "interaction"
+
+
+class MlFeatureSuggestion(ContractModel):
+    kind: MlSuggestionType
+    column: Optional[str] = None
+    columns: Optional[list[str]] = None
+    method: Optional[str] = None
+    reason: str = Field(min_length=1)
+
+
+class MlFeatureSuggestionsResponse(ContractModel):
+    target_col: str
+    suggestions: list[MlFeatureSuggestion]
+
+
+class MlApplyFeatureRequest(ContractModel):
+    suggestion: MlFeatureSuggestion
+
+
+class MlApplyFeatureResponse(ContractModel):
+    dataset: OverviewDataset
+    description: str = Field(min_length=1)
+    provenance: OverviewProvenance
+
+
+class MlTaskType(str, Enum):
+    CLASSIFICATION = "classification"
+    REGRESSION = "regression"
+
+
+class MlTaskDetectionResponse(ContractModel):
+    target_col: str
+    task_type: MlTaskType
+    reason: str = Field(min_length=1)
+
+
+class MlImbalanceInfo(ContractModel):
+    target_col: str
+    counts: dict[str, int]
+    proportions_pct: dict[str, float]
+    minority_pct: float
+    is_imbalanced: bool
+    explanation: str = Field(min_length=1)
+
+
+class MlCvMetric(ContractModel):
+    mean: float
+    std: float
+
+
+class MlCvResult(ContractModel):
+    results: dict[str, dict[str, MlCvMetric]]
+    n_splits: int = Field(ge=2)
+
+
+class MlFeatureImportance(ContractModel):
+    feature: str
+    importance: float
+
+
+class MlBaselineRequest(ContractModel):
+    feature_cols: list[str] = Field(min_length=1)
+    target_col: str = Field(min_length=1)
+    task_type: Optional[MlTaskType] = None
+    use_smote: bool = False
+
+
+class MlBaselineResult(ContractModel):
+    task_type: MlTaskType
+    results: dict[str, dict[str, float]]
+    confusion_matrix: Optional[list[list[int]]] = None
+    confusion_labels: Optional[list[str]] = None
+    feature_importances: list[MlFeatureImportance]
+    n_train: int = Field(ge=0)
+    n_test: int = Field(ge=0)
+    smote_before_after: Optional[dict[str, Any]] = None
+    cv: Optional[MlCvResult] = None
+    cv_error: Optional[str] = None
+    verdict: str = Field(min_length=1)
+    leakage_note: str = Field(min_length=1)
+    provenance: OverviewProvenance
+
+
+class MlFeatureSelectionRequest(ContractModel):
+    feature_cols: list[str] = Field(min_length=1)
+    target_col: str = Field(min_length=1)
+    task_type: Optional[MlTaskType] = None
+    top_k: Optional[int] = Field(default=None, ge=1)
+
+
+class MlFeatureRankingRow(ContractModel):
+    feature: str
+    mutual_info: float
+    mutual_info_rank: float
+    l1_coef_abs: float
+    l1_rank: float
+    rfe_selected: bool
+    rfe_rank: float
+    consensus_votes: int = Field(ge=0, le=3)
+    consensus_rank: float
+
+
+class MlFeatureSelectionResult(ContractModel):
+    task_type: MlTaskType
+    top_k: int = Field(ge=1)
+    n_features: int = Field(ge=1)
+    ranking: list[MlFeatureRankingRow]
+    recommended_features: list[str]
+    provenance: OverviewProvenance
+
+
+class MlShapRequest(ContractModel):
+    feature_cols: list[str] = Field(min_length=1)
+    target_col: str = Field(min_length=1)
+    task_type: Optional[MlTaskType] = None
+
+
+class MlShapImportance(ContractModel):
+    feature: str
+    mean_abs_shap: float
+
+
+class MlShapResult(ContractModel):
+    task_type: MlTaskType
+    model_explained: str = Field(min_length=1)
+    global_importance: list[MlShapImportance]
+    note: str = Field(min_length=1)
+    provenance: OverviewProvenance
+
+
+class AtlasMlAction(str, Enum):
+    EXPLAIN_TASK_TYPE = "explain_task_type"
+    COMPARE_MODELS = "compare_models"
+    EXPLAIN_CROSS_VALIDATION = "explain_cross_validation"
+    EXPLAIN_IMBALANCE = "explain_imbalance"
+    EXPLAIN_FEATURE_IMPORTANCE = "explain_feature_importance"
+    IDENTIFY_OVERFITTING = "identify_overfitting"
+
+
+class AtlasMlRequest(ContractModel):
+    action: AtlasMlAction
+    feature_cols: list[str] = Field(min_length=1)
+    target_col: str = Field(min_length=1)
+    task_type: Optional[MlTaskType] = None
+
+
+class AtlasMlResponse(ContractModel):
+    action: AtlasMlAction
+    summary: str = Field(min_length=1)
+    uncertainty: str = Field(min_length=1)
+    evidence: list[AtlasEvidence]

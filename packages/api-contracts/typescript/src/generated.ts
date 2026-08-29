@@ -80,6 +80,22 @@ export interface AtlasForecastResponse {
   evidence: AtlasEvidence[];
 }
 
+export type AtlasMlAction = "explain_task_type" | "compare_models" | "explain_cross_validation" | "explain_imbalance" | "explain_feature_importance" | "identify_overfitting";
+
+export interface AtlasMlRequest {
+  action: AtlasMlAction;
+  feature_cols: string[];
+  target_col: string;
+  task_type?: MlTaskType;
+}
+
+export interface AtlasMlResponse {
+  action: AtlasMlAction;
+  summary: string;
+  uncertainty: string;
+  evidence: AtlasEvidence[];
+}
+
 export type AtlasOverviewAction = "explain_dataset" | "diagnose_quality" | "inspect_anomaly" | "suggest_next_analysis" | "trace_source" | "compare_columns" | "summarize_risks";
 
 export interface AtlasOverviewRequest {
@@ -341,6 +357,133 @@ export interface MigrationState {
   parity_required?: boolean;
   legacy_reference: string;
 }
+
+export interface MlApplyFeatureRequest {
+  suggestion: MlFeatureSuggestion;
+}
+
+export interface MlApplyFeatureResponse {
+  dataset: OverviewDataset;
+  description: string;
+  provenance: OverviewProvenance;
+}
+
+export interface MlBaselineRequest {
+  feature_cols: string[];
+  target_col: string;
+  task_type?: MlTaskType;
+  use_smote?: boolean;
+}
+
+export interface MlBaselineResult {
+  task_type: MlTaskType;
+  results: Record<string, Record<string, number>>;
+  confusion_matrix?: number[][];
+  confusion_labels?: string[];
+  feature_importances: MlFeatureImportance[];
+  n_train: number;
+  n_test: number;
+  smote_before_after?: Record<string, unknown>;
+  cv?: MlCvResult;
+  cv_error?: string;
+  verdict: string;
+  leakage_note: string;
+  provenance: OverviewProvenance;
+}
+
+export interface MlCvMetric {
+  mean: number;
+  std: number;
+}
+
+export interface MlCvResult {
+  results: Record<string, Record<string, MlCvMetric>>;
+  n_splits: number;
+}
+
+export interface MlFeatureImportance {
+  feature: string;
+  importance: number;
+}
+
+export interface MlFeatureRankingRow {
+  feature: string;
+  mutual_info: number;
+  mutual_info_rank: number;
+  l1_coef_abs: number;
+  l1_rank: number;
+  rfe_selected: boolean;
+  rfe_rank: number;
+  consensus_votes: number;
+  consensus_rank: number;
+}
+
+export interface MlFeatureSelectionRequest {
+  feature_cols: string[];
+  target_col: string;
+  task_type?: MlTaskType;
+  top_k?: number;
+}
+
+export interface MlFeatureSelectionResult {
+  task_type: MlTaskType;
+  top_k: number;
+  n_features: number;
+  ranking: MlFeatureRankingRow[];
+  recommended_features: string[];
+  provenance: OverviewProvenance;
+}
+
+export interface MlFeatureSuggestion {
+  kind: MlSuggestionType;
+  column?: string;
+  columns?: string[];
+  method?: string;
+  reason: string;
+}
+
+export interface MlFeatureSuggestionsResponse {
+  target_col: string;
+  suggestions: MlFeatureSuggestion[];
+}
+
+export interface MlImbalanceInfo {
+  target_col: string;
+  counts: Record<string, number>;
+  proportions_pct: Record<string, number>;
+  minority_pct: number;
+  is_imbalanced: boolean;
+  explanation: string;
+}
+
+export interface MlShapImportance {
+  feature: string;
+  mean_abs_shap: number;
+}
+
+export interface MlShapRequest {
+  feature_cols: string[];
+  target_col: string;
+  task_type?: MlTaskType;
+}
+
+export interface MlShapResult {
+  task_type: MlTaskType;
+  model_explained: string;
+  global_importance: MlShapImportance[];
+  note: string;
+  provenance: OverviewProvenance;
+}
+
+export type MlSuggestionType = "encode" | "scale" | "datetime_expand" | "interaction";
+
+export interface MlTaskDetectionResponse {
+  target_col: string;
+  task_type: MlTaskType;
+  reason: string;
+}
+
+export type MlTaskType = "classification" | "regression";
 
 export interface NumericSummary {
   min?: number | string;
