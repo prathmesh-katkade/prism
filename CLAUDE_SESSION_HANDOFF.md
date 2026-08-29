@@ -1,198 +1,180 @@
 # PRISM Claude Session Handoff
 
-Timestamp: 2026-08-29T21:00:00Z (approx.)
+Timestamp: 2026-08-29T22:10:00Z (approx.)
 Repository: prathmesh-katkade/prism
-Current branch: phase-7-advanced-analytics
-Current commit: 824a251 (verify with `git log -1`)
-Remote tracking branch: origin/phase-7-advanced-analytics
+Current branch: `phase-6.5-integration-staging` (this session's working branch, `phase-7-staging-hardening`, is merged and can be deleted)
+Current commit: `371572d` (verify with `git log -1`)
+Remote tracking branch: `origin/phase-6.5-integration-staging`
 Working tree clean: YES (verify with `git status --short` on resume)
 
 ## Canonical migration lineage
-Current migration base: `phase-5-ai-analyst` ← PR #6 merge (`a203eea`) ← Phase 6.5
-(`phase-6.5-integration-staging`, includes live-staging evidence, head `aaf5b7f`) ←
-`phase-7-advanced-analytics`, head `824a251`.
-Phase 6.5: COMPLETE, native staging CONFIRMED LIVE (a real Render deploy by the user,
-2026-08-30) — see `PHASE6_5_RELEASE_REPORT.md`.
-Phase 7 branch status: **PHASE 7 IS COMPLETE.** 7A (Stats Lab), 7B (Forecasting), and 7C
-(ML Lab) are all native and `ReleaseChannel.ENABLED`. See `PHASE7_FINAL_REPORT.md`.
+`phase-5-ai-analyst` ← PR #6 ← `phase-6.5-integration-staging` ← PR #7 (`phase-7-advanced-
+analytics`, merge commit `d39b8ea`, 2026-08-29T21:16:38Z) ← PR #8 (`phase-7-staging-hardening`,
+merge commit `371572d`, 2026-08-29T22:07Z) — **`371572d` is the current tip and the exact,
+fully CI-tested commit any deployment should use.**
 
 ## Current phase
-Phase: 7 — COMPLETE. Phase 8 — NOT STARTED (see `PHASE8_HANDOFF.md`; no brief exists).
-Slice: none in progress.
-Overall status: All eight navigation workflows in the shell (Overview, SQL Lab, AI Analyst,
-Clean, Visualize, Stats, Forecasting, ML) are native and enabled. Full quality gate green
-across all three Phase 7 slices. This session stopped here per the explicit instruction:
-"Even if Phase 7 passes: Do NOT implement Phase 8. Only create PHASE8_HANDOFF.md... Then STOP."
+Phase: 7 — COMPLETE and staging-hardened. Phase 8 — NOT STARTED (see `PHASE8_HANDOFF.md`).
+This session's task: "PRISM — PHASE 7 STAGING RELEASE + LIVE PRODUCT VERIFICATION + UI/UX
+AUDIT" — verify Phase 7 branch, PR it into the canonical staging lineage, get CI green, merge,
+deploy, live-verify, audit UI/UX, fix release-blocking defects, redeploy, certify, **stop
+before Phase 8**.
 
 ## Completed in this session
-- **Phase 7A — Stats Lab**: full vertical slice (contracts, backend, frontend, Atlas, e2e),
-  gate passed, promoted SHADOW→ENABLED. Found and fixed a real performance bug (scipy's
-  ~365ms cold-import cost landing on a live request) and a real deployment-breaking bug
-  (scipy missing from `apps/api/requirements.txt`, the file Render actually uses).
-- **Phase 7B — Forecasting**: full vertical slice, gate passed, promoted SHADOW→ENABLED.
-  Pre-empted both 7A lessons from the start (added statsmodels to requirements.txt before
-  writing the router; imported it at module load) — verified with a clean-venv install and
-  a timing check, no repeat of either bug.
-- **Phase 7C — ML Lab**: full vertical slice, gate passed, promoted SHADOW→ENABLED. Pre-empted
-  the same two lessons for scikit-learn/imbalanced-learn/shap. Found and fixed a real
-  accessibility bug (wide result tables need `tabIndex={0}` to be keyboard-focusable
-  scrollable regions — a latent gap in the shared `.data-table-wrap` pattern, only surfaced
-  by ML Lab's wider tables; same gap left as documented technical debt in
-  Clean/Overview/Stats, not fixed speculatively outside this phase's touched files).
-- Checkpoints: `.prism/checkpoints/phase-7a.md`, `phase-7b.md`, `phase-7c.md`.
-- `PHASE7_IMPLEMENTATION_LEDGER.md` — full per-slice record for all three.
-- `PHASE7_FINAL_REPORT.md` — the required cross-slice summary with all five gate flags YES.
-- `PHASE8_HANDOFF.md` — minimal orientation only, no Phase 8 code or plan.
-- `docs/migration/CURRENT_PHASE.md` — updated throughout, now states Phase 7 complete.
-- 21 commits pushed to `origin/phase-7-advanced-analytics` across this session (contracts/
-  backend/parity, frontend/Atlas/e2e, perf fixes, gate promotions, and docs, for each of
-  three slices, plus a repository-truth reconciliation at the start of the session).
+1. Verified repository truth (Phase 7 branch head `996754c8ba71...`, matched the task's stated
+   context; all 8 workflows genuinely `ENABLED`, confirmed via live health-endpoint checks,
+   not just documentation claims).
+2. Opened [PR #7](https://github.com/prathmesh-katkade/prism/pull/7)
+   (`phase-7-advanced-analytics` → `phase-6.5-integration-staging` — verified via
+   `git merge-base --is-ancestor` that 6.5 supersedes `phase-5-ai-analyst`, the master
+   prompt's suggested default base). All 5 CI checks green. **Merged** (`d39b8ea`).
+3. Created release tag `prism-native-v0.7` locally (now at `371572d`, moved once after the
+   hardening merge). Push to origin blocked: `BLOCKED_EXTERNAL_TAG_PERMISSION` (HTTP 403,
+   same credential-scope limit as every prior session's `prism-native-v0.6`). Branch pushes
+   work; tag-ref pushes do not.
+4. Verified `render.yaml`: native staging services present/additive, legacy `prism` untouched,
+   `apps/api/requirements.txt` has all five Phase 7 dependencies.
+5. **No Render deployment access exists in this session** — checked directly (no `RENDER_*`
+   env var, no browser-automation/computer-use tool capable of an authenticated login, no
+   Render MCP connector; a `Vercel` connector became available mid-session but is a different
+   platform, doesn't match `render.yaml`'s services or CORS/origin config, and is a poor fit
+   for the API's scipy/statsmodels/sklearn/shap dependencies under serverless limits — noted,
+   not used). Classified `BLOCKED_EXTERNAL_DEPLOYMENT_ACCESS`. Substituted the most honest
+   available equivalent: real **production-mode** local servers (`next build`+`next start`,
+   real `uvicorn`), using Render's own literal build/start commands from `render.yaml`, hit
+   with zero route mocking — for live API checks, the full product smoke test, performance
+   timing, and the UI/UX audit.
+6. Ran a genuine (non-mocked) Playwright smoke suite (A–J per the task's checklist) against
+   that real local stack — all 8 native workflows, SSE, revision/undo, provenance. All passed.
+7. **UI/UX audit — found and fixed real defects**, all in
+   [PR #8](https://github.com/prathmesh-katkade/prism/pull/8) (merged, `371572d`):
+   - **P0**: Contextual Inspector text clipping on every workspace — `ResizeHandle`'s
+     `className="resize-handle inspector"` collided with the Inspector aside's own
+     `.inspector` class, painting a near-black bar over the first 1–2 characters of every
+     line of inspector text. Renamed to `resize-handle-{panel}`.
+   - **P1**: Clean/Visualize/Stats/Forecasting/ML Lab severely word-wrapped at common laptop
+     widths (~1280–1350px) — `.three-pane`'s breakpoints didn't account for the outer shell's
+     own rail+inspector also being on screen. Widened the thresholds.
+   - **P1**: Nav buttons had no accessible name when collapsed/narrow (WCAG 4.1.2). Added
+     `aria-label`.
+   - **P1**: `.data-table-wrap` keyboard-focusability gap (named technical debt from
+     `PHASE7_FINAL_REPORT.md`) — fixed in Overview, Clean, Stats (ML Lab already had it).
+   - **P3**: missing favicon — added `apps/web/app/icon.svg`.
+   - An automated Codex review landed on PR #7 *after* it had already merged (5 findings).
+     Verified each: one (ML Lab losing track of which columns are features when the target
+     changes) was real and native-only — fixed with a regression test. The other four
+     (pandas 2.3 frequency-alias handling in Forecasting, an unvalidated stratified split in
+     ML Lab, ANOVA's effect size computed from a different group set than its p-value, Pearson
+     on a constant column) are real but **pre-existing in both the legacy Streamlit modules
+     and their exact native ports** — fixing only native would break the parity tests that
+     assert native's output against legacy's, and fixing both means touching legacy code,
+     which this native-staging pass deliberately leaves untouched. Documented as a follow-up
+     needing a coordinated legacy+native fix; commented on PR #7 explaining the reasoning.
+   - Two additional visual anomalies (light-theme text color not updating on toggle,
+     `.workspace-area` measuring 0 width at ~900px with the inspector open) were investigated
+     exhaustively — DOM/CSS traced correct in both cases, reproducible even on a plain
+     JS-injected element with no PRISM code involved — and attributed to this sandbox's
+     specific pinned/version-mismatched Chromium build (independently confirmed mismatched:
+     the installed Playwright driver expects browser revision 1234, only 1194 is on disk),
+     not to product code. Recommend a real-browser spot-check as inexpensive follow-up.
+8. `PHASE7_STAGING_RELEASE_REPORT.md` — the full required-format report: services, CI, live
+   API, live product smoke tests, performance, accessibility, UI/UX audit (P0–P3), fixes made,
+   known limitations, legacy regression, rollback, and all six gate flags.
+9. Confirmed legacy Streamlit unaffected: zero diff to `app.py`/`modules/`, `py_compile` clean,
+   `eval/autocleaner_eval.py` 8/8, a real local `streamlit run` boot served HTTP 200.
+10. `docs/migration/CURRENT_PHASE.md` updated to reflect `371572d` as the current tip.
 
 ## Currently implemented
-- Everything from Phases 1–6.5, plus all of Phase 7: native Stats Lab, Forecasting, and ML
-  Lab — APIs, workspaces, Atlas integrations, all `ENABLED`.
+Everything through Phase 7 (Stats Lab, Forecasting, ML Lab, all `ENABLED`), plus this session's
+staging-hardening fixes (see above). All merged into `phase-6.5-integration-staging` at
+`371572d`.
 
 ## In progress
-- Nothing. No partially-edited production files. Working tree clean as of the last commit.
+Nothing. Working tree clean as of `371572d`. Both this session's PRs are merged and closed.
 
-## NOT implemented
-- Phase 8: nothing — no code, no contracts, no components, no brief. See `PHASE8_HANDOFF.md`
-  for why (no scope has been defined by the user/product owner yet) and what to do about it.
-- Live staging redeploy: Phase 7's commits are not yet reflected in the live
-  `prism-native-api-staging`/`prism-native-web-staging` deployment (which was last deployed
-  during Phase 6.5, before Phase 7 existed). Needs the same Render credentials the user used
-  for that deploy — not available to this session. Classify as
-  `BLOCKED_EXTERNAL_DEPLOYMENT_ACCESS` if pursued.
-- `.data-table-wrap` keyboard-focusability fix in `clean-workspace.tsx`,
-  `overview-workspace.tsx`, `stats-workspace.tsx` (fixed only in `mllab-workspace.tsx` where
-  it was actually found) — flagged as technical debt, not yet fixed.
+## NOT implemented / NOT live
+- **Live Render deployment**: `prism-native-api-staging`/`prism-native-web-staging` still
+  reflect the pre-Phase-7 (Phase 6.5) commit as of this session's end. `371572d` has never been
+  deployed to a real Render URL. This is the single reason `NATIVE_V07_DEPLOYED=NO` and
+  `PHASE8_READY=NO` in `PHASE7_STAGING_RELEASE_REPORT.md` despite everything else passing.
+  Needs the same Render credentials the user (or a session with real deployment access) used
+  for the Phase 6.5 live-staging addendum.
+- Tag `prism-native-v0.7` not on origin (local only) — needs elevated git credential scope.
+- The four pre-existing legacy+native shared bugs from the post-merge Codex review (see above)
+  — needs a coordinated fix touching both `modules/*.py` and their native ports together.
+- A container-query-based precise fix for `.three-pane`'s responsive breakpoints (the
+  threshold-widening fix in PR #8 is a pragmatic match for common widths, not a general
+  solution for every rail/inspector width combination).
+- Phase 8: nothing — no code, no contracts, no brief. See `PHASE8_HANDOFF.md`.
 
 ## Exact next task
-**None specified.** Phase 7 is complete and this session was explicitly instructed to stop
-after creating `PHASE8_HANDOFF.md`. The next task is whatever the user/product owner asks
-for next — most likely either (a) a Phase 8 scope decision plus implementation, (b)
-re-deploying live staging with Phase 7's commits, or (c) the small `.data-table-wrap`
-accessibility follow-up across the three components that still have the gap. None of these
-should be started without an explicit instruction.
+**None specified beyond what's listed above.** This session's task explicitly ends with
+certification, not a live deploy or Phase 8 — "Stop after certification." The next task is
+whatever the user asks for; the most likely candidates, in the order this session would
+recommend if asked:
+1. A real, credentialed Render deployment of `371572d` to `prism-native-api-staging`/
+   `prism-native-web-staging`, then a live (not local-equivalent) re-verification of the same
+   smoke-test matrix in `PHASE7_STAGING_RELEASE_REPORT.md`.
+2. The coordinated legacy+native fix for the four pre-existing bugs found by Codex's review.
+3. A Phase 8 scope decision from the user/product owner (see `PHASE8_HANDOFF.md`) — do not
+   infer one from the repository's recurring "still forbidden" phrase.
 
-## Files changed in this session
-See the three per-slice commit groups on `phase-7-advanced-analytics` (`git log --oneline
-aaf5b7f..824a251`) — each slice follows the same shape: contracts+backend+parity tests,
-frontend+Atlas+e2e, a perf or other fix if one was found, a gate-passed ENABLED-promotion
-commit, then (once, at the end) checkpoint+ledger+final-report+handoff docs.
-
-## Contracts added/changed
-Stats: `StatTestKind`, `StatNormalityCheck`, `StatSuggestionResponse`, `StatTestRequest`,
-`StatTestResult`, `AtlasStatsAction/Request/Response`.
-Forecasting: `ForecastPoint`, `ForecastInterval`, `ForecastMetrics`, `ForecastRequest`,
-`ForecastResult`, `DecomposeRequest`, `DecompositionResult`, `ChangepointRequest`,
-`ChangepointFinding`, `ChangepointResult`, `AtlasForecastAction/Request/Response`.
-ML Lab: `MlSuggestionType`, `MlFeatureSuggestion(s)`, `MlApplyFeatureRequest/Response`,
-`MlTaskType`, `MlTaskDetectionResponse`, `MlImbalanceInfo`, `MlCvMetric/Result`,
-`MlFeatureImportance`, `MlBaselineRequest/Result`, `MlFeatureSelectionRequest/Result`,
-`MlFeatureRankingRow`, `MlShapRequest/Result`, `MlShapImportance`,
-`AtlasMlAction/Request/Response`. All reuse `OverviewProvenance`.
-
-## Tests added
-Stats: 16 backend + 3 frontend + 1 e2e. Forecasting: 17 backend + 4 frontend + 1 e2e.
-ML Lab: 18 backend + 3 frontend + 1 e2e. Plus migration-state regression test updates at
-each promotion. Total new test count this session: 51 backend + 10 frontend + 3 e2e.
-
-## Latest verification
-Python: `pytest tests/ apps/api -q` → 707 passed, 4 skipped (pre-existing MySQL-source-not-
-configured skips, no local MySQL server running this session — not a regression). `ruff`,
-`mypy` (28 files), `check_boundaries.py`, `check_secrets.py`,
+## Latest verification (as of `371572d`)
+Python: `pytest tests/ apps/api -q` → 707 passed, 4 skipped (pre-existing, no local MySQL —
+not a regression). `ruff`, `mypy`, `check_boundaries.py`, `check_secrets.py`,
 `generate_typescript_contracts.py --check` → all clean.
-Frontend: `npm run lint`, `npm run typecheck`, `npm run test:web` (7 files/21 tests),
-`npm run a11y:baseline`, `npm run build:web` → all clean/passing.
-Playwright: `apps/web/e2e/shell.spec.ts` 12/12 passed (mocked; the executablePath override
-needed to run Chromium in this sandbox was applied temporarily and reverted before every
-commit — never left in the committed diff).
-Deployment-manifest check: fresh venv, `pip install -r apps/api/requirements.txt` only,
-`create_app()` succeeds and registers all 19 Phase-7 routes (3 Stats + 4 Forecasting + 8 ML
-Lab + the pre-existing ones) — repeated for each slice, catching 7A's real bug and confirming
-7B/7C's pre-emptive fix worked.
-Legacy Streamlit: `py_compile` across `app.py` + all 47 `modules/*.py` files succeeds; no
-diff to any legacy file this session (`git status` confirms zero changes there).
+Frontend: `npm run lint`, `npm run typecheck`, `npm run test:web` (7 files/22 tests, +1 from
+the ML Lab regression test), `npm run build:web` → all clean.
+Playwright: `apps/web/e2e/shell.spec.ts` 12/12 (mocked-route mode, matches CI). A genuine
+(non-mocked) smoke suite against the real local production-mode stack: 8/9 passed, 1 skipped
+(Clean's specific fixture had no detectable issues — expected).
+CI (both PRs): `phase-1-python`, `phase-1-web`, `phase-4-live-e2e`, `legacy-regression`,
+`secret-scan` all green on the final head of each PR. One flake (`sql-lab-live.spec.ts`,
+unrelated to either PR's diff) self-resolved on the next push with no code change.
+Legacy Streamlit: `py_compile` clean, `eval/autocleaner_eval.py` 8/8, real local
+`streamlit run app.py` boot served HTTP 200. Zero diff to `app.py`/`modules/` all session.
 
 ## Known failures
-- `test_mysql_results_schema_nulls_order_plan_and_legacy_parity`-adjacent tests: skipped
-  (not failed) — no local MySQL server running in this session's environment. Not a
-  regression; a prior session root-caused and fixed the actual dtype-parity issue.
-- Live staging does not yet reflect Phase 7's commits (see "NOT implemented" above).
-
-## Statistical/architecture decisions made
-- Every heavy native dependency (scipy, statsmodels, scikit-learn, imbalanced-learn, shap)
-  is: (1) added to `apps/api/requirements.txt` *before* writing the router that needs it,
-  verified with a clean-venv install; (2) imported at module load, never lazily inside a
-  request handler, verified with a direct timing check showing no cold-import tax. This is
-  now a standing checklist item for any future native slice with a new dependency.
-- Cross-library/cross-run numeric parity uses tolerance and semantic/shape assertions, never
-  bit-exact equality (established Phase 6.5, applied throughout Phase 7 — tightest for
-  Stats' closed-form scipy calls, loosest for ML Lab's SHAP sanity checks).
-- Every native workflow's Atlas action set was deliberately trimmed from the master prompt's
-  full suggested lists (Forecasting: 5 of 7; ML Lab: 6 of a longer list) to what's genuinely
-  useful for a first pass — documented as a conscious scope decision, not an oversight, in
-  each slice's `PHASE7_IMPLEMENTATION_LEDGER.md` entry.
-- `apply-feature` (ML Lab) reuses the exact same `DatasetStore.add_revision` mechanism Clean
-  established in Phase 6 — never a second, parallel revision system.
+- MySQL-source-parity tests: skipped (not failed), no local MySQL server — pre-existing, not
+  a regression.
+- Live staging does not yet reflect this session's commits (see "NOT implemented" above).
 
 ## Important invariants
 - Legacy Streamlit (`app.py`, `modules/*`) is the parity/rollback reference for every native
-  slice and must never be modified as part of native-stack work.
-- No secrets committed; `tools/check_secrets.py` must stay clean on every commit.
-- No native workflow's `ReleaseChannel` flips to `ENABLED` until its own full gate
-  (API/workspace/parity/Atlas/accessibility/performance/regression) passes.
+  slice and must never be modified as part of native-stack work — held throughout this session.
+- No secrets committed; `tools/check_secrets.py` clean on every commit.
 - No fitted model object, raw transformed feature matrix, or other unserializable server-side
-  object crosses the HTTP boundary — every ML-adjacent response is JSON-safe metrics/
-  rankings/importances only.
+  object crosses the HTTP boundary.
+- `ResizeHandle`'s per-panel class must stay `resize-handle-{panel}` (hyphenated, one merged
+  class), never `resize-handle ${panel}` (space-separated) — the latter reintroduces the P0
+  class collision with `.inspector`/`.rail` fixed in PR #8.
 
 ## Git
-Latest commit: `824a251`
-Push status: `phase-7-advanced-analytics` pushed and in sync with origin as of `824a251`.
-PR: none open (not requested this session; PR #6 is the only PR in this lineage, merged/closed).
-PR target: N/A
-CI state: N/A for direct branch pushes (PR-triggered only in this repo's current config).
-
-## Phase 7 gate status (COMPLETE — for reference, not a to-do)
-See `PHASE7_FINAL_REPORT.md` for the full per-slice gate table.
-PHASE_7A_COMPLETE = YES
-PHASE_7B_COMPLETE = YES
-PHASE_7C_COMPLETE = YES
-PHASE_7_COMPLETE = YES
-PHASE_8_UNLOCKED = YES
-
-## Exact continuation order
-1. Read `PHASE7_FINAL_REPORT.md` and `PHASE8_HANDOFF.md` in full.
-2. Get an explicit Phase 8 scope decision from the user/product owner — do not infer one
-   from the repository's recurring "still forbidden" phrase (see `PHASE8_HANDOFF.md` for
-   why that phrase is not a spec).
-3. Only once scope is explicit: write a Phase 8 brief analogous to `PHASE7_BRIEF.md` before
-   any implementation, following this project's established two-step pattern (brief session,
-   then implementation session) unless told otherwise.
-4. If instead asked to close smaller gaps first: the `.data-table-wrap` tabIndex fix (3
-   files) and/or a live-staging redeploy (needs credentials) are the two ready-to-go,
-   independently small follow-ups named above.
+Latest commit: `371572d` on `phase-6.5-integration-staging`.
+Push status: both `phase-7-staging-hardening` (now merged) and `phase-6.5-integration-staging`
+are in sync with origin as of `371572d`.
+PRs this session: [#7](https://github.com/prathmesh-katkade/prism/pull/7) (merged, `d39b8ea`),
+[#8](https://github.com/prathmesh-katkade/prism/pull/8) (merged, `371572d`). Both closed.
+CI state: green on both PRs' final heads.
 
 ## Files the next session should read first
-- `PHASE7_FINAL_REPORT.md` — the complete Phase 7 summary.
-- `PHASE8_HANDOFF.md` — why Phase 8 has no defined scope yet, and what to do about it.
+- `PHASE7_STAGING_RELEASE_REPORT.md` — this session's complete report; read this first.
 - `docs/migration/CURRENT_PHASE.md` — states true current status.
-- `apps/api/src/prism_api/migration.py` / `apps/web/src/state/shell-model.ts` — the
-  `ReleaseChannel` mechanism, unchanged in shape since Phase 1, if Phase 8 adds new workflows.
+- `PHASE7_FINAL_REPORT.md` — the underlying Phase 7 feature summary (still accurate for the
+  feature work itself; superseded only on deployment/staging status by the report above).
+- `PHASE8_HANDOFF.md` — why Phase 8 has no defined scope yet.
 
 ## Files/directories the next session should NOT reread unless needed
-- Every `.prism/checkpoints/phase-*.md` file before `phase-7c.md` — historical, fully
-  reflected in `docs/migration/CURRENT_PHASE.md` and `PHASE7_FINAL_REPORT.md`.
+- Every `.prism/checkpoints/phase-*.md` file — historical, fully reflected in the reports above.
 - `PHASE6_5_RELEASE_REPORT.md`, `docs/ROLLBACK.md` — only needed if a Phase 6.5/staging
   regression is suspected.
-- `PHASE7_BRIEF.md` — historical planning doc, superseded by `PHASE7_FINAL_REPORT.md` now
-  that the work it planned is done.
-- Any `modules/*.py` beyond `stats_lab.py`/`forecasting.py`/`mllab.py` — not relevant to
-  Phase 7's own scope, and Phase 8's scope isn't defined yet either.
+- `PHASE7_BRIEF.md` — historical planning doc.
+- Any `modules/*.py` beyond `stats_lab.py`/`forecasting.py`/`mllab.py`, unless working the
+  coordinated legacy+native fix noted above.
 
 ## Stop boundary
 **Phase 8 is not started and must not be started without an explicit scope decision from the
-user/product owner** — see `PHASE8_HANDOFF.md` for the full reasoning. This session stopped
-immediately after Phase 7's completion docs, per the explicit instruction: "Even if Phase 7
-passes: Do NOT implement Phase 8. Only create `PHASE8_HANDOFF.md`... Then STOP."
+user/product owner.** This session stopped immediately after certification, per its own
+explicit instruction: "Even if `PHASE8_READY = YES` DO NOT START PHASE 8. Stop after
+certification." (`PHASE8_READY` in fact resolved to `NO` this session, specifically because
+`371572d` has not been deployed live — see `PHASE7_STAGING_RELEASE_REPORT.md`.)

@@ -1,9 +1,18 @@
 # Current migration phase
 
-**Phase:** 6.5 complete, native staging LIVE and verified; **Phase 7 (Stats Lab, Forecasting,
-ML Lab) is COMPLETE — all three slices ENABLED.** Every navigation workflow in the shell now
-opens a native surface. Phase 8 is not started and out of scope for this session; see
-`PHASE8_HANDOFF.md`.
+**Phase:** 6.5 complete; **Phase 7 (Stats Lab, Forecasting, ML Lab) is COMPLETE — all three
+slices ENABLED**, merged into `phase-6.5-integration-staging` (PR #7, merge commit `d39b8ea`),
+with a release-hardening pass on top (PR #8, merge commit `371572d` — see
+`PHASE7_STAGING_RELEASE_REPORT.md`) that fixed a P0 Contextual Inspector text-clipping bug, a
+P1 three-pane responsive-breakpoint collapse, a P1 nav accessible-name gap, the known
+`.data-table-wrap` keyboard-focusability debt in Overview/Clean/Stats, and an ML Lab
+target/feature-selection bug found by an automated review after PR #7 merged. Every navigation
+workflow in the shell opens a native surface. **`371572d` is the current tip of the native
+migration lineage and the exact commit a live redeploy should use** — it has not yet been
+redeployed to `prism-native-api-staging`/`prism-native-web-staging` (no Render deployment access
+existed in the session that did this hardening pass; see `PHASE7_STAGING_RELEASE_REPORT.md`'s
+gate flags, `NATIVE_V07_DEPLOYED=NO`). Phase 8 is not started and out of scope for this session;
+see `PHASE8_HANDOFF.md`.
 
 **Enabled:** native Overview, native SQL Lab, native AI Analyst, native Clean, and native Visualize.
 Clean and Visualize both operate on the same server-held `overview.store` dataset that Overview,
@@ -40,8 +49,9 @@ Forecasting, and 7C ML Lab are all COMPLETE and `ENABLED`** — native APIs
 (`apps/web/src/components/stats-workspace.tsx`, `forecasting-workspace.tsx`,
 `mllab-workspace.tsx`), full parity/accessibility/performance/Atlas gates passed for all three
 (`.prism/checkpoints/phase-7a.md`, `phase-7b.md`, `phase-7c.md`, `PHASE7_IMPLEMENTATION_LEDGER.md`).
-See `PHASE7_FINAL_REPORT.md` for the full cross-slice summary and gate flags, and
-`PHASE8_HANDOFF.md` for minimal next-phase context (Phase 8 itself is not started).
+See `PHASE7_FINAL_REPORT.md` for the full cross-slice summary and gate flags,
+`PHASE7_STAGING_RELEASE_REPORT.md` for the staging-verification/hardening pass that followed,
+and `PHASE8_HANDOFF.md` for minimal next-phase context (Phase 8 itself is not started).
 
 **Still forbidden:** full autonomous Atlas orchestration, governance, desktop, and publication
 work (none of these were in Phase 7's scope). Streamlit Clean/Visualize (`modules/cleaning.py`,

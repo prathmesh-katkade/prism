@@ -1,9 +1,9 @@
 # PRISM Native v0.7 Staging Release Report
 
 Branch: `phase-7-advanced-analytics` (source) → `phase-6.5-integration-staging` (target) → `phase-7-staging-hardening` (release-blocking fixes found during this pass)
-PR: [#7](https://github.com/prathmesh-katkade/prism/pull/7) (Phase 7 feature merge) + [#8](https://github.com/prathmesh-katkade/prism/pull/8) (staging hardening)
-Merge commit: `d39b8ea` (PR #7 into `phase-6.5-integration-staging`) + PR #8 merge commit (pending CI)
-Tag: `prism-native-v0.7` created locally at `d39b8ea`; push to origin blocked (`BLOCKED_EXTERNAL_TAG_PERMISSION` — same credential-scope limitation documented in every prior session; branch pushes work, tag-ref pushes do not)
+PR: [#7](https://github.com/prathmesh-katkade/prism/pull/7) (Phase 7 feature merge, merged) + [#8](https://github.com/prathmesh-katkade/prism/pull/8) (staging hardening, merged)
+Merge commit: `d39b8ea` (PR #7 into `phase-6.5-integration-staging`, 2026-08-29T21:16:38Z) then `371572d` (PR #8 into `phase-6.5-integration-staging`, 2026-08-29T22:07Z) — **`371572d` is the exact, fully-tested commit this release certifies and the one a real deployment should use.**
+Tag: `prism-native-v0.7` created locally at `371572d`; push to origin blocked (`BLOCKED_EXTERNAL_TAG_PERMISSION` — same credential-scope limitation documented in every prior session; branch pushes work, tag-ref pushes do not)
 
 ## Services
 
@@ -15,12 +15,10 @@ Legacy: `prism` (Streamlit) — untouched this session (`git diff` shows zero ch
 
 ## CI
 
-Python: PR #7 — pass (`phase-1-python`: ruff/mypy/pytest/contracts/boundaries/secrets). PR #8 — pending.
-Frontend: PR #7 — pass (`phase-1-web`: lint/typecheck/a11y/test/build). PR #8 — pending.
-Playwright: PR #7 — pass (`phase-4-live-e2e`: real MySQL + live e2e). PR #8 — pending.
-Security: PR #7 — pass (`secret-scan`, gitleaks). PR #8 — pending.
-
-*(This section is updated below once PR #8's CI completes — see "Fixes made during staging".)*
+Python: PR #7 — pass. PR #8 (final head `7a0b0e1`) — pass (`phase-1-python`: ruff/mypy/pytest/contracts/boundaries/secrets).
+Frontend: PR #7 — pass. PR #8 — pass (`phase-1-web`: lint/typecheck/a11y/test/build).
+Playwright: PR #7 — pass. PR #8 — pass (`phase-4-live-e2e`: real MySQL + live e2e) on the final head; one unrelated flake (`sql-lab-live.spec.ts` timing out on a real-MySQL-backed query, no code this PR touches) on an earlier commit's run self-resolved on the next push with no code change — see **Fixes made during staging**.
+Security: PR #7 — pass. PR #8 — pass (`secret-scan`, gitleaks).
 
 ## Live API
 
@@ -118,7 +116,7 @@ Confirmed unaffected: `git diff` shows zero changes under `app.py`/`modules/` ac
 
 ## Rollback
 
-If PR #8 or any staging deployment introduces a regression: `render.yaml`'s native staging services can be rolled back to the pre-Phase-7 commit (the state before PR #7 merged, `aaf5b7f`) via Render's own deployment history once deployment access exists, with zero effect on the legacy `prism` Streamlit service (its own build/start commands are untouched by any commit in this lineage). Locally, `git revert` of PR #8's merge commit (once merged) cleanly undoes this session's fixes without touching Phase 7's own feature code, since the two are on independent, individually-revertable commits.
+If a future staging deployment of `371572d` introduces a regression: `render.yaml`'s native staging services can be rolled back to the pre-Phase-7 commit (the state before PR #7 merged, `aaf5b7f`) via Render's own deployment history once deployment access exists, with zero effect on the legacy `prism` Streamlit service (its own build/start commands are untouched by any commit in this lineage). Locally, `git revert 371572d` (PR #8's merge commit) cleanly undoes this session's staging-hardening fixes without touching Phase 7's own feature code (PR #7's `d39b8ea`), since the two are on independent, individually-revertable commits.
 
 NATIVE_V07_DEPLOYED = NO
 PHASE7_LIVE = NO
