@@ -244,8 +244,148 @@ revisit if a future session finds analysts asking for them.
 
 ---
 
-## 7C — ML Lab (NOT STARTED)
+## 7C — ML Lab (COMPLETE, ENABLED)
 
-Not implemented in this session. See `PHASE7_BRIEF.md` for the planned
-scope (`modules/mllab.py`: task detection, baseline models, cross-
-validation, feature selection, SHAP) and sequencing rationale.
+**Objective**: Give an analyst a bounded baseline-exploration tool —
+feature engineering suggestions, two comparable baseline models with
+cross-validated stability, class-imbalance and leakage awareness, and
+model explainability — framed throughout as *baseline exploration, not a
+deployment pipeline*.
+
+**Legacy reference**: `modules/mllab.py` (729 lines) — `suggest_features`,
+`apply_suggestion`, `detect_task_type`, `run_baseline_models`,
+`run_cross_validation`, `build_verdict`, `check_class_imbalance`,
+`imbalance_explanation`, `explain_with_shap`, `shap_for_display`,
+`run_feature_selection`.
+
+**Files changed**:
+- `packages/api-contracts/python/prism_api_contracts/models.py`,
+  `__init__.py` — new contracts (below).
+- `packages/api-contracts/typescript/src/generated.ts` — regenerated.
+- `apps/api/src/prism_api/mllab.py` (new) — the native router.
+- `apps/api/src/prism_api/main.py` — router registration.
+- `apps/api/src/prism_api/migration.py` — `ml` entry, `SHADOW` → `ENABLED`.
+- `apps/api/requirements.txt` — `scikit-learn==1.6.1`,
+  `imbalanced-learn==0.12.4`, `shap==0.49.1` added *before* writing the
+  router, verified with a clean-venv install.
+- `apps/web/src/components/mllab-workspace.tsx` (new) — the workspace.
+- `apps/web/src/components/prism-shell.tsx` — wired into `nativeKinds` and
+  the workspace-surface dispatch (the last of the eight navigation
+  workflows to leave the migration bridge).
+- `apps/web/src/state/shell-model.ts` — `WorkspaceTab.kind` gained `"ml"`;
+  `phaseTwoMigrations`' entry corrected `legacy` → `shadow` → `enabled`.
+- `apps/web/app/prism.css` — `.mllab-fields`, `.mllab-results`,
+  `.mllab-checkbox`, `.mllab-feature-list`.
+- `pyproject.toml` — `sklearn`/`sklearn.*`, `imblearn`/`imblearn.*`,
+  `shap`/`shap.*` added to mypy's ignore-missing-imports.
+- Tests: `tests/api/test_mllab.py` (new, 18), `tests/api/test_contracts.py`
+  and `tests/migration/test_phase_1_parity_hooks.py` (updated),
+  `apps/web/src/components/mllab-workspace.test.tsx` (new, 3),
+  `apps/web/src/components/prism-shell.test.tsx` (updated),
+  `apps/web/e2e/shell.spec.ts` (new ML Lab e2e test).
+
+**Contracts**: `MlSuggestionType`, `MlFeatureSuggestion(s)`,
+`MlApplyFeatureRequest/Response`, `MlTaskType`, `MlTaskDetectionResponse`,
+`MlImbalanceInfo`, `MlCvMetric/Result`, `MlFeatureImportance`,
+`MlBaselineRequest/Result`, `MlFeatureSelectionRequest/Result`,
+`MlFeatureRankingRow`, `MlShapRequest/Result`, `MlShapImportance`,
+`AtlasMlAction/Request/Response`. Every result reuses `OverviewProvenance`.
+No fitted model object or raw transformed array ever crosses the HTTP
+boundary (rule 46) — only JSON-serializable metrics, rankings, and
+importances.
+
+**Analytical method**: Task detection is dtype/cardinality-driven,
+deterministic, never LLM-decided (numeric + ≤15 distinct values + <5% of
+rows → classification; else regression; non-numeric → classification).
+Baseline models are a small, defensible pair (Logistic/Linear Regression
+vs. Random Forest, `n_estimators=200`) — no model zoo. Preprocessing is a
+`ColumnTransformer` (median-impute + standard-scale numeric, most-frequent-
+impute + one-hot categorical) fit on the training split only. Feature
+selection cross-checks three independent methods (Mutual Information, an
+L1-regularized linear model, Recursive Feature Elimination with a Random
+Forest estimator) and reports consensus rather than trusting any single
+ranking. SHAP explains the Random Forest specifically via `TreeExplainer`
+(fast, exact for tree ensembles), collapsing multi-class output to the
+class the model's decisions hinge on most.
+
+**Assumptions**: Class imbalance is checked and reported (`<20%` minority
+threshold, matching legacy), gated to classification targets only. SMOTE
+(when requested) is applied to the training set alone, after the split —
+`modules/mllab.py`'s own `SMOTE_TEST_SET_NOTE` reasoning, preserved as this
+module's `LEAKAGE_NOTE`. Cross-validation fold counts are capped down for
+small or imbalanced datasets exactly like legacy, degrading gracefully
+rather than raising.
+
+**Parity**: Direct, in-process tests import `modules.mllab` and compare the
+native API's output against the legacy functions' own return values on
+identical fixture DataFrames (fixed `random_state=42` throughout, matching
+legacy exactly). Baseline metrics, confusion matrices, and cross-validation
+fold means matched exactly/to tight tolerance. SHAP's global importance
+was sanity-checked (shape, sign, sort order) rather than parity-asserted
+value-by-value — TreeExplainer is deterministic for a fixed model, but
+SHAP's own internals are more sensitive to environment/version drift than
+scipy's closed-form tests, so this follows rule 39's explicit tolerance
+allowance rather than 7A's stricter bar. No intentional behavioral
+corrections were made.
+
+**Tests**: 18 backend (`tests/api/test_mllab.py`) + 3 frontend component
+(`mllab-workspace.test.tsx`) + 1 Playwright e2e with axe-core (0
+violations) + 2 updated cross-cutting migration-state regression tests.
+
+**Provenance**: Every result's `provenance` binds `source_fingerprint`/
+`dataset_revision` to the exact revision the analysis ran against, via the
+same shared `DatasetStore` every other workflow reads. `apply-feature`
+(which modifies data) produces a new revision rather than mutating in
+place, exactly like Clean.
+
+**Atlas**: Six actions — `explain_task_type`, `compare_models`,
+`explain_cross_validation`, `explain_imbalance`, `explain_feature_importance`,
+`identify_overfitting` (compares the holdout score against the cross-
+validated mean and flags a meaningful gap) — trimmed from rule 38's full
+list to the essentials for this first pass (SHAP-specific and leakage/
+overfitting-risk actions beyond `identify_overfitting` were judged
+under-scoped; the SHAP endpoint's own `note` field already carries
+explanatory framing). Atlas never computes, retrains, or alters a model —
+every response reads `run_baseline_models()`'s own deterministic output.
+
+**Accessibility**: 0 axe-core violations scoped to `.mllab-workspace`. A
+real gap was found and fixed here: wide result tables need `tabIndex={0}`
+on their `.data-table-wrap` container to be keyboard-focusable scrollable
+regions — see "Technical debt" below for the same latent gap elsewhere.
+
+**Performance**: No regression. Applied 7A/7B's lessons from the start —
+all three heavy libraries imported at module load, verified with a direct
+timing check that the very first ML request in a fresh process is in line
+with subsequent ones. ~1.4s per baseline run (fitting 2 models twice —
+once for the holdout, once inside 5-fold CV — plus Random Forest's 200
+trees) is legitimate bounded compute for an interactive baseline-
+exploration tool, not a regression to fix.
+
+**Risks**: Highest of the three 7A/7B/7C slices, as anticipated in
+`PHASE7_BRIEF.md`'s original risk assessment — model training carries more
+moving parts (SMOTE's neighbor-count sensitivity on small classes, SHAP's
+additivity-check false positive on ensemble averaging, both already
+encountered and handled during this slice using legacy's own documented
+workarounds) than the closed-form computations in 7A/7B.
+
+**Technical debt**:
+- The `.data-table-wrap` keyboard-focusability gap (see Accessibility)
+  exists in `clean-workspace.tsx`, `overview-workspace.tsx`, and
+  `stats-workspace.tsx` too — not fixed there in this slice since none of
+  those files were otherwise touched this phase; a small follow-up should
+  add `tabIndex={0}` to their `.data-table-wrap` usages too.
+- SHAP's local (per-row) explanation was scoped out — only global
+  (mean-|SHAP|-per-feature) importance is exposed, per this slice's
+  bounded first pass. `modules/mllab.py` itself only builds a global
+  explainability view in its own UI too, so this is parity, not a gap
+  relative to legacy.
+- `AtlasMlAction` was trimmed from rule 38's full list — see Atlas above.
+
+**Rollback**: Flip `ml`'s `channel` to `SHADOW`/`LEGACY` in `migration.py`
+and `shell-model.ts` — no data migration, no code removal.
+
+---
+
+**Phase 7 is now complete.** All three slices (7A Stats Lab, 7B
+Forecasting, 7C ML Lab) are native and `ENABLED`. See
+`PHASE7_FINAL_REPORT.md` for the full cross-slice summary.
