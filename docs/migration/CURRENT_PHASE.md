@@ -1,7 +1,7 @@
 # Current migration phase
 
-**Phase:** 6.5 complete (native stack integrated + staging-configured); Phase 7 unlocked but
-**not yet started** — only `PHASE7_BRIEF.md` (planning) exists on `phase-7-advanced-analytics`.
+**Phase:** 6.5 complete, native staging LIVE and verified; Phase 7A (Stats Lab) starting now on
+`phase-7-advanced-analytics`.
 
 **Enabled:** native Overview, native SQL Lab, native AI Analyst, native Clean, and native Visualize.
 Clean and Visualize both operate on the same server-held `overview.store` dataset that Overview,
@@ -21,17 +21,23 @@ fully offline), a single typed frontend API-config boundary, a `/api/v1/platform
 (config-only provider check, never a live probe), structured request logging, additive staging
 deployment config (`render.yaml`: `prism-native-api-staging` / `prism-native-web-staging`, free
 tier, legacy Streamlit `prism` service untouched), and a real integration bug fix (Overview losing
-its active dataset on tab switch). Live staging deployment itself is
-`BLOCKED_EXTERNAL_DEPLOYMENT_ACCESS` (no hosting credentials in-session) — see
-`PHASE6_5_RELEASE_REPORT.md`. Release tag `prism-native-v0.6` exists locally at `349943f` (tag-ref
-push to origin is blocked by this session's credential scope; branch pushes work).
+its active dataset on tab switch). Live staging deployment is now **CONFIRMED LIVE**: a real
+authenticated Render session (2026-08-30, run directly by the user) deployed
+`prism-native-api-staging` and `prism-native-web-staging` and verified every native workflow in a
+real browser against the live URLs — full detail and gate flags
+(`NATIVE_STAGING_COMPLETE=YES`) in the "Live staging addendum" section of
+`PHASE6_5_RELEASE_REPORT.md` and `.prism/checkpoints/phase-6.5.md`. That evidence, plus a Render
+Python-runtime pin (`render.yaml`), has been folded into `phase-6.5-integration-staging` (now at
+`aaf5b7f`) and merged into `phase-7-advanced-analytics`. Release tag `prism-native-v0.6` exists
+locally at `349943f` (tag-ref push to origin is blocked by this session's credential scope; branch
+pushes work).
 
-**Phase 7** (`phase-7-advanced-analytics` branch): unlocked per the Phase 6.5 release gate, but
-**no Phase 7 code has been written yet**. `PHASE7_BRIEF.md` on that branch lays out the migration
-plan for the three remaining legacy modules in priority order — **7A Stats Lab** (highest
-priority, smallest, deterministic — start here), **7B Forecasting**, **7C ML Lab** — plus how the
-existing `packages/analytical-schemas` / `packages/atlas-interfaces` scaffolding fits in. See
-`CLAUDE_SESSION_HANDOFF.md` for the exact next implementation task.
+**Phase 7** (`phase-7-advanced-analytics` branch): unlocked, native staging gate satisfied, **7A
+(Stats Lab) implementation starting now**. `PHASE7_BRIEF.md` on that branch lays out the migration
+plan for the three remaining legacy modules in priority order — **7A Stats Lab** (in progress),
+**7B Forecasting**, **7C ML Lab** — plus how the existing `packages/analytical-schemas` /
+`packages/atlas-interfaces` scaffolding fits in. See `CLAUDE_SESSION_HANDOFF.md` for the exact
+next implementation task.
 
 **Still forbidden until implemented and gated:** Stats, Forecasting, ML, full autonomous Atlas
 orchestration, governance, desktop, and publication work. Streamlit Clean/Visualize
