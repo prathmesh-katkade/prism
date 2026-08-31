@@ -503,3 +503,36 @@ skips; `ruff check` clean; CI's exact mypy invocation clean;
 `tools/generate_typescript_contracts.py --check` clean after regenerating
 (`FreshnessState`/`FreshnessAssessment` now in `generated.ts`). Full gate
 record: `.prism/checkpoints/phase-8d.md`.
+
+## 8E — Evidence + Lineage Inspector UI
+
+**Objective:** Make the Phase 8A–8D backend intelligence visible in the
+product — a dedicated, reusable evidence/lineage inspector, integrated
+additively into the existing PRISM shell.
+
+**Delivered:** `apps/web/src/components/evidence-inspector.tsx` — identity,
+freshness (text+icon badge), dataset revision, provenance, method/
+parameters, warnings, evidence, upstream/downstream direct dependencies
+(clickable, with back-navigation), reproducibility. Pure GET-driven viewer,
+never mutates. `InspectorObjectState` gained an optional
+`analyticalObjectId`; the shell's `Inspector` renders `EvidenceInspector`
+when it's set, additive to the existing architecture. Stats Lab wired as
+the flagship integration (resolves the real object id via the unchanged
+`GET /datasets/{id}/objects?kind=analysis` read endpoint after a run);
+extending the same pattern to the other native workspaces is a documented,
+low-risk follow-up, not done in this pass — the same kind of deliberate
+scope choice Phase 8A made picking representative producers before 8B
+expanded coverage.
+
+**Design:** reuses PRISM's existing hairline/eyebrow/inspector CSS patterns
+and dark/light custom properties exactly; no new theming logic. Lineage
+navigation is a compact clickable list, not a graph-canvas library, per the
+task's explicit preference for progressive expansion over a heavyweight
+visualization dependency.
+
+**Tests:** `evidence-inspector.test.tsx`, 5 new tests (identity/freshness/
+parameters, stale-vs-current text distinction, parent navigation + back,
+not-found handling, close button). `npm run test:web` → 27 passed (22
+pre-existing + 5 new), zero regressions. `npm run lint`, `npm run
+typecheck`, `npm run a11y:baseline`, `npm run build:web` all clean. Full
+gate record: `.prism/checkpoints/phase-8e.md`.

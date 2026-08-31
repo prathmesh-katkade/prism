@@ -58,7 +58,19 @@ export function StatsWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
       if (!response.ok) throw new Error((await response.json() as { detail?: string }).detail ?? "The test could not be run.");
       const body = await response.json() as StatTestResult;
       setResult(body);
-      onSelectContext({ objectId: `stat:${suggestion.test}:${suggestion.col_a}:${suggestion.col_b}`, label: `${suggestion.test} — ${suggestion.col_a} × ${suggestion.col_b}`, type: "finding", state: "ready", actions: [{ id: "atlas-explain-test", label: "Ask Atlas to explain" }], metadata: [`p=${body.p_value.toFixed(4)}`, body.significant ? "significant" : "not significant"] });
+      // Phase 8E: resolve the real Phase 8 analytical-object id this run just registered
+      // (newest-first ordering guarantees it is first) so the shell's Evidence Inspector
+      // can show full provenance/freshness/lineage for it - a best-effort lookup that
+      // never blocks or fails the already-successful test result if it can't resolve.
+      let analyticalObjectId: string | undefined;
+      try {
+        const objectsResponse = await fetch(apiUrl(`/api/v1/lineage/datasets/${datasetId}/objects?kind=analysis`));
+        if (objectsResponse.ok) {
+          const objects = await objectsResponse.json() as { object_id: string }[];
+          analyticalObjectId = objects[0]?.object_id;
+        }
+      } catch { /* Evidence Inspector linkage is best-effort; the result itself is unaffected. */ }
+      onSelectContext({ objectId: `stat:${suggestion.test}:${suggestion.col_a}:${suggestion.col_b}`, label: `${suggestion.test} — ${suggestion.col_a} × ${suggestion.col_b}`, type: "finding", state: "ready", actions: [{ id: "atlas-explain-test", label: "Ask Atlas to explain" }], metadata: [`p=${body.p_value.toFixed(4)}`, body.significant ? "significant" : "not significant"], ...(analyticalObjectId ? { analyticalObjectId } : {}) });
     } catch (reason) { setError(reason instanceof Error ? reason.message : "The test could not be run."); }
     finally { setRunning(false); }
   }

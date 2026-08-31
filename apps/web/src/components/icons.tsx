@@ -1,6 +1,6 @@
 import React, { type SVGProps } from "react";
 
-export type IconName = "command" | "grid" | "database" | "spark" | "panel" | "split" | "sun" | "moon" | "arrow" | "close" | "collapse";
+export type IconName = "command" | "grid" | "database" | "spark" | "panel" | "split" | "sun" | "moon" | "arrow" | "close" | "collapse" | "check" | "clock" | "layers" | "help" | "alert" | "link";
 
 const paths: Record<IconName, string> = {
   command: "M9 4 5 8l4 4M15 4l4 4-4 4M5 16h14",
@@ -13,7 +13,13 @@ const paths: Record<IconName, string> = {
   moon: "M20 15.2A8 8 0 1 1 8.8 4 6.2 6.2 0 0 0 20 15.2Z",
   arrow: "m9 18 6-6-6-6",
   close: "m6 6 12 12M18 6 6 18",
-  collapse: "M8 5 3 10l5 5M16 5l5 5-5 5M4 10h16"
+  collapse: "M8 5 3 10l5 5M16 5l5 5-5 5M4 10h16",
+  check: "m4 12 5 5L20 6",
+  clock: "M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm0-12v4l3 2",
+  layers: "m12 3 8 4.5-8 4.5-8-4.5L12 3Zm-8 8.5 8 4.5 8-4.5M4 16l8 4.5 8-4.5",
+  help: "M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.9.4-1.5 1-1.5 2.2v.5M12 17.5v.1M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z",
+  alert: "M12 3 2 20h20L12 3Zm0 6v5m0 3v.1",
+  link: "M9 15l6-6M8.5 12.5 6 15a3 3 0 1 0 4.2 4.2l2.5-2.5M15.5 11.5 18 9a3 3 0 1 0-4.2-4.2l-2.5 2.5"
 };
 
 export function Icon({ name, ...props }: { name: IconName } & SVGProps<SVGSVGElement>) {
