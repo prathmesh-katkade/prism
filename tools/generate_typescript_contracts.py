@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import difflib
 import json
 import sys
 from pathlib import Path
@@ -105,6 +106,7 @@ def main() -> int:
             print(
                 "Generated TypeScript contract is stale. Run: python tools/generate_typescript_contracts.py"
             )
+            print("".join(difflib.unified_diff(existing.splitlines(True), generated.splitlines(True), fromfile="checked-in", tofile="generated")))
             return 1
         return 0
     with TARGET.open("w", encoding="utf-8", newline="\n") as handle:
