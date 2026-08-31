@@ -4,7 +4,7 @@
 - Base branch: `phase-6.5-integration-staging`
 - Base commit: `2741c2ef3c242d3edff7a46beda2acd437da25ac`
 - Date: 2026-08-31
-- Status: CI CERTIFIED — pending merge of PR #10
+- Status: REVIEW FIXES PENDING CI
 
 ## Scope
 
@@ -32,10 +32,11 @@ staleness, rerun, Atlas-lineage, UI, or Phase 9 behavior.
 
 ## Verdict
 
-**CI CERTIFIED — PENDING MERGE.** Phase 8A has passed the prescribed Python
-3.11 CI and all required checks. The initial live-E2E failure was fixed by
-declaring the analytical-schemas runtime package; a later SQL Lab browser-test
-flake passed on its isolated job retry. Merge PR #10 before beginning 8B.
+**REVIEW FIXES PENDING CI.** The earlier Python 3.11 CI run is green, including
+the runtime-dependency fix and an isolated retry of the intermittent SQL Lab
+browser test. A post-CI review found and corrected incomplete Clean and Stats
+reproducibility records. Do not merge PR #10 or begin 8B until CI validates
+those corrections.
 
 ## 8B starting point
 

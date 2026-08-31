@@ -332,7 +332,7 @@ def run_test(stored: StoredDataset, request: StatTestRequest) -> StatTestResult:
         result = _run_pearson(stored, request.col_a, request.col_b)
     else:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported test.")
-    register_statistical_test(stored, result, [request.col_a, request.col_b])
+    register_statistical_test(stored, result)
     return result
 
 

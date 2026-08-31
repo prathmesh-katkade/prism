@@ -36,11 +36,18 @@ def _dataset_ref(stored: StoredDataset) -> DatasetRef:
 def register_statistical_test(
     stored: StoredDataset,
     result: StatTestResult,
-    columns: List[str],
 ) -> AnalyticalObject:
     """Record a completed deterministic Stats computation without changing its API shape."""
     producer = Producer(service="stats", version=result.provenance.service_version)
     parameters: dict[str, Any] = dict(result.provenance.parameters)
+    column_keys = (
+        ("numeric_col", "cat_col")
+        if "numeric_col" in parameters and "cat_col" in parameters
+        else ("col_a", "col_b")
+    )
+    columns = [parameters.get(key) for key in column_keys]
+    if not all(isinstance(column, str) and column for column in columns):
+        raise ValueError("Statistical result provenance must identify the columns actually tested.")
     record = AnalyticalObject(
         object_id=f"stats_{uuid.uuid4().hex}",
         kind=ObjectKind.ANALYSIS,
@@ -58,7 +65,7 @@ def register_statistical_test(
             reproducibility=StatisticalTestReproducibilitySpec(
                 producer=producer,
                 test=result.test.value,
-                columns=columns,
+                columns=[str(column) for column in columns],
                 parameters=parameters,
             ),
             created_at=result.provenance.computed_at,
@@ -101,7 +108,11 @@ def register_clean_transformation(
             reproducibility=CleaningReproducibilitySpec(
                 producer=producer,
                 operation=transformation.operation.value,
-                parameters=transformation.parameters,
+                parameters={
+                    **transformation.parameters,
+                    "column": transformation.column,
+                    "affected_columns": transformation.affected_columns,
+                },
             ),
             created_at=transformation.created_at,
         ),

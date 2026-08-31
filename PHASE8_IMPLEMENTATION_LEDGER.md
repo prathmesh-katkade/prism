@@ -1,6 +1,6 @@
 # Phase 8 Implementation Ledger
 
-## 8A — Unified Provenance Foundation (CI CERTIFIED — PENDING MERGE)
+## 8A — Unified Provenance Foundation (REVIEW FIXES PENDING CI)
 
 **Base:** `phase-6.5-integration-staging` at
 `2741c2ef3c242d3edff7a46beda2acd437da25ac`.
@@ -52,6 +52,12 @@ its request; the failed job was rerun and passed. Local full-suite execution
 remains unavailable under this checkout's Python 3.9 runtime because three
 pre-existing Forecasting tests require Python 3.10+ `zip(..., strict=True)`;
 the required Python 3.11 CI gate is certified.
+
+**Post-CI review fixes:** PR review identified that Clean reproducibility could
+omit a target column and Stats could record request fields instead of the
+columns actually tested. Both paths now derive reproducibility data from the
+completed operation/result and have focused regression coverage. The final
+8A CI gate must validate these corrections before merge.
 
 **8B starting point:** expose read-only registry lineage queries only after a
 separate scope decision; do not build a dependency graph, staleness engine, or
