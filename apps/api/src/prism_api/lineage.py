@@ -12,6 +12,8 @@ strictly read-only, built only from links producers already record, never AI-inf
 
 from __future__ import annotations
 
+from typing import cast
+
 from fastapi import APIRouter, HTTPException, Query, status
 from prism_analytical_schemas import (
     AnalyticalObject,
@@ -28,6 +30,7 @@ from pydantic import BaseModel
 
 from . import atlas_lineage, freshness_service, lineage_service, reproduction_service
 from .analytical_objects import registry
+from .durable_registry import DurableAnalyticalObjectRegistry
 from .overview import store as overview_store
 
 router = APIRouter(prefix="/api/v1/lineage", tags=["lineage"])
@@ -71,7 +74,7 @@ def list_history(limit: int = Query(100, ge=1, le=500), kind: ObjectKind | None 
     This is intentionally read-only. It is a research-history feed, not a
     generic lineage administration or mutation API.
     """
-    return registry.list_recent(limit=limit, kind=kind)
+    return cast(DurableAnalyticalObjectRegistry, registry).list_recent(limit=limit, kind=kind)
 
 
 @router.get("/objects/{object_id}/parents", response_model=list[AnalyticalObject])

@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
-from typing import Any, List, Optional
+from typing import Any, List, Optional, cast
 
 from prism_analytical_schemas import (
     AnalyticalObject,
+    AnalyticalObjectRegistry,
     AnalyticalProvenance,
     CleaningReproducibilitySpec,
     DatasetRef,
@@ -32,10 +33,10 @@ from prism_api_contracts import (
 )
 from prism_overview_analytics import ANALYTICS_SERVICE_VERSION
 
-from .durable_registry import DurableAnalyticalObjectRegistry, create_history_registry
+from .durable_registry import create_history_registry
 from .overview import StoredDataset
 
-registry: DurableAnalyticalObjectRegistry = create_history_registry()
+registry: AnalyticalObjectRegistry = cast(AnalyticalObjectRegistry, create_history_registry())
 
 
 def _dataset_ref(stored: StoredDataset) -> DatasetRef:
