@@ -245,3 +245,199 @@ graph traversal, visualization, staleness propagation, invalidation
 propagation, rerun/reproduction execution, Atlas lineage reasoning, or
 lineage/evidence frontend UI was implemented in 8A or 8B and none of it should
 be started without a separate scope decision.
+
+## 8C — Deterministic Dependency Graph / Lineage Traversal
+
+**Base:** `phase-6.5-integration-staging` at
+`670d670ee0cdaaff7a6a62f1281d2df8b6802cf8` (PR #11 / Phase 8B merge). Branch:
+`phase-8c-lineage-traversal`.
+
+**Objective:** Make the direct `parent_refs` graph 8A/8B already record
+*walkable* — direct parent/child lookup, transitive ancestor/descendant BFS
+with depth and bounded `max_depth`, a compact combined graph view, and an
+optional shortest path — entirely read-only, entirely deterministic, no AI
+inference, no new parent links, no staleness/rerun/persistence/UI.
+
+**Graph semantics:** `parent → child` means "child depends on parent" (a
+`forecast_result` object's parent is the `dataset_revision` it read). Parent =
+immediate upstream dependency; child = immediate downstream dependent;
+ancestor = transitive upstream; descendant = transitive downstream. Held
+consistently across the registry, the service layer, and every route.
+
+**Reverse child index:** `AnalyticalObjectRegistry._child_index:
+dict[object_id, list[object_id]]`, maintained inline in `register()` — for
+every `parent_ref` a newly-registered object declares, that object's id is
+appended under its parent's id. No backfill pass, no scan: a child lookup is
+one dict access. It does not require the parent to already be registered
+(see partial-graph handling below), and it is covered by the same `RLock` as
+every other registry mutation.
+
+**Direct relationships:** `registry.get_parents(object_id)` /
+`get_children(object_id)` — `None` if `object_id` itself is not registered
+(→ HTTP 404); `[]` for a root/leaf; otherwise the immediate
+parent/child `AnalyticalObject`s, sorted by `object_id` for determinism. A
+`parent_ref` pointing at an id the registry does not currently hold (a
+partial-graph gap) is skipped, never fabricated.
+
+**Traversal algorithm:** `registry.ancestors(object_id, max_depth=None)` /
+`descendants(...)` — iterative BFS (`_traverse`), no recursion, so there is no
+stack-depth risk on a long chain. A `depths: dict[object_id, int]` doubles as
+the visited set: a node is expanded at most once, the moment it is first
+discovered, which also gives BFS's usual shortest-hop-count guarantee. Every
+edge actually crossed (including a re-encounter of an already-visited node —
+the diamond-convergence case) is recorded in a `set[tuple[parent_id,
+child_id]]`, so fan-in is captured without duplicating the node itself.
+Returns `None` only if the root itself is not registered.
+
+**Depth semantics:** `parent_refs`/`children`/`ancestors`/`descendants` all
+exclude the requested root from their result (the caller already has that
+object). The compact `/graph` endpoint is the one exception: it includes the
+root at `depth=0`. This is a fixed convention, not per-call configurable.
+
+**Max depth:** optional `max_depth`, validated `1 <= max_depth <= 100`
+(`MAX_LINEAGE_DEPTH` in `lineage.py`) via FastAPI `Query(..., ge=1, le=100)` —
+an out-of-range value is a typed 422, not a silent clamp. `truncated=True`
+means the walk was cut off by `max_depth` while at least one more,
+unexplored neighbor genuinely existed beyond it — not merely that the graph
+ended there naturally.
+
+**Cycle safety:** the registry's own `register()` cannot construct a cycle
+(only immediate self-parenting is rejected there), so a cycle is not a
+reachable outcome of normal use — but traversal itself must not assume that.
+`test_a_malformed_cycle_in_registry_state_does_not_hang_traversal` directly
+corrupts registry internals to prove a 3-hop cycle still terminates and
+never double-emits a node, purely from the `depths`/visited-set discipline
+in `_traverse`.
+
+**Ordering:** deterministic `(depth ASC, object_id ASC)` for traversal nodes;
+edges sorted `(parent_object_id ASC, child_object_id ASC)`. Direct
+parent/child lists are `object_id ASC`. Chosen over a `created_at`-based
+tie-break because `object_id` alone is already unique and sufficient — one
+fewer field for two BFS branches to disagree on.
+
+**API routes (all read-only, all under the existing `/api/v1/lineage`
+router):**
+
+```
+GET /objects/{object_id}/parents
+GET /objects/{object_id}/children
+GET /objects/{object_id}/ancestors      ?max_depth=
+GET /objects/{object_id}/descendants    ?max_depth=
+GET /objects/{object_id}/graph          ?direction=upstream|downstream|both&max_depth=
+GET /path                               ?from_object_id=&to_object_id=
+```
+
+No `POST`/`PATCH`/`DELETE` route exists, or was added, anywhere under
+`/lineage`. `apps/api/src/prism_api/lineage.py` stays a thin HTTP-shape layer
+(404 translation, query validation); the actual composition (turning registry
+traversal results into typed responses, merging ancestors+descendants for
+`/graph`) lives in the new `apps/api/src/prism_api/lineage_service.py`, which
+has no FastAPI dependency and is directly unit-testable.
+
+**Shortest path:** `registry.shortest_path(from_id, to_id)` — BFS over both
+parent and child edges treated as one undirected connectivity graph (a path
+can legitimately run through a shared ancestor neither object directly
+touches), each edge tagged with its true direction so the reconstructed path
+still reports correctly-oriented `parent_object_id`/`child_object_id` edges.
+Three outcomes, kept distinct: `None` (either id unknown → 404), `found=False`
+(both exist, no path — a legitimate answer, not an error), `found=True` with
+the ordered path.
+
+**Contracts:** `LineageDirection`, `LineageNode` (wraps `AnalyticalObject` +
+`depth`, no field duplication), `LineageEdge`, `LineageTraversal`,
+`LineagePath` — added to `packages/analytical-schemas/python/
+prism_analytical_schemas/models.py` alongside `AnalyticalObject` itself
+(the same package `lineage.py` already imports directly from), exported via
+that package's `__init__.py`. `prism_api_contracts` is untouched.
+
+**Fingerprint-aware identity, extended into traversal:** 8B fixed dataset-
+revision object identity to include `source_fingerprint`, not just
+`(dataset_id, revision)`, so a revert-then-different-redo never resolves to
+the abandoned branch. 8C traversal only ever walks `object_id`s (which
+already encode that full identity) — there is no separate place traversal
+could regress into revision-number-only comparison. Regression-tested
+directly: two `ensure_dataset_revision` calls sharing `(dataset_id=
+"ds_fp_test", revision=1)` but different fingerprints produce distinct
+objects, and `ancestors()` on a child of one never includes the other.
+
+**Partial-graph / process-local behavior, unchanged and still true:** the
+registry only holds history observed since the current process started; a
+`parent_ref` pointing outside that history is skipped, not invented, at both
+the direct-lookup and the BFS layer. An API restart still resets all
+analytical history, including the lineage graph — no persistence was added.
+
+**Security:** traversal returns nothing that registration did not already
+sanitize — `_restore` still reconstructs every node from the same
+`model_validate`-on-read snapshot Phase 8A/8B use, and the reproducibility
+field validators (secret-key/secret-value redaction) already ran at
+`register()` time, before any traversal endpoint exists to serve it. Verified
+directly: a SQL Lab run's `api_key` bind parameter stays `[redacted]` through
+both the `/descendants` and `/graph` HTTP responses.
+
+**Performance:** no full-registry scan anywhere in the traversal path — only
+`_child_index` dict lookups and each visited node's own `parent_refs`. Tested
+at a 1,000-node long chain (`ancestors()` on the tail) and a 5,000-child wide
+tree (`get_children()`, repeated calls, and a `max_depth=1` descendant walk) —
+all comfortably sub-second per call.
+
+**Producers:** untouched. All 8C work is concentrated in
+`packages/analytical-schemas/.../registry.py` (the reverse index and
+traversal methods), the new `lineage_service.py`, `lineage.py`'s routes, the
+new lineage contracts, tests, and this documentation.
+
+**Backward compatibility:** the two pre-existing routes (`GET
+/objects/{object_id}`, `GET /datasets/{dataset_id}/objects`) are byte-for-byte
+unchanged; every Phase 3–7 producer route is untouched. All 8C routes are
+additive.
+
+**Tests:** `tests/api/test_phase8c_lineage_traversal.py` (26 tests) — direct
+parents/children (including root/leaf/unknown-404), ancestor chain depth and
+ordering, descendant fan-out and branch traversal, `max_depth` bounding and
+truncation reporting, invalid `max_depth` (422), diamond-convergence
+duplicate safety, a synthetic-cycle non-hang proof, fingerprint-aware
+identity under traversal, immutable-snapshot safety, partial-graph handling,
+secret redaction through traversal endpoints, the compact graph endpoint
+(root-inclusion, direction filtering, 404), shortest path (found/not-found/
+unknown-endpoint), the two pre-existing routes' continued behavior, and
+performance at synthetic scale. All 26 pass; all pre-existing Phase 8A/8B
+tests (`tests/api/test_analytical_object_integration.py`,
+`tests/api/test_phase8b_registry_producers.py`) remain green, unmodified.
+
+**Known limitations, unchanged from 8A/8B:** the registry is process-local
+and in-memory (an API restart resets all lineage history); dataset-revision
+identity still depends on `(dataset_id, revision, source_fingerprint)`, never
+revision number alone.
+
+**Rollback:** revert the merge commit for PR into
+`phase-6.5-integration-staging`; nothing outside `registry.py`,
+`lineage_service.py` (new file), `lineage.py`, the new lineage contracts in
+`models.py`/`__init__.py`, the new test file, and the regenerated
+`generated.ts` is touched, so rollback is a clean, isolated revert.
+
+**Exact 8D starting point (do not implement here):** Phase 8D — Versioning +
+Staleness Propagation — will answer "a dataset revision changed; which
+downstream analytical objects are now stale?" using exactly the descendant
+traversal 8C already built (`registry.descendants(dataset_revision_object_id)`
+gives the full, correctly-ordered set of everything that would need
+re-evaluation). 8D's actual job is to decide what "stale" means as a
+lifecycle state, mutate `AnalyticalObject.lifecycle` (currently `COMPLETED`
+records are never touched again after registration — the registry is
+append-only, not update-in-place, so this is a real design decision, not a
+one-line change), and expose that as a read (and only a read) surface. 8C
+does not do any of that: no object's `lifecycle` was set to `STALE`, no
+invalidation logic exists, no rerun/reproduction path exists, and no such
+work should start without a fresh, explicit 8D scope decision.
+
+**Quality gates this session:** `pytest tests/ apps/api -q` → 784 passed, 4
+skipped; `ruff check` (repo-wide) → clean; `mypy --follow-imports=skip
+--allow-subclassing-any --allow-untyped-decorators --no-warn-return-any
+apps/api/src packages` (CI's exact invocation) → clean; `tools/
+check_boundaries.py` → clean; `tools/check_secrets.py` → clean; `tools/
+generate_typescript_contracts.py --check` → clean (after regenerating — the
+new `LineageDirection`/`LineageNode`/`LineageEdge`/`LineageTraversal`/
+`LineagePath` types are now in
+`packages/api-contracts/typescript/src/generated.ts`); `npm run lint`, `npm
+run typecheck`, `npm run test:web` (22 tests, unchanged — no frontend code
+touched), `npm run a11y:baseline`, `npm run build:web` → all clean. Legacy
+Streamlit: zero diff to `app.py`/`modules/`, `py_compile` clean,
+`eval/autocleaner_eval.py` 8/8.

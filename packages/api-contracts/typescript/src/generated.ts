@@ -397,6 +397,35 @@ export interface HealthResponse {
 
 export type LifecycleState = "draft" | "completed" | "failed" | "stale" | "archived";
 
+export type LineageDirection = "upstream" | "downstream" | "both";
+
+export interface LineageEdge {
+  parent_object_id: string;
+  child_object_id: string;
+}
+
+export interface LineageNode {
+  object: AnalyticalObject;
+  depth: number;
+}
+
+export interface LineagePath {
+  from_object_id: string;
+  to_object_id: string;
+  found: boolean;
+  nodes?: LineageNode[];
+  edges?: LineageEdge[];
+}
+
+export interface LineageTraversal {
+  root_object_id: string;
+  direction: LineageDirection;
+  nodes?: LineageNode[];
+  edges?: LineageEdge[];
+  max_depth?: number;
+  truncated?: boolean;
+}
+
 export interface MigrationState {
   workflow: string;
   channel: ReleaseChannel;

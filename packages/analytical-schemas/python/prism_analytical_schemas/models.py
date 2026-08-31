@@ -176,3 +176,66 @@ class AnalyticalObject(SchemaModel):
     provenance: AnalyticalProvenance
     schema_version: str = "v1"
     payload: Dict[str, object] = Field(default_factory=dict)
+
+
+class LineageDirection(str, Enum):
+    """Which way a lineage traversal walks the direct `parent_refs` graph.
+
+    UPSTREAM follows parent_refs (toward what an object depends on). DOWNSTREAM
+    follows the reverse child index (toward what depends on an object). BOTH
+    walks both and merges the result into one graph.
+    """
+
+    UPSTREAM = "upstream"
+    DOWNSTREAM = "downstream"
+    BOTH = "both"
+
+
+class LineageNode(SchemaModel):
+    """One object reached by a traversal, at its hop distance from the requested root.
+
+    Reuses ``AnalyticalObject`` wholesale rather than duplicating its fields.
+    """
+
+    object: AnalyticalObject
+    depth: int = Field(ge=0)
+
+
+class LineageEdge(SchemaModel):
+    """One direct parent -> child edge, always oriented parent first regardless of
+    which direction a traversal walked to find it."""
+
+    parent_object_id: str = Field(min_length=1)
+    child_object_id: str = Field(min_length=1)
+
+
+class LineageTraversal(SchemaModel):
+    """A traversal result: ancestors/descendants/parents/children responses, and the
+    compact graph endpoint, all share this shape.
+
+    Convention: for parents/children/ancestors/descendants, the requested root is
+    excluded from ``nodes`` (its own object is already the resource the caller asked
+    about). For the compact graph endpoint, the root is included at depth 0.
+    """
+
+    root_object_id: str = Field(min_length=1)
+    direction: LineageDirection
+    nodes: List[LineageNode] = Field(default_factory=list)
+    edges: List[LineageEdge] = Field(default_factory=list)
+    max_depth: Optional[int] = None
+    truncated: bool = False
+
+
+class LineagePath(SchemaModel):
+    """A deterministic shortest path between two analytical objects, if one exists.
+
+    ``nodes`` excludes ``from_object_id`` and includes ``to_object_id``, ordered along
+    the path with depth = hop index (1-based). ``found=False`` means both objects exist
+    in the registry but no path connects them - a legitimate, non-error outcome.
+    """
+
+    from_object_id: str = Field(min_length=1)
+    to_object_id: str = Field(min_length=1)
+    found: bool
+    nodes: List[LineageNode] = Field(default_factory=list)
+    edges: List[LineageEdge] = Field(default_factory=list)

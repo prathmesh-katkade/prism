@@ -1,56 +1,65 @@
 # PRISM Claude Session Handoff
 
-## Phase 8B: analytical registry + read-only lineage API — COMPLETE, merged (2026-08-31)
+## Phase 8C: deterministic lineage traversal — locally complete, PR pending (2026-08-31)
 
 **Read this section first — it supersedes everything below it until the next
 session updates this file again.**
 
-- **Phase 8B is CERTIFIED COMPLETE.** [PR #11](https://github.com/prathmesh-katkade/prism/pull/11)
-  (`phase-8b-registry-read-model` → `phase-6.5-integration-staging`) merged at
-  merge commit `670d670ee0cdaaff7a6a62f1281d2df8b6802cf8` on 2026-08-31. All 5
-  CI checks passed on the final head `63daaafa4e80b2527618af3def2162be808f8476`.
-  Canonical base for whatever comes next: `phase-6.5-integration-staging` at
-  `670d670ee0cdaaff7a6a62f1281d2df8b6802cf8`.
-- Phase 8A is also MERGED (PR #10, `4912610be584e2b3e9902500bd6585aeebb8a506`,
-  2026-08-31T17:20:36Z), underneath 8B. Do not rebuild either.
-- Full gate table: `.prism/checkpoints/phase-8b.md` — every gate PASS,
-  including live CI and a post-merge automated-review pass (see below).
-- Scope delivered: dataset-revision objects (`ensure_dataset_revision`,
-  idempotent, keyed on `(dataset_id, revision, source_fingerprint[:16])`,
-  correct direct-parent chain); producer coverage for SQL Lab (local dataset
-  connection only), Visualize, Forecasting, and ML Lab (baseline/
-  feature-selection/SHAP as three separate objects), on top of 8A's
-  Stats/Clean; AI Analyst registers only a completed `ANSWERED` outcome; the
-  existing read-only `lineage.py` API reviewed and a real inherited bug fixed
-  (missing `from __future__ import annotations` broke mypy under this repo's
-  Python 3.9 target — see `PHASE8_IMPLEMENTATION_LEDGER.md`'s 8B section for
-  the full list of what was and wasn't registered, and why).
-- Two real gaps surfaced by Codex's automated post-merge review, both fixed
-  and regression-tested before merge (final head `63daaaf`): (P1) the
-  dataset-revision object id originally didn't include the source fingerprint,
-  so `DatasetStore.revert()` reusing a revision number for different data
-  after an undo could silently resolve to the wrong (abandoned) object — now
-  fixed; (P2) concurrent first-touch registration wasn't race-safe and could
-  surface a 500 — now caught and resolved to the winning record.
-- Invariants held: `DatasetStore` remains the authoritative revision system;
-  legacy Streamlit untouched (zero diff, `py_compile` clean, eval 8/8);
-  existing Phase 3–7 HTTP contracts unchanged; no database introduced; no
-  write route exists under `/lineage`.
+- Working branch: `phase-8c-lineage-traversal`, created from
+  `phase-6.5-integration-staging` at `670d670ee0cdaaff7a6a62f1281d2df8b6802cf8`
+  (PR #11 / Phase 8B merge). Locally verified, **not yet pushed/PR'd**.
+- Phase 8A (PR #10, `4912610be584e2b3e9902500bd6585aeebb8a506`) and Phase 8B
+  (PR #11, `670d670ee0cdaaff7a6a62f1281d2df8b6802cf8`) are both MERGED. Do not
+  rebuild either.
+- Status: 8C is **locally complete** — see `.prism/checkpoints/phase-8c.md`
+  for the full gate table. Every gate checkable without a live CI run passes
+  (784 Python tests including 26 new Phase 8C tests, ruff/mypy under CI's
+  exact flags, boundaries, secret scan, fresh TS contracts, full frontend
+  gate, legacy regression all green). **Not yet pushed, no PR opened, no CI
+  run exists for this branch.**
+- Scope delivered: a reverse child index maintained inline in `register()`
+  (`AnalyticalObjectRegistry._child_index`); direct parent/child lookup
+  (`GET /objects/{id}/parents`, `.../children`); deterministic, cycle-safe,
+  iterative BFS ancestor/descendant traversal with depth and bounded
+  `max_depth` (`GET .../ancestors`, `.../descendants`); a compact combined
+  graph endpoint (`GET .../graph`, root included at depth 0); an optional
+  deterministic shortest path (`GET /path`). New typed contracts
+  (`LineageDirection`/`LineageNode`/`LineageEdge`/`LineageTraversal`/
+  `LineagePath`) live in `prism_analytical_schemas` next to `AnalyticalObject`
+  itself. See `PHASE8_IMPLEMENTATION_LEDGER.md`'s 8C section for full detail
+  on graph direction semantics, ordering convention, and what was
+  deliberately left out.
+- Invariants held: no new parent link created (8C only walks the existing
+  graph); traversal never bypasses 8A/8B's secret redaction (verified over
+  HTTP); fingerprint-aware dataset-revision identity extends cleanly into
+  traversal (tested); no full-registry scan anywhere in the traversal path;
+  no write route exists, or was added, under `/lineage`; both pre-existing
+  lineage routes are byte-for-byte unchanged; no producer code touched.
 - Known limitation, unchanged: the registry is process-local and in-memory —
-  an API restart resets all analytical history. Persistence needs a dedicated
-  architecture decision in a later phase, not attempted in 8A or 8B.
-- **PHASE_8A_COMPLETE = YES, PHASE_8B_COMPLETE = YES, PHASE_8C_STARTED = NO.**
-- **Nothing is pending from 8B.** Per explicit scope boundary, this session
-  stopped here and did **not** start Phase 8C. The documented (not
-  implemented) 8C starting point — Deterministic Dependency Graph / Lineage
-  Traversal, building ancestor/descendant traversal on top of the direct
-  `parent_refs` links 8A/8B already record, and nothing beyond that (no
-  staleness/invalidation propagation, rerun engine, Atlas lineage awareness,
-  lineage UI, or persistence) without a fresh scope decision — is in
-  `PHASE8_IMPLEMENTATION_LEDGER.md` and `.prism/checkpoints/phase-8b.md`'s
-  "8C starting point" section. Whoever resumes should start there.
-- Canonical records: `PHASE8_IMPLEMENTATION_LEDGER.md` (8B section) and
-  `.prism/checkpoints/phase-8b.md`.
+  an API restart resets all analytical history, including the lineage graph.
+  Persistence needs a dedicated architecture decision in a later phase, not
+  attempted in 8A, 8B, or 8C.
+- Do not start: staleness/invalidation propagation, a rerun engine, Atlas
+  lineage awareness, a lineage UI, persistence, governance, or Phase 9.
+- Canonical records: `PHASE8_IMPLEMENTATION_LEDGER.md` (8C section) and
+  `.prism/checkpoints/phase-8c.md`.
+
+### Exact next step for whoever resumes this
+
+1. `git push -u origin phase-8c-lineage-traversal` (verify with `git log
+   --oneline origin/phase-8c-lineage-traversal..HEAD` first, in case another
+   session has since pushed to this branch).
+2. Open a PR from `phase-8c-lineage-traversal` into
+   `phase-6.5-integration-staging` (title suggestion: "Phase 8C: deterministic
+   lineage traversal").
+3. Wait for CI; fix any real failure (root-cause it — this session's local
+   verification was thorough, but CI's environment can still surface
+   something local checks can't).
+4. Merge once green, record the exact merge commit here and in
+   `.prism/checkpoints/phase-8c.md`, set `PHASE_8C_COMPLETE = YES`, and hand
+   off the already-documented (not implemented) 8D starting point —
+   Versioning + Staleness Propagation, reusing 8C's own descendant traversal —
+   **do not implement 8D itself** without a fresh, explicit scope decision.
 
 ---
 
