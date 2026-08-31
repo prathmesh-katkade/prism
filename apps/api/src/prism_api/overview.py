@@ -25,6 +25,8 @@ from prism_api_contracts import (
 )
 from prism_overview_analytics import ANALYTICS_SERVICE_VERSION, build_overview
 
+from .durable_dataset_store import DurableDatasetStore
+
 router = APIRouter(prefix="/api/v1/overview", tags=["overview"])
 MAX_UPLOAD_BYTES = 64 * 1024 * 1024
 MAX_PROFILE_ROWS = 500_000
@@ -106,8 +108,6 @@ class DatasetStore:
 
 # Phase 9 preserves DatasetStore's authority and public API, while making its
 # revision payloads restart-safe alongside durable analytical history.
-from .durable_dataset_store import DurableDatasetStore
-
 store = DurableDatasetStore()
 
 

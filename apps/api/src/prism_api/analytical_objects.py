@@ -32,8 +32,8 @@ from prism_api_contracts import (
 )
 from prism_overview_analytics import ANALYTICS_SERVICE_VERSION
 
-from .overview import StoredDataset
 from .durable_registry import DurableAnalyticalObjectRegistry, create_history_registry
+from .overview import StoredDataset
 
 registry: DurableAnalyticalObjectRegistry = create_history_registry()
 

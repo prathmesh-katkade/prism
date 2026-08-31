@@ -13,13 +13,24 @@ import os
 from pathlib import Path
 from typing import Iterable, Optional
 
-from sqlalchemy import Column, DateTime, Integer, MetaData, String, Table, Text, create_engine, desc, insert, select, text
-from sqlalchemy.engine import Engine
-from sqlalchemy.exc import IntegrityError
-
 from prism_analytical_schemas import AnalyticalObject, ObjectKind, sanitize_provenance_parameters
 from prism_analytical_schemas.registry import PathResult, TraversalResult
-
+from sqlalchemy import (
+    Column,
+    DateTime,
+    Integer,
+    MetaData,
+    String,
+    Table,
+    Text,
+    create_engine,
+    desc,
+    insert,
+    select,
+    text,
+)
+from sqlalchemy.engine import Engine
+from sqlalchemy.exc import IntegrityError
 
 _metadata = MetaData()
 _objects = Table(

@@ -16,7 +16,22 @@ from datetime import datetime, timezone
 import pandas as pd
 from fastapi import HTTPException, status
 from prism_api_contracts import OverviewDataset
-from sqlalchemy import Boolean, Column, DateTime, Integer, MetaData, String, Table, Text, and_, create_engine, desc, insert, select, update
+from sqlalchemy import (
+    Boolean,
+    Column,
+    DateTime,
+    Integer,
+    MetaData,
+    String,
+    Table,
+    Text,
+    and_,
+    create_engine,
+    desc,
+    insert,
+    select,
+    update,
+)
 
 from .durable_registry import history_database_url
 

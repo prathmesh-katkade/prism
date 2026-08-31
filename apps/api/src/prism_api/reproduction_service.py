@@ -28,6 +28,7 @@ from prism_analytical_schemas import (
     ReproductionResponse,
 )
 from prism_api_contracts import (
+    CleanTransformationRequest,
     ForecastRequest,
     MlBaselineRequest,
     MlFeatureSelectionRequest,
@@ -35,7 +36,6 @@ from prism_api_contracts import (
     StatTestKind,
     StatTestRequest,
     VisualizationSpec,
-    CleanTransformationRequest,
 )
 
 from . import clean, forecasting, mllab, visualize

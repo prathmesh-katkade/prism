@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+import pandas as pd
 from prism_analytical_schemas import (
     AnalyticalObject,
     AnalyticalProvenance,
@@ -14,9 +15,8 @@ from prism_analytical_schemas import (
     ParentRef,
     Producer,
 )
-from prism_api.durable_registry import DurableAnalyticalObjectRegistry
 from prism_api.durable_dataset_store import DurableDatasetStore
-import pandas as pd
+from prism_api.durable_registry import DurableAnalyticalObjectRegistry
 
 
 def _object(object_id: str, parents: list[ParentRef] | None = None) -> AnalyticalObject:
