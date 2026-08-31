@@ -22,7 +22,10 @@ test("SQL Lab completes a real browser to FastAPI analytical flow", async ({ pag
   const runQuery = page.getByRole("button", { name: /Run query/ });
   await expect(runQuery).toBeEnabled();
   await runQuery.click();
-  await expect(page.getByText("3 returned / 3 total rows")).toBeVisible({ timeout: 10_000 });
+  // Server logs confirm the query itself always completes in well under 20ms;
+  // this timeout covers CI-runner render latency (Monaco falls back to
+  // main-thread execution there per its own console warning), not query time.
+  await expect(page.getByText("3 returned / 3 total rows")).toBeVisible({ timeout: 20_000 });
   await expect(page.getByRole("button", { name: "Create dataset" })).toBeVisible();
   if (process.platform === "win32") {
     await expect(page).toHaveScreenshot("sql-lab-live-results.png", { animations: "disabled", fullPage: true, maxDiffPixelRatio: 0.01 });
