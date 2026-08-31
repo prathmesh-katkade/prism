@@ -1,6 +1,6 @@
 # Current migration phase
 
-**Phase:** 8A — Unified Provenance Foundation (**in progress**)
+**Phase:** 8A — Unified Provenance Foundation (**CI certified; PR #10 pending merge**)
 
 **Working branch:** `phase-8-provenance-lineage`.
 
@@ -23,7 +23,10 @@ Existing Phase 3–7 HTTP contracts remain backward compatible: the registry is
 an internal foundation and is not yet a public lineage graph endpoint.
 
 The implementation ledger is `PHASE8_IMPLEMENTATION_LEDGER.md`; the current
-gate record is `.prism/checkpoints/phase-8a.md`.
+gate record is `.prism/checkpoints/phase-8a.md`. CI run #98 passed
+phase-1-python, phase-1-web, phase-4-live-e2e, legacy-regression, and
+secret-scan for `ff8a6338814f67e4add58730b112464defe66787`; merge PR #10 before
+starting 8B.
 
 ## Still forbidden in 8A
 

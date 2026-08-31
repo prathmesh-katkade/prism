@@ -4,7 +4,7 @@
 - Base branch: `phase-6.5-integration-staging`
 - Base commit: `2741c2ef3c242d3edff7a46beda2acd437da25ac`
 - Date: 2026-08-31
-- Status: LOCAL NOT READY — Python 3.11 CI required
+- Status: CI CERTIFIED — pending merge of PR #10
 
 ## Scope
 
@@ -27,14 +27,15 @@ staleness, rerun, Atlas-lineage, UI, or Phase 9 behavior.
 | Dependency boundaries | PASS | `tools/check_boundaries.py` passes. |
 | Repository secret scan | PASS | `tools/check_secrets.py` passes. |
 | Frontend typecheck | PASS | `npm run typecheck` passes. |
-| Full Python regression | LOCAL ENVIRONMENT GATE | Python 3.9 runs the Phase 8A and most regression tests, but three pre-existing Forecasting tests use `zip(..., strict=True)`, a Python 3.10+ API. The API response succeeds before each test-only failure. CI is pinned to Python 3.11 and must provide the final result. |
+| Full Python regression | PASS (CI) | `phase-1-python` passed under Python 3.11 in CI run #98. Local Python 3.9 remains unable to execute three pre-existing Forecasting tests that use `zip(..., strict=True)`. |
+| Existing CI | PASS | CI run #98 passed phase-1-python, phase-1-web, phase-4-live-e2e, legacy-regression, and secret-scan for `ff8a6338814f67e4add58730b112464defe66787`. |
 
 ## Verdict
 
-**LOCAL NOT READY.** Phase 8A code-level and focused integration gates pass,
-but the prescribed full Python suite cannot pass under the only installed
-local interpreter (3.9). Do not treat this as final certification until the
-repository's Python 3.11 CI is green.
+**CI CERTIFIED — PENDING MERGE.** Phase 8A has passed the prescribed Python
+3.11 CI and all required checks. The initial live-E2E failure was fixed by
+declaring the analytical-schemas runtime package; a later SQL Lab browser-test
+flake passed on its isolated job retry. Merge PR #10 before beginning 8B.
 
 ## 8B starting point
 

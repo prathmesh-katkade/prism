@@ -1,10 +1,12 @@
 # PRISM Claude Session Handoff
 
-## Phase 8A continuation (2026-08-31)
+## Phase 8A closeout / Phase 8B prerequisite (2026-08-31)
 
 - Working branch: `phase-8-provenance-lineage`
 - Canonical base: `phase-6.5-integration-staging` at
   `2741c2ef3c242d3edff7a46beda2acd437da25ac`
+- Status: CI certified, pending merge of PR #10. CI run #98 is green for
+  `ff8a6338814f67e4add58730b112464defe66787` (including phase-4-live-e2e).
 - Scope: Phase 8A only — canonical analytical object/provenance contracts,
   append-only in-process registry, and representative Stats/Clean producers.
 - Invariants: `DatasetStore` remains the authoritative revision system; legacy
@@ -14,9 +16,9 @@
   Atlas lineage awareness, or Phase 9.
 - Canonical records: `PHASE8_IMPLEMENTATION_LEDGER.md` and
   `.prism/checkpoints/phase-8a.md`.
-- Resume with the quality-gate status in the Phase 8A checkpoint. If it is
-  complete, stop at the 8B starting point stated there rather than expanding
-  scope.
+- Merge PR #10, record its exact merge commit, and start 8B only from the
+  resulting clean staging lineage. Do not expand 8A into graph, staleness,
+  rerun, Atlas, or UI work.
 
 ---
 

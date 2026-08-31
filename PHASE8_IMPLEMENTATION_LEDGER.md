@@ -1,6 +1,6 @@
 # Phase 8 Implementation Ledger
 
-## 8A — Unified Provenance Foundation (IN PROGRESS)
+## 8A — Unified Provenance Foundation (CI CERTIFIED — PENDING MERGE)
 
 **Base:** `phase-6.5-integration-staging` at
 `2741c2ef3c242d3edff7a46beda2acd437da25ac`.
@@ -43,11 +43,15 @@ persistence/database, and Phase 9 work.
 - `tests/api/test_analytical_object_integration.py` — Stats and Clean records
   against their active DatasetStore revisions.
 
-**Quality-gate status:** focused schema/API tests, lint, mypy, contract
-freshness, boundary, secret, and frontend typecheck gates pass. The local
-full-suite gate is blocked only by this checkout's Python 3.9 runtime: three
-pre-existing Forecasting tests call `zip(..., strict=True)`, which requires
-Python 3.10+. Repository CI runs Python 3.11 and remains the final gate.
+**Quality-gate status:** CI run #98 is green for `ff8a6338814f67e4add58730b112464defe66787`:
+phase-1-python, phase-1-web, legacy-regression, secret-scan, and phase-4-live-e2e
+all passed. The first live-E2E attempt exposed a missing API runtime dependency
+for `prism_analytical_schemas`; `apps/api/requirements.txt` now installs the
+package. A subsequent SQL Lab browser assertion flaked after the API completed
+its request; the failed job was rerun and passed. Local full-suite execution
+remains unavailable under this checkout's Python 3.9 runtime because three
+pre-existing Forecasting tests require Python 3.10+ `zip(..., strict=True)`;
+the required Python 3.11 CI gate is certified.
 
 **8B starting point:** expose read-only registry lineage queries only after a
 separate scope decision; do not build a dependency graph, staleness engine, or
