@@ -291,3 +291,31 @@ class FreshnessAssessment(SchemaModel):
     reason_code: str = Field(min_length=1)
     reason: str = Field(min_length=1)
     assessed_at: datetime
+
+
+class ReproductionMode(str, Enum):
+    """Which dataset identity a rerun targets - never anything else: the server always
+    derives every other configuration value from the original object's own recorded
+    provenance, never from client-submitted analytical parameters."""
+
+    SAME_REVISION = "same_revision"
+    CURRENT_REVISION = "current_revision"
+
+
+class ReproductionOutcome(str, Enum):
+    CREATED = "created"
+    UNSUPPORTED = "unsupported"
+    VALIDATION_FAILED = "validation_failed"
+    SOURCE_REVISION_UNAVAILABLE = "source_revision_unavailable"
+
+
+class ReproductionResponse(SchemaModel):
+    """A rerun never overwrites: ``new_object`` (when ``outcome`` is CREATED) is always a
+    brand-new ``AnalyticalObject`` with its own id; ``original_object_id`` is left exactly
+    as it was, unread by this response and unmodified in the registry."""
+
+    outcome: ReproductionOutcome
+    original_object_id: str = Field(min_length=1)
+    mode: ReproductionMode
+    new_object: Optional[AnalyticalObject] = None
+    detail: str = Field(min_length=1)

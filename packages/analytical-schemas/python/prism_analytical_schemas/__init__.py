@@ -18,6 +18,9 @@ from .models import (
     ObjectKind,
     ParentRef,
     Producer,
+    ReproductionMode,
+    ReproductionOutcome,
+    ReproductionResponse,
     StatisticalTestReproducibilitySpec,
     sanitize_provenance_parameters,
 )
@@ -42,6 +45,9 @@ __all__ = [
     "ObjectKind",
     "ParentRef",
     "Producer",
+    "ReproductionMode",
+    "ReproductionOutcome",
+    "ReproductionResponse",
     "StatisticalTestReproducibilitySpec",
     "sanitize_provenance_parameters",
 ]

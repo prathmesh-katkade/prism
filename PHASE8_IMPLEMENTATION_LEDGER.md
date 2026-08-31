@@ -536,3 +536,45 @@ not-found handling, close button). `npm run test:web` → 27 passed (22
 pre-existing + 5 new), zero regressions. `npm run lint`, `npm run
 typecheck`, `npm run a11y:baseline`, `npm run build:web` all clean. Full
 gate record: `.prism/checkpoints/phase-8e.md`.
+
+## 8F — Reproducibility + Safe Rerun
+
+**Objective:** Turn preserved reproducibility metadata into safe reruns. A
+rerun never overwrites an existing object — it always creates a new one.
+
+**Delivered:** `apps/api/src/prism_api/reproduction_service.py` reconstructs
+a producer's original request purely from its own recorded
+`provenance.reproducibility` (never from a client payload), then calls the
+exact same computation the original route used — extracted as `execute_*`
+helpers in `forecasting.py`/`mllab.py` (behavior-preserving, mechanical
+extraction; `stats.run_test` already took an explicit `stored`, unchanged).
+`same_revision` mode resolves the exact `(revision, source_fingerprint)`
+identity via `DatasetStore.revisions()` — never revision number alone;
+`current_revision` resolves DatasetStore's active identity. Supported:
+`analysis`/`forecast`/`ml_model`/`visualization`. Deliberately unsupported,
+each with a documented reason returned in the response: `dataset_revision`,
+`cleaning_plan` (Clean's own apply/undo already is its rerun mechanism),
+`query_result` (SQL Lab's async run/poll flow isn't supported by this
+synchronous endpoint yet), `profile`, `evidence` — the same documented,
+non-silent scope-boundary pattern Phase 8B established for producer
+coverage gaps.
+
+**API:** `POST /api/v1/lineage/objects/{id}/rerun` — body is `{"mode":
+"same_revision"|"current_revision"}`, the only field a caller may supply.
+Typed `ReproductionResponse` (`outcome`: created/unsupported/
+validation_failed/source_revision_unavailable).
+
+**UI:** Evidence Inspector's Reproducibility section gained "Reproduce on
+original revision" / "Rerun on current data" (inline, no modal), plus an
+inline outcome panel — a `created` result offers "View new result"
+navigating the inspector to it; any other outcome shows its `detail`
+message, `role="alert"`.
+
+**Tests:** `tests/api/test_phase8f_reproduction.py`, 12 tests (Stats same/
+current-revision, missing-column failure, Forecast/ML/Visualize rerun, SQL/
+dataset-revision unsupported, abandoned-branch source-unavailability,
+no-overwrite across repeated reruns, 404, secret safety). 2 new frontend
+tests. `pytest tests/ apps/api -q` → 809 passed, 4 pre-existing skips; `npm
+run test:web` → 29 passed. `ruff`/mypy (CI's exact invocation)/contracts/
+frontend gates all clean. Full gate record:
+`.prism/checkpoints/phase-8f.md`.

@@ -686,6 +686,22 @@ export interface ReadinessResponse {
 
 export type ReleaseChannel = "legacy" | "shadow" | "enabled";
 
+export type ReproductionMode = "same_revision" | "current_revision";
+
+export type ReproductionOutcome = "created" | "unsupported" | "validation_failed" | "source_revision_unavailable";
+
+export interface ReproductionResponse {
+  outcome: ReproductionOutcome;
+  original_object_id: string;
+  mode: ReproductionMode;
+  new_object?: AnalyticalObject;
+  detail: string;
+}
+
+export interface RerunRequest {
+  mode: ReproductionMode;
+}
+
 export interface SqlCapability {
   name: string;
   supported: boolean;

@@ -51,6 +51,23 @@ export interface FreshnessShape {
   reason_code: string;
 }
 
+type ReproductionMode = "same_revision" | "current_revision";
+
+interface ReproductionResponseShape {
+  outcome: "created" | "unsupported" | "validation_failed" | "source_revision_unavailable";
+  original_object_id: string;
+  mode: ReproductionMode;
+  new_object: AnalyticalObjectShape | null;
+  detail: string;
+}
+
+const OUTCOME_LABEL: Record<ReproductionResponseShape["outcome"], string> = {
+  created: "New object created",
+  unsupported: "Rerun not supported for this object",
+  validation_failed: "Could not reproduce",
+  source_revision_unavailable: "Original data unavailable",
+};
+
 const KIND_LABEL: Record<string, string> = {
   dataset_revision: "Dataset revision",
   profile: "Profile",
@@ -229,14 +246,66 @@ function EvidenceBody({ state, onNavigate }: { state: LoadedState; onNavigate(id
           </ul>
         ) : <p className="quiet-note">Nothing recorded depends on this object yet.</p>}
       </section>
-      <section className="evidence-section">
-        <span className="eyebrow">REPRODUCIBILITY</span>
-        <p className="quiet-note">
-          {object.provenance.reproducibility.kind} reproducibility spec recorded — the original
-          configuration is preserved so this result can be reproduced later.
-        </p>
-      </section>
+      <ReproducibilitySection object={object} onNavigate={onNavigate} />
     </>
+  );
+}
+
+function ReproducibilitySection({ object, onNavigate }: { object: AnalyticalObjectShape; onNavigate(id: string): void }) {
+  const [pending, setPending] = useState<ReproductionMode | null>(null);
+  const [result, setResult] = useState<ReproductionResponseShape | null>(null);
+
+  async function rerun(mode: ReproductionMode) {
+    setPending(mode);
+    setResult(null);
+    try {
+      const response = await fetch(apiUrl(`/api/v1/lineage/objects/${object.object_id}/rerun`), {
+        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ mode }),
+      });
+      setResult(await response.json() as ReproductionResponseShape);
+    } catch {
+      setResult({ outcome: "validation_failed", original_object_id: object.object_id, mode, new_object: null, detail: "The rerun request could not be sent." });
+    } finally {
+      setPending(null);
+    }
+  }
+
+  return (
+    <section className="evidence-section">
+      <span className="eyebrow">REPRODUCIBILITY</span>
+      <p className="quiet-note">
+        {object.provenance.reproducibility.kind} reproducibility spec recorded — original revision{" "}
+        {object.provenance.dataset.revision} of {object.provenance.dataset.dataset_id}. Reproducing never
+        changes this object; it always creates a new one.
+      </p>
+      <div className="inspector-actions">
+        <button disabled={pending !== null} onClick={() => void rerun("same_revision")}>
+          {pending === "same_revision" ? "Reproducing…" : "Reproduce on original revision"}
+        </button>
+        <button disabled={pending !== null} onClick={() => void rerun("current_revision")}>
+          {pending === "current_revision" ? "Rerunning…" : "Rerun on current data"}
+        </button>
+      </div>
+      {result ? <ReproductionOutcome result={result} onNavigate={onNavigate} /> : null}
+    </section>
+  );
+}
+
+function ReproductionOutcome({ result, onNavigate }: { result: ReproductionResponseShape; onNavigate(id: string): void }) {
+  if (result.outcome === "created" && result.new_object) {
+    return (
+      <aside className="reproduction-outcome reproduction-created" aria-live="polite">
+        <strong>{OUTCOME_LABEL[result.outcome]}</strong>
+        <p>{result.detail}</p>
+        <button onClick={() => onNavigate((result.new_object as AnalyticalObjectShape).object_id)}>View new result</button>
+      </aside>
+    );
+  }
+  return (
+    <aside className="reproduction-outcome reproduction-blocked" role="alert">
+      <strong>{OUTCOME_LABEL[result.outcome]}</strong>
+      <p>{result.detail}</p>
+    </aside>
   );
 }
 

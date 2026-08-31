@@ -1,12 +1,13 @@
-"""Phase 8B/8C/8D read-only analytical-object registry, lineage-traversal, and
-freshness API.
+"""Phase 8B/8C/8D/8F read-only analytical-object registry, lineage-traversal,
+freshness, and reproduction API.
 
 Phase 8C adds deterministic graph traversal (parents/children/ancestors/descendants/
 graph/path) on top of Phase 8B's read-only object retrieval. Phase 8D adds contextual
 freshness (current/stale/superseded/unknown) computed live against DatasetStore's
-active identity - never stored on the object. All of it stays read-only, built only
-from links producers already record, never AI-inferred. No write route exists, or may
-be added, under this router.
+active identity - never stored on the object. Phase 8F adds one controlled write
+route, `/rerun`: it never overwrites an existing object, only ever creates a new one
+from an existing object's own recorded configuration - everything else here stays
+strictly read-only, built only from links producers already record, never AI-inferred.
 """
 
 from __future__ import annotations
@@ -19,9 +20,12 @@ from prism_analytical_schemas import (
     LineagePath,
     LineageTraversal,
     ObjectKind,
+    ReproductionMode,
+    ReproductionResponse,
 )
+from pydantic import BaseModel
 
-from . import freshness_service, lineage_service
+from . import freshness_service, lineage_service, reproduction_service
 from .analytical_objects import registry
 from .overview import store as overview_store
 
@@ -33,6 +37,13 @@ router = APIRouter(prefix="/api/v1/lineage", tags=["lineage"])
 MAX_LINEAGE_DEPTH = 100
 
 _NOT_FOUND = "Analytical object was not found."
+
+
+class RerunRequest(BaseModel):
+    """The only field a rerun caller may supply - every other configuration value is
+    derived from the original object's own recorded provenance, never from the client."""
+
+    mode: ReproductionMode
 
 
 @router.get("/objects/{object_id}", response_model=AnalyticalObject)
@@ -128,3 +139,18 @@ def get_dataset_freshness(dataset_id: str) -> list[FreshnessAssessment]:
     unknown or never-touched dataset returns an empty list, matching
     `/datasets/{dataset_id}/objects`'s own behavior - never a 404."""
     return freshness_service.assess_dataset(registry, overview_store, dataset_id)
+
+
+@router.post("/objects/{object_id}/rerun", response_model=ReproductionResponse)
+def rerun_object(object_id: str, request: RerunRequest) -> ReproductionResponse:
+    """Reproduce one analytical object's original configuration as a brand-new object.
+
+    The only route under `/lineage` that writes anything - and even this one never
+    overwrites: it only ever creates a new `AnalyticalObject`. The request supplies only
+    `mode`; every other configuration value (columns, test, target, horizon, ...) is
+    derived from the original object's own recorded provenance, never from the client.
+    """
+    result = reproduction_service.reproduce(registry, overview_store, object_id, request.mode)
+    if result is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_NOT_FOUND)
+    return result

@@ -103,6 +103,54 @@ describe("Evidence inspector", () => {
     await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("This analytical object could not be found."));
   });
 
+  it("reproduces an object on current data and offers to view the new result", async () => {
+    const object = analyticalObject();
+    const newObject = analyticalObject({ object_id: "stats_new456" });
+    const fetchMock = vi.fn(async (input: string | URL) => {
+      const path = String(input);
+      if (path.includes("/rerun")) {
+        return json({ outcome: "created", original_object_id: "stats_abc123", mode: "current_revision", new_object: newObject, detail: "Reproduced as a new analysis object (stats_new456); the original object is unchanged." });
+      }
+      if (path.includes("/freshness")) return json(freshness);
+      if (path.includes("/parents")) return json([]);
+      if (path.includes("/children")) return json([]);
+      if (path.includes("stats_new456")) return json(newObject);
+      return json(object);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<EvidenceInspector objectId="stats_abc123" onClose={vi.fn()} />);
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Statistical analysis" })).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "Rerun on current data" }));
+
+    await waitFor(() => expect(screen.getByText("New object created")).toBeInTheDocument());
+    expect(screen.getByText(/the original object is unchanged/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "View new result" })).toBeInTheDocument();
+  });
+
+  it("shows a clear blocked message when a rerun is unsupported", async () => {
+    const fetchMock = vi.fn(async (input: string | URL) => {
+      const path = String(input);
+      if (path.includes("/rerun")) {
+        return json({ outcome: "unsupported", original_object_id: "stats_abc123", mode: "current_revision", new_object: null, detail: "Rerun is not supported for dataset_revision objects." });
+      }
+      if (path.includes("/freshness")) return json(freshness);
+      if (path.includes("/parents")) return json([]);
+      if (path.includes("/children")) return json([]);
+      return json(analyticalObject());
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<EvidenceInspector objectId="stats_abc123" onClose={vi.fn()} />);
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Statistical analysis" })).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "Rerun on current data" }));
+
+    await waitFor(() => expect(screen.getByText("Rerun not supported for this object")).toBeInTheDocument());
+    expect(screen.getByRole("alert")).toHaveTextContent("Rerun is not supported for dataset_revision objects.");
+  });
+
   it("calls onClose from the close button", async () => {
     const onClose = vi.fn();
     const fetchMock = vi.fn(async (input: string | URL) => {
