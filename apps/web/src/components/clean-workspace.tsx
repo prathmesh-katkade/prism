@@ -61,6 +61,8 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
     try {
       const response = await fetch(apiUrl(`/api/v1/clean/datasets/${datasetId}/apply`), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(pendingRequest) });
       if (!response.ok) throw new Error((await response.json() as { detail?: string }).detail ?? "Applying the transformation failed.");
+      const applied = await response.json() as { transformation: { transformation_id: string; operation: string } };
+      onSelectContext({ objectId: applied.transformation.transformation_id, analyticalObjectId: `clean_${applied.transformation.transformation_id}`, label: `Clean — ${applied.transformation.operation.replaceAll("_", " ")}`, type: "finding", state: "ready", actions: [], metadata: ["Immutable transformation record"] });
       setPreview(null); setPendingRequest(null); setSelectedIssue(null); setAtlas(null);
       await refresh(datasetId);
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Applying the transformation failed."); }

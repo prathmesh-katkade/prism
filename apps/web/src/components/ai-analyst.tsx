@@ -3,8 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import type { AiAnalystResponse } from "@prism/api-contracts";
 import { apiUrl } from "../config/api";
+import { newestAnalyticalObjectId } from "./analytical-history";
+import type { InspectorObjectState } from "../state/shell-model";
 
-export function AiAnalyst({ resultRunId, onSqlDraft }: { resultRunId: string | undefined; onSqlDraft(sql: string): void }) {
+export function AiAnalyst({ resultRunId, onSqlDraft, onSelectContext }: { resultRunId: string | undefined; onSqlDraft(sql: string): void; onSelectContext(state: InspectorObjectState): void }) {
   const [question, setQuestion] = useState("What can this dataset support with confidence?");
   const [answer, setAnswer] = useState("");
   const [response, setResponse] = useState<AiAnalystResponse | null>(null);
@@ -30,7 +32,7 @@ export function AiAnalyst({ resultRunId, onSqlDraft }: { resultRunId: string | u
           if (event.event === "atlas.state") setState(String(event.data.state ?? "working"));
           if (event.event === "atlas.token") { setState("responding"); setAnswer((current) => current + String(event.data.token ?? "")); }
           if (event.event === "atlas.tool_wait") setState("sql_review_required");
-          if (event.event === "atlas.complete") { const completed = event.data as unknown as AiAnalystResponse; setResponse(completed); setAnswer(completed.answer); setState("complete"); }
+          if (event.event === "atlas.complete") { const completed = event.data as unknown as AiAnalystResponse; setResponse(completed); setAnswer(completed.answer); setState("complete"); if (completed.outcome === "answered") { void newestAnalyticalObjectId(completed.context.dataset_id, "evidence").then((analyticalObjectId) => onSelectContext({ objectId: completed.request_id, ...(analyticalObjectId ? { analyticalObjectId } : {}), label: "AI Analyst evidence", type: "finding", state: "ready", actions: [], metadata: [completed.provider, "Evidence-grounded"] })); } }
           if (event.event === "atlas.failure") { setError(String(event.data.detail ?? "AI Analyst failed.")); setState("degraded"); }
           if (event.event === "atlas.cancelled") setState("cancelled");
         }

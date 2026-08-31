@@ -64,6 +64,16 @@ def list_objects(
     return registry.list_for_dataset(dataset_id, revision=revision, kind=kind)
 
 
+@router.get("/history", response_model=list[AnalyticalObject])
+def list_history(limit: int = Query(100, ge=1, le=500), kind: ObjectKind | None = None) -> list[AnalyticalObject]:
+    """Bounded global analytical history, ordered newest-first.
+
+    This is intentionally read-only. It is a research-history feed, not a
+    generic lineage administration or mutation API.
+    """
+    return registry.list_recent(limit=limit, kind=kind)
+
+
 @router.get("/objects/{object_id}/parents", response_model=list[AnalyticalObject])
 def get_object_parents(object_id: str) -> list[AnalyticalObject]:
     """Direct parents only - never transitive. Use `/ancestors` for the full chain."""

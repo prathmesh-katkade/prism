@@ -125,3 +125,23 @@ def test_lineage_read_api_returns_immutable_registry_snapshots() -> None:
     assert fetched.status_code == 200
     assert fetched.json()["payload"]["test"] == "pearson"
     assert client.get("/api/v1/lineage/objects/missing").status_code == 404
+
+
+def test_clean_current_revision_rerun_creates_a_new_immutable_transformation() -> None:
+    client = TestClient(create_app())
+    dataset_id = _dataset(client)
+    applied = client.post(f"/api/v1/clean/datasets/{dataset_id}/apply", json={"operation": "drop_duplicates"})
+    assert applied.status_code == 201
+    source = next(record for record in registry.list_for_dataset(dataset_id) if record.kind.value == "cleaning_plan")
+
+    rerun = client.post(f"/api/v1/lineage/objects/{source.object_id}/rerun", json={"mode": "current_revision"})
+    assert rerun.status_code == 200
+    body = rerun.json()
+    assert body["outcome"] == "created"
+    assert body["new_object"]["kind"] == "cleaning_plan"
+    assert body["new_object"]["object_id"] != source.object_id
+    assert registry.get(source.object_id).object_id == source.object_id
+
+    same_revision = client.post(f"/api/v1/lineage/objects/{source.object_id}/rerun", json={"mode": "same_revision"})
+    assert same_revision.status_code == 200
+    assert same_revision.json()["outcome"] == "unsupported"

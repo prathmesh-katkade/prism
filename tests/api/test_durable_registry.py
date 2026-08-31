@@ -15,6 +15,8 @@ from prism_analytical_schemas import (
     Producer,
 )
 from prism_api.durable_registry import DurableAnalyticalObjectRegistry
+from prism_api.durable_dataset_store import DurableDatasetStore
+import pandas as pd
 
 
 def _object(object_id: str, parents: list[ParentRef] | None = None) -> AnalyticalObject:
@@ -56,3 +58,16 @@ def test_registration_is_idempotent_at_the_database_primary_key(tmp_path) -> Non
     assert registry.ensure(record).object_id == "once"
     assert registry.ensure(record).object_id == "once"
     assert [item.object_id for item in registry.list_for_dataset("dataset_1")] == ["once"]
+
+
+def test_dataset_revisions_survive_restart_and_revert_keeps_branch_safety(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    database_url = f"sqlite:///{(tmp_path / 'history.sqlite').as_posix()}"
+    writer = DurableDatasetStore(database_url)
+    created = writer.put(pd.DataFrame({"value": [1, 2]}), "sample.csv", "a" * 32)
+    writer.add_revision(created.dataset_id, pd.DataFrame({"value": [3]}), "b" * 32)
+
+    recovered = DurableDatasetStore(database_url)
+    assert recovered.get(created.dataset_id).frame["value"].tolist() == [3]
+    recovered.revert(created.dataset_id, 0)
+    assert recovered.get(created.dataset_id).source_fingerprint == "a" * 32
+    assert [item.dataset.revision for item in recovered.revisions(created.dataset_id)] == [0]

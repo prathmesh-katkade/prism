@@ -104,7 +104,11 @@ class DatasetStore:
         return target.dataset
 
 
-store = DatasetStore()
+# Phase 9 preserves DatasetStore's authority and public API, while making its
+# revision payloads restart-safe alongside durable analytical history.
+from .durable_dataset_store import DurableDatasetStore
+
+store = DurableDatasetStore()
 
 
 def _read_upload(contents: bytes, source_name: str) -> pd.DataFrame:

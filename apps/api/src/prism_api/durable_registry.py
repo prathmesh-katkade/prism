@@ -146,6 +146,15 @@ class DurableAnalyticalObjectRegistry:
         with self.engine.connect() as connection:
             return [self._restore(snapshot) for snapshot in connection.execute(statement).scalars()]
 
+    def list_recent(self, limit: int = 100, kind: Optional[ObjectKind] = None) -> list[AnalyticalObject]:
+        """Return a bounded, newest-first history feed without exposing a write path."""
+        statement = select(_objects.c.snapshot)
+        if kind is not None:
+            statement = statement.where(_objects.c.kind == kind.value)
+        statement = statement.order_by(desc(_objects.c.created_at), desc(_objects.c.object_id)).limit(limit)
+        with self.engine.connect() as connection:
+            return [self._restore(snapshot) for snapshot in connection.execute(statement).scalars()]
+
     def _neighbor_ids(self, object_id: str, direction: str) -> list[str]:
         column = _edges.c.parent_object_id if direction == "ancestors" else _edges.c.child_object_id
         match = _edges.c.child_object_id if direction == "ancestors" else _edges.c.parent_object_id

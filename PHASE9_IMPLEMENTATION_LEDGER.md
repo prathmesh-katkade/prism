@@ -16,17 +16,26 @@
   lineage edges, indexed by object id, dataset, revision, fingerprint, kind,
   and creation time.
 - [x] Added restart, lineage, primary-key idempotency, and redaction tests.
+- [x] Made DatasetStore revisions durable in the same configured store, retaining
+  its authority for active revision and fingerprint-aware branch semantics.
 - [x] Added the reusable client-side read-only bridge and wired Evidence
-  Inspector selection through Visualize, Forecasting, and ML baseline results.
+  Inspector selection through SQL Lab, Clean, AI Analyst, Visualize,
+  Forecasting, Stats, and ML baseline results.
+- [x] Added a native History workspace with bounded global-history reads,
+  search, kind filtering, current/stale counters, and direct Evidence Inspector
+  navigation.
+- [x] Added safe Clean current-revision reapply; same-revision Clean remains
+  explicitly unsupported because it would otherwise change the active branch.
 
 ## Remaining before Phase 9 certification
 
 - [ ] Production migration/rollback tooling and managed-MySQL configuration.
 - [ ] Persisted audit fields and request/session correlation.
-- [ ] SQL Lab, Clean, AI Analyst, and all remaining ML result coverage in the
-  Inspector; dedicated History workspace and its accessibility/E2E suite.
-- [ ] Deterministic SQL/Clean rerun design and implementation where safe.
-- [ ] DatasetStore restart semantics and a real managed-store restart test.
+- [ ] Remaining ML feature-selection/SHAP Inspector selection and dedicated
+  History accessibility/E2E suite.
+- [ ] Deterministic SQL rerun design where asynchronous execution context can
+  be preserved without permitting credential reuse or arbitrary execution.
+- [ ] Real managed-MySQL restart test.
 - [ ] Full repository gate on CI, PR review/merge, authenticated staging deploy,
   and live smoke matrix.
 
