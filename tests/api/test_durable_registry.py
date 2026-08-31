@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+import uuid
 from datetime import datetime, timezone
 
 import pandas as pd
@@ -58,6 +60,28 @@ def test_registration_is_idempotent_at_the_database_primary_key(tmp_path) -> Non
     assert registry.ensure(record).object_id == "once"
     assert registry.ensure(record).object_id == "once"
     assert [item.object_id for item in registry.list_for_dataset("dataset_1")] == ["once"]
+
+
+def test_creation_audit_survives_restart_without_storing_secrets(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    database_url = f"sqlite:///{(tmp_path / 'history.sqlite').as_posix()}"
+    DurableAnalyticalObjectRegistry(database_url).register(_object("audited"))
+
+    events = DurableAnalyticalObjectRegistry(database_url).list_audit_events("audited")
+    assert len(events) == 1
+    assert events[0]["event_type"] == "created"
+    assert events[0]["actor"] == "system"
+    assert events[0]["producer_service"] == "test"
+    assert "password" not in str(events[0]).lower()
+
+
+def test_configured_mysql_history_survives_registry_restart() -> None:
+    """Phase 4 CI sets the managed-store URL; normal unit runs remain self-contained."""
+    database_url = os.environ.get("PRISM_ANALYTICAL_HISTORY_DATABASE_URL")
+    if not database_url or not database_url.startswith("mysql"):
+        return
+    object_id = f"mysql_restart_{uuid.uuid4().hex}"
+    DurableAnalyticalObjectRegistry(database_url).register(_object(object_id))
+    assert DurableAnalyticalObjectRegistry(database_url).get(object_id) is not None
 
 
 def test_dataset_revisions_survive_restart_and_revert_keeps_branch_safety(tmp_path) -> None:  # type: ignore[no-untyped-def]

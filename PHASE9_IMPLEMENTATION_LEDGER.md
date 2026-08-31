@@ -26,16 +26,22 @@
   navigation.
 - [x] Added safe Clean current-revision reapply; same-revision Clean remains
   explicitly unsupported because it would otherwise change the active branch.
+- [x] Added append-only creation/rerun audit events with service/version and an
+  explicit `system` actor (there is no authenticated identity layer to invent),
+  plus a read-only audit endpoint.
+- [x] Added durable-history readiness reporting, managed-MySQL CI restart
+  coverage, explicit Render configuration requirements, and an operational
+  migration/backup/rollback procedure.
+- [x] Wired ML feature-selection and SHAP results into the shared Evidence
+  Inspector context.
 
 ## Remaining before Phase 9 certification
 
-- [ ] Production migration/rollback tooling and managed-MySQL configuration.
-- [ ] Persisted audit fields and request/session correlation.
-- [ ] Remaining ML feature-selection/SHAP Inspector selection and dedicated
-  History accessibility/E2E suite.
+- [ ] Authenticated actor/session correlation (out of scope until PRISM has an
+  identity boundary; creation records explicitly show `system` meanwhile).
+- [ ] Dedicated deployed History browser suite (unit/a11y coverage exists).
 - [ ] Deterministic SQL rerun design where asynchronous execution context can
   be preserved without permitting credential reuse or arbitrary execution.
-- [ ] Real managed-MySQL restart test.
 - [ ] Full repository gate on CI, PR review/merge, authenticated staging deploy,
   and live smoke matrix.
 

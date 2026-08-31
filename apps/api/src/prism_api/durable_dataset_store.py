@@ -113,7 +113,32 @@ class DurableDatasetStore:
         current = self.get(dataset_id)
         dataset = OverviewDataset(dataset_id=dataset_id, revision=current.dataset.revision + 1, source_name=current.dataset.source_name, source_fingerprint=fingerprint, row_count=len(frame), column_count=len(frame.columns))
         with self.engine.begin() as connection:
-            connection.execute(insert(_revisions).values(dataset_id=dataset_id, revision=dataset.revision, source_fingerprint=fingerprint, source_name=dataset.source_name, row_count=len(frame), column_count=len(frame.columns), frame_json=self._frame_json(frame), is_active=True, activated_at=datetime.now(timezone.utc)))
+            existing = connection.execute(
+                select(_revisions.c.dataset_id).where(
+                    and_(
+                        _revisions.c.dataset_id == dataset_id,
+                        _revisions.c.revision == dataset.revision,
+                        _revisions.c.source_fingerprint == fingerprint,
+                    )
+                )
+            ).scalar_one_or_none()
+            if existing is None:
+                connection.execute(insert(_revisions).values(dataset_id=dataset_id, revision=dataset.revision, source_fingerprint=fingerprint, source_name=dataset.source_name, row_count=len(frame), column_count=len(frame.columns), frame_json=self._frame_json(frame), is_active=True, activated_at=datetime.now(timezone.utc)))
+            else:
+                # Reapplying the same deterministic transformation after undo
+                # revives its immutable historical revision instead of inserting
+                # a duplicate identity or silently losing provenance.
+                connection.execute(
+                    update(_revisions)
+                    .where(
+                        and_(
+                            _revisions.c.dataset_id == dataset_id,
+                            _revisions.c.revision == dataset.revision,
+                            _revisions.c.source_fingerprint == fingerprint,
+                        )
+                    )
+                    .values(is_active=True, activated_at=datetime.now(timezone.utc))
+                )
         return dataset
 
     def revert(self, dataset_id: str, revision: int) -> OverviewDataset:

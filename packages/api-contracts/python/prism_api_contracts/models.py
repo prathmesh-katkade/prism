@@ -32,13 +32,15 @@ class HealthResponse(ContractModel):
 
 
 class ProviderReadiness(ContractModel):
-    """Diagnostic configuration status for one optional dependency — never a live network probe
-    (a readiness check must stay fast and must not itself hang on an external service), and never
-    used to fail readiness on its own: PRISM's deterministic path works with every optional
-    provider unconfigured or unreachable."""
+    """Diagnostic state for an optional provider or required persistence boundary.
+
+    AI configuration remains non-blocking. Durable analytical history is reported
+    separately because a production history-enabled deployment must not silently
+    accept work when its evidence store is unavailable.
+    """
 
     name: str = Field(min_length=1)
-    status: Literal["configured", "not_configured"]
+    status: Literal["configured", "not_configured", "ready", "unavailable"]
     detail: str = Field(min_length=1)
 
 

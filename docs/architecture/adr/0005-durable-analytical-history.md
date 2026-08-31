@@ -22,8 +22,10 @@ fallback, not a production substitute.
 The schema has primary-key object identity, transactionally written direct
 edges, and indexes for dataset, revision, fingerprint, kind, and creation time.
 Freshness stays derived at read time against `DatasetStore`; historical
-snapshots, provenance, and edges are append-only. The database is never asked
-to store a dataset frame, a fitted model, a raw credential, or hidden reasoning.
+snapshots, provenance, and edges are append-only. DatasetStore revision frames
+are persisted by its own adapter and remain its authoritative source for
+revision identity and content. The history tables never store a fitted model,
+raw credential, or hidden reasoning.
 
 ## Consequences
 
@@ -31,5 +33,6 @@ Restart-safe history and lineage are available when a durable database URL is
 configured. Retries are idempotent at the object-id primary key. Migrations use
 the version table plus additive SQLAlchemy schema creation; incompatible future
 changes require a numbered migration and a tested rollback before release.
-Backups are the managed database's responsibility; rollback means deploy the
-previous compatible application before applying a destructive schema change.
+The version-1 rollout is additive and documented in
+`docs/operations/durable-analytical-history.md`; managed database backups are
+required before future destructive schema changes.

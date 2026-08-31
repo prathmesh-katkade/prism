@@ -50,6 +50,19 @@ class RerunRequest(BaseModel):
     mode: ReproductionMode
 
 
+class AnalyticalAuditEvent(BaseModel):
+    """Read-only lifecycle evidence for one immutable analytical object."""
+
+    event_id: str
+    object_id: str
+    event_type: str
+    actor: str
+    producer_service: str
+    producer_version: str
+    request_id: str | None = None
+    created_at: str
+
+
 @router.get("/objects/{object_id}", response_model=AnalyticalObject)
 def get_object(object_id: str) -> AnalyticalObject:
     record = registry.get(object_id)
@@ -75,6 +88,14 @@ def list_history(limit: int = Query(100, ge=1, le=500), kind: ObjectKind | None 
     generic lineage administration or mutation API.
     """
     return cast(DurableAnalyticalObjectRegistry, registry).list_recent(limit=limit, kind=kind)
+
+
+@router.get("/objects/{object_id}/audit", response_model=list[AnalyticalAuditEvent])
+def list_object_audit(object_id: str, limit: int = Query(100, ge=1, le=500)) -> list[AnalyticalAuditEvent]:
+    """Append-only creation and rerun audit history; intentionally no write route."""
+    if registry.get(object_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_NOT_FOUND)
+    return [AnalyticalAuditEvent(**event) for event in cast(DurableAnalyticalObjectRegistry, registry).list_audit_events(object_id, limit)]
 
 
 @router.get("/objects/{object_id}/parents", response_model=list[AnalyticalObject])
