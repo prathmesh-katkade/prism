@@ -6,7 +6,7 @@ import { apiUrl } from "../config/api";
 import { newestAnalyticalObjectId } from "./analytical-history";
 import type { InspectorObjectState } from "../state/shell-model";
 
-export function AiAnalyst({ resultRunId, onSqlDraft, onSelectContext }: { resultRunId: string | undefined; onSqlDraft(sql: string): void; onSelectContext(state: InspectorObjectState): void }) {
+export function AiAnalyst({ datasetId, resultRunId, onSqlDraft, onSelectContext }: { datasetId: string | undefined; resultRunId: string | undefined; onSqlDraft(sql: string): void; onSelectContext(state: InspectorObjectState): void }) {
   const [question, setQuestion] = useState("What can this dataset support with confidence?");
   const [answer, setAnswer] = useState("");
   const [response, setResponse] = useState<AiAnalystResponse | null>(null);
@@ -21,7 +21,7 @@ export function AiAnalyst({ resultRunId, onSqlDraft, onSelectContext }: { result
     const aborter = new AbortController(); controller.current = aborter;
     setAnswer(""); setResponse(null); setError(null); setState("context_selecting"); requestId.current = null;
     try {
-      const stream = await fetch(apiUrl("/api/v1/ai-analyst/stream"), { method: "POST", headers: { "content-type": "application/json", accept: "text/event-stream" }, signal: aborter.signal, body: JSON.stringify({ question, ...(resultRunId ? { result_run_id: resultRunId } : {}) }) });
+      const stream = await fetch(apiUrl("/api/v1/ai-analyst/stream"), { method: "POST", headers: { "content-type": "application/json", accept: "text/event-stream" }, signal: aborter.signal, body: JSON.stringify({ question, ...(datasetId ? { dataset_id: datasetId } : {}), ...(resultRunId ? { result_run_id: resultRunId } : {}) }) });
       if (!stream.ok || !stream.body) throw new Error("AI Analyst stream could not start.");
       const reader = stream.body.pipeThrough(new TextDecoderStream()).getReader(); let buffer = "";
       for (;;) {
