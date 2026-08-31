@@ -1,12 +1,14 @@
 # Current migration phase
 
-**Phase:** 8B — Analytical Object Registry + Read-Only Retrieval (**locally
-complete, PR pending**)
+**Phase:** 8B — Analytical Object Registry + Read-Only Retrieval (**COMPLETE
+— merged**)
 
-**Working branch:** `phase-8b-registry-read-model`.
+**Merged via:** [PR #11](https://github.com/prathmesh-katkade/prism/pull/11)
+at merge commit `670d670ee0cdaaff7a6a62f1281d2df8b6802cf8` into
+`phase-6.5-integration-staging`, 2026-08-31.
 
-**Canonical base:** `phase-6.5-integration-staging` at
-`4912610be584e2b3e9902500bd6585aeebb8a506` (PR #10 — Phase 8A merge).
+**Canonical base for the next phase:** `phase-6.5-integration-staging` at
+`670d670ee0cdaaff7a6a62f1281d2df8b6802cf8` (PR #11 — Phase 8B merge).
 
 Phases 1–7 remain complete. Overview, SQL Lab, AI Analyst, Clean, Visualize,
 Stats, Forecasting, and ML Lab stay native and enabled; their Streamlit
@@ -51,11 +53,13 @@ analytical-history model:
 Existing Phase 3–7 HTTP contracts remain backward compatible: every touched
 producer route's own response model and status code are unchanged.
 
-The implementation ledger is `PHASE8_IMPLEMENTATION_LEDGER.md`; the current
-gate record is `.prism/checkpoints/phase-8b.md`. All locally-verifiable gates
-pass (full Python suite, ruff/mypy under CI's exact flags, boundaries,
-secrets, fresh TypeScript contracts, full frontend gate, legacy regression);
-CI itself is pending a PR from `phase-8b-registry-read-model`.
+The implementation ledger is `PHASE8_IMPLEMENTATION_LEDGER.md`; the final
+gate record is `.prism/checkpoints/phase-8b.md`. Every gate passed, including
+live CI on PR #11's final head (`63daaaf`, all 5 checks green) and a
+post-merge automated review pass that surfaced and fixed two real gaps
+before merge (see the ledger's 8B "Status update").
+
+`PHASE_8A_COMPLETE = YES`, `PHASE_8B_COMPLETE = YES`, `PHASE_8C_STARTED = NO`.
 
 ## Still forbidden in 8B
 

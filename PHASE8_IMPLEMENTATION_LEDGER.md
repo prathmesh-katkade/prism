@@ -69,7 +69,22 @@ completed operation/result and have focused regression coverage. The final
 separate scope decision; do not build a dependency graph, staleness engine, or
 UI from this in-process foundation without that decision.
 
-## 8B — Analytical Object Registry + Read-Only Retrieval
+## 8B — Analytical Object Registry + Read-Only Retrieval (COMPLETE — merged)
+
+**Status update:** [PR #11](https://github.com/prathmesh-katkade/prism/pull/11)
+passed final CI (all 5 checks green on head `63daaafa4e80b2527618af3def2162be808f8476`)
+and merged into `phase-6.5-integration-staging` at merge commit
+`670d670ee0cdaaff7a6a62f1281d2df8b6802cf8` on 2026-08-31. Codex's automated
+post-merge-review pass found two real gaps in this session's own new code
+before merge, both fixed and covered by regression tests in the final head:
+(P1) the dataset-revision object id was keyed on `(dataset_id, revision)`
+only, so `DatasetStore.revert()` reusing a revision number for different
+data after an undo would silently resolve to the abandoned branch's object —
+fixed by keying on `(dataset_id, revision, source_fingerprint[:16])`; (P2)
+concurrent first-touch registration wasn't race-safe and could surface a
+duplicate-id `ValueError` as a 500 — fixed by catching it in
+`ensure_dataset_revision` and returning the registry's winning record. See
+`.prism/checkpoints/phase-8b.md` for the full gate record.
 
 **Base:** `phase-6.5-integration-staging` at `4912610be584e2b3e9902500bd6585aeebb8a506`
 (PR #10 / Phase 8A merge). Branch: `phase-8b-registry-read-model`.

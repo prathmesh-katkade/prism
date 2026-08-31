@@ -4,7 +4,10 @@
 - Base branch: `phase-6.5-integration-staging`
 - Base commit: `4912610be584e2b3e9902500bd6585aeebb8a506` (PR #10 / Phase 8A merge)
 - Date: 2026-08-31
-- Status: LOCALLY COMPLETE, PR PENDING
+- Status: **COMPLETE — merged**
+- PR: [#11](https://github.com/prathmesh-katkade/prism/pull/11)
+- Final head: `63daaafa4e80b2527618af3def2162be808f8476`
+- Merge commit: `670d670ee0cdaaff7a6a62f1281d2df8b6802cf8` into `phase-6.5-integration-staging`
 
 ## Scope
 
@@ -40,13 +43,13 @@ behavior.
 | Lint and mypy | PASS | `ruff check` (repo-wide) clean; `mypy --follow-imports=skip --allow-subclassing-any --allow-untyped-decorators --no-warn-return-any apps/api/src packages` (CI's exact invocation) clean — fixed a real gap this session found in the inherited `lineage.py` (missing `from __future__ import annotations`, needed for its `X \| None` syntax under this repo's Python 3.9 mypy target). |
 | Frontend gates | PASS | `npm run lint`, `npm run typecheck`, `npm run test:web` (22 tests), `npm run a11y:baseline`, `npm run build:web` all clean. |
 | Legacy regression | PASS | Zero diff to `app.py`/`modules/`; `py_compile` clean; `eval/autocleaner_eval.py` 8/8. |
-| CI | PENDING | Not yet pushed/opened as a PR from this checkpoint. |
+| CI | PASS | All 5 checks green on PR #11's final head `63daaaf`: phase-1-python, phase-1-web, phase-4-live-e2e, legacy-regression, secret-scan. (`sql-lab-live.spec.ts` flaked once on the prior head, unrelated to this PR's diff — same test/failure signature as an earlier, unrelated PR in this lineage; confirmed by a clean re-run with no code change, per the one-re-run flake-confirmation rule.) |
+| Post-merge review | PASS | Codex's automated review found two real gaps in this session's own new code before merge: (P1) the dataset-revision object id was keyed on `(dataset_id, revision)` only, so `DatasetStore.revert()` reusing a revision number for different data after undo would silently resolve to the abandoned branch's object; (P2) first-touch registration wasn't race-safe, so two concurrent producers could turn a duplicate-id `ValueError` into a 500. Both fixed and covered by new regression tests before merge (`63daaaf`). |
 
 ## Verdict
 
-**LOCALLY COMPLETE.** Every gate above that can be verified without a live
-CI run passes. The branch is ready to push and open as a PR into
-`phase-6.5-integration-staging`; merge only once CI is green there too.
+**COMPLETE.** Every gate passes, including live CI on the final head. PR #11
+merged into `phase-6.5-integration-staging` at `670d670ee0cdaaff7a6a62f1281d2df8b6802cf8`.
 
 ## Known limitation, restated
 
