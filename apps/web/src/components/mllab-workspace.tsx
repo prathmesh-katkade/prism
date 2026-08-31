@@ -13,6 +13,7 @@ import type {
   OverviewProfileResponse,
 } from "@prism/api-contracts";
 import { apiUrl } from "../config/api";
+import { newestAnalyticalObjectId } from "./analytical-history";
 import type { InspectorObjectState } from "../state/shell-model";
 
 type MlUiState = "empty" | "loading" | "ready" | "error";
@@ -95,7 +96,8 @@ export function MlLabWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
       if (!response.ok) throw new Error((await response.json() as { detail?: string }).detail ?? "The baseline models could not be run.");
       const body = await response.json() as MlBaselineResult;
       setBaselineResult(body);
-      onSelectContext({ objectId: `ml-baseline:${targetCol}`, label: `Baseline — ${targetCol}`, type: "finding", state: "ready", actions: [{ id: "atlas-compare-models", label: "Ask Atlas to compare models" }], metadata: [body.task_type, body.verdict] });
+      const analyticalObjectId = await newestAnalyticalObjectId(datasetId, "ml_model");
+      onSelectContext({ objectId: `ml-baseline:${targetCol}`, label: `Baseline — ${targetCol}`, type: "finding", state: "ready", actions: [{ id: "atlas-compare-models", label: "Ask Atlas to compare models" }], metadata: [body.task_type, body.verdict], ...(analyticalObjectId ? { analyticalObjectId } : {}) });
     } catch (reason) { setError(reason instanceof Error ? reason.message : "The baseline models could not be run."); }
     finally { setRunning(false); }
   }

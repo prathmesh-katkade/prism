@@ -52,6 +52,10 @@ services:
       # never point it at a publicly exposed tunnel of a local machine.
       - key: PRISM_AI_PROVIDER
         value: deterministic
+      # Required for restart-safe Phase 9 analytical history. Configure this as
+      # a managed MySQL URL in Render; do not put credentials in this file.
+      - key: PRISM_ANALYTICAL_HISTORY_DATABASE_URL
+        sync: false
 
   - type: web
     name: prism-native-web-staging

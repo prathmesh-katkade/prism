@@ -1,5 +1,20 @@
 # PRISM Claude Session Handoff
 
+## Phase 9: IN PROGRESS — durable-history checkpoint (2026-09-01)
+
+- Work is isolated on `phase-9-productization`, based on canonical staging
+  `4b0a271` (runtime unchanged from certified Phase 8 merge `4b291898`).
+- Phase 8 public staging health, readiness, and web root answered HTTP 200 on
+  2026-09-01, but exact deployment identity cannot be proven without Render
+  access. Status remains `BLOCKED_EXTERNAL_DEPLOYMENT_ACCESS` for deployment.
+- ADR 0005 and the first SQLAlchemy-backed durable registry checkpoint are in
+  the worktree. It persists immutable snapshots/direct edges and passes its
+  direct restart, lineage, idempotency, and redaction tests. It is **not** a
+  Phase 9 completion claim; see `PHASE9_IMPLEMENTATION_LEDGER.md` for the
+  explicit outstanding product, operation, and release work.
+
+---
+
 ## Phase 8: COMPLETE — all sub-phases (8A–8H) merged (2026-08-31)
 
 **Read this section first — it supersedes everything below it until the next

@@ -11,6 +11,7 @@ import type {
   OverviewProfileResponse,
 } from "@prism/api-contracts";
 import { apiUrl } from "../config/api";
+import { newestAnalyticalObjectId } from "./analytical-history";
 import type { InspectorObjectState } from "../state/shell-model";
 
 type ForecastingUiState = "empty" | "loading" | "ready" | "error";
@@ -60,7 +61,8 @@ export function ForecastingWorkspace({ datasetId, onSelectContext, onOpenWorkflo
         if (!response.ok) throw new Error((await response.json() as { detail?: string }).detail ?? "This series could not be forecast.");
         const body = await response.json() as ForecastResult;
         setForecastResult(body);
-        onSelectContext({ objectId: `forecast:${datetimeCol}:${numericCol}`, label: `Forecast — ${numericCol}`, type: "finding", state: "ready", actions: [{ id: "atlas-explain-method", label: "Ask Atlas to explain" }], metadata: [body.model_used, `${body.horizon} periods ahead`] });
+        const analyticalObjectId = await newestAnalyticalObjectId(datasetId, "forecast");
+        onSelectContext({ objectId: `forecast:${datetimeCol}:${numericCol}`, label: `Forecast — ${numericCol}`, type: "finding", state: "ready", actions: [{ id: "atlas-explain-method", label: "Ask Atlas to explain" }], metadata: [body.model_used, `${body.horizon} periods ahead`], ...(analyticalObjectId ? { analyticalObjectId } : {}) });
       } else if (mode === "decompose") {
         const response = await fetch(apiUrl(`/api/v1/forecasting/datasets/${datasetId}/decompose`), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ datetime_col: datetimeCol, numeric_col: numericCol }) });
         if (!response.ok) throw new Error((await response.json() as { detail?: string }).detail ?? "This series could not be decomposed.");

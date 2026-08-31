@@ -8,7 +8,6 @@ from typing import Any, List, Optional
 
 from prism_analytical_schemas import (
     AnalyticalObject,
-    AnalyticalObjectRegistry,
     AnalyticalProvenance,
     CleaningReproducibilitySpec,
     DatasetRef,
@@ -34,8 +33,9 @@ from prism_api_contracts import (
 from prism_overview_analytics import ANALYTICS_SERVICE_VERSION
 
 from .overview import StoredDataset
+from .durable_registry import DurableAnalyticalObjectRegistry, create_history_registry
 
-registry = AnalyticalObjectRegistry()
+registry: DurableAnalyticalObjectRegistry = create_history_registry()
 
 
 def _dataset_ref(stored: StoredDataset) -> DatasetRef:

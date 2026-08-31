@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import type { AtlasVisualizeResponse, OverviewProfileResponse, VisualizationDataResponse, VisualizationSpec, VisualizationSuggestion, VizMark } from "@prism/api-contracts";
 import { apiUrl } from "../config/api";
+import { newestAnalyticalObjectId } from "./analytical-history";
 import type { InspectorObjectState } from "../state/shell-model";
 
 type VizUiState = "empty" | "loading" | "ready" | "error";
@@ -42,7 +43,8 @@ export function VisualizeWorkspace({ datasetId, onSelectContext, onOpenWorkflow 
       if (!response.ok) throw new Error((await response.json() as { detail?: string }).detail ?? "This chart could not be rendered.");
       const body = await response.json() as VisualizationDataResponse;
       setData(body);
-      onSelectContext({ objectId: `chart:${nextSpec.dimension ?? "distribution"}:${nextSpec.measure ?? ""}`, label: `${nextSpec.mark} chart`, type: "finding", state: "ready", actions: [{ id: "atlas-explain-chart", label: "Ask Atlas to explain this chart" }], metadata: [`${body.data.length} points shown`, body.truncated ? "truncated" : "complete"] });
+      const analyticalObjectId = await newestAnalyticalObjectId(id, "visualization");
+      onSelectContext({ objectId: `chart:${nextSpec.dimension ?? "distribution"}:${nextSpec.measure ?? ""}`, label: `${nextSpec.mark} chart`, type: "finding", state: "ready", actions: [{ id: "atlas-explain-chart", label: "Ask Atlas to explain this chart" }], metadata: [`${body.data.length} points shown`, body.truncated ? "truncated" : "complete"], ...(analyticalObjectId ? { analyticalObjectId } : {}) });
     } catch (reason) { setError(reason instanceof Error ? reason.message : "This chart could not be rendered."); }
   }, [onSelectContext]);
 
