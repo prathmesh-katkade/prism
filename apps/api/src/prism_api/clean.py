@@ -37,6 +37,7 @@ from prism_api_contracts import (
 )
 from prism_overview_analytics import build_overview
 
+from .analytical_objects import register_clean_transformation
 from .overview import StoredDataset
 from .overview import store as overview_store
 
@@ -247,6 +248,7 @@ def apply_transformation(dataset_id: str, request: CleanTransformationRequest) -
         reversible=True, created_at=datetime.now(timezone.utc),
     )
     _history.setdefault(dataset_id, []).append(transformation)
+    register_clean_transformation(stored, transformation, warnings)
     return CleanApplyResponse(dataset=dataset, transformation=transformation, issues=detect_issues(updated), health=_health(updated))
 
 

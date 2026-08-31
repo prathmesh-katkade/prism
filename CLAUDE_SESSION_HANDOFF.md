@@ -1,5 +1,28 @@
 # PRISM Claude Session Handoff
 
+## Phase 8A closeout / Phase 8B prerequisite (2026-08-31)
+
+- Working branch: `phase-8-provenance-lineage`
+- Canonical base: `phase-6.5-integration-staging` at
+  `2741c2ef3c242d3edff7a46beda2acd437da25ac`
+- Status: review fixes pending CI before PR #10 may merge. CI run #98 is green
+  for `ff8a6338814f67e4add58730b112464defe66787` (including phase-4-live-e2e),
+  but later review corrections require a final validation run.
+- Scope: Phase 8A only — canonical analytical object/provenance contracts,
+  append-only in-process registry, and representative Stats/Clean producers.
+- Invariants: `DatasetStore` remains the authoritative revision system; legacy
+  Streamlit stays untouched as the parity/rollback reference; existing Phase
+  3–7 HTTP contracts remain unchanged; no database is introduced.
+- Do not start: dependency graph, staleness propagation, reruns, lineage UI,
+  Atlas lineage awareness, or Phase 9.
+- Canonical records: `PHASE8_IMPLEMENTATION_LEDGER.md` and
+  `.prism/checkpoints/phase-8a.md`.
+- Validate the review fixes in CI, then merge PR #10, record its exact merge
+  commit, and start 8B only from the resulting clean staging lineage. Do not
+  expand 8A into graph, staleness, rerun, Atlas, or UI work.
+
+---
+
 Timestamp: 2026-08-29T22:10:00Z (approx.)
 Repository: prathmesh-katkade/prism
 Current branch: `phase-6.5-integration-staging` (this session's working branch, `phase-7-staging-hardening`, is merged and can be deleted)
