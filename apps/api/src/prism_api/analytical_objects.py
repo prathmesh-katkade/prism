@@ -46,32 +46,48 @@ def _dataset_ref(stored: StoredDataset) -> DatasetRef:
     )
 
 
-def _dataset_revision_object_id(dataset_id: str, revision: int) -> str:
-    return f"dsrev_{dataset_id}_r{revision}"
+def _dataset_revision_object_id(ref: DatasetRef) -> str:
+    """Keyed on the full (dataset_id, revision, source_fingerprint) identity, not just
+    (dataset_id, revision).
+
+    ``DatasetStore.revert`` truncates history to an earlier revision and a later
+    transformation then reuses that same revision *number* for a genuinely different
+    piece of data (see ``DatasetStore.add_revision``/``revert``) - the revision number
+    alone is not a stable identity across an undo-then-redo-differently sequence. The
+    fingerprint is what actually distinguishes the two branches, so it is part of the
+    object id: registering the second branch's revision creates a new object rather than
+    silently returning the first branch's (now-abandoned) one.
+    """
+    return f"dsrev_{ref.dataset_id}_r{ref.revision}_{ref.source_fingerprint[:16]}"
 
 
-def ensure_dataset_revision(ref: DatasetRef) -> AnalyticalObject:
-    """Idempotently mirror one DatasetStore dataset/revision identity into the registry.
+def ensure_dataset_revision(ref: DatasetRef, parent: Optional[AnalyticalObject] = None) -> AnalyticalObject:
+    """Idempotently mirror one DatasetStore dataset/revision/fingerprint identity into the
+    registry.
 
     DatasetStore remains the sole revision authority (rule: "exactly one canonical
-    analytical object for a given DatasetStore revision identity"); this only registers
-    a durable record for it the first time any producer needs to reference it, and
-    returns the existing record on every later call for the same identity - callers
-    never need to check "does this exist yet" themselves. If the immediately preceding
-    revision has already been registered, this links it as the direct parent (revision
-    ancestry); DatasetStore only ever creates a new revision by incrementing the current
-    one by exactly one (see ``DatasetStore.add_revision``), so that predecessor is always
-    the correct direct parent when it exists.
+    analytical object for a given DatasetStore revision identity"); this only registers a
+    durable record for it the first time any producer needs to reference it, and returns
+    the existing record on every later call for the same identity - callers never need to
+    check "does this exist yet" themselves. ``parent`` is only ever meaningful from
+    ``register_clean_transformation`` (the one place that actually creates a new
+    revision, and so is the only place that actually knows the correct predecessor);
+    every other producer calls this with no ``parent`` for a revision it only reads -
+    that revision's dataset-revision object, if it is not revision 0, was necessarily
+    already registered (with its correct parent) by whichever Clean call produced it,
+    since DatasetStore revisions are only ever created that way.
+
+    Registration itself is race-safe: if two requests are the first concurrent producers
+    to touch the same identity, both may see it absent and both call ``registry.register``;
+    the loser's ``ValueError`` (duplicate id) is caught here and resolved by returning the
+    winner's own already-registered record, rather than surfacing as a 500 on top of an
+    otherwise-successful computation.
     """
-    object_id = _dataset_revision_object_id(ref.dataset_id, ref.revision)
+    object_id = _dataset_revision_object_id(ref)
     existing = registry.get(object_id)
     if existing is not None:
         return existing
-    parent_refs: list[ParentRef] = []
-    if ref.revision > 0:
-        parent_id = _dataset_revision_object_id(ref.dataset_id, ref.revision - 1)
-        if registry.exists(parent_id):
-            parent_refs.append(ParentRef(object_id=parent_id, relation="revision_of"))
+    parent_refs = [ParentRef(object_id=parent.object_id, relation="revision_of")] if parent is not None else []
     record = AnalyticalObject(
         object_id=object_id,
         kind=ObjectKind.DATASET_REVISION,
@@ -88,7 +104,13 @@ def ensure_dataset_revision(ref: DatasetRef) -> AnalyticalObject:
         ),
         payload={},
     )
-    return registry.register(record)
+    try:
+        return registry.register(record)
+    except ValueError:
+        winner = registry.get(object_id)
+        if winner is None:
+            raise  # a genuinely different failure (e.g. self-parent) - do not mask it
+        return winner
 
 
 def _derived_from(stored: StoredDataset) -> tuple[DatasetRef, list[ParentRef]]:
@@ -173,7 +195,7 @@ def register_clean_transformation(
         revision=transformation.resulting_revision,
         source_fingerprint=transformation.resulting_fingerprint,
     )
-    ensure_dataset_revision(resulting_ref)
+    ensure_dataset_revision(resulting_ref, parent=source_dataset_revision)
     record = AnalyticalObject(
         object_id=f"clean_{transformation.transformation_id}",
         kind=ObjectKind.CLEANING_PLAN,

@@ -134,6 +134,73 @@ def test_clean_produces_correct_revision_ancestry_across_two_transformations() -
     assert [ref.object_id for ref in clean_record_2.provenance.parent_refs] == [dsrev_1.object_id]
 
 
+def test_undo_then_a_different_transformation_disambiguates_the_reused_revision_number() -> None:
+    """DatasetStore.revert truncates history and a later transformation reuses the same
+    revision *number* for genuinely different data - the dataset-revision object identity
+    must include the fingerprint, not just (dataset_id, revision), or the second branch
+    would silently resolve to the first branch's abandoned object."""
+    client = TestClient(create_app())
+    dataset_id = _dataset(client, b"x,y\n1,2\n1,2\n,4\n")
+
+    first = client.post(f"/api/v1/clean/datasets/{dataset_id}/apply", json={"operation": "drop_duplicates"})
+    assert first.status_code == 201
+    branch_a = registry.list_for_dataset(dataset_id, revision=1, kind=ObjectKind.DATASET_REVISION)[0]
+
+    undo = client.post(f"/api/v1/clean/datasets/{dataset_id}/undo", json={"to_revision": 0})
+    assert undo.status_code == 200
+
+    second = client.post(f"/api/v1/clean/datasets/{dataset_id}/apply", json={"operation": "fill_missing", "column": "x", "fill_strategy": "median"})
+    assert second.status_code == 201
+    branch_b = registry.list_for_dataset(dataset_id, revision=1, kind=ObjectKind.DATASET_REVISION)[0]
+
+    # Both branches really do share the same DatasetStore revision *number*...
+    assert branch_a.provenance.dataset.revision == branch_b.provenance.dataset.revision == 1
+    # ...but they are distinct objects for distinct data, both still present in history.
+    assert branch_a.object_id != branch_b.object_id
+    assert branch_a.provenance.dataset.source_fingerprint != branch_b.provenance.dataset.source_fingerprint
+    all_revision_1 = registry.list_for_dataset(dataset_id, revision=1, kind=ObjectKind.DATASET_REVISION)
+    assert {r.object_id for r in all_revision_1} == {branch_a.object_id, branch_b.object_id}
+    # A producer resolving "the current revision" now (DatasetStore's own current pointer,
+    # which undo/apply already moved to branch_b) must land on branch_b, not the abandoned
+    # branch_a - i.e. re-ensuring the *currently active* revision is idempotent against
+    # branch_b, never branch_a.
+    from prism_api.overview import store as overview_store
+
+    stored = overview_store.get(dataset_id)
+    assert stored.dataset.revision == 1
+    assert stored.source_fingerprint == branch_b.provenance.dataset.source_fingerprint
+    current_ref = DatasetRef(dataset_id=dataset_id, revision=stored.dataset.revision, source_fingerprint=stored.source_fingerprint)
+    resolved = ensure_dataset_revision(current_ref)
+    assert resolved.object_id == branch_b.object_id
+
+
+def test_concurrent_first_touch_registration_never_500s_and_both_callers_get_the_same_object() -> None:
+    """Two concurrent producers racing to be the first to register the same dataset-revision
+    identity must both succeed and agree on the same record, never surface the registry's
+    internal duplicate-id ValueError as a 500."""
+    import threading
+
+    from prism_api.analytical_objects import ensure_dataset_revision
+
+    ref = DatasetRef(dataset_id="ds_race_test", revision=0, source_fingerprint="b" * 64)
+    results: list[AnalyticalObject] = []
+    barrier = threading.Barrier(8)
+
+    def worker() -> None:
+        barrier.wait()
+        results.append(ensure_dataset_revision(ref))
+
+    threads = [threading.Thread(target=worker) for _ in range(8)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert len(results) == 8
+    assert len({record.object_id for record in results}) == 1
+    assert len(registry.list_for_dataset("ds_race_test", revision=0, kind=ObjectKind.DATASET_REVISION)) == 1
+
+
 def test_stats_result_points_to_the_correct_dataset_revision_object_as_its_direct_parent() -> None:
     client = TestClient(create_app())
     dataset_id = _dataset(client)
