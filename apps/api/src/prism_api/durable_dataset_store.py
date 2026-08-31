@@ -33,6 +33,7 @@ _revisions = Table(
     Column("is_active", Boolean, nullable=False, index=True),
     Column("activated_at", DateTime(timezone=True), nullable=False, index=True),
 )
+_schema = Table("prism_dataset_schema_version", _metadata, Column("version", Integer, primary_key=True))
 
 
 @dataclass(frozen=True)
@@ -54,6 +55,9 @@ class DurableDatasetStore:
         url = database_url or history_database_url()
         self.engine = create_engine(url, future=True, pool_pre_ping=True, connect_args={"check_same_thread": False} if url.startswith("sqlite") else {})
         _metadata.create_all(self.engine)
+        with self.engine.begin() as connection:
+            if connection.execute(select(_schema.c.version).limit(1)).scalar_one_or_none() is None:
+                connection.execute(insert(_schema).values(version=1))
 
     @staticmethod
     def _stored(row) -> StoredDataset:  # type: ignore[no-untyped-def]
