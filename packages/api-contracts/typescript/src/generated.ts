@@ -45,6 +45,24 @@ export interface AiEvidence {
 
 export type AiProviderStatus = "deterministic" | "ollama" | "fallback";
 
+export interface AnalyticalObject {
+  object_id: string;
+  kind: ObjectKind;
+  lifecycle: LifecycleState;
+  provenance: AnalyticalProvenance;
+  schema_version?: string;
+  payload?: Record<string, unknown>;
+}
+
+export interface AnalyticalProvenance {
+  dataset: DatasetRef;
+  parent_refs?: ParentRef[];
+  warnings?: string[];
+  evidence_refs?: EvidenceRef[];
+  reproducibility: CleaningReproducibilitySpec | StatisticalTestReproducibilitySpec | GenericReproducibilitySpec;
+  created_at: string;
+}
+
 export type AtlasCleanAction = "explain_issue" | "propose_fix" | "compare_before_after";
 
 export interface AtlasCleanRequest {
@@ -259,10 +277,23 @@ export interface CleanUndoRequest {
   to_revision: number;
 }
 
+export interface CleaningReproducibilitySpec {
+  producer: Producer;
+  kind?: string;
+  operation: string;
+  parameters?: Record<string, unknown>;
+}
+
 export interface CorrelationFinding {
   left: string;
   right: string;
   coefficient: number;
+}
+
+export interface DatasetRef {
+  dataset_id: string;
+  revision: number;
+  source_fingerprint: string;
 }
 
 export interface DatasetRowsResponse {
@@ -296,6 +327,12 @@ export interface DecompositionResult {
 export interface DistributionBucket {
   label: unknown;
   count: number;
+}
+
+export interface EvidenceRef {
+  evidence_id: string;
+  kind: string;
+  summary?: string;
 }
 
 export type FillStrategy = "mean" | "median" | "mode" | "constant" | "forward_fill";
@@ -340,6 +377,13 @@ export interface ForecastResult {
   provenance: OverviewProvenance;
 }
 
+export interface GenericReproducibilitySpec {
+  producer: Producer;
+  kind?: string;
+  operation: string;
+  parameters?: Record<string, unknown>;
+}
+
 export interface HTTPValidationError {
   detail?: ValidationError[];
 }
@@ -350,6 +394,8 @@ export interface HealthResponse {
   generated_at: string;
   migrations: MigrationState[];
 }
+
+export type LifecycleState = "draft" | "completed" | "failed" | "stale" | "archived";
 
 export interface MigrationState {
   workflow: string;
@@ -494,6 +540,8 @@ export interface NumericSummary {
   kurtosis?: string;
 }
 
+export type ObjectKind = "dataset_revision" | "profile" | "query_result" | "cleaning_plan" | "visualization" | "analysis" | "forecast" | "ml_model" | "evidence";
+
 export interface OutlierFinding {
   count: number;
   pct: number;
@@ -562,6 +610,16 @@ export interface OverviewQuality {
 export interface OverviewSuggestion {
   workflow: string;
   reason: string;
+}
+
+export interface ParentRef {
+  object_id: string;
+  relation?: string;
+}
+
+export interface Producer {
+  service: string;
+  version: string;
 }
 
 export interface ProviderReadiness {
@@ -745,6 +803,14 @@ export interface StatTestResult {
   evidence_statement: string;
   warnings?: string[];
   provenance: OverviewProvenance;
+}
+
+export interface StatisticalTestReproducibilitySpec {
+  producer: Producer;
+  kind?: string;
+  test: string;
+  columns: string[];
+  parameters?: Record<string, unknown>;
 }
 
 export interface ValidationError {

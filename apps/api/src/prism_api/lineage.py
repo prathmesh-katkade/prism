@@ -1,5 +1,7 @@
 """Phase 8B read-only analytical-object registry API."""
 
+from __future__ import annotations
+
 from fastapi import APIRouter, HTTPException, Query, status
 from prism_analytical_schemas import AnalyticalObject, ObjectKind
 
@@ -19,7 +21,7 @@ def get_object(object_id: str) -> AnalyticalObject:
 @router.get("/datasets/{dataset_id}/objects", response_model=list[AnalyticalObject])
 def list_objects(
     dataset_id: str,
-    revision: int | None = Query(default=None, ge=0),
-    kind: ObjectKind | None = Query(default=None),
+    revision: int | None = Query(None, ge=0),
+    kind: ObjectKind | None = None,
 ) -> list[AnalyticalObject]:
     return registry.list_for_dataset(dataset_id, revision=revision, kind=kind)

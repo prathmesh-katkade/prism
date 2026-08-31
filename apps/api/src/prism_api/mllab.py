@@ -63,6 +63,7 @@ from sklearn.model_selection import KFold, StratifiedKFold, cross_validate, trai
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
+from .analytical_objects import register_ml_result
 from .overview import StoredDataset
 from .overview import store as overview_store
 
@@ -432,12 +433,22 @@ def baseline(dataset_id: str, request: MlBaselineRequest) -> MlBaselineResult:
     else:
         cv = MlCvResult(results={model: {metric: MlCvMetric(**values) for metric, values in metrics.items()} for model, metrics in cv_results["results"].items()}, n_splits=cv_results["n_splits"])
 
-    return MlBaselineResult(
+    baseline_result = MlBaselineResult(
         task_type=task_type, results=result["results"], confusion_matrix=result["confusion_matrix"], confusion_labels=result["confusion_labels"],
         feature_importances=feature_importances, n_train=result["n_train"], n_test=result["n_test"], smote_before_after=result["smote_before_after"],
         cv=cv, cv_error=cv_error, verdict=verdict, leakage_note=LEAKAGE_NOTE,
         provenance=_provenance(stored, "baseline", {"feature_cols": request.feature_cols, "target_col": request.target_col, "task_type": task_type.value, "use_smote": request.use_smote, "split": "80/20 stratified" if task_type is MlTaskType.CLASSIFICATION else "80/20"}),
     )
+    register_ml_result(
+        stored, "baseline",
+        {
+            "feature_cols": request.feature_cols, "target_col": request.target_col, "task_type": task_type.value,
+            "models": ["Baseline", "Random Forest"], "seed": SEED, "use_smote": request.use_smote,
+            "split": "80/20 stratified" if task_type is MlTaskType.CLASSIFICATION else "80/20",
+            "cv_n_splits": cv.n_splits if cv is not None else None,
+        },
+    )
+    return baseline_result
 
 
 # --- Feature selection: three-method consensus ------------------------------------
@@ -522,10 +533,18 @@ def feature_selection(dataset_id: str, request: MlFeatureSelectionRequest) -> Ml
         MlFeatureRankingRow(feature=str(name), mutual_info=float(row["mutual_info"]), mutual_info_rank=float(row["mutual_info_rank"]), l1_coef_abs=float(row["l1_coef_abs"]), l1_rank=float(row["l1_rank"]), rfe_selected=bool(row["rfe_selected"]), rfe_rank=float(row["rfe_rank"]), consensus_votes=int(row["consensus_votes"]), consensus_rank=float(row["consensus_rank"]))
         for name, row in ranking_df.iterrows()
     ]
-    return MlFeatureSelectionResult(
+    feature_selection_result = MlFeatureSelectionResult(
         task_type=task_type, top_k=result["top_k"], n_features=result["n_features"], ranking=rows, recommended_features=[str(f) for f in result["recommended_features"]],
         provenance=_provenance(stored, "feature_selection", {"feature_cols": request.feature_cols, "target_col": request.target_col, "task_type": task_type.value, "top_k": result["top_k"]}),
     )
+    register_ml_result(
+        stored, "feature_selection",
+        {
+            "feature_cols": request.feature_cols, "target_col": request.target_col, "task_type": task_type.value,
+            "top_k": result["top_k"], "methods": ["mutual_info", "l1", "rfe"],
+        },
+    )
+    return feature_selection_result
 
 
 # --- SHAP explainability: global importance for the Random Forest ---------------------
@@ -579,12 +598,20 @@ def shap_explain(dataset_id: str, request: MlShapRequest) -> MlShapResult:
     mean_abs = np.abs(display_values.values).mean(axis=0)
     ranked = sorted(zip(result["feature_names"], mean_abs), key=lambda item: -item[1])[:SHAP_MAX_DISPLAY]
 
-    return MlShapResult(
+    shap_result = MlShapResult(
         task_type=task_type, model_explained="Random Forest",
         global_importance=[MlShapImportance(feature=name, mean_abs_shap=float(value)) for name, value in ranked],
         note="Global importance is the mean absolute SHAP value per feature across the test set — how much each feature moved predictions away from the baseline, on average, in either direction. This describes what the model used, not what causes the outcome.",
         provenance=_provenance(stored, "shap", {"feature_cols": request.feature_cols, "target_col": request.target_col, "task_type": task_type.value, "model_explained": "Random Forest"}),
     )
+    register_ml_result(
+        stored, "shap",
+        {
+            "feature_cols": request.feature_cols, "target_col": request.target_col, "task_type": task_type.value,
+            "model_explained": "Random Forest", "seed": SEED,
+        },
+    )
+    return shap_result
 
 
 # --- Atlas: explains the deterministic result, never invents or retrains a model --------
