@@ -377,6 +377,22 @@ export interface ForecastResult {
   provenance: OverviewProvenance;
 }
 
+export interface FreshnessAssessment {
+  object_id: string;
+  state: FreshnessState;
+  freshness_known: boolean;
+  dataset_id: string;
+  object_revision: number;
+  object_fingerprint: string;
+  active_revision?: number;
+  active_fingerprint?: string;
+  reason_code: string;
+  reason: string;
+  assessed_at: string;
+}
+
+export type FreshnessState = "current" | "stale" | "superseded" | "unknown" | "invalid";
+
 export interface GenericReproducibilitySpec {
   producer: Producer;
   kind?: string;

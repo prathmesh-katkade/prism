@@ -449,3 +449,57 @@ run typecheck`, `npm run test:web` (22 tests, unchanged — no frontend code
 touched), `npm run a11y:baseline`, `npm run build:web` → all clean. Legacy
 Streamlit: zero diff to `app.py`/`modules/`, `py_compile` clean,
 `eval/autocleaner_eval.py` 8/8.
+
+## 8D — Versioning + Staleness Propagation
+
+**Base:** `phase-6.5-integration-staging` at `68377c7` (PR #12 / Phase 8C
+merge + docs). Branch: `phase-8-completion`.
+
+**Objective:** Contextual freshness (`current`/`stale`/`superseded`/`unknown`/
+`invalid`) computed live against `DatasetStore`'s active identity, with
+`AnalyticalObject` staying fully immutable — freshness is a read-time
+assessment, never a stored field.
+
+**Model:** `FreshnessState` + `FreshnessAssessment` in
+`prism_analytical_schemas`, alongside `AnalyticalObject`. `CURRENT`: exact
+`(dataset_id, revision, source_fingerprint)` match against DatasetStore's
+active identity. `STALE`: a non-`DATASET_REVISION` object whose upstream
+identity is no longer active — old is not invalid, and remains valid
+historical evidence. `SUPERSEDED`: reserved for `DATASET_REVISION` objects
+themselves (an old revision, or a same-revision-number branch abandoned by
+undo/redo) — a version is superseded, not stale. `UNKNOWN`
+(`freshness_known=false`): the process-local `DatasetStore` no longer
+resolves the dataset_id (e.g. after a restart) — never guessed. `INVALID`:
+defined per spec, reserved for genuine corruption; no code path in this
+implementation produces it (age alone never does).
+
+**No new graph engine:** `apps/api/src/prism_api/freshness_service.py`
+computes per-object freshness as a direct identity comparison — every
+producer already pins the exact revision/fingerprint it consumed into its own
+`provenance.dataset` (Phase 8A/8B), so propagation is "free": every
+descendant of a superseded revision is, by construction, already pointing at
+that old identity, with no separate propagation step or lag. The one place
+Phase 8C's own `registry.descendants()` is called is to size the "N objects
+still depend on this revision" text in a superseded dataset-revision object's
+reason — reusing 8C's traversal rather than writing a second one.
+
+**API:** `GET /api/v1/lineage/objects/{object_id}/freshness` (404 for an
+unknown object), `GET /api/v1/lineage/datasets/{dataset_id}/freshness`
+(empty list, never 404, matching `/datasets/{id}/objects`'s own convention).
+No mutation route (no `POST /mark-stale`, no `PATCH /freshness`).
+
+**Tests:** `tests/api/test_phase8d_freshness.py`, 13 tests — current/stale/
+superseded/unknown states, multiple descendants staling together, the
+dataset-revision-vs-analysis distinction, immediate (non-lagged) staleness on
+a further Clean apply, fingerprint-safe undo/redo (an abandoned branch never
+reads current just because its revision number was reused), partial-history
+safety (a synthetic dataset_id absent from a fresh `DatasetStore`), Phase 8C
+traversal unaffected, secret redaction through the freshness endpoint, and
+performance at 1,000 synthetic objects.
+
+**Quality gates:** `pytest tests/ apps/api -q` → 797 passed, 4 pre-existing
+skips; `ruff check` clean; CI's exact mypy invocation clean;
+`tools/check_boundaries.py`/`tools/check_secrets.py` clean;
+`tools/generate_typescript_contracts.py --check` clean after regenerating
+(`FreshnessState`/`FreshnessAssessment` now in `generated.ts`). Full gate
+record: `.prism/checkpoints/phase-8d.md`.

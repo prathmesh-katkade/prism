@@ -1,9 +1,12 @@
-"""Phase 8B/8C read-only analytical-object registry and lineage-traversal API.
+"""Phase 8B/8C/8D read-only analytical-object registry, lineage-traversal, and
+freshness API.
 
 Phase 8C adds deterministic graph traversal (parents/children/ancestors/descendants/
-graph/path) on top of Phase 8B's read-only object retrieval - all still read-only,
-still built only from the direct `parent_refs` links producers already record, never
-AI-inferred. No write route exists, or may be added, under this router.
+graph/path) on top of Phase 8B's read-only object retrieval. Phase 8D adds contextual
+freshness (current/stale/superseded/unknown) computed live against DatasetStore's
+active identity - never stored on the object. All of it stays read-only, built only
+from links producers already record, never AI-inferred. No write route exists, or may
+be added, under this router.
 """
 
 from __future__ import annotations
@@ -11,14 +14,16 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Query, status
 from prism_analytical_schemas import (
     AnalyticalObject,
+    FreshnessAssessment,
     LineageDirection,
     LineagePath,
     LineageTraversal,
     ObjectKind,
 )
 
-from . import lineage_service
+from . import freshness_service, lineage_service
 from .analytical_objects import registry
+from .overview import store as overview_store
 
 router = APIRouter(prefix="/api/v1/lineage", tags=["lineage"])
 
@@ -105,3 +110,21 @@ def get_path(from_object_id: str, to_object_id: str) -> LineagePath:
     if result is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="One or both analytical objects were not found.")
     return result
+
+
+@router.get("/objects/{object_id}/freshness", response_model=FreshnessAssessment)
+def get_object_freshness(object_id: str) -> FreshnessAssessment:
+    """Contextual freshness for one object, computed live - never stored, never
+    changes the object it describes."""
+    result = freshness_service.assess_object(registry, overview_store, object_id)
+    if result is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_NOT_FOUND)
+    return result
+
+
+@router.get("/datasets/{dataset_id}/freshness", response_model=list[FreshnessAssessment])
+def get_dataset_freshness(dataset_id: str) -> list[FreshnessAssessment]:
+    """Freshness for every registered object of ``dataset_id``, newest-first. An
+    unknown or never-touched dataset returns an empty list, matching
+    `/datasets/{dataset_id}/objects`'s own behavior - never a 404."""
+    return freshness_service.assess_dataset(registry, overview_store, dataset_id)

@@ -239,3 +239,55 @@ class LineagePath(SchemaModel):
     found: bool
     nodes: List[LineageNode] = Field(default_factory=list)
     edges: List[LineageEdge] = Field(default_factory=list)
+
+
+class FreshnessState(str, Enum):
+    """Contextual freshness of an analytical object, assessed against the
+    dataset identity currently active in DatasetStore - never stored on the
+    object itself (historical evidence stays immutable; freshness is computed
+    fresh on every read).
+
+    CURRENT: the object's own (dataset_id, revision, source_fingerprint) is
+    exactly the identity DatasetStore currently has active for that dataset.
+
+    STALE: the object is valid historical evidence, but the upstream dataset
+    identity it depends on is no longer the active one. Being old does not by
+    itself make a result stale, and being stale never means it was wrong -
+    only that it no longer reflects the dataset's current state.
+
+    SUPERSEDED: reserved primarily for a DATASET_REVISION object itself, when
+    a newer revision (or, after an undo/redo, a different fingerprint at the
+    same revision number) is now the active one. A dataset-revision object
+    does not go "stale" the way an analysis does - it is a version, and a
+    version is superseded, not stale.
+
+    UNKNOWN: the object's dataset_id no longer resolves in this process-local
+    DatasetStore (e.g. after a restart wiped in-memory history the registry
+    itself may still remember). Never guessed as CURRENT or STALE.
+
+    INVALID: reserved for genuinely corrupt/unusable evidence. Not used for
+    "old" - old and unknown both have their own states above.
+    """
+
+    CURRENT = "current"
+    STALE = "stale"
+    SUPERSEDED = "superseded"
+    UNKNOWN = "unknown"
+    INVALID = "invalid"
+
+
+class FreshnessAssessment(SchemaModel):
+    """A contextual, point-in-time freshness read for one analytical object -
+    never persisted, never mutates the object it describes."""
+
+    object_id: str = Field(min_length=1)
+    state: FreshnessState
+    freshness_known: bool
+    dataset_id: str = Field(min_length=1)
+    object_revision: int = Field(ge=0)
+    object_fingerprint: str = Field(min_length=1)
+    active_revision: Optional[int] = None
+    active_fingerprint: Optional[str] = None
+    reason_code: str = Field(min_length=1)
+    reason: str = Field(min_length=1)
+    assessed_at: datetime
