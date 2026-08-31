@@ -152,9 +152,9 @@ def test_partial_history_staleness_explanation_is_a_limitation_not_a_guess() -> 
         LifecycleState,
         Producer,
     )
-    from prism_api_contracts import AtlasLineageAction
     from prism_api import atlas_lineage
     from prism_api.overview import DatasetStore
+    from prism_api_contracts import AtlasLineageAction
 
     local_registry = registry.__class__()
     local_registry.register(

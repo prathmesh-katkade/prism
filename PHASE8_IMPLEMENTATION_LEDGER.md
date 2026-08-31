@@ -619,3 +619,59 @@ safety, 404, secret safety). 2 new frontend tests. `pytest tests/ apps/api
 -q` → 820 passed, 4 pre-existing skips; `npm run test:web` → 31 passed.
 `ruff`/mypy (CI's exact invocation)/contracts/frontend gates all clean.
 Full gate record: `.prism/checkpoints/phase-8g.md`.
+
+## 8H — Hardening + Release Gate
+
+**Objective:** certify the entire 8D–8H system as one coherent
+production-quality feature set, on top of already-merged 8A/8B/8C. No new
+product scope.
+
+**8H.1 integration audit:** `tests/api/test_phase8h_integration_flows.py`,
+5 tests, all real HTTP through `TestClient`, no mocking — Flow A (upload →
+Stats → provenance → lineage → freshness → inspector-facing reads → rerun →
+new object → Atlas explanation), Flow B (Clean → staleness → Atlas explains
+why → Atlas recommends the exact stale object → rerun on current revision →
+refreshed, original still stale and byte-identical), Flow C (SQL → query
+object → Visualize → lineage graph → both remain fully, unchangedly
+readable after later Clean activity), Flow D (Forecast → Clean → stale →
+rerun → current), Flow E (ML baseline/feature-selection/SHAP → shared
+dataset-revision parentage → freshness → lineage navigation).
+
+**8H.2 self-review** against the mandated pitfall list (historical
+mutation, revision-number identity bugs, fingerprint mismatch, incorrect
+stale/current logic, broken graph direction, rerun overwriting/misusing
+history, Atlas hallucination, security leaks, full registry scans, race
+conditions, UI stale-state mismatch, a11y regression): clear on every item
+except one documented, low-risk, non-blocking limitation — a rerun's "read
+back the newest object of this kind/revision" step could in principle race
+against a *concurrent* rerun of the exact same object; not exercised by any
+required test, and closing it fully would need a larger refactor (each
+producer's response model returning the created object id directly) than
+Phase 8F's own scope called for. Full writeup: `PHASE8_FINAL_REPORT.md`.
+
+**8H.3–8H.7:** performance already covered per-phase (8C's 1,000/5,000-node
+traversal, 8D's 1,000-object freshness scale); no full-registry scan
+introduced anywhere in 8D–8G. Accessibility: `npm run a11y:baseline` clean
+throughout. Security: secret-redaction-over-HTTP verified per sub-phase.
+Full regression: `pytest tests/ apps/api -q` → 825 passed, 4 pre-existing
+skips; `npm run test:web` → 31 passed; legacy Streamlit zero diff,
+`py_compile` clean, eval 8/8. Full repo gates: `ruff check` clean; CI's
+exact mypy invocation clean; `tools/check_boundaries.py`/
+`tools/check_secrets.py` clean; `tools/generate_typescript_contracts.py
+--check` clean; `npm run lint`/`typecheck`/`test:web`/`a11y:baseline`/
+`build:web` all clean.
+
+**8H.8/8H.9 documentation:** `PHASE8_FINAL_REPORT.md` (executive summary,
+per-sub-phase architecture, performance, accessibility, security,
+regression, known limitations, deployment status, rollback, release
+status, Phase 9 handoff, final flags); `.prism/checkpoints/phase-8-final.md`
+(the release-gate table); `PHASE9_HANDOFF.md` (candidate directions,
+deliberately unscoped, nothing implemented).
+
+**Deployment:** `BLOCKED_EXTERNAL_DEPLOYMENT_ACCESS` — checked directly
+this session (no `RENDER_*` env var, no Render MCP connector, no
+browser-automation tool with authenticated console access); unchanged from
+every prior Phase 6.5–8C session's finding. Engineering- and
+CI-completeness remains this repository's established release bar (Phase
+6.5/7 precedent); this report states plainly that live deployment itself
+was not verified.
