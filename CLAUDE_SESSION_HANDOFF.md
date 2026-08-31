@@ -1,22 +1,23 @@
 # PRISM Claude Session Handoff
 
-## Phase 8C: deterministic lineage traversal — locally complete, PR pending (2026-08-31)
+## Phase 8C: deterministic lineage traversal — COMPLETE, merged (2026-08-31)
 
 **Read this section first — it supersedes everything below it until the next
 session updates this file again.**
 
-- Working branch: `phase-8c-lineage-traversal`, created from
-  `phase-6.5-integration-staging` at `670d670ee0cdaaff7a6a62f1281d2df8b6802cf8`
-  (PR #11 / Phase 8B merge). Locally verified, **not yet pushed/PR'd**.
+- **Phase 8C is CERTIFIED COMPLETE.** [PR #12](https://github.com/prathmesh-katkade/prism/pull/12)
+  (`phase-8c-lineage-traversal` → `phase-6.5-integration-staging`) merged at
+  merge commit `79b059f40a85a3ce5dc71500ca23286178ce5948` on 2026-08-31. All 5
+  CI checks passed on the only head this PR had
+  (`125b3f9b70a06a7465bd8ed63d92791e8d842e6e`) — no failures, no re-run
+  needed, no review comments raised before merge. Canonical base for
+  whatever comes next: `phase-6.5-integration-staging` at
+  `79b059f40a85a3ce5dc71500ca23286178ce5948`.
 - Phase 8A (PR #10, `4912610be584e2b3e9902500bd6585aeebb8a506`) and Phase 8B
-  (PR #11, `670d670ee0cdaaff7a6a62f1281d2df8b6802cf8`) are both MERGED. Do not
-  rebuild either.
-- Status: 8C is **locally complete** — see `.prism/checkpoints/phase-8c.md`
-  for the full gate table. Every gate checkable without a live CI run passes
-  (784 Python tests including 26 new Phase 8C tests, ruff/mypy under CI's
-  exact flags, boundaries, secret scan, fresh TS contracts, full frontend
-  gate, legacy regression all green). **Not yet pushed, no PR opened, no CI
-  run exists for this branch.**
+  (PR #11, `670d670ee0cdaaff7a6a62f1281d2df8b6802cf8`) are also MERGED,
+  underneath 8C. Do not rebuild any of them.
+- Full gate table: `.prism/checkpoints/phase-8c.md` — every gate PASS,
+  including live CI.
 - Scope delivered: a reverse child index maintained inline in `register()`
   (`AnalyticalObjectRegistry._child_index`); direct parent/child lookup
   (`GET /objects/{id}/parents`, `.../children`); deterministic, cycle-safe,
@@ -39,27 +40,20 @@ session updates this file again.**
   an API restart resets all analytical history, including the lineage graph.
   Persistence needs a dedicated architecture decision in a later phase, not
   attempted in 8A, 8B, or 8C.
-- Do not start: staleness/invalidation propagation, a rerun engine, Atlas
-  lineage awareness, a lineage UI, persistence, governance, or Phase 9.
+- **PHASE_8A_COMPLETE = YES, PHASE_8B_COMPLETE = YES, PHASE_8C_COMPLETE = YES,
+  PHASE_8D_STARTED = NO.**
+- **Nothing is pending from 8C.** Per explicit scope boundary, this session
+  stopped here and did **not** start Phase 8D. The documented (not
+  implemented) 8D starting point — Versioning + Staleness Propagation,
+  reusing 8C's own descendant traversal to answer "a dataset revision
+  changed; which downstream objects are now stale?", and nothing beyond that
+  (no invalidation propagation, rerun engine, Atlas lineage reasoning,
+  lineage UI, persistence, governance, or Phase 9) without a fresh scope
+  decision — is in `PHASE8_IMPLEMENTATION_LEDGER.md` and
+  `.prism/checkpoints/phase-8c.md`'s "8D starting point" section. Whoever
+  resumes should start there.
 - Canonical records: `PHASE8_IMPLEMENTATION_LEDGER.md` (8C section) and
   `.prism/checkpoints/phase-8c.md`.
-
-### Exact next step for whoever resumes this
-
-1. `git push -u origin phase-8c-lineage-traversal` (verify with `git log
-   --oneline origin/phase-8c-lineage-traversal..HEAD` first, in case another
-   session has since pushed to this branch).
-2. Open a PR from `phase-8c-lineage-traversal` into
-   `phase-6.5-integration-staging` (title suggestion: "Phase 8C: deterministic
-   lineage traversal").
-3. Wait for CI; fix any real failure (root-cause it — this session's local
-   verification was thorough, but CI's environment can still surface
-   something local checks can't).
-4. Merge once green, record the exact merge commit here and in
-   `.prism/checkpoints/phase-8c.md`, set `PHASE_8C_COMPLETE = YES`, and hand
-   off the already-documented (not implemented) 8D starting point —
-   Versioning + Staleness Propagation, reusing 8C's own descendant traversal —
-   **do not implement 8D itself** without a fresh, explicit scope decision.
 
 ---
 

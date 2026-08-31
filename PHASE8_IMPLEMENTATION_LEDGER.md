@@ -246,7 +246,15 @@ propagation, rerun/reproduction execution, Atlas lineage reasoning, or
 lineage/evidence frontend UI was implemented in 8A or 8B and none of it should
 be started without a separate scope decision.
 
-## 8C — Deterministic Dependency Graph / Lineage Traversal
+## 8C — Deterministic Dependency Graph / Lineage Traversal (COMPLETE — merged)
+
+**Status update:** [PR #12](https://github.com/prathmesh-katkade/prism/pull/12)
+passed CI on its only head (`125b3f9b70a06a7465bd8ed63d92791e8d842e6e`, all 5
+checks green, no re-run needed) and merged into
+`phase-6.5-integration-staging` at merge commit
+`79b059f40a85a3ce5dc71500ca23286178ce5948` on 2026-08-31. No review comments
+or threads were raised before merge. See `.prism/checkpoints/phase-8c.md` for
+the full gate record.
 
 **Base:** `phase-6.5-integration-staging` at
 `670d670ee0cdaaff7a6a62f1281d2df8b6802cf8` (PR #11 / Phase 8B merge). Branch:

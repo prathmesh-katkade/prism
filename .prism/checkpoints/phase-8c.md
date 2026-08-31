@@ -4,7 +4,10 @@
 - Base branch: `phase-6.5-integration-staging`
 - Base commit: `670d670ee0cdaaff7a6a62f1281d2df8b6802cf8` (PR #11 / Phase 8B merge)
 - Date: 2026-08-31
-- Status: **locally complete, PR pending**
+- Status: **COMPLETE — merged**
+- PR: [#12](https://github.com/prathmesh-katkade/prism/pull/12)
+- Final head: `125b3f9b70a06a7465bd8ed63d92791e8d842e6e`
+- Merge commit: `79b059f40a85a3ce5dc71500ca23286178ce5948` into `phase-6.5-integration-staging`
 
 ## Scope
 
@@ -44,13 +47,14 @@ lineage UI, database persistence, governance, or Phase 9 behavior.
 | Boundaries and secret scan | PASS | `tools/check_boundaries.py` clean; `tools/check_secrets.py` clean. |
 | Frontend gates | PASS | `npm run lint`, `npm run typecheck`, `npm run test:web` (22 tests, unchanged — no frontend code touched by 8C), `npm run a11y:baseline`, `npm run build:web` all clean. |
 | Legacy regression | PASS | Zero diff to `app.py`/`modules/`; `py_compile` clean; `eval/autocleaner_eval.py` 8/8. |
-| CI | PENDING | Not yet pushed/opened as a PR from this checkpoint. |
+| CI | PASS | All 5 checks green on PR #12's only head `125b3f9` (phase-1-python, phase-1-web, phase-4-live-e2e, legacy-regression, secret-scan) — no failures, no re-run needed. |
+| Review | PASS | No review comments or threads at merge time; `mergeable_state: clean`. |
 
 ## Verdict
 
-**LOCALLY COMPLETE.** Every gate checkable without a live CI run passes.
-Ready to push `phase-8c-lineage-traversal` and open a PR into
-`phase-6.5-integration-staging`.
+**COMPLETE.** Every gate passes, including live CI on the only head this PR
+had. PR #12 merged into `phase-6.5-integration-staging` at
+`79b059f40a85a3ce5dc71500ca23286178ce5948` on 2026-08-31.
 
 ## Known limitations, restated
 
@@ -81,6 +85,6 @@ Phase 9 work under this checkpoint.
 ```
 PHASE_8A_COMPLETE = YES
 PHASE_8B_COMPLETE = YES
-PHASE_8C_COMPLETE = NO   (locally complete; flips to YES once PR CI is green and merged - see the "Status" line at the top of this file for the current state)
+PHASE_8C_COMPLETE = YES
 PHASE_8D_STARTED = NO
 ```

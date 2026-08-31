@@ -1,12 +1,14 @@
 # Current migration phase
 
-**Phase:** 8C — Deterministic Dependency Graph / Lineage Traversal (**locally
-complete, PR pending**)
+**Phase:** 8C — Deterministic Dependency Graph / Lineage Traversal (**COMPLETE
+— merged**)
 
-**Working branch:** `phase-8c-lineage-traversal`.
+**Merged via:** [PR #12](https://github.com/prathmesh-katkade/prism/pull/12)
+at merge commit `79b059f40a85a3ce5dc71500ca23286178ce5948` into
+`phase-6.5-integration-staging`, 2026-08-31.
 
-**Canonical base:** `phase-6.5-integration-staging` at
-`670d670ee0cdaaff7a6a62f1281d2df8b6802cf8` (PR #11 — Phase 8B merge).
+**Canonical base for the next phase:** `phase-6.5-integration-staging` at
+`79b059f40a85a3ce5dc71500ca23286178ce5948` (PR #12 — Phase 8C merge).
 
 Phases 1–7 remain complete. Overview, SQL Lab, AI Analyst, Clean, Visualize,
 Stats, Forecasting, and ML Lab stay native and enabled; their Streamlit
@@ -73,11 +75,12 @@ routes, remain backward compatible and byte-for-byte unchanged; all 8C
 routes are additive.
 
 The implementation ledger is `PHASE8_IMPLEMENTATION_LEDGER.md` (8C section);
-the gate record is `.prism/checkpoints/phase-8c.md`. All locally-verifiable
-gates pass (full Python suite — 784 passed, 4 pre-existing skips; ruff/mypy
-under CI's exact flags; boundaries; secret scan; fresh TypeScript contracts;
-full frontend gate; legacy regression); CI itself is pending a PR from
-`phase-8c-lineage-traversal`.
+the final gate record is `.prism/checkpoints/phase-8c.md`. Every gate passed,
+including live CI on PR #12's only head (`125b3f9`, all 5 checks green, no
+re-run needed) and no review comments raised before merge.
+
+`PHASE_8A_COMPLETE = YES`, `PHASE_8B_COMPLETE = YES`, `PHASE_8C_COMPLETE =
+YES`, `PHASE_8D_STARTED = NO`.
 
 ## Still forbidden in 8C
 
