@@ -37,6 +37,7 @@ from prism_overview_analytics import ANALYTICS_SERVICE_VERSION, detect_column_ty
 # difference between a real latency regression and normal process warmup.
 from scipy import stats as scipy_stats
 
+from .analytical_objects import register_statistical_test
 from .overview import StoredDataset
 from .overview import store as overview_store
 
@@ -316,19 +317,23 @@ def _run_pearson(stored: StoredDataset, col_a: str, col_b: str) -> StatTestResul
 
 def run_test(stored: StoredDataset, request: StatTestRequest) -> StatTestResult:
     """Dispatch to the right test based on a (typically suggest_test-derived) request."""
+    result: StatTestResult
     if request.test is StatTestKind.TTEST:
         if not request.numeric_col or not request.cat_col:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="A t-test needs numeric_col and cat_col.")
-        return _run_ttest(stored, request.numeric_col, request.cat_col)
-    if request.test is StatTestKind.ANOVA:
+        result = _run_ttest(stored, request.numeric_col, request.cat_col)
+    elif request.test is StatTestKind.ANOVA:
         if not request.numeric_col or not request.cat_col:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="ANOVA needs numeric_col and cat_col.")
-        return _run_anova(stored, request.numeric_col, request.cat_col)
-    if request.test is StatTestKind.CHI2:
-        return _run_chi2(stored, request.col_a, request.col_b)
-    if request.test is StatTestKind.PEARSON:
-        return _run_pearson(stored, request.col_a, request.col_b)
-    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported test.")
+        result = _run_anova(stored, request.numeric_col, request.cat_col)
+    elif request.test is StatTestKind.CHI2:
+        result = _run_chi2(stored, request.col_a, request.col_b)
+    elif request.test is StatTestKind.PEARSON:
+        result = _run_pearson(stored, request.col_a, request.col_b)
+    else:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported test.")
+    register_statistical_test(stored, result, [request.col_a, request.col_b])
+    return result
 
 
 @router.get("/datasets/{dataset_id}/suggest", response_model=StatSuggestionResponse)
