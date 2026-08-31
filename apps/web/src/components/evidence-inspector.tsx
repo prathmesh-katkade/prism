@@ -68,6 +68,24 @@ const OUTCOME_LABEL: Record<ReproductionResponseShape["outcome"], string> = {
   source_revision_unavailable: "Original data unavailable",
 };
 
+type AtlasLineageAction = "explain_provenance" | "explain_staleness" | "explain_lineage" | "recommend_reruns" | "explain_evidence";
+
+const ATLAS_LINEAGE_ACTIONS: readonly { action: AtlasLineageAction; label: string }[] = [
+  { action: "explain_provenance", label: "What produced this?" },
+  { action: "explain_staleness", label: "Why is this stale?" },
+  { action: "explain_lineage", label: "Explain its lineage" },
+  { action: "recommend_reruns", label: "What should I rerun?" },
+  { action: "explain_evidence", label: "Explain its evidence" },
+];
+
+interface AtlasLineageResponseShape {
+  action: AtlasLineageAction | "compare_versions";
+  summary: string;
+  uncertainty: string;
+  evidence: { label: string; value: string }[];
+  limitation: string | null;
+}
+
 const KIND_LABEL: Record<string, string> = {
   dataset_revision: "Dataset revision",
   profile: "Profile",
@@ -247,7 +265,54 @@ function EvidenceBody({ state, onNavigate }: { state: LoadedState; onNavigate(id
         ) : <p className="quiet-note">Nothing recorded depends on this object yet.</p>}
       </section>
       <ReproducibilitySection object={object} onNavigate={onNavigate} />
+      <AtlasLineageSection objectId={object.object_id} />
     </>
+  );
+}
+
+function AtlasLineageSection({ objectId }: { objectId: string }) {
+  const [pending, setPending] = useState<AtlasLineageAction | null>(null);
+  const [result, setResult] = useState<AtlasLineageResponseShape | null>(null);
+
+  async function ask(action: AtlasLineageAction) {
+    setPending(action);
+    setResult(null);
+    try {
+      const response = await fetch(apiUrl(`/api/v1/lineage/objects/${objectId}/atlas`), {
+        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action }),
+      });
+      setResult(await response.json() as AtlasLineageResponseShape);
+    } catch {
+      setResult({ action, summary: "Atlas could not be reached.", uncertainty: "", evidence: [], limitation: "The request failed." });
+    } finally {
+      setPending(null);
+    }
+  }
+
+  return (
+    <section className="evidence-section">
+      <span className="eyebrow">ATLAS · LINEAGE-AWARE</span>
+      <div className="atlas-action-row">
+        {ATLAS_LINEAGE_ACTIONS.map(({ action, label }) => (
+          <button key={action} disabled={pending !== null} onClick={() => void ask(action)}>
+            {pending === action ? "Asking…" : label}
+          </button>
+        ))}
+      </div>
+      {result ? (
+        <aside className="atlas-result" aria-live="polite">
+          <span className="eyebrow">ATLAS · {result.action.replaceAll("_", " ")}</span>
+          <strong>{result.summary}</strong>
+          {result.limitation ? <small role="alert">{result.limitation}</small> : null}
+          {result.uncertainty ? <small>{result.uncertainty}</small> : null}
+          {result.evidence.length ? (
+            <dl className="inspector-data">
+              {result.evidence.map((item, index) => <div key={index}><dt>{item.label}</dt><dd>{item.value}</dd></div>)}
+            </dl>
+          ) : null}
+        </aside>
+      ) : null}
+    </section>
   );
 }
 

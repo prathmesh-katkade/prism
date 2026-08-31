@@ -578,3 +578,44 @@ tests. `pytest tests/ apps/api -q` → 809 passed, 4 pre-existing skips; `npm
 run test:web` → 29 passed. `ruff`/mypy (CI's exact invocation)/contracts/
 frontend gates all clean. Full gate record:
 `.prism/checkpoints/phase-8f.md`.
+
+## 8G — Atlas Lineage Awareness
+
+**Objective:** Atlas becomes provenance-aware — explain what produced a
+result, why it's stale, its lineage shape, rerun candidates, its evidence,
+and how two objects compare.
+
+**Critical design fact:** Atlas, everywhere in this codebase (`stats.py`/
+`visualize.py`/`forecasting.py`'s own existing `/atlas` routes), is a
+deterministic rule-based explainer over already-computed results — not an
+LLM call. `atlas_lineage.py` follows the exact same pattern: every field
+traces back to one `registry`/`freshness_service` call. "No invented
+dependencies/versions/stale reasons/evidence/parameters" is structural, not
+a prompting concern.
+
+**Delivered:** six actions (`explain_provenance`/`explain_staleness`/
+`explain_lineage`/`compare_versions`/`recommend_reruns`/
+`explain_evidence`), matching every other workspace's existing Atlas
+response shape (`AtlasEvidence` list + summary + uncertainty) plus one
+addition — an optional `limitation` field for "missing lineage → limitation,
+not hallucination" (an unresolvable identity, a missing comparison target,
+no recorded evidence). `recommend_reruns` walks Phase 8C's own
+`registry.descendants()` and reports only objects whose live freshness
+assessment is actually `stale` — never a blanket recommendation, and never
+auto-executes anything; it only names candidates for the existing Phase 8F
+`/rerun` action. `POST /api/v1/lineage/objects/{id}/atlas`, body
+`{"action": ..., "compare_to_object_id"?: ...}`, read-only.
+
+**UI:** Evidence Inspector gained an "ATLAS · LINEAGE-AWARE" section — five
+one-click actions firing against the current selection automatically (no
+manual object id entry), reusing the existing `.atlas-action-row`/
+`.atlas-result` CSS every other native workspace's Atlas UI already uses.
+
+**Tests:** `tests/api/test_phase8g_atlas_lineage.py`, 11 tests (grounded
+provenance/staleness/lineage explanations, rerun recommendations that track
+real staleness transitions, parameter-diff comparison, limitation-not-guess
+for a missing comparison target and for absent evidence, partial-history
+safety, 404, secret safety). 2 new frontend tests. `pytest tests/ apps/api
+-q` → 820 passed, 4 pre-existing skips; `npm run test:web` → 31 passed.
+`ruff`/mypy (CI's exact invocation)/contracts/frontend gates all clean.
+Full gate record: `.prism/checkpoints/phase-8g.md`.

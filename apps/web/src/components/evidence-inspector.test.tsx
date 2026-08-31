@@ -151,6 +151,52 @@ describe("Evidence inspector", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("Rerun is not supported for dataset_revision objects.");
   });
 
+  it("asks Atlas why an object is stale using the current selection, with no manual object id entry", async () => {
+    const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path.includes("/atlas")) {
+        return json({ action: "explain_staleness", summary: "This object is stale: revision 1 is now active.", uncertainty: "This explanation is generated deterministically.", evidence: [{ label: "State", value: "stale" }], limitation: null });
+      }
+      if (path.includes("/freshness")) return json(freshness);
+      if (path.includes("/parents")) return json([]);
+      if (path.includes("/children")) return json([]);
+      void init;
+      return json(analyticalObject());
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<EvidenceInspector objectId="stats_abc123" onClose={vi.fn()} />);
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Statistical analysis" })).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "Why is this stale?" }));
+
+    await waitFor(() => expect(screen.getByText("This object is stale: revision 1 is now active.")).toBeInTheDocument());
+    const atlasCall = fetchMock.mock.calls.find(([url]) => String(url).includes("/atlas"));
+    const [, requestInit] = atlasCall as [string | URL, RequestInit];
+    expect(JSON.parse(String(requestInit.body))).toEqual({ action: "explain_staleness" });
+  });
+
+  it("shows an Atlas limitation distinctly from its summary, not as fabricated certainty", async () => {
+    const fetchMock = vi.fn(async (input: string | URL) => {
+      const path = String(input);
+      if (path.includes("/atlas")) {
+        return json({ action: "explain_evidence", summary: "No recorded evidence references exist for this object.", uncertainty: "Deterministic.", evidence: [], limitation: "This object's provenance does not carry evidence_refs." });
+      }
+      if (path.includes("/freshness")) return json(freshness);
+      if (path.includes("/parents")) return json([]);
+      if (path.includes("/children")) return json([]);
+      return json(analyticalObject());
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<EvidenceInspector objectId="stats_abc123" onClose={vi.fn()} />);
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Statistical analysis" })).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "Explain its evidence" }));
+
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("This object's provenance does not carry evidence_refs."));
+  });
+
   it("calls onClose from the close button", async () => {
     const onClose = vi.fn();
     const fetchMock = vi.fn(async (input: string | URL) => {

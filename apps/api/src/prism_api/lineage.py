@@ -23,9 +23,10 @@ from prism_analytical_schemas import (
     ReproductionMode,
     ReproductionResponse,
 )
+from prism_api_contracts import AtlasLineageRequest, AtlasLineageResponse
 from pydantic import BaseModel
 
-from . import freshness_service, lineage_service, reproduction_service
+from . import atlas_lineage, freshness_service, lineage_service, reproduction_service
 from .analytical_objects import registry
 from .overview import store as overview_store
 
@@ -151,6 +152,18 @@ def rerun_object(object_id: str, request: RerunRequest) -> ReproductionResponse:
     derived from the original object's own recorded provenance, never from the client.
     """
     result = reproduction_service.reproduce(registry, overview_store, object_id, request.mode)
+    if result is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_NOT_FOUND)
+    return result
+
+
+@router.post("/objects/{object_id}/atlas", response_model=AtlasLineageResponse)
+def atlas_lineage_action(object_id: str, request: AtlasLineageRequest) -> AtlasLineageResponse:
+    """Atlas lineage awareness: deterministic explanations grounded entirely in Phase
+    8A-8F's own recorded provenance/freshness/reproducibility data - see
+    `atlas_lineage.py`'s module docstring for why this is structurally incapable of
+    inventing a dependency, version, or stale reason."""
+    result = atlas_lineage.explain(registry, overview_store, object_id, request.action, request.compare_to_object_id)
     if result is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_NOT_FOUND)
     return result
