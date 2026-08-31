@@ -229,7 +229,13 @@ def _points(series: pd.Series) -> list[ForecastPoint]:
 
 @router.post("/datasets/{dataset_id}/forecast", response_model=ForecastResult)
 def forecast(dataset_id: str, request: ForecastRequest) -> ForecastResult:
-    stored = overview_store.get(dataset_id)
+    return execute_forecast(overview_store.get(dataset_id), request)
+
+
+def execute_forecast(stored: StoredDataset, request: ForecastRequest) -> ForecastResult:
+    """The route handler's actual work, extracted so Phase 8F's reproduction service can
+    call it against an explicit (possibly historical) ``StoredDataset`` - the route itself
+    always resolves the current one; a rerun may deliberately target an older revision."""
     series, freq = _require_series(stored, request.datetime_col, request.numeric_col)
 
     result = run_forecast(series, request.horizon, freq)

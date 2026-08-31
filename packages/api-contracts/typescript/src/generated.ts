@@ -98,6 +98,21 @@ export interface AtlasForecastResponse {
   evidence: AtlasEvidence[];
 }
 
+export type AtlasLineageAction = "explain_provenance" | "explain_staleness" | "explain_lineage" | "compare_versions" | "recommend_reruns" | "explain_evidence";
+
+export interface AtlasLineageRequest {
+  action: AtlasLineageAction;
+  compare_to_object_id?: string;
+}
+
+export interface AtlasLineageResponse {
+  action: AtlasLineageAction;
+  summary: string;
+  uncertainty: string;
+  evidence: AtlasEvidence[];
+  limitation?: string;
+}
+
 export type AtlasMlAction = "explain_task_type" | "compare_models" | "explain_cross_validation" | "explain_imbalance" | "explain_feature_importance" | "identify_overfitting";
 
 export interface AtlasMlRequest {
@@ -376,6 +391,22 @@ export interface ForecastResult {
   warnings?: string[];
   provenance: OverviewProvenance;
 }
+
+export interface FreshnessAssessment {
+  object_id: string;
+  state: FreshnessState;
+  freshness_known: boolean;
+  dataset_id: string;
+  object_revision: number;
+  object_fingerprint: string;
+  active_revision?: number;
+  active_fingerprint?: string;
+  reason_code: string;
+  reason: string;
+  assessed_at: string;
+}
+
+export type FreshnessState = "current" | "stale" | "superseded" | "unknown" | "invalid";
 
 export interface GenericReproducibilitySpec {
   producer: Producer;
@@ -669,6 +700,22 @@ export interface ReadinessResponse {
 }
 
 export type ReleaseChannel = "legacy" | "shadow" | "enabled";
+
+export type ReproductionMode = "same_revision" | "current_revision";
+
+export type ReproductionOutcome = "created" | "unsupported" | "validation_failed" | "source_revision_unavailable";
+
+export interface ReproductionResponse {
+  outcome: ReproductionOutcome;
+  original_object_id: string;
+  mode: ReproductionMode;
+  new_object?: AnalyticalObject;
+  detail: string;
+}
+
+export interface RerunRequest {
+  mode: ReproductionMode;
+}
 
 export interface SqlCapability {
   name: string;

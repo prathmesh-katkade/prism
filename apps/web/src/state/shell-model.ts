@@ -31,6 +31,10 @@ export interface InspectorObjectState {
   state: "ready" | "legacy" | "bridged" | "native" | "unavailable";
   actions: readonly ContextAction[];
   metadata?: readonly string[];
+  /** Phase 8E: when set, this is a real Phase 8 analytical-registry object id (not one
+   * of the synthetic `objectId` values used above) - the shell renders the dedicated
+   * Evidence Inspector for it instead of the generic context panel. */
+  analyticalObjectId?: string;
 }
 
 export interface ContextAction {

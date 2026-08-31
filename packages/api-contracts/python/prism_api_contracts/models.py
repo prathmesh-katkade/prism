@@ -942,3 +942,25 @@ class AtlasMlResponse(ContractModel):
     summary: str = Field(min_length=1)
     uncertainty: str = Field(min_length=1)
     evidence: list[AtlasEvidence]
+
+
+class AtlasLineageAction(str, Enum):
+    EXPLAIN_PROVENANCE = "explain_provenance"
+    EXPLAIN_STALENESS = "explain_staleness"
+    EXPLAIN_LINEAGE = "explain_lineage"
+    COMPARE_VERSIONS = "compare_versions"
+    RECOMMEND_RERUNS = "recommend_reruns"
+    EXPLAIN_EVIDENCE = "explain_evidence"
+
+
+class AtlasLineageRequest(ContractModel):
+    action: AtlasLineageAction
+    compare_to_object_id: Optional[str] = None
+
+
+class AtlasLineageResponse(ContractModel):
+    action: AtlasLineageAction
+    summary: str = Field(min_length=1)
+    uncertainty: str = Field(min_length=1)
+    evidence: list[AtlasEvidence]
+    limitation: Optional[str] = None

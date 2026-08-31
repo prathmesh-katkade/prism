@@ -1,59 +1,79 @@
 # PRISM Claude Session Handoff
 
-## Phase 8C: deterministic lineage traversal — COMPLETE, merged (2026-08-31)
+## Phase 8 (D–H): freshness, inspector UI, rerun, Atlas lineage, hardening — locally complete, PR pending (2026-08-31)
 
 **Read this section first — it supersedes everything below it until the next
 session updates this file again.**
 
-- **Phase 8C is CERTIFIED COMPLETE.** [PR #12](https://github.com/prathmesh-katkade/prism/pull/12)
-  (`phase-8c-lineage-traversal` → `phase-6.5-integration-staging`) merged at
-  merge commit `79b059f40a85a3ce5dc71500ca23286178ce5948` on 2026-08-31. All 5
-  CI checks passed on the only head this PR had
-  (`125b3f9b70a06a7465bd8ed63d92791e8d842e6e`) — no failures, no re-run
-  needed, no review comments raised before merge. Canonical base for
-  whatever comes next: `phase-6.5-integration-staging` at
-  `79b059f40a85a3ce5dc71500ca23286178ce5948`.
-- Phase 8A (PR #10, `4912610be584e2b3e9902500bd6585aeebb8a506`) and Phase 8B
-  (PR #11, `670d670ee0cdaaff7a6a62f1281d2df8b6802cf8`) are also MERGED,
-  underneath 8C. Do not rebuild any of them.
-- Full gate table: `.prism/checkpoints/phase-8c.md` — every gate PASS,
-  including live CI.
-- Scope delivered: a reverse child index maintained inline in `register()`
-  (`AnalyticalObjectRegistry._child_index`); direct parent/child lookup
-  (`GET /objects/{id}/parents`, `.../children`); deterministic, cycle-safe,
-  iterative BFS ancestor/descendant traversal with depth and bounded
-  `max_depth` (`GET .../ancestors`, `.../descendants`); a compact combined
-  graph endpoint (`GET .../graph`, root included at depth 0); an optional
-  deterministic shortest path (`GET /path`). New typed contracts
-  (`LineageDirection`/`LineageNode`/`LineageEdge`/`LineageTraversal`/
-  `LineagePath`) live in `prism_analytical_schemas` next to `AnalyticalObject`
-  itself. See `PHASE8_IMPLEMENTATION_LEDGER.md`'s 8C section for full detail
-  on graph direction semantics, ordering convention, and what was
-  deliberately left out.
-- Invariants held: no new parent link created (8C only walks the existing
-  graph); traversal never bypasses 8A/8B's secret redaction (verified over
-  HTTP); fingerprint-aware dataset-revision identity extends cleanly into
-  traversal (tested); no full-registry scan anywhere in the traversal path;
-  no write route exists, or was added, under `/lineage`; both pre-existing
-  lineage routes are byte-for-byte unchanged; no producer code touched.
+- Working branch: `phase-8-completion`, created from
+  `phase-6.5-integration-staging` at `79b059f40a85a3ce5dc71500ca23286178ce5948`
+  (PR #12 / Phase 8C merge + docs commit `68377c7`). Locally verified,
+  **not yet pushed/PR'd**.
+- Phase 8A (PR #10), 8B (PR #11), 8C (PR #12) are all MERGED. Do not rebuild
+  any of them.
+- Status: 8D–8H are **locally complete** — see `PHASE8_FINAL_REPORT.md` and
+  `.prism/checkpoints/phase-8-final.md` for the full picture. Every gate
+  checkable without a live CI run passes (825 Python tests including 40 new
+  Phase 8D–8H tests, 31 frontend tests including 9 new, ruff/mypy under CI's
+  exact flags, boundaries, secret scan, fresh TS contracts, full frontend
+  gate, legacy regression all green). **Not yet pushed, no PR opened, no CI
+  run exists for this branch.**
+- Scope delivered, one line each (full detail in `PHASE8_IMPLEMENTATION_LEDGER.md`'s
+  8D–8H sections and each phase's own `.prism/checkpoints/phase-8{d,e,f,g}.md`):
+  - **8D:** live-computed freshness (`current`/`stale`/`superseded`/`unknown`)
+    against `DatasetStore`'s active identity; `AnalyticalObject` stays fully
+    immutable.
+  - **8E:** a dedicated `EvidenceInspector` UI, integrated additively into the
+    existing shell/Inspector architecture, wired through Stats Lab.
+  - **8F:** safe, non-destructive rerun (`same_revision`/`current_revision`)
+    — never overwrites, always creates a new object; Stats/Forecast/ML/
+    Visualize supported, SQL/Clean/others deliberately and honestly
+    unsupported.
+  - **8G:** Atlas lineage awareness — six deterministic explain/compare/
+    recommend actions, grounded entirely in recorded data (Atlas here is a
+    rule-based explainer, not an LLM call, exactly like every other native
+    workspace's existing Atlas actions).
+  - **8H:** end-to-end integration audit (5 real-HTTP flows), self-code-review,
+    full regression, full repo-standard gates, `PHASE8_FINAL_REPORT.md`.
+- Invariants held throughout: no historical object ever mutated (rerun always
+  creates a new one); fingerprint-aware `(dataset_id, revision,
+  source_fingerprint)` identity used everywhere, never revision alone; no
+  secret leak through freshness/rerun/Atlas (verified over HTTP in every
+  sub-phase); no full-registry scan introduced; only one write route exists
+  anywhere under `/lineage` (`/rerun`, and even it only ever creates, never
+  overwrites); Atlas structurally cannot invent a dependency/version/stale
+  reason.
 - Known limitation, unchanged: the registry is process-local and in-memory —
-  an API restart resets all analytical history, including the lineage graph.
-  Persistence needs a dedicated architecture decision in a later phase, not
-  attempted in 8A, 8B, or 8C.
-- **PHASE_8A_COMPLETE = YES, PHASE_8B_COMPLETE = YES, PHASE_8C_COMPLETE = YES,
-  PHASE_8D_STARTED = NO.**
-- **Nothing is pending from 8C.** Per explicit scope boundary, this session
-  stopped here and did **not** start Phase 8D. The documented (not
-  implemented) 8D starting point — Versioning + Staleness Propagation,
-  reusing 8C's own descendant traversal to answer "a dataset revision
-  changed; which downstream objects are now stale?", and nothing beyond that
-  (no invalidation propagation, rerun engine, Atlas lineage reasoning,
-  lineage UI, persistence, governance, or Phase 9) without a fresh scope
-  decision — is in `PHASE8_IMPLEMENTATION_LEDGER.md` and
-  `.prism/checkpoints/phase-8c.md`'s "8D starting point" section. Whoever
-  resumes should start there.
-- Canonical records: `PHASE8_IMPLEMENTATION_LEDGER.md` (8C section) and
-  `.prism/checkpoints/phase-8c.md`.
+  an API restart resets all analytical history. Persistence needs a dedicated
+  ADR in a later phase, not attempted anywhere in Phase 8.
+- Deployment: `BLOCKED_EXTERNAL_DEPLOYMENT_ACCESS` — no Render credentials
+  available to this session (checked directly); engineering- and
+  CI-completeness is this repository's established release bar (see
+  `PHASE8_FINAL_REPORT.md`'s "Deployment status" section), not a live
+  deployment verification this session cannot perform.
+- **PHASE_8A/8B/8C/8D/8E/8F/8G/8H_COMPLETE = YES (engineering + local gates);
+  PHASE_8_COMPLETE = NO and PHASE_9_UNLOCKED = NO until this PR's CI is green
+  and it merges.**
+- Canonical records: `PHASE8_FINAL_REPORT.md`, `PHASE8_IMPLEMENTATION_LEDGER.md`
+  (8D–8H sections), `.prism/checkpoints/phase-8-final.md` (and the individual
+  `phase-8d.md`/`8e.md`/`8f.md`/`8g.md`), `PHASE9_HANDOFF.md`.
+
+### Exact next step for whoever resumes this
+
+1. `git push -u origin phase-8-completion` (verify with `git log --oneline
+   origin/phase-8-completion..HEAD` first, in case another session has since
+   pushed to this branch).
+2. Open a PR from `phase-8-completion` into `phase-6.5-integration-staging`
+   (title suggestion: "Phase 8 completion: provenance, lineage, freshness,
+   reproducibility, and Atlas").
+3. Wait for CI; fix any real failure (root-cause it).
+4. Merge once green, record the exact merge commit in `PHASE8_FINAL_REPORT.md`,
+   `.prism/checkpoints/phase-8-final.md`, this file, and
+   `docs/migration/CURRENT_PHASE.md`; flip `PHASE_8_COMPLETE` and
+   `PHASE_9_UNLOCKED` to `YES` only once that CI is actually green and the
+   merge is actually done.
+5. **Do not start Phase 9** without a fresh, explicit scope decision — see
+   `PHASE9_HANDOFF.md` for candidate directions, none of them pre-selected.
 
 ---
 

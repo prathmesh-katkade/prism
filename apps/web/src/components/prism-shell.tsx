@@ -12,6 +12,7 @@ import { VisualizeWorkspace } from "./visualize-workspace";
 import { StatsWorkspace } from "./stats-workspace";
 import { ForecastingWorkspace } from "./forecasting-workspace";
 import { MlLabWorkspace } from "./mllab-workspace";
+import { EvidenceInspector } from "./evidence-inspector";
 import { migrationPresentation, phaseTwoMigrations, type InspectorObjectState, type ShellStatus, type WorkspaceTab } from "../state/shell-model";
 import { useLayoutState } from "../state/use-layout-state";
 
@@ -209,6 +210,7 @@ function ShellState({ status }: { status: ShellStatus }) {
 }
 
 function Inspector({ state, onClose }: { state: InspectorObjectState; onClose(): void }) {
+  if (state.analyticalObjectId) return <EvidenceInspector objectId={state.analyticalObjectId} onClose={onClose} />;
   return <aside className="inspector" aria-label="Contextual inspector"><div className="inspector-heading"><div><span className="eyebrow">CONTEXT</span><h2>{state.label}</h2></div><button className="icon-button" onClick={onClose} aria-label="Hide inspector"><Icon name="close" /></button></div><dl className="inspector-data"><div><dt>Object type</dt><dd>{state.type}</dd></div><div><dt>State</dt><dd><span className={`migration-chip ${state.state}`}>{state.state}</span></dd></div><div><dt>Inspector contract</dt><dd>object-state/v1</dd></div>{state.metadata?.map((item) => <div key={item}><dt>Evidence</dt><dd>{item}</dd></div>)}</dl><div className="inspector-actions"><span className="eyebrow">CONTEXT ACTIONS</span>{state.actions.map((action) => <button key={action.id} disabled={action.disabled}>{action.label}{action.shortcut ? <kbd>{action.shortcut}</kbd> : <Icon name="arrow" />}</button>)}</div><div className="drag-foundation" draggable onDragStart={(event) => event.dataTransfer.setData("text/plain", state.objectId ?? "project")}><span className="eyebrow">SEMANTIC DRAG FOUNDATION</span><p>Drag object context to a future tab group.</p></div></aside>;
 }
 

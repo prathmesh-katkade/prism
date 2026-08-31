@@ -410,7 +410,12 @@ def build_verdict(baseline_result: dict[str, Any]) -> str:
 
 @router.post("/datasets/{dataset_id}/baseline", response_model=MlBaselineResult)
 def baseline(dataset_id: str, request: MlBaselineRequest) -> MlBaselineResult:
-    stored = overview_store.get(dataset_id)
+    return execute_baseline(overview_store.get(dataset_id), request)
+
+
+def execute_baseline(stored: StoredDataset, request: MlBaselineRequest) -> MlBaselineResult:
+    """The route handler's actual work, extracted so Phase 8F's reproduction service can
+    call it against an explicit (possibly historical) ``StoredDataset``."""
     _require_columns(stored.frame, [*request.feature_cols, request.target_col])
 
     task_type = request.task_type
@@ -518,7 +523,12 @@ def run_feature_selection(frame: pd.DataFrame, feature_cols: list[str], target_c
 
 @router.post("/datasets/{dataset_id}/feature-selection", response_model=MlFeatureSelectionResult)
 def feature_selection(dataset_id: str, request: MlFeatureSelectionRequest) -> MlFeatureSelectionResult:
-    stored = overview_store.get(dataset_id)
+    return execute_feature_selection(overview_store.get(dataset_id), request)
+
+
+def execute_feature_selection(stored: StoredDataset, request: MlFeatureSelectionRequest) -> MlFeatureSelectionResult:
+    """The route handler's actual work, extracted so Phase 8F's reproduction service can
+    call it against an explicit (possibly historical) ``StoredDataset``."""
     _require_columns(stored.frame, [*request.feature_cols, request.target_col])
     task_type = request.task_type
     if task_type is None:
@@ -582,7 +592,12 @@ def shap_explain(dataset_id: str, request: MlShapRequest) -> MlShapResult:
     fitted model object across requests — deterministic given the same configuration (rule
     36: reproducible from the configuration alone), and avoids holding unserializable model
     state in server memory between calls."""
-    stored = overview_store.get(dataset_id)
+    return execute_shap(overview_store.get(dataset_id), request)
+
+
+def execute_shap(stored: StoredDataset, request: MlShapRequest) -> MlShapResult:
+    """The route handler's actual work, extracted so Phase 8F's reproduction service can
+    call it against an explicit (possibly historical) ``StoredDataset``."""
     _require_columns(stored.frame, [*request.feature_cols, request.target_col])
     task_type = request.task_type
     if task_type is None:

@@ -449,3 +449,229 @@ run typecheck`, `npm run test:web` (22 tests, unchanged — no frontend code
 touched), `npm run a11y:baseline`, `npm run build:web` → all clean. Legacy
 Streamlit: zero diff to `app.py`/`modules/`, `py_compile` clean,
 `eval/autocleaner_eval.py` 8/8.
+
+## 8D — Versioning + Staleness Propagation
+
+**Base:** `phase-6.5-integration-staging` at `68377c7` (PR #12 / Phase 8C
+merge + docs). Branch: `phase-8-completion`.
+
+**Objective:** Contextual freshness (`current`/`stale`/`superseded`/`unknown`/
+`invalid`) computed live against `DatasetStore`'s active identity, with
+`AnalyticalObject` staying fully immutable — freshness is a read-time
+assessment, never a stored field.
+
+**Model:** `FreshnessState` + `FreshnessAssessment` in
+`prism_analytical_schemas`, alongside `AnalyticalObject`. `CURRENT`: exact
+`(dataset_id, revision, source_fingerprint)` match against DatasetStore's
+active identity. `STALE`: a non-`DATASET_REVISION` object whose upstream
+identity is no longer active — old is not invalid, and remains valid
+historical evidence. `SUPERSEDED`: reserved for `DATASET_REVISION` objects
+themselves (an old revision, or a same-revision-number branch abandoned by
+undo/redo) — a version is superseded, not stale. `UNKNOWN`
+(`freshness_known=false`): the process-local `DatasetStore` no longer
+resolves the dataset_id (e.g. after a restart) — never guessed. `INVALID`:
+defined per spec, reserved for genuine corruption; no code path in this
+implementation produces it (age alone never does).
+
+**No new graph engine:** `apps/api/src/prism_api/freshness_service.py`
+computes per-object freshness as a direct identity comparison — every
+producer already pins the exact revision/fingerprint it consumed into its own
+`provenance.dataset` (Phase 8A/8B), so propagation is "free": every
+descendant of a superseded revision is, by construction, already pointing at
+that old identity, with no separate propagation step or lag. The one place
+Phase 8C's own `registry.descendants()` is called is to size the "N objects
+still depend on this revision" text in a superseded dataset-revision object's
+reason — reusing 8C's traversal rather than writing a second one.
+
+**API:** `GET /api/v1/lineage/objects/{object_id}/freshness` (404 for an
+unknown object), `GET /api/v1/lineage/datasets/{dataset_id}/freshness`
+(empty list, never 404, matching `/datasets/{id}/objects`'s own convention).
+No mutation route (no `POST /mark-stale`, no `PATCH /freshness`).
+
+**Tests:** `tests/api/test_phase8d_freshness.py`, 13 tests — current/stale/
+superseded/unknown states, multiple descendants staling together, the
+dataset-revision-vs-analysis distinction, immediate (non-lagged) staleness on
+a further Clean apply, fingerprint-safe undo/redo (an abandoned branch never
+reads current just because its revision number was reused), partial-history
+safety (a synthetic dataset_id absent from a fresh `DatasetStore`), Phase 8C
+traversal unaffected, secret redaction through the freshness endpoint, and
+performance at 1,000 synthetic objects.
+
+**Quality gates:** `pytest tests/ apps/api -q` → 797 passed, 4 pre-existing
+skips; `ruff check` clean; CI's exact mypy invocation clean;
+`tools/check_boundaries.py`/`tools/check_secrets.py` clean;
+`tools/generate_typescript_contracts.py --check` clean after regenerating
+(`FreshnessState`/`FreshnessAssessment` now in `generated.ts`). Full gate
+record: `.prism/checkpoints/phase-8d.md`.
+
+## 8E — Evidence + Lineage Inspector UI
+
+**Objective:** Make the Phase 8A–8D backend intelligence visible in the
+product — a dedicated, reusable evidence/lineage inspector, integrated
+additively into the existing PRISM shell.
+
+**Delivered:** `apps/web/src/components/evidence-inspector.tsx` — identity,
+freshness (text+icon badge), dataset revision, provenance, method/
+parameters, warnings, evidence, upstream/downstream direct dependencies
+(clickable, with back-navigation), reproducibility. Pure GET-driven viewer,
+never mutates. `InspectorObjectState` gained an optional
+`analyticalObjectId`; the shell's `Inspector` renders `EvidenceInspector`
+when it's set, additive to the existing architecture. Stats Lab wired as
+the flagship integration (resolves the real object id via the unchanged
+`GET /datasets/{id}/objects?kind=analysis` read endpoint after a run);
+extending the same pattern to the other native workspaces is a documented,
+low-risk follow-up, not done in this pass — the same kind of deliberate
+scope choice Phase 8A made picking representative producers before 8B
+expanded coverage.
+
+**Design:** reuses PRISM's existing hairline/eyebrow/inspector CSS patterns
+and dark/light custom properties exactly; no new theming logic. Lineage
+navigation is a compact clickable list, not a graph-canvas library, per the
+task's explicit preference for progressive expansion over a heavyweight
+visualization dependency.
+
+**Tests:** `evidence-inspector.test.tsx`, 5 new tests (identity/freshness/
+parameters, stale-vs-current text distinction, parent navigation + back,
+not-found handling, close button). `npm run test:web` → 27 passed (22
+pre-existing + 5 new), zero regressions. `npm run lint`, `npm run
+typecheck`, `npm run a11y:baseline`, `npm run build:web` all clean. Full
+gate record: `.prism/checkpoints/phase-8e.md`.
+
+## 8F — Reproducibility + Safe Rerun
+
+**Objective:** Turn preserved reproducibility metadata into safe reruns. A
+rerun never overwrites an existing object — it always creates a new one.
+
+**Delivered:** `apps/api/src/prism_api/reproduction_service.py` reconstructs
+a producer's original request purely from its own recorded
+`provenance.reproducibility` (never from a client payload), then calls the
+exact same computation the original route used — extracted as `execute_*`
+helpers in `forecasting.py`/`mllab.py` (behavior-preserving, mechanical
+extraction; `stats.run_test` already took an explicit `stored`, unchanged).
+`same_revision` mode resolves the exact `(revision, source_fingerprint)`
+identity via `DatasetStore.revisions()` — never revision number alone;
+`current_revision` resolves DatasetStore's active identity. Supported:
+`analysis`/`forecast`/`ml_model`/`visualization`. Deliberately unsupported,
+each with a documented reason returned in the response: `dataset_revision`,
+`cleaning_plan` (Clean's own apply/undo already is its rerun mechanism),
+`query_result` (SQL Lab's async run/poll flow isn't supported by this
+synchronous endpoint yet), `profile`, `evidence` — the same documented,
+non-silent scope-boundary pattern Phase 8B established for producer
+coverage gaps.
+
+**API:** `POST /api/v1/lineage/objects/{id}/rerun` — body is `{"mode":
+"same_revision"|"current_revision"}`, the only field a caller may supply.
+Typed `ReproductionResponse` (`outcome`: created/unsupported/
+validation_failed/source_revision_unavailable).
+
+**UI:** Evidence Inspector's Reproducibility section gained "Reproduce on
+original revision" / "Rerun on current data" (inline, no modal), plus an
+inline outcome panel — a `created` result offers "View new result"
+navigating the inspector to it; any other outcome shows its `detail`
+message, `role="alert"`.
+
+**Tests:** `tests/api/test_phase8f_reproduction.py`, 12 tests (Stats same/
+current-revision, missing-column failure, Forecast/ML/Visualize rerun, SQL/
+dataset-revision unsupported, abandoned-branch source-unavailability,
+no-overwrite across repeated reruns, 404, secret safety). 2 new frontend
+tests. `pytest tests/ apps/api -q` → 809 passed, 4 pre-existing skips; `npm
+run test:web` → 29 passed. `ruff`/mypy (CI's exact invocation)/contracts/
+frontend gates all clean. Full gate record:
+`.prism/checkpoints/phase-8f.md`.
+
+## 8G — Atlas Lineage Awareness
+
+**Objective:** Atlas becomes provenance-aware — explain what produced a
+result, why it's stale, its lineage shape, rerun candidates, its evidence,
+and how two objects compare.
+
+**Critical design fact:** Atlas, everywhere in this codebase (`stats.py`/
+`visualize.py`/`forecasting.py`'s own existing `/atlas` routes), is a
+deterministic rule-based explainer over already-computed results — not an
+LLM call. `atlas_lineage.py` follows the exact same pattern: every field
+traces back to one `registry`/`freshness_service` call. "No invented
+dependencies/versions/stale reasons/evidence/parameters" is structural, not
+a prompting concern.
+
+**Delivered:** six actions (`explain_provenance`/`explain_staleness`/
+`explain_lineage`/`compare_versions`/`recommend_reruns`/
+`explain_evidence`), matching every other workspace's existing Atlas
+response shape (`AtlasEvidence` list + summary + uncertainty) plus one
+addition — an optional `limitation` field for "missing lineage → limitation,
+not hallucination" (an unresolvable identity, a missing comparison target,
+no recorded evidence). `recommend_reruns` walks Phase 8C's own
+`registry.descendants()` and reports only objects whose live freshness
+assessment is actually `stale` — never a blanket recommendation, and never
+auto-executes anything; it only names candidates for the existing Phase 8F
+`/rerun` action. `POST /api/v1/lineage/objects/{id}/atlas`, body
+`{"action": ..., "compare_to_object_id"?: ...}`, read-only.
+
+**UI:** Evidence Inspector gained an "ATLAS · LINEAGE-AWARE" section — five
+one-click actions firing against the current selection automatically (no
+manual object id entry), reusing the existing `.atlas-action-row`/
+`.atlas-result` CSS every other native workspace's Atlas UI already uses.
+
+**Tests:** `tests/api/test_phase8g_atlas_lineage.py`, 11 tests (grounded
+provenance/staleness/lineage explanations, rerun recommendations that track
+real staleness transitions, parameter-diff comparison, limitation-not-guess
+for a missing comparison target and for absent evidence, partial-history
+safety, 404, secret safety). 2 new frontend tests. `pytest tests/ apps/api
+-q` → 820 passed, 4 pre-existing skips; `npm run test:web` → 31 passed.
+`ruff`/mypy (CI's exact invocation)/contracts/frontend gates all clean.
+Full gate record: `.prism/checkpoints/phase-8g.md`.
+
+## 8H — Hardening + Release Gate
+
+**Objective:** certify the entire 8D–8H system as one coherent
+production-quality feature set, on top of already-merged 8A/8B/8C. No new
+product scope.
+
+**8H.1 integration audit:** `tests/api/test_phase8h_integration_flows.py`,
+5 tests, all real HTTP through `TestClient`, no mocking — Flow A (upload →
+Stats → provenance → lineage → freshness → inspector-facing reads → rerun →
+new object → Atlas explanation), Flow B (Clean → staleness → Atlas explains
+why → Atlas recommends the exact stale object → rerun on current revision →
+refreshed, original still stale and byte-identical), Flow C (SQL → query
+object → Visualize → lineage graph → both remain fully, unchangedly
+readable after later Clean activity), Flow D (Forecast → Clean → stale →
+rerun → current), Flow E (ML baseline/feature-selection/SHAP → shared
+dataset-revision parentage → freshness → lineage navigation).
+
+**8H.2 self-review** against the mandated pitfall list (historical
+mutation, revision-number identity bugs, fingerprint mismatch, incorrect
+stale/current logic, broken graph direction, rerun overwriting/misusing
+history, Atlas hallucination, security leaks, full registry scans, race
+conditions, UI stale-state mismatch, a11y regression): clear on every item
+except one documented, low-risk, non-blocking limitation — a rerun's "read
+back the newest object of this kind/revision" step could in principle race
+against a *concurrent* rerun of the exact same object; not exercised by any
+required test, and closing it fully would need a larger refactor (each
+producer's response model returning the created object id directly) than
+Phase 8F's own scope called for. Full writeup: `PHASE8_FINAL_REPORT.md`.
+
+**8H.3–8H.7:** performance already covered per-phase (8C's 1,000/5,000-node
+traversal, 8D's 1,000-object freshness scale); no full-registry scan
+introduced anywhere in 8D–8G. Accessibility: `npm run a11y:baseline` clean
+throughout. Security: secret-redaction-over-HTTP verified per sub-phase.
+Full regression: `pytest tests/ apps/api -q` → 825 passed, 4 pre-existing
+skips; `npm run test:web` → 31 passed; legacy Streamlit zero diff,
+`py_compile` clean, eval 8/8. Full repo gates: `ruff check` clean; CI's
+exact mypy invocation clean; `tools/check_boundaries.py`/
+`tools/check_secrets.py` clean; `tools/generate_typescript_contracts.py
+--check` clean; `npm run lint`/`typecheck`/`test:web`/`a11y:baseline`/
+`build:web` all clean.
+
+**8H.8/8H.9 documentation:** `PHASE8_FINAL_REPORT.md` (executive summary,
+per-sub-phase architecture, performance, accessibility, security,
+regression, known limitations, deployment status, rollback, release
+status, Phase 9 handoff, final flags); `.prism/checkpoints/phase-8-final.md`
+(the release-gate table); `PHASE9_HANDOFF.md` (candidate directions,
+deliberately unscoped, nothing implemented).
+
+**Deployment:** `BLOCKED_EXTERNAL_DEPLOYMENT_ACCESS` — checked directly
+this session (no `RENDER_*` env var, no Render MCP connector, no
+browser-automation tool with authenticated console access); unchanged from
+every prior Phase 6.5–8C session's finding. Engineering- and
+CI-completeness remains this repository's established release bar (Phase
+6.5/7 precedent); this report states plainly that live deployment itself
+was not verified.
