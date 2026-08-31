@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { apiUrl } from "../config/api";
 import { Icon, type IconName } from "./icons";
 
@@ -139,10 +139,18 @@ export function EvidenceInspector({ objectId, onClose }: { objectId: string; onC
     setHistory([]);
   }, [objectId]);
 
+  // Guards against a superseded navigation's response arriving after a later one - if the
+  // user navigates to a dependency and quickly clicks Back, two `load` calls can be in
+  // flight at once; whichever HTTP response resolves last must not win unless it is still
+  // the one the inspector is actually showing.
+  const latestRequestedId = useRef(objectId);
+
   const load = useCallback(async (id: string) => {
+    latestRequestedId.current = id;
     setLoading(true);
     setError(null);
     const object = await fetchJson<AnalyticalObjectShape>(`/api/v1/lineage/objects/${id}`);
+    if (latestRequestedId.current !== id) return;
     if (!object) {
       setError("This analytical object could not be found.");
       setLoaded(null);
@@ -154,6 +162,7 @@ export function EvidenceInspector({ objectId, onClose }: { objectId: string; onC
       fetchJson<AnalyticalObjectShape[]>(`/api/v1/lineage/objects/${id}/parents`),
       fetchJson<AnalyticalObjectShape[]>(`/api/v1/lineage/objects/${id}/children`),
     ]);
+    if (latestRequestedId.current !== id) return;
     setLoaded({ object, freshness, parents: parents ?? [], children: children ?? [] });
     setLoading(false);
   }, []);
@@ -264,8 +273,11 @@ function EvidenceBody({ state, onNavigate }: { state: LoadedState; onNavigate(id
           </ul>
         ) : <p className="quiet-note">Nothing recorded depends on this object yet.</p>}
       </section>
-      <ReproducibilitySection object={object} onNavigate={onNavigate} />
-      <AtlasLineageSection objectId={object.object_id} />
+      {/* Keyed by object_id: without this, React reuses these components' instances
+          across a lineage navigation and their local rerun/Atlas result state stays
+          visibly attached to the *previous* object even though the props changed. */}
+      <ReproducibilitySection key={`repro-${object.object_id}`} object={object} onNavigate={onNavigate} />
+      <AtlasLineageSection key={`atlas-${object.object_id}`} objectId={object.object_id} />
     </>
   );
 }

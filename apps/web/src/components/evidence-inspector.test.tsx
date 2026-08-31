@@ -94,6 +94,37 @@ describe("Evidence inspector", () => {
     await waitFor(() => expect(screen.getByRole("heading", { name: "Statistical analysis" })).toBeInTheDocument());
   });
 
+  it("clears the previous object's Atlas/rerun result when navigating to a different object", async () => {
+    const child = analyticalObject({ object_id: "stats_abc123" });
+    const parent = analyticalObject({ object_id: "dsrev_ds_1_r0_aaaa", kind: "dataset_revision" });
+    const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path.includes("/atlas")) {
+        return json({ action: "explain_provenance", summary: "Only true for stats_abc123.", uncertainty: "Deterministic.", evidence: [], limitation: null });
+      }
+      if (path.includes("/freshness")) return json(freshness);
+      if (path.includes("stats_abc123/parents")) return json([parent]);
+      if (path.includes("stats_abc123/children")) return json([]);
+      if (path.includes("dsrev_ds_1_r0_aaaa/parents")) return json([]);
+      if (path.includes("dsrev_ds_1_r0_aaaa/children")) return json([child]);
+      if (path.includes("dsrev_ds_1_r0_aaaa")) return json(parent);
+      void init;
+      return json(child);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<EvidenceInspector objectId="stats_abc123" onClose={vi.fn()} />);
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Statistical analysis" })).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "What produced this?" }));
+    await waitFor(() => expect(screen.getByText("Only true for stats_abc123.")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: /Dataset revision/ }));
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Dataset revision" })).toBeInTheDocument());
+
+    expect(screen.queryByText("Only true for stats_abc123.")).not.toBeInTheDocument();
+  });
+
   it("shows a clear message for an object that cannot be found, without crashing", async () => {
     const fetchMock = vi.fn(async () => new Response(null, { status: 404 }));
     vi.stubGlobal("fetch", fetchMock);

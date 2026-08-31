@@ -103,6 +103,26 @@ def test_compare_versions_reports_changed_parameters() -> None:
     assert changed != "none recorded"
 
 
+def test_compare_versions_requires_the_same_dataset_id_not_just_matching_revision_and_fingerprint() -> None:
+    """Two separately-uploaded datasets can coincidentally share a revision number and,
+    for identical content, even a fingerprint - dataset_id is what actually distinguishes
+    them, matching the (dataset_id, revision, source_fingerprint) identity used everywhere
+    else in Phase 8. Regression for a real gap a post-push automated review found."""
+    client = TestClient(create_app())
+    same_csv = b"x,y,segment,label\n1,10,a,yes\n2,20,a,no\n3,30,b,yes\n4,40,b,no\n"
+    dataset_a = _dataset(client, csv=same_csv, name="identical_a.csv")
+    dataset_b = _dataset(client, csv=same_csv, name="identical_b.csv")
+    client.post(f"/api/v1/stats/datasets/{dataset_a}/run", json={"test": "pearson", "col_a": "x", "col_b": "y"})
+    client.post(f"/api/v1/stats/datasets/{dataset_b}/run", json={"test": "pearson", "col_a": "x", "col_b": "y"})
+    record_a = next(r for r in registry.list_for_dataset(dataset_a, revision=0) if r.kind is ObjectKind.ANALYSIS)
+    record_b = next(r for r in registry.list_for_dataset(dataset_b, revision=0) if r.kind is ObjectKind.ANALYSIS)
+    assert record_a.provenance.dataset.source_fingerprint == record_b.provenance.dataset.source_fingerprint
+    assert record_a.provenance.dataset.revision == record_b.provenance.dataset.revision
+
+    response = _atlas(client, record_a.object_id, "compare_versions", compare_to_object_id=record_b.object_id)
+    assert "different dataset identities" in response.json()["summary"]
+
+
 def test_compare_versions_without_a_target_is_a_limitation_not_a_guess() -> None:
     client = TestClient(create_app())
     dataset_id = _dataset(client)

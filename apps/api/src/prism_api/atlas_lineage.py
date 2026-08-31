@@ -103,7 +103,15 @@ def _compare_versions(registry: AnalyticalObjectRegistry, record: AnalyticalObje
             uncertainty=_UNCERTAINTY, evidence=[], limitation=f"{compare_to_object_id!r} is not a registered analytical object.",
         )
     same_kind = record.kind == other.kind
-    same_identity = record.provenance.dataset.revision == other.provenance.dataset.revision and record.provenance.dataset.source_fingerprint == other.provenance.dataset.source_fingerprint
+    # Full (dataset_id, revision, source_fingerprint) identity, matching the rule used
+    # everywhere else in Phase 8 - two different datasets can coincidentally share a
+    # revision number and, for identical content, even a fingerprint; dataset_id is what
+    # actually distinguishes them.
+    same_identity = (
+        record.provenance.dataset.dataset_id == other.provenance.dataset.dataset_id
+        and record.provenance.dataset.revision == other.provenance.dataset.revision
+        and record.provenance.dataset.source_fingerprint == other.provenance.dataset.source_fingerprint
+    )
     changed = _diff_parameters(record, other)
     summary = (
         f"{record.object_id} and {other.object_id} are {'the same kind of object' if same_kind else 'different kinds of object'}, "
