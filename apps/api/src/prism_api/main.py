@@ -16,6 +16,7 @@ from prism_config.settings import get_settings
 from .ai_analyst import router as ai_analyst_router
 from .clean import router as clean_router
 from .forecasting import router as forecasting_router
+from .lineage import router as lineage_router
 from .migration import PHASE_1_MIGRATIONS
 from .mllab import router as mllab_router
 from .overview import router as overview_router
@@ -67,6 +68,7 @@ def create_app() -> FastAPI:
     app.include_router(stats_router)
     app.include_router(forecasting_router)
     app.include_router(mllab_router)
+    app.include_router(lineage_router)
 
     @app.middleware("http")
     async def trace_requests(

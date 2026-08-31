@@ -57,6 +57,7 @@ from prism_sql_lab_runtime import (
     schema_for_frame,
 )
 
+from .analytical_objects import register_query_result
 from .overview import StoredDataset
 from .overview import store as overview_store
 from .sql_jobs import QueryJob, runtime
@@ -488,6 +489,8 @@ def execute_query(request: SqlRunRequest) -> SqlRunResponse:
                 "provenance": _provenance(connection, schema, request, kept),
             })
             store.update_run(run_id, completed, kept)
+            if target.dataset is not None:
+                register_query_result(target.dataset, request, completed)
             return
         store.update_run(run_id, completed)
 

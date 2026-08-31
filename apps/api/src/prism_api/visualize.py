@@ -32,6 +32,7 @@ from prism_api_contracts import (
 )
 from prism_overview_analytics import ANALYTICS_SERVICE_VERSION, build_overview
 
+from .analytical_objects import register_visualization
 from .overview import StoredDataset
 from .overview import store as overview_store
 
@@ -136,6 +137,7 @@ def render(dataset_id: str, spec: VisualizationSpec) -> VisualizationDataRespons
     stored = overview_store.get(dataset_id)
     data, truncated, warnings = _aggregate(stored.frame, spec)
     provenance = _provenance(stored)
+    register_visualization(stored, spec, truncated, warnings)
     return VisualizationDataResponse(spec=spec, data=data, truncated=truncated, warnings=warnings, provenance=provenance)
 
 

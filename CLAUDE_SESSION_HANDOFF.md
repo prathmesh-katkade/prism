@@ -1,25 +1,56 @@
 # PRISM Claude Session Handoff
 
-## Phase 8A closeout / Phase 8B prerequisite (2026-08-31)
+## Phase 8B: analytical registry + read-only lineage API (2026-08-31)
 
-- Working branch: `phase-8-provenance-lineage`
+**Read this section first — it supersedes everything below it until the next
+session updates this file again.**
+
+- Working branch: `phase-8b-registry-read-model`, currently 1 commit ahead of
+  origin (this session's work), locally verified, **not yet pushed/PR'd**.
 - Canonical base: `phase-6.5-integration-staging` at
-  `2741c2ef3c242d3edff7a46beda2acd437da25ac`
-- Status: review fixes pending CI before PR #10 may merge. CI run #98 is green
-  for `ff8a6338814f67e4add58730b112464defe66787` (including phase-4-live-e2e),
-  but later review corrections require a final validation run.
-- Scope: Phase 8A only — canonical analytical object/provenance contracts,
-  append-only in-process registry, and representative Stats/Clean producers.
-- Invariants: `DatasetStore` remains the authoritative revision system; legacy
-  Streamlit stays untouched as the parity/rollback reference; existing Phase
-  3–7 HTTP contracts remain unchanged; no database is introduced.
-- Do not start: dependency graph, staleness propagation, reruns, lineage UI,
-  Atlas lineage awareness, or Phase 9.
-- Canonical records: `PHASE8_IMPLEMENTATION_LEDGER.md` and
-  `.prism/checkpoints/phase-8a.md`.
-- Validate the review fixes in CI, then merge PR #10, record its exact merge
-  commit, and start 8B only from the resulting clean staging lineage. Do not
-  expand 8A into graph, staleness, rerun, Atlas, or UI work.
+  `4912610be584e2b3e9902500bd6585aeebb8a506` — **Phase 8A is MERGED** (PR #10,
+  2026-08-31T17:20:36Z). Do not rebuild 8A.
+- Status: 8B is **locally complete** — see `.prism/checkpoints/phase-8b.md`
+  for the full gate table. Every gate that can be checked without a live CI
+  run passes (756 Python tests, ruff/mypy under CI's exact flags, boundaries,
+  secrets, fresh TS contracts, full frontend gate, legacy regression all
+  green). **Not yet pushed, no PR opened, no CI run exists for this branch.**
+- Scope delivered: dataset-revision objects (`ensure_dataset_revision`,
+  idempotent, correct direct-parent chain); producer coverage for SQL Lab
+  (local dataset connection only), Visualize, Forecasting, and ML Lab
+  (baseline/feature-selection/SHAP as three separate objects), on top of 8A's
+  Stats/Clean; AI Analyst registers only a completed `ANSWERED` outcome; the
+  existing read-only `lineage.py` API reviewed and a real inherited bug fixed
+  (missing `from __future__ import annotations` broke mypy under this repo's
+  Python 3.9 target — see `PHASE8_IMPLEMENTATION_LEDGER.md`'s 8B section for
+  the full list of what was and wasn't registered, and why).
+- Invariants held: `DatasetStore` remains the authoritative revision system;
+  legacy Streamlit untouched (zero diff, `py_compile` clean, eval 8/8);
+  existing Phase 3–7 HTTP contracts unchanged; no database introduced; no
+  write route exists under `/lineage`.
+- Do not start: dependency graph traversal, staleness/invalidation
+  propagation, a rerun engine, Atlas lineage awareness, a lineage UI,
+  persistence, or Phase 9.
+- Canonical records: `PHASE8_IMPLEMENTATION_LEDGER.md` (8B section) and
+  `.prism/checkpoints/phase-8b.md`.
+
+### Exact next step for whoever resumes this
+
+1. `git push -u origin phase-8b-registry-read-model` (branch exists locally
+   with 1 unpushed commit on top of origin's single-commit 8B branch — verify
+   with `git log --oneline origin/phase-8b-registry-read-model..HEAD` before
+   pushing, in case another session has since pushed more).
+2. Open a PR from `phase-8b-registry-read-model` into
+   `phase-6.5-integration-staging` (title suggestion: "Phase 8B: analytical
+   registry and read-only lineage API").
+3. Wait for CI; fix any real failure (root-cause it — this session's local
+   verification was thorough, but CI's Python 3.11 / real MySQL / live-e2e
+   environment can still surface something local checks can't).
+4. Merge once green, record the exact merge commit here and in
+   `.prism/checkpoints/phase-8b.md`, then set `PHASE_8C_STARTED` context for
+   the next session per the 8C starting point already documented in
+   `PHASE8_IMPLEMENTATION_LEDGER.md` — **do not implement 8C itself** without
+   a fresh, explicit scope decision.
 
 ---
 

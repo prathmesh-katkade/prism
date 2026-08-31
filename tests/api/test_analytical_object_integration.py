@@ -104,3 +104,24 @@ def test_stats_reproducibility_uses_the_columns_that_the_test_executed() -> None
         if record.kind.value == "analysis"
     )
     assert stats_record.provenance.reproducibility.columns == ["y", "label"]
+
+
+def test_lineage_read_api_returns_immutable_registry_snapshots() -> None:
+    client = TestClient(create_app())
+    dataset_id = _dataset(client)
+    assert client.post(
+        f"/api/v1/stats/datasets/{dataset_id}/run",
+        json={"test": "pearson", "col_a": "x", "col_b": "y"},
+    ).status_code == 200
+
+    listed = client.get(f"/api/v1/lineage/datasets/{dataset_id}/objects", params={"revision": 0, "kind": "analysis"})
+    assert listed.status_code == 200
+    payload = listed.json()
+    assert len(payload) == 1
+    object_id = payload[0]["object_id"]
+    payload[0]["payload"]["test"] = "mutated"
+
+    fetched = client.get(f"/api/v1/lineage/objects/{object_id}")
+    assert fetched.status_code == 200
+    assert fetched.json()["payload"]["test"] == "pearson"
+    assert client.get("/api/v1/lineage/objects/missing").status_code == 404

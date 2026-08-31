@@ -47,6 +47,7 @@ from statsmodels.tsa.exponential_smoothing.ets import ETSModel
 from statsmodels.tsa.seasonal import STL
 from statsmodels.tsa.statespace.sarimax import SARIMAX
 
+from .analytical_objects import register_forecast
 from .overview import StoredDataset
 from .overview import store as overview_store
 
@@ -245,13 +246,15 @@ def forecast(dataset_id: str, request: ForecastRequest) -> ForecastResult:
     forecast_points = [ForecastPoint(timestamp=index, value=float(row["forecast"])) for index, row in forecast_df.iterrows()]
     intervals = [ForecastInterval(timestamp=index, lower=float(row["lower"]), upper=float(row["upper"])) for index, row in forecast_df.iterrows()]
 
-    return ForecastResult(
+    forecast_result = ForecastResult(
         datetime_col=request.datetime_col, numeric_col=request.numeric_col, frequency=freq,
         model_used=result["model_used"], horizon=request.horizon, observed=observed,
         forecast=forecast_points, intervals=intervals, metrics=metrics,
         caveat=forecast_caveat(len(series), request.horizon, result["model_used"]), warnings=warnings,
         provenance=_provenance(stored, "forecast", {"datetime_col": request.datetime_col, "numeric_col": request.numeric_col, "horizon": request.horizon, "frequency": freq, "model_used": result["model_used"]}),
     )
+    register_forecast(stored, request, forecast_result)
+    return forecast_result
 
 
 def can_decompose(series: pd.Series, freq: str) -> tuple[bool, Optional[str]]:

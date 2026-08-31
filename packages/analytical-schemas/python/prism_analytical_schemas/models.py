@@ -22,6 +22,7 @@ _SECRET_VALUE_PATTERN = re.compile(
 
 
 class ObjectKind(str, Enum):
+    DATASET_REVISION = "dataset_revision"
     PROFILE = "profile"
     QUERY_RESULT = "query_result"
     CLEANING_PLAN = "cleaning_plan"
@@ -29,6 +30,7 @@ class ObjectKind(str, Enum):
     ANALYSIS = "analysis"
     FORECAST = "forecast"
     ML_MODEL = "ml_model"
+    EVIDENCE = "evidence"
 
 
 class LifecycleState(str, Enum):

@@ -27,6 +27,7 @@ from prism_api_contracts import (
     AiProviderStatus,
 )
 
+from .analytical_objects import register_ai_evidence
 from .overview import get_profile
 from .overview import store as overview_store
 from .sql_lab import store as sql_store
@@ -185,7 +186,7 @@ def analyze(request: AiAnalystRequest, request_id: Optional[str] = None) -> AiAn
     health = profile.health.total
     missing = profile.quality.total_missing_pct
     answer = f"The active dataset has {profile.quality.n_rows:,} rows, {profile.quality.n_cols} columns, and a health score of {health}/100."
-    return AiAnalystResponse(
+    answered = AiAnalystResponse(
         request_id=request_id or f"ai_{uuid.uuid4().hex}", outcome=AiAnalystOutcome.ANSWERED,
         answer=answer,
         uncertainty=f"This summary describes the loaded data; it does not establish causation. Missingness is {missing:.2f}%.",
@@ -193,6 +194,11 @@ def analyze(request: AiAnalystRequest, request_id: Optional[str] = None) -> AiAn
         recommended_next_step="Inspect the highest-missingness column in Overview or ask for a guarded SQL breakdown.",
         evidence=evidence, context=context, provider=provider, provenance={**provenance, "result_run_id": selected_run},
     )
+    # Only a completed, evidence-grounded ANSWERED outcome is worth preserving - the
+    # causal-limit (INSUFFICIENT_EVIDENCE) and unexecuted-SQL-draft (SQL_READY) branches
+    # above return before this point and are never registered.
+    register_ai_evidence(dataset_id, profile.dataset.revision, profile.provenance.source_fingerprint, request, answered)
+    return answered
 
 
 @router.post("/analyze", response_model=AiAnalystResponse)
