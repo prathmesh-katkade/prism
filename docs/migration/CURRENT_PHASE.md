@@ -1,13 +1,11 @@
 # Current migration phase
 
-**Phase:** 8B — Analytical Object Registry + Read-Only Retrieval (**COMPLETE
-— merged**)
+**Phase:** 8C — Deterministic Dependency Graph / Lineage Traversal (**locally
+complete, PR pending**)
 
-**Merged via:** [PR #11](https://github.com/prathmesh-katkade/prism/pull/11)
-at merge commit `670d670ee0cdaaff7a6a62f1281d2df8b6802cf8` into
-`phase-6.5-integration-staging`, 2026-08-31.
+**Working branch:** `phase-8c-lineage-traversal`.
 
-**Canonical base for the next phase:** `phase-6.5-integration-staging` at
+**Canonical base:** `phase-6.5-integration-staging` at
 `670d670ee0cdaaff7a6a62f1281d2df8b6802cf8` (PR #11 — Phase 8B merge).
 
 Phases 1–7 remain complete. Overview, SQL Lab, AI Analyst, Clean, Visualize,
@@ -24,55 +22,75 @@ registry, and Stats/Clean as representative producers, every object tied to
 `4912610be584e2b3e9902500bd6585aeebb8a506`. Gate record:
 `.prism/checkpoints/phase-8a.md`.
 
-## Phase 8B scope
+## Phase 8B — COMPLETE, merged
 
-Phase 8B turns that foundation into a useful, read-only canonical
-analytical-history model:
+Phase 8B completed dataset-revision identity, direct-parent wiring across the
+remaining native workflows (SQL Lab, Visualize, Forecasting, ML Lab, AI
+Analyst), and a read-only lineage API (`GET /objects/{object_id}`, `GET
+/datasets/{dataset_id}/objects`). Merged via
+[PR #11](https://github.com/prathmesh-katkade/prism/pull/11) at
+`670d670ee0cdaaff7a6a62f1281d2df8b6802cf8`. Gate record:
+`.prism/checkpoints/phase-8b.md`.
 
-- **Dataset-revision objects** — `ensure_dataset_revision` idempotently
-  mirrors each `DatasetStore` dataset/revision/fingerprint identity into the
-  registry (deterministic id, exactly one object per identity), with the
-  immediately preceding revision linked as its direct parent whenever it is
-  already registered.
-- **Producer coverage completed** — SQL Lab (local dataset connection only),
-  Visualize, Forecasting, and ML Lab (baseline/feature-selection/SHAP as
-  three independent objects) now register alongside 8A's Stats/Clean. AI
-  Analyst registers only a completed, evidence-grounded `ANSWERED` outcome.
-  Deliberate exclusions (Overview, ML Lab's `apply-feature`/`imbalance`, SQL
-  Lab against non-dataset connections, AI Analyst's other two outcomes) are
-  documented with reasons in `PHASE8_IMPLEMENTATION_LEDGER.md`, not silently
-  skipped.
-- **Direct-parent semantics only** — every object points at the one
-  dataset-revision object it actually ran against; no transitive graph
-  exists or is inferred.
-- **Read-only lineage API** — `GET /api/v1/lineage/objects/{object_id}` and
-  `GET /api/v1/lineage/datasets/{dataset_id}/objects` (optional `revision`/
-  `kind` filters, deterministic newest-first ordering, immutable snapshots).
-  No write route exists under `/lineage`.
+## Phase 8C scope
 
-Existing Phase 3–7 HTTP contracts remain backward compatible: every touched
-producer route's own response model and status code are unchanged.
+Phase 8C makes the direct `parent_refs` graph 8A/8B already record walkable —
+still entirely read-only, still built only from links producers already
+record, never AI-inferred:
 
-The implementation ledger is `PHASE8_IMPLEMENTATION_LEDGER.md`; the final
-gate record is `.prism/checkpoints/phase-8b.md`. Every gate passed, including
-live CI on PR #11's final head (`63daaaf`, all 5 checks green) and a
-post-merge automated review pass that surfaced and fixed two real gaps
-before merge (see the ledger's 8B "Status update").
+- **Reverse child index** — `AnalyticalObjectRegistry` now maintains
+  `parent_object_id → [child_object_id, ...]` inline during `register()`, so
+  a child lookup is a dict access, never a full-registry scan.
+- **Direct parent/child lookup** — `GET /objects/{id}/parents` and
+  `GET /objects/{id}/children`: the immediate relationship only, `[]` for a
+  root/leaf, 404 for an unknown id.
+- **Transitive ancestor/descendant traversal** — `GET
+  /objects/{id}/ancestors` and `GET /objects/{id}/descendants`: iterative,
+  cycle-safe BFS with per-node depth, deterministic `(depth ASC, object_id
+  ASC)` ordering, and an optional bounded `max_depth` (1–100, typed 422
+  outside that range) that reports whether it actually truncated real
+  further history.
+- **Compact graph view** — `GET /objects/{id}/graph`
+  (`direction=upstream|downstream|both`): the one place the root itself is
+  included, at depth 0, otherwise a thin composition of the same traversal
+  used above.
+- **Shortest path** — `GET /path?from_object_id=&to_object_id=`: deterministic,
+  direction-agnostic, with a `found=false` (not an error) response when both
+  objects exist but nothing connects them.
+- **Fingerprint-aware identity, extended** — traversal walks `object_id`s,
+  which already encode `(dataset_id, revision, source_fingerprint)`, so a
+  revision-number-only identity bug (the class of gap 8B fixed) has no
+  separate surface to regress into here.
 
-`PHASE_8A_COMPLETE = YES`, `PHASE_8B_COMPLETE = YES`, `PHASE_8C_STARTED = NO`.
+No write route exists, or was added, anywhere under `/lineage`. No new
+parent link is created by 8C — only the existing graph is walked. No
+staleness/invalidation propagation, rerun/reproduction engine, Atlas lineage
+reasoning, lineage/evidence frontend UI, database persistence, or Phase 9
+work is part of this phase.
 
-## Still forbidden in 8B
+Existing Phase 3–7 HTTP contracts, and both pre-existing Phase 8B lineage
+routes, remain backward compatible and byte-for-byte unchanged; all 8C
+routes are additive.
 
-- dependency graph traversal or visualization
+The implementation ledger is `PHASE8_IMPLEMENTATION_LEDGER.md` (8C section);
+the gate record is `.prism/checkpoints/phase-8c.md`. All locally-verifiable
+gates pass (full Python suite — 784 passed, 4 pre-existing skips; ruff/mypy
+under CI's exact flags; boundaries; secret scan; fresh TypeScript contracts;
+full frontend gate; legacy regression); CI itself is pending a PR from
+`phase-8c-lineage-traversal`.
+
+## Still forbidden in 8C
+
 - staleness propagation / invalidation propagation
 - rerun or reproduction execution engine
 - Atlas lineage awareness
 - lineage/evidence frontend UI
 - database or persistence layer
+- governance
 - Phase 9 work
 
-The exact 8C starting point (Deterministic Dependency Graph / Lineage
-Traversal) builds ancestor/descendant traversal on top of the direct
-`parent_refs` links 8A and 8B already record. It must not expand into
-staleness, rerun, Atlas, UI, or persistence work without a new scope
-decision.
+The exact 8D starting point (Versioning + Staleness Propagation) reuses the
+descendant traversal 8C already built to answer "a dataset revision changed;
+which downstream objects are now stale?" — it must not be started without a
+fresh, explicit scope decision. See `PHASE8_IMPLEMENTATION_LEDGER.md`'s 8C
+section and `.prism/checkpoints/phase-8c.md` for the exact starting point.
