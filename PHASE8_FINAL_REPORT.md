@@ -15,10 +15,10 @@ reproduced without ever overwriting history; the result is visible in the
 product via a dedicated inspector; and Atlas can explain all of it,
 grounded entirely in recorded fact, never inference.
 
-Eight sub-phases (8A–8H) shipped across three merged PRs (#10, #11, #12)
-plus one final integration PR covering 8D–8H, each with a full local and CI
-quality gate. The registry remains intentionally process-local and
-in-memory throughout — no persistence layer was introduced.
+Eight sub-phases (8A–8H) shipped across four merged PRs (#10, #11, #12,
+and #13 covering 8D–8H), each with a full local and CI quality gate. The
+registry remains intentionally process-local and in-memory throughout — no
+persistence layer was introduced.
 
 ## Architecture delivered, by sub-phase
 
@@ -222,12 +222,11 @@ This matches every prior Phase 6.5–8C session's finding; access has not
 changed.
 
 **Distinguishing status honestly, per the task's own instruction:**
-- **Engineering complete:** YES — all Phase 8D–8H code committed on
-  `phase-8-completion`, on top of already-merged 8A/8B/8C; all local gates
-  green.
-- **CI complete:** pending this PR's own CI run against
-  `phase-6.5-integration-staging` (see "Release status" below for the
-  outcome once known).
+- **Engineering complete:** YES — all Phase 8D–8H code merged via
+  [PR #13](https://github.com/prathmesh-katkade/prism/pull/13), on top of
+  already-merged 8A/8B/8C; all local gates green.
+- **CI complete:** YES — all 5 checks passed on PR #13's final head
+  `e3c72258faa4cf5c71ea25e6bb9c1bb95c377e60`.
 - **Deployment unverified:** YES — the exact final Phase 8 merge commit has
   not been deployed to `prism-native-api-staging`/`prism-native-web-staging`,
   and none of the live-endpoint checks (health/ready/lineage/freshness/
@@ -243,21 +242,23 @@ deployment itself was not verified, alongside the flags below.
 ## Rollback
 
 Each sub-phase's own commit on `phase-8-completion` is independently
-revertible (8D: `239d04a`, 8E: `b4fb4d1`, 8F: `e6b0460`, 8G: `5e8460b`,
-8H: this commit). The whole slice reverts cleanly as the merge commit for
-the PR from `phase-8-completion` into `phase-6.5-integration-staging`,
-leaving 8A/8B/8C (already merged and stable) untouched.
+identifiable and revertible (8D: `239d04a`, 8E: `b4fb4d1`, 8F: `e6b0460`,
+8G: `5e8460b`, 8H: `9c58faa`, post-review fixes: `e3c7225`). The whole
+slice reverts cleanly as the merge commit
+`4b291898d38e4397a335aef761ab13b3be197d68` for PR #13, leaving 8A/8B/8C
+(already merged and stable) untouched.
 
 ## Release status
 
-**Locally complete, PR pending as of this writing.** See
-`.prism/checkpoints/phase-8-final.md` for the live gate table; that file
-(and the flags below, and `CLAUDE_SESSION_HANDOFF.md`/
-`docs/migration/CURRENT_PHASE.md`) get their final update the moment this
-PR's CI is confirmed green and it merges — following the exact same
-finalize-after-merge pattern every prior Phase 8 checkpoint in this session
-used (see `.prism/checkpoints/phase-8b.md`/`phase-8c.md` for the pre- and
-post-merge versions of that same pattern).
+**COMPLETE — merged.** [PR #13](https://github.com/prathmesh-katkade/prism/pull/13)
+merged into `phase-6.5-integration-staging` at merge commit
+`4b291898d38e4397a335aef761ab13b3be197d68` on 2026-08-31. All 5 CI checks
+passed on the final head `e3c72258faa4cf5c71ea25e6bb9c1bb95c377e60`. A
+post-push automated review (Codex) found three real gaps in this session's
+own new code before merge — all fixed and covered by new regression tests
+in that same final head; see `.prism/checkpoints/phase-8-final.md`'s
+"Post-push review" row for detail. Full gate table:
+`.prism/checkpoints/phase-8-final.md`.
 
 ## Phase 9 handoff
 
@@ -274,13 +275,13 @@ PHASE_8D_COMPLETE = YES
 PHASE_8E_COMPLETE = YES
 PHASE_8F_COMPLETE = YES
 PHASE_8G_COMPLETE = YES
-PHASE_8H_COMPLETE = YES  (engineering + local gates; CI pending this PR)
+PHASE_8H_COMPLETE = YES
 
-PHASE_8_COMPLETE = NO   (flips to YES once this PR's CI is green and it merges)
-PHASE_9_UNLOCKED = NO   (flips to YES together with PHASE_8_COMPLETE)
+PHASE_8_COMPLETE = YES
+PHASE_9_UNLOCKED = YES
 ```
 
-Live deployment to Render staging remains unverified regardless of merge
-outcome — see "Deployment status" above; this repository's established
-release bar (Phase 6.5/7's own precedent) is engineering + CI completeness,
-not a live deployment a session has no credentials to perform.
+Live deployment to Render staging remains unverified — see "Deployment
+status" above; this repository's established release bar (Phase 6.5/7's
+own precedent) is engineering + CI completeness, not a live deployment a
+session has no credentials to perform.

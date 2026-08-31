@@ -1,27 +1,25 @@
 # Current migration phase
 
-**Phase:** 8 (D–H) — Freshness, Inspector UI, Reproducibility, Atlas Lineage
-Awareness, and Hardening (**locally complete, PR pending**)
+**Phase:** 8 — COMPLETE (all sub-phases 8A–8H merged, **PHASE_9_UNLOCKED**)
 
-**Working branch:** `phase-8-completion`.
-
-**Canonical base:** `phase-6.5-integration-staging` at
-`79b059f40a85a3ce5dc71500ca23286178ce5948` (PR #12 — Phase 8C merge + docs
-commit `68377c7`).
+**Canonical base for the next phase:** `phase-6.5-integration-staging` at
+`4b291898d38e4397a335aef761ab13b3be197d68` (PR #13 — Phase 8D–8H merge).
 
 Phases 1–7 remain complete. Overview, SQL Lab, AI Analyst, Clean, Visualize,
 Stats, Forecasting, and ML Lab stay native and enabled; their Streamlit
 implementations remain the parity/rollback references.
 
-## Phase 8A/8B/8C — COMPLETE, merged
+## Phase 8A–8H — COMPLETE, all merged
 
 - 8A: [PR #10](https://github.com/prathmesh-katkade/prism/pull/10) at `4912610be584e2b3e9902500bd6585aeebb8a506`.
 - 8B: [PR #11](https://github.com/prathmesh-katkade/prism/pull/11) at `670d670ee0cdaaff7a6a62f1281d2df8b6802cf8`.
 - 8C: [PR #12](https://github.com/prathmesh-katkade/prism/pull/12) at `79b059f40a85a3ce5dc71500ca23286178ce5948`.
+- 8D–8H: [PR #13](https://github.com/prathmesh-katkade/prism/pull/13) at `4b291898d38e4397a335aef761ab13b3be197d68`.
 
-Gate records: `.prism/checkpoints/phase-8a.md`, `phase-8b.md`, `phase-8c.md`.
+Gate records: `.prism/checkpoints/phase-8a.md` through `phase-8-final.md`.
+Full report: `PHASE8_FINAL_REPORT.md`.
 
-## Phase 8D–8H scope (this working branch)
+## Phase 8D–8H scope
 
 - **8D — Versioning + Staleness Propagation.** Contextual freshness
   (`current`/`stale`/`superseded`/`unknown`/`invalid`), computed live
@@ -48,6 +46,21 @@ No new graph engine, no dependency-graph redesign, no database/persistence
 layer, no governance, no Phase 9 work. Full detail:
 `PHASE8_IMPLEMENTATION_LEDGER.md` (8D–8H sections), gate records
 `.prism/checkpoints/phase-8d.md` through `phase-8-final.md`.
+
+A post-push automated review found three real gaps in 8D–8H's own new code
+(a React state-reset bug and a race-guard gap in the Evidence Inspector,
+and a missing `dataset_id` comparison in Atlas's `compare_versions`) — all
+fixed and regression-tested in PR #13's final head before merge.
+
+```
+PHASE_8A_COMPLETE = YES   PHASE_8E_COMPLETE = YES
+PHASE_8B_COMPLETE = YES   PHASE_8F_COMPLETE = YES
+PHASE_8C_COMPLETE = YES   PHASE_8G_COMPLETE = YES
+PHASE_8D_COMPLETE = YES   PHASE_8H_COMPLETE = YES
+
+PHASE_8_COMPLETE = YES
+PHASE_9_UNLOCKED = YES
+```
 
 ## Still forbidden until a fresh scope decision
 

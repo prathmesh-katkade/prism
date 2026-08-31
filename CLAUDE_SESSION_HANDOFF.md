@@ -1,23 +1,23 @@
 # PRISM Claude Session Handoff
 
-## Phase 8 (D–H): freshness, inspector UI, rerun, Atlas lineage, hardening — locally complete, PR pending (2026-08-31)
+## Phase 8: COMPLETE — all sub-phases (8A–8H) merged (2026-08-31)
 
 **Read this section first — it supersedes everything below it until the next
 session updates this file again.**
 
-- Working branch: `phase-8-completion`, created from
-  `phase-6.5-integration-staging` at `79b059f40a85a3ce5dc71500ca23286178ce5948`
-  (PR #12 / Phase 8C merge + docs commit `68377c7`). Locally verified,
-  **not yet pushed/PR'd**.
-- Phase 8A (PR #10), 8B (PR #11), 8C (PR #12) are all MERGED. Do not rebuild
-  any of them.
-- Status: 8D–8H are **locally complete** — see `PHASE8_FINAL_REPORT.md` and
-  `.prism/checkpoints/phase-8-final.md` for the full picture. Every gate
-  checkable without a live CI run passes (825 Python tests including 40 new
-  Phase 8D–8H tests, 31 frontend tests including 9 new, ruff/mypy under CI's
-  exact flags, boundaries, secret scan, fresh TS contracts, full frontend
-  gate, legacy regression all green). **Not yet pushed, no PR opened, no CI
-  run exists for this branch.**
+- **Phase 8 is CERTIFIED COMPLETE.** [PR #13](https://github.com/prathmesh-katkade/prism/pull/13)
+  (`phase-8-completion` → `phase-6.5-integration-staging`, covering 8D–8H)
+  merged at merge commit `4b291898d38e4397a335aef761ab13b3be197d68` on
+  2026-08-31. All 5 CI checks passed on the final head
+  `e3c72258faa4cf5c71ea25e6bb9c1bb95c377e60`. Canonical base for whatever
+  comes next: `phase-6.5-integration-staging` at
+  `4b291898d38e4397a335aef761ab13b3be197d68`.
+- Phase 8A (PR #10), 8B (PR #11), 8C (PR #12) are also MERGED, underneath
+  8D–8H. Do not rebuild any of them.
+- Full picture: `PHASE8_FINAL_REPORT.md` and `.prism/checkpoints/phase-8-final.md`
+  — every gate PASS, including live CI and a post-push automated-review pass
+  (see below). 826 Python tests (40 new across 8D–8H, 1 more from the
+  post-push fixes), 32 frontend tests (10 new), all passing.
 - Scope delivered, one line each (full detail in `PHASE8_IMPLEMENTATION_LEDGER.md`'s
   8D–8H sections and each phase's own `.prism/checkpoints/phase-8{d,e,f,g}.md`):
   - **8D:** live-computed freshness (`current`/`stale`/`superseded`/`unknown`)
@@ -35,6 +35,17 @@ session updates this file again.**
     workspace's existing Atlas actions).
   - **8H:** end-to-end integration audit (5 real-HTTP flows), self-code-review,
     full regression, full repo-standard gates, `PHASE8_FINAL_REPORT.md`.
+- Post-push automated review (Codex) found three real gaps in this session's
+  own new code before merge, all fixed and regression-tested in the final
+  head (`e3c7225`): (P1) `EvidenceInspector`'s `ReproducibilitySection`/
+  `AtlasLineageSection` weren't keyed by object id, so a rerun/Atlas result
+  could stay visibly attached to a previously-selected object after lineage
+  navigation — fixed by keying both on `object.object_id`; (P2) `load()` had
+  no guard against a superseded navigation's response resolving after a
+  later one — fixed with a ref-tracked latest-requested-id check; (P2)
+  `atlas_lineage.py`'s `compare_versions` omitted `dataset_id` from its
+  identity comparison, so two separately-uploaded, byte-identical datasets
+  could be reported as "the same dataset identity" — fixed.
 - Invariants held throughout: no historical object ever mutated (rerun always
   creates a new one); fingerprint-aware `(dataset_id, revision,
   source_fingerprint)` identity used everywhere, never revision alone; no
@@ -50,30 +61,22 @@ session updates this file again.**
   available to this session (checked directly); engineering- and
   CI-completeness is this repository's established release bar (see
   `PHASE8_FINAL_REPORT.md`'s "Deployment status" section), not a live
-  deployment verification this session cannot perform.
-- **PHASE_8A/8B/8C/8D/8E/8F/8G/8H_COMPLETE = YES (engineering + local gates);
-  PHASE_8_COMPLETE = NO and PHASE_9_UNLOCKED = NO until this PR's CI is green
-  and it merges.**
+  deployment verification this session cannot perform. Live deployment
+  remains unverified regardless of merge status.
+- **PHASE_8A_COMPLETE = YES, PHASE_8B_COMPLETE = YES, PHASE_8C_COMPLETE = YES,
+  PHASE_8D_COMPLETE = YES, PHASE_8E_COMPLETE = YES, PHASE_8F_COMPLETE = YES,
+  PHASE_8G_COMPLETE = YES, PHASE_8H_COMPLETE = YES, PHASE_8_COMPLETE = YES,
+  PHASE_9_UNLOCKED = YES.**
+- **Nothing is pending from Phase 8.** Per explicit scope boundary, this
+  session stopped here and did **not** start Phase 9. Candidate (unscoped)
+  Phase 9 directions — a persistence-architecture ADR, completing Evidence
+  Inspector coverage across the remaining native workspaces, rerun coverage
+  expansion, governance — are in `PHASE9_HANDOFF.md`. None of them is
+  pre-selected; whoever resumes should make that scope decision explicitly
+  before implementing anything.
 - Canonical records: `PHASE8_FINAL_REPORT.md`, `PHASE8_IMPLEMENTATION_LEDGER.md`
-  (8D–8H sections), `.prism/checkpoints/phase-8-final.md` (and the individual
-  `phase-8d.md`/`8e.md`/`8f.md`/`8g.md`), `PHASE9_HANDOFF.md`.
-
-### Exact next step for whoever resumes this
-
-1. `git push -u origin phase-8-completion` (verify with `git log --oneline
-   origin/phase-8-completion..HEAD` first, in case another session has since
-   pushed to this branch).
-2. Open a PR from `phase-8-completion` into `phase-6.5-integration-staging`
-   (title suggestion: "Phase 8 completion: provenance, lineage, freshness,
-   reproducibility, and Atlas").
-3. Wait for CI; fix any real failure (root-cause it).
-4. Merge once green, record the exact merge commit in `PHASE8_FINAL_REPORT.md`,
-   `.prism/checkpoints/phase-8-final.md`, this file, and
-   `docs/migration/CURRENT_PHASE.md`; flip `PHASE_8_COMPLETE` and
-   `PHASE_9_UNLOCKED` to `YES` only once that CI is actually green and the
-   merge is actually done.
-5. **Do not start Phase 9** without a fresh, explicit scope decision — see
-   `PHASE9_HANDOFF.md` for candidate directions, none of them pre-selected.
+  (8A–8H sections), `.prism/checkpoints/phase-8-final.md` (and the individual
+  `phase-8a.md` through `phase-8g.md`), `PHASE9_HANDOFF.md`.
 
 ---
 
