@@ -17,8 +17,14 @@ test("History workspace shows a real SQL Lab result through the live API and ope
   await expect(page.locator(".monaco-editor")).toBeVisible();
   const runQuery = page.getByRole("button", { name: /Run query/ });
   await expect(runQuery).toBeEnabled();
-  await runQuery.click();
-  await expect(page.getByText("3 returned / 3 total rows")).toBeVisible({ timeout: 20_000 });
+  // Sync on the actual results response rather than a bare click - see
+  // sql-lab-live.spec.ts for why.
+  const [resultsResponse] = await Promise.all([
+    page.waitForResponse((response) => /\/sql-lab\/runs\/[^/]+\/results/.test(response.url()) && response.status() === 200),
+    runQuery.click(),
+  ]);
+  expect(resultsResponse.ok()).toBe(true);
+  await expect(page.getByText("3 returned / 3 total rows")).toBeVisible({ timeout: 15_000 });
 
   // Recording a SQL run durably is what makes it show up in History - this is
   // the same registration path every native workflow's "Inspect result" /

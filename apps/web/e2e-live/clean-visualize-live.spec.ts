@@ -42,10 +42,15 @@ test("Clean detects an issue, previews it, applies it as a new revision Overview
   await page.getByRole("button", { name: /SQL Lab native/i }).click();
   await expect(page.locator(".monaco-editor")).toBeVisible();
   await page.locator(".monaco-editor").click();
-  await page.keyboard.press("ControlOrMeta+Enter");
-  // Same CI-runner render-latency allowance as sql-lab-live.spec.ts: the
-  // query itself completes well under 20ms server-side.
-  await expect(page.getByText("3 returned / 3 total rows")).toBeVisible({ timeout: 20_000 });
+  // Same synchronization approach as sql-lab-live.spec.ts: the query itself
+  // completes well under 20ms server-side, so wait on the actual results
+  // response rather than an unknown mix of network and CI-runner render time.
+  const [resultsResponse] = await Promise.all([
+    page.waitForResponse((response) => /\/sql-lab\/runs\/[^/]+\/results/.test(response.url()) && response.status() === 200),
+    page.keyboard.press("ControlOrMeta+Enter"),
+  ]);
+  expect(resultsResponse.ok()).toBe(true);
+  await expect(page.getByText("3 returned / 3 total rows")).toBeVisible({ timeout: 15_000 });
 
   // Undo restores the original revision.
   await page.getByRole("button", { name: /Clean native/i }).click();
