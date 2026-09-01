@@ -7,6 +7,7 @@ import time
 import uuid
 from collections.abc import Awaitable, Callable
 from datetime import datetime, timezone
+from typing import cast
 
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -14,7 +15,9 @@ from prism_api_contracts import HealthResponse, ProviderReadiness, ReadinessResp
 from prism_config.settings import get_settings
 
 from .ai_analyst import router as ai_analyst_router
+from .analytical_objects import registry as analytical_registry
 from .clean import router as clean_router
+from .durable_registry import DurableAnalyticalObjectRegistry
 from .forecasting import router as forecasting_router
 from .lineage import router as lineage_router
 from .migration import PHASE_1_MIGRATIONS
@@ -118,6 +121,18 @@ def create_app() -> FastAPI:
         check must stay fast and must not itself hang waiting on an optional external service)."""
         provider = os.environ.get("PRISM_AI_PROVIDER", "deterministic").lower()
         configured = provider == "ollama"
+        try:
+            cast(DurableAnalyticalObjectRegistry, analytical_registry).ping()
+            history_status, history_detail = (
+                "ready",
+                "Analytical-history persistence is reachable.",
+            )
+        except Exception:
+            logger.exception("analytical_history_readiness_failed")
+            history_status, history_detail = (
+                "unavailable",
+                "Analytical-history persistence is unavailable; no new durable evidence can be certified.",
+            )
         providers = (
             ProviderReadiness(
                 name="ollama",
@@ -129,6 +144,7 @@ def create_app() -> FastAPI:
                     else "PRISM_AI_PROVIDER is not set to 'ollama'; AI Analyst uses its deterministic path."
                 ),
             ),
+            ProviderReadiness(name="analytical_history", status=history_status, detail=history_detail),
         )
         return ReadinessResponse(generated_at=datetime.now(timezone.utc), providers=providers)
 

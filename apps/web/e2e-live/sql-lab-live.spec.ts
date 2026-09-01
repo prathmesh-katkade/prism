@@ -21,8 +21,17 @@ test("SQL Lab completes a real browser to FastAPI analytical flow", async ({ pag
 
   const runQuery = page.getByRole("button", { name: /Run query/ });
   await expect(runQuery).toBeEnabled();
-  await runQuery.click();
-  await expect(page.getByText("3 returned / 3 total rows")).toBeVisible({ timeout: 10_000 });
+  // Server logs prove the query itself always completes in well under 20ms;
+  // syncing on the actual results response (rather than a bare click) means
+  // the remaining UI-visibility timeout only has to cover React's render,
+  // not an unknown mix of network and render time under CI-runner load
+  // (Monaco falls back to main-thread execution there per its own warning).
+  const [resultsResponse] = await Promise.all([
+    page.waitForResponse((response) => /\/sql-lab\/runs\/[^/]+\/results/.test(response.url()) && response.status() === 200),
+    runQuery.click(),
+  ]);
+  expect(resultsResponse.ok()).toBe(true);
+  await expect(page.getByText("3 returned / 3 total rows")).toBeVisible({ timeout: 15_000 });
   await expect(page.getByRole("button", { name: "Create dataset" })).toBeVisible();
   if (process.platform === "win32") {
     await expect(page).toHaveScreenshot("sql-lab-live-results.png", { animations: "disabled", fullPage: true, maxDiffPixelRatio: 0.01 });

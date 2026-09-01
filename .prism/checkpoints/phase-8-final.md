@@ -50,8 +50,10 @@ post-push automated review pass. PR #13 merged into
   `PHASE8_FINAL_REPORT.md`.
 - SQL Lab and Clean reruns are deliberately unsupported (each with a
   documented reason returned in the `/rerun` response itself).
-- Deployment to Render staging is unverified — `BLOCKED_EXTERNAL_DEPLOYMENT_ACCESS`,
-  no credentials available to this session (see `PHASE8_FINAL_REPORT.md`).
+- Exact Render deployment identity is unverified —
+  `BLOCKED_EXTERNAL_DEPLOYMENT_ACCESS`. On 2026-09-01, public API health,
+  readiness, and web-root probes returned HTTP 200, but no authenticated Render
+  deployment history is available to match those services to the Phase 8 commit.
 
 ## Phase 9
 

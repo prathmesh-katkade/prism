@@ -6,10 +6,9 @@ import hashlib
 import io
 import math
 import uuid
-from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pandas as pd
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile, status
@@ -25,16 +24,14 @@ from prism_api_contracts import (
 )
 from prism_overview_analytics import ANALYTICS_SERVICE_VERSION, build_overview
 
+from .durable_dataset_store import DurableDatasetStore
+from .durable_dataset_store import StoredDataset as DurableStoredDataset
+
+StoredDataset = DurableStoredDataset
+
 router = APIRouter(prefix="/api/v1/overview", tags=["overview"])
 MAX_UPLOAD_BYTES = 64 * 1024 * 1024
 MAX_PROFILE_ROWS = 500_000
-
-
-@dataclass(frozen=True)
-class StoredDataset:
-    dataset: OverviewDataset
-    frame: pd.DataFrame
-    source_fingerprint: str
 
 
 class DatasetStore:
@@ -104,7 +101,9 @@ class DatasetStore:
         return target.dataset
 
 
-store = DatasetStore()
+# Phase 9 preserves DatasetStore's authority and public API, while making its
+# revision payloads restart-safe alongside durable analytical history.
+store: DatasetStore = cast(DatasetStore, DurableDatasetStore())
 
 
 def _read_upload(contents: bytes, source_name: str) -> pd.DataFrame:

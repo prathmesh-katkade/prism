@@ -7,6 +7,15 @@ const apiDirectory = path.resolve("apps/api/src");
 export default defineConfig({
   testDir: "./e2e-live",
   timeout: 45_000,
+  // Live-e2e specs share one real FastAPI backend and its single global
+  // "active dataset" pointer (overview_store.latest()) by design - that is
+  // what makes them "live" rather than mocked. Running spec files across
+  // parallel workers races concurrent dataset uploads against that shared
+  // pointer, so a worker's own just-uploaded dataset can lose "latest" to
+  // another worker's upload before its page finishes loading. Durable,
+  // DB-backed persistence (Phase 9) widened that race window enough to
+  // make it flake reliably, so these tests always run single-worker.
+  workers: 1,
   use: { baseURL: "http://127.0.0.1:3100", trace: "retain-on-failure" },
   webServer: [
     {

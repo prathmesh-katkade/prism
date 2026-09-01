@@ -45,6 +45,17 @@ export interface AiEvidence {
 
 export type AiProviderStatus = "deterministic" | "ollama" | "fallback";
 
+export interface AnalyticalAuditEvent {
+  event_id: string;
+  object_id: string;
+  event_type: string;
+  actor: string;
+  producer_service: string;
+  producer_version: string;
+  request_id?: string;
+  created_at: string;
+}
+
 export interface AnalyticalObject {
   object_id: string;
   kind: ObjectKind;
@@ -684,7 +695,7 @@ export interface Producer {
 
 export interface ProviderReadiness {
   name: string;
-  status: "configured" | "not_configured";
+  status: "configured" | "not_configured" | "ready" | "unavailable";
   detail: string;
 }
 

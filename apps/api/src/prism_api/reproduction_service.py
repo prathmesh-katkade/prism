@@ -28,6 +28,7 @@ from prism_analytical_schemas import (
     ReproductionResponse,
 )
 from prism_api_contracts import (
+    CleanTransformationRequest,
     ForecastRequest,
     MlBaselineRequest,
     MlFeatureSelectionRequest,
@@ -37,16 +38,15 @@ from prism_api_contracts import (
     VisualizationSpec,
 )
 
-from . import forecasting, mllab, visualize
+from . import clean, forecasting, mllab, visualize
 from .analytical_objects import register_visualization
 from .analytical_objects import registry as object_registry
 from .overview import DatasetStore, StoredDataset
 
-_SUPPORTED_KINDS = {ObjectKind.ANALYSIS, ObjectKind.FORECAST, ObjectKind.ML_MODEL, ObjectKind.VISUALIZATION}
+_SUPPORTED_KINDS = {ObjectKind.ANALYSIS, ObjectKind.FORECAST, ObjectKind.ML_MODEL, ObjectKind.VISUALIZATION, ObjectKind.CLEANING_PLAN}
 
 _UNSUPPORTED_REASONS = {
     ObjectKind.DATASET_REVISION: "A dataset-revision object is a data identity record, not an analytical result - there is nothing to rerun.",
-    ObjectKind.CLEANING_PLAN: "Clean transformations already have their own deterministic apply/undo mechanism; use Clean's apply action again rather than a generic rerun.",
     ObjectKind.QUERY_RESULT: "SQL Lab runs execute asynchronously (submit, then poll); the synchronous rerun endpoint does not support that flow in this phase.",
     ObjectKind.PROFILE: "A profile is a read-only snapshot, not a rerunnable analytical action.",
     ObjectKind.EVIDENCE: "AI Analyst evidence involves a provider call outside deterministic rerun scope in this phase.",
@@ -101,6 +101,12 @@ def reproduce(
         reason = _UNSUPPORTED_REASONS.get(record.kind, f"Rerun is not supported for {record.kind.value} objects.")
         return ReproductionResponse(outcome=ReproductionOutcome.UNSUPPORTED, original_object_id=object_id, mode=mode, detail=reason)
 
+    if record.kind is ObjectKind.CLEANING_PLAN and mode is ReproductionMode.SAME_REVISION:
+        return ReproductionResponse(
+            outcome=ReproductionOutcome.UNSUPPORTED, original_object_id=object_id, mode=mode,
+            detail="Clean rerun is intentionally defined as reapplying the recorded plan to the current revision. Reapplying it to an older revision would change the active DatasetStore branch implicitly.",
+        )
+
     ref = record.provenance.dataset
     stored = _resolve_stored(overview_store, ref.dataset_id, mode, ref.revision, ref.source_fingerprint)
     if stored is None:
@@ -115,7 +121,7 @@ def reproduce(
         return ReproductionResponse(outcome=ReproductionOutcome.SOURCE_REVISION_UNAVAILABLE, original_object_id=object_id, mode=mode, detail=detail)
 
     try:
-        new_object = _dispatch(record, stored)
+        new_object = _dispatch_clean_current(record, stored) if record.kind is ObjectKind.CLEANING_PLAN else _dispatch(record, stored)
     except HTTPException as error:
         return ReproductionResponse(outcome=ReproductionOutcome.VALIDATION_FAILED, original_object_id=object_id, mode=mode, detail=str(error.detail))
     except (KeyError, ValueError) as error:
@@ -183,3 +189,26 @@ def _dispatch(record: AnalyticalObject, stored: StoredDataset) -> AnalyticalObje
         raise ValueError(f"Unreachable: {record.kind} is not in _SUPPORTED_KINDS.")
 
     return _newest_of_kind(stored, record.kind)
+
+
+def _dispatch_clean_current(record: AnalyticalObject, stored: StoredDataset) -> AnalyticalObject:
+    """Reapply an immutable Clean plan to the active revision as a new action.
+
+    The persisted plan supplies every parameter. The client still supplies only
+    rerun mode, so this cannot become a general transformation-write API.
+    """
+    params = record.provenance.reproducibility.parameters
+    request = CleanTransformationRequest(
+        operation=record.provenance.reproducibility.operation,
+        column=cast(Optional[str], params.get("column")),
+        new_name=cast(Optional[str], params.get("new_name")),
+        target_type=cast(Optional[str], params.get("target_type")),
+        fill_strategy=cast(Optional[str], params.get("fill_strategy")),
+        fill_value=cast(Optional[str], params.get("fill_value")),
+        case=cast(Optional[str], params.get("case")),
+    )
+    result = clean.apply_transformation(stored.dataset.dataset_id, request)
+    created = object_registry.get(f"clean_{result.transformation.transformation_id}")
+    if created is None:  # pragma: no cover - transaction failure would already surface
+        raise ValueError("Clean rerun completed without recording an analytical object.")
+    return created

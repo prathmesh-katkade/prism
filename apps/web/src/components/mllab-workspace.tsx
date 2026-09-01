@@ -13,6 +13,7 @@ import type {
   OverviewProfileResponse,
 } from "@prism/api-contracts";
 import { apiUrl } from "../config/api";
+import { newestAnalyticalObjectId } from "./analytical-history";
 import type { InspectorObjectState } from "../state/shell-model";
 
 type MlUiState = "empty" | "loading" | "ready" | "error";
@@ -95,7 +96,8 @@ export function MlLabWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
       if (!response.ok) throw new Error((await response.json() as { detail?: string }).detail ?? "The baseline models could not be run.");
       const body = await response.json() as MlBaselineResult;
       setBaselineResult(body);
-      onSelectContext({ objectId: `ml-baseline:${targetCol}`, label: `Baseline — ${targetCol}`, type: "finding", state: "ready", actions: [{ id: "atlas-compare-models", label: "Ask Atlas to compare models" }], metadata: [body.task_type, body.verdict] });
+      const analyticalObjectId = await newestAnalyticalObjectId(datasetId, "ml_model");
+      onSelectContext({ objectId: `ml-baseline:${targetCol}`, label: `Baseline — ${targetCol}`, type: "finding", state: "ready", actions: [{ id: "atlas-compare-models", label: "Ask Atlas to compare models" }], metadata: [body.task_type, body.verdict], ...(analyticalObjectId ? { analyticalObjectId } : {}) });
     } catch (reason) { setError(reason instanceof Error ? reason.message : "The baseline models could not be run."); }
     finally { setRunning(false); }
   }
@@ -106,7 +108,10 @@ export function MlLabWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
     try {
       const response = await fetch(apiUrl(`/api/v1/ml/datasets/${datasetId}/feature-selection`), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ feature_cols: featureCols, target_col: targetCol }) });
       if (!response.ok) throw new Error((await response.json() as { detail?: string }).detail ?? "Feature selection could not run.");
-      setFeatureSelectionResult(await response.json() as MlFeatureSelectionResult);
+      const body = await response.json() as MlFeatureSelectionResult;
+      setFeatureSelectionResult(body);
+      const analyticalObjectId = await newestAnalyticalObjectId(datasetId, "ml_model");
+      onSelectContext({ objectId: `ml-feature-selection:${targetCol}`, label: `Feature selection — ${targetCol}`, type: "finding", state: "ready", actions: [], metadata: [`${body.recommended_features.length} recommended feature(s)`], ...(analyticalObjectId ? { analyticalObjectId } : {}) });
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Feature selection could not run."); }
     finally { setRunning(false); }
   }
@@ -117,7 +122,10 @@ export function MlLabWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
     try {
       const response = await fetch(apiUrl(`/api/v1/ml/datasets/${datasetId}/shap`), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ feature_cols: featureCols, target_col: targetCol }) });
       if (!response.ok) throw new Error((await response.json() as { detail?: string }).detail ?? "SHAP explanation could not run.");
-      setShapResult(await response.json() as MlShapResult);
+      const body = await response.json() as MlShapResult;
+      setShapResult(body);
+      const analyticalObjectId = await newestAnalyticalObjectId(datasetId, "ml_model");
+      onSelectContext({ objectId: `ml-shap:${targetCol}`, label: `SHAP evidence — ${targetCol}`, type: "finding", state: "ready", actions: [], metadata: [body.note], ...(analyticalObjectId ? { analyticalObjectId } : {}) });
     } catch (reason) { setError(reason instanceof Error ? reason.message : "SHAP explanation could not run."); }
     finally { setRunning(false); }
   }

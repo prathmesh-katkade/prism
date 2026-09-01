@@ -93,6 +93,7 @@ jobs:
           --health-retries=10
     env:
       PRISM_PHASE4_MYSQL_URL: mysql+pymysql://root@127.0.0.1:3306/prism_phase4
+      PRISM_ANALYTICAL_HISTORY_DATABASE_URL: mysql+pymysql://root@127.0.0.1:3306/prism_history
     steps:
       - uses: actions/checkout@v4
 
@@ -114,11 +115,12 @@ jobs:
 
       - name: Seed MySQL parity source
         run: >-
-          python -c "from sqlalchemy import create_engine, text; engine=create_engine('mysql+pymysql://root@127.0.0.1:3306/prism_phase4'); connection=engine.connect(); connection.execute(text('CREATE TABLE sales (id INT PRIMARY KEY, region VARCHAR(32), revenue DECIMAL(10,2) NULL)')); connection.execute(text(\"INSERT INTO sales VALUES (1,'North',10.50),(2,'South',NULL),(3,'North',12.00)\")); connection.commit(); connection.close(); engine.dispose()"
+          python -c "from sqlalchemy import create_engine, text; engine=create_engine('mysql+pymysql://root@127.0.0.1:3306/prism_phase4'); connection=engine.connect(); connection.execute(text('CREATE DATABASE prism_history')); connection.execute(text('CREATE TABLE sales (id INT PRIMARY KEY, region VARCHAR(32), revenue DECIMAL(10,2) NULL)')); connection.execute(text(\"INSERT INTO sales VALUES (1,'North',10.50),(2,'South',NULL),(3,'North',12.00)\")); connection.commit(); connection.close(); engine.dispose()"
 
       - name: Run real MySQL parity and browser-to-API flow
         run: |
           pytest tests/sql_lab/test_mysql_connector_parity.py
+          pytest tests/api/test_durable_registry.py
           npm run test:e2e:live
 
   secret-scan:

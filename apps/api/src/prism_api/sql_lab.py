@@ -488,9 +488,12 @@ def execute_query(request: SqlRunRequest) -> SqlRunResponse:
                 "warnings": [f"Result capped at {request.result_limit:,} rows."] if truncated else [],
                 "provenance": _provenance(connection, schema, request, kept),
             })
-            store.update_run(run_id, completed, kept)
             if target.dataset is not None:
                 register_query_result(target.dataset, request, completed)
+            # Mark a run visible as succeeded only after its immutable evidence
+            # record is committed.  Otherwise a fast client can observe a
+            # terminal run before lineage/history can resolve its object.
+            store.update_run(run_id, completed, kept)
             return
         store.update_run(run_id, completed)
 

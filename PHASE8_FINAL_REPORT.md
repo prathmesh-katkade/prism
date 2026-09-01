@@ -215,11 +215,12 @@ Streamlit: zero diff to `app.py`/`modules/`, `py_compile` clean,
 
 ## Deployment status
 
-`BLOCKED_EXTERNAL_DEPLOYMENT_ACCESS` — checked directly this session: no
-`RENDER_*` environment variable, no Render MCP connector, no
-browser-automation tool capable of an authenticated Render console login.
-This matches every prior Phase 6.5–8C session's finding; access has not
-changed.
+`BLOCKED_EXTERNAL_DEPLOYMENT_ACCESS` — checked again on 2026-09-01: no
+authenticated Render client/connector or browser-console capability is available
+to trigger or inspect a deployment. The public API health and readiness URLs and
+the web root each answered HTTP 200, but neither response exposes the deployed
+git revision; therefore availability is confirmed while exact Phase 8 deployment
+identity remains unverified.
 
 **Distinguishing status honestly, per the task's own instruction:**
 - **Engineering complete:** YES — all Phase 8D–8H code merged via
@@ -227,10 +228,12 @@ changed.
   already-merged 8A/8B/8C; all local gates green.
 - **CI complete:** YES — all 5 checks passed on PR #13's final head
   `e3c72258faa4cf5c71ea25e6bb9c1bb95c377e60`.
-- **Deployment unverified:** YES — the exact final Phase 8 merge commit has
-  not been deployed to `prism-native-api-staging`/`prism-native-web-staging`,
-  and none of the live-endpoint checks (health/ready/lineage/freshness/
-  Inspector/rerun/Atlas) have been run against a live deployment.
+- **Exact deployment identity unverified:** YES — the public staging API
+  `/api/v1/platform/health`, `/api/v1/platform/ready`, and web root returned
+  HTTP 200 on 2026-09-01, but the exact deployed commit cannot be established
+  without authenticated Render deployment history. The required workflow and
+  browser smoke matrix (lineage/freshness/Inspector/rerun/Atlas) remains
+  unexecuted against a known Phase 8 revision.
 
 Whether this blocks `PHASE_8_COMPLETE` follows this repository's existing
 release policy from Phase 6.5/7: engineering + CI completeness, not a live
