@@ -39,7 +39,10 @@
 
 - [ ] Authenticated actor/session correlation (out of scope until PRISM has an
   identity boundary; creation records explicitly show `system` meanwhile).
-- [ ] Dedicated deployed History browser suite (unit/a11y coverage exists).
+- [x] Dedicated deployed History browser suite: `apps/web/e2e-live/history-live.spec.ts`
+  drives a real browser against the live API - upload, run a SQL query,
+  confirm the durably registered result appears in the History workspace,
+  and open its Evidence Inspector.
 - [ ] Deterministic SQL rerun design where asynchronous execution context can
   be preserved without permitting credential reuse or arbitrary execution.
 - [ ] Full repository gate on CI, PR review/merge, authenticated staging deploy,
