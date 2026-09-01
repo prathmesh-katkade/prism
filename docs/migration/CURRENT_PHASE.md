@@ -1,8 +1,24 @@
 # Current migration phase
 
-**Phase:** 8 — COMPLETE (all sub-phases 8A–8H merged, **PHASE_9_UNLOCKED**)
+**Phase:** 9 — COMPLETE (durable analytical history and productization,
+**PHASE_10_UNLOCKED**)
 
 **Canonical base for the next phase:** `phase-6.5-integration-staging` at
+`2013f41faa8a515b039b6a37a493abc2c05c7b23` (PR #14 — Phase 9 merge).
+
+Phase 9 made Phase 8's analytical history durable (SQLAlchemy-backed registry
+and DatasetStore, proven to survive a restart), wired the Evidence Inspector
+through every native workflow, added a native History workspace, expanded
+safe reproduction where an async-safe design exists, and added a lightweight
+append-only audit trail — without changing any Phase 8 contract. Full detail:
+`PHASE9_FINAL_REPORT.md`. Deployment verification remains
+`BLOCKED_EXTERNAL_DEPLOYMENT_ACCESS` (no Render credentials in this
+environment, and this session's egress policy also rejects `*.onrender.com`).
+Next phase: `PHASE10_HANDOFF.md` (unscoped pointer only).
+
+## Phase 8 — COMPLETE (all sub-phases 8A–8H merged)
+
+Canonical base at the time: `phase-6.5-integration-staging` at
 `4b291898d38e4397a335aef761ab13b3be197d68` (PR #13 — Phase 8D–8H merge).
 
 Phases 1–7 remain complete. Overview, SQL Lab, AI Analyst, Clean, Visualize,

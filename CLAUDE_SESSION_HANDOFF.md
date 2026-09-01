@@ -1,17 +1,52 @@
 # PRISM Claude Session Handoff
 
-## Phase 9: IN PROGRESS — durable-history checkpoint (2026-09-01)
+## Phase 9: COMPLETE — durable analytical history and productization (2026-09-01)
 
-- Work is isolated on `phase-9-productization`, based on canonical staging
-  `4b0a271` (runtime unchanged from certified Phase 8 merge `4b291898`).
-- Phase 8 public staging health, readiness, and web root answered HTTP 200 on
-  2026-09-01, but exact deployment identity cannot be proven without Render
-  access. Status remains `BLOCKED_EXTERNAL_DEPLOYMENT_ACCESS` for deployment.
-- ADR 0005 and the first SQLAlchemy-backed durable registry checkpoint are in
-  the worktree. It persists immutable snapshots/direct edges and passes its
-  direct restart, lineage, idempotency, and redaction tests. It is **not** a
-  Phase 9 completion claim; see `PHASE9_IMPLEMENTATION_LEDGER.md` for the
-  explicit outstanding product, operation, and release work.
+**Read this section first — it supersedes everything below it until the next
+session updates this file again.**
+
+- **Phase 9 is CERTIFIED COMPLETE.** [PR #14](https://github.com/prathmesh-katkade/prism/pull/14)
+  (`phase-9-productization` → `phase-6.5-integration-staging`) merged at merge
+  commit `2013f41faa8a515b039b6a37a493abc2c05c7b23` on 2026-09-01. All 5 CI
+  checks passed on the final head `4a1b68e`. Canonical base for whatever comes
+  next: `phase-6.5-integration-staging` at `2013f41faa8a515b039b6a37a493abc2c05c7b23`.
+- Full picture: `PHASE9_FINAL_REPORT.md` and `.prism/checkpoints/phase-9-final.md`.
+  222 Python tests (plus the new `test_durable_registry.py` suite, 4 of which
+  are MySQL-only and run for real in CI), 33 frontend tests, 6 live-browser
+  e2e tests, all passing.
+- Scope delivered, one line each (full detail in `PHASE9_IMPLEMENTATION_LEDGER.md`
+  and `PHASE9_FINAL_REPORT.md`):
+  - **Durable history.** `DurableAnalyticalObjectRegistry` and
+    `DurableDatasetStore` (SQLAlchemy) persist what Phase 8's registry kept
+    in process memory — proven to survive a restart (two independent
+    instances against the same database, including a real CI MySQL run).
+    `DatasetStore` stays the sole authority for active revision identity;
+    `AnalyticalObject` stays fully immutable. No Phase 8 contract changed.
+  - **Evidence Inspector everywhere.** One shared architecture, wired
+    through SQL Lab, Clean, AI Analyst, Visualize, Forecasting, Stats, and
+    ML Lab.
+  - **Native History workspace.** Searchable, kind-filterable, with
+    live-computed current/stale state and direct Evidence Inspector
+    navigation; unit + live-browser e2e coverage.
+  - **Reproducibility where safe.** Current-revision Clean reapply; SQL
+    rerun stays explicitly unsupported (documented, not silently dropped).
+  - **Lightweight governance.** Append-only audit trail with an explicit
+    `system` actor — no RBAC, no invented identity layer.
+  - **Operations hardening.** Additive schema versioning, managed-MySQL CI
+    restart coverage, `/api/v1/platform/ready` readiness, documented
+    migration/rollback.
+- Deployment verification remains `BLOCKED_EXTERNAL_DEPLOYMENT_ACCESS` — no
+  Render credentials in this environment, and this session additionally
+  confirmed its egress proxy rejects outbound connections to `*.onrender.com`
+  under organization policy. `render.yaml` correctly declares the
+  durable-history environment variables for staging; the live deploy and
+  restart-survival proof against a real deployment remain undone.
+- Remaining, by design, not blockers: authenticated actor/session
+  correlation (deferred until PRISM has an identity boundary) and
+  deterministic SQL rerun (deferred until an async-safe design exists).
+- **Next phase is unscoped.** See `PHASE10_HANDOFF.md` — a pointer with
+  candidate directions, not an implementation plan. Do not start Phase 10
+  work without deliberately picking a direction first.
 
 ---
 

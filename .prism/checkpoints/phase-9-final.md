@@ -1,11 +1,10 @@
 # Phase 9 checkpoint — Durable Analytical History and Productization
 
 **Branch:** `phase-9-productization` → `phase-6.5-integration-staging`
-**PR:** [#14](https://github.com/prathmesh-katkade/prism/pull/14)
-**Status:** IN PROGRESS — CI is being driven to green on head `702c78f`; do not
-certify or merge as Phase 9 complete from this record until the "CI on PR #14"
-section below is updated to confirm all checks pass on the actual merged head.
-Deployment verification is `BLOCKED_EXTERNAL_DEPLOYMENT_ACCESS` regardless.
+**PR:** [#14](https://github.com/prathmesh-katkade/prism/pull/14) — MERGED at
+`2013f41faa8a515b039b6a37a493abc2c05c7b23` on 2026-09-01.
+**Status:** ENGINEERING COMPLETE — all 5 CI checks green on head `4a1b68e`.
+Deployment verification is `BLOCKED_EXTERNAL_DEPLOYMENT_ACCESS`.
 
 ## What Phase 9 delivered
 
@@ -63,13 +62,14 @@ Deployment verification is `BLOCKED_EXTERNAL_DEPLOYMENT_ACCESS` regardless.
 - `npm run test:web` (vitest): 33/33 passed.
 - `python tools/check_boundaries.py`, `python tools/check_secrets.py`: passed.
 - `npm run test:e2e:live` (all 6 live-e2e tests, single worker, matching CI):
-  passed twice in a row.
+  passed three times in a row with the final response-synchronized version.
 
-## CI on PR #14 — IN PROGRESS
+## CI on PR #14 — GREEN
 
-Driving to green across several rounds, all in `phase-4-live-e2e`'s live
-browser suite (`secret-scan`, `phase-1-web`, `phase-1-python`, and
-`legacy-regression` have been green since the first push this session):
+All 5 checks (`secret-scan`, `phase-1-web`, `phase-1-python`,
+`legacy-regression`, `phase-4-live-e2e`) pass on head `4a1b68e`. Getting there
+took several rounds, all in `phase-4-live-e2e`'s live browser suite
+(the other four checks were green from the first push this session):
 
 1. `sql-lab-live.spec.ts` and `clean-visualize-live.spec.ts` share one real
    FastAPI backend and its single global `overview_store.latest()` pointer by
@@ -89,10 +89,7 @@ browser suite (`secret-scan`, `phase-1-web`, `phase-1-python`, and
    plus render time" with "wait for the actual results response, then wait a
    bounded, render-only 15s" across all three spec files (commit `702c78f`),
    removing the network half of the uncertainty rather than continuing to
-   guess at a bigger number.
-
-CI is currently running on `702c78f`; this checkpoint will be updated with the
-confirmed result rather than left claiming green ahead of that confirmation.
+   guess at a bigger number. Confirmed green on the next run (head `4a1b68e`).
 
 ## Deployment verification — BLOCKED_EXTERNAL_DEPLOYMENT_ACCESS
 
@@ -118,6 +115,6 @@ against the real CI MySQL service) sharing one database.
 
 ```
 PHASE_8_COMPLETE = YES
-PHASE_9_COMPLETE = PENDING (CI being driven to green on PR #14, head 702c78f)
-PHASE_10_UNLOCKED = NO
+PHASE_9_COMPLETE = YES (engineering; deployment verification blocked externally)
+PHASE_10_UNLOCKED = YES
 ```
