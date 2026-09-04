@@ -570,6 +570,9 @@ def _cancel_run(run_id: str) -> None:
         else step
         for step in run.plan.steps
     ]
+    # See execute(): append the terminal event before the plan-state flip so a
+    # concurrent poller never observes CANCELLED without the matching event.
+    runs.append_event(run_id, AtlasRunEventType.RUN_CANCELLED, payload={"reason": "user_requested"})
     runs.update(
         run.model_copy(
             update={
@@ -581,7 +584,6 @@ def _cancel_run(run_id: str) -> None:
             }
         )
     )
-    runs.append_event(run_id, AtlasRunEventType.RUN_CANCELLED, payload={"reason": "user_requested"})
 
 
 def _blocked_reason(kind: AtlasStepKind) -> str:
@@ -684,6 +686,16 @@ def execute(run_id: str) -> None:
         if blocked:
             answer += " Requested work was held at the declared safety boundary until required context is supplied."
             uncertainty = " ".join([uncertainty, *blocked])
+        # Append the terminal event *before* flipping plan.state so a concurrent
+        # poller can never observe a COMPLETED/FAILED/CANCELLED plan state
+        # whose matching event has not been durably recorded yet -- execute()
+        # runs on a background thread racing the API's own request handlers.
+        runs.append_event(
+            run_id,
+            AtlasRunEventType.RUN_COMPLETED,
+            specialist=AtlasSpecialistId.ATLAS,
+            payload={"answer_grounded": True, "blocked_steps": len(blocked)},
+        )
         runs.update(
             finished.model_copy(
                 update={
@@ -693,14 +705,11 @@ def execute(run_id: str) -> None:
                 }
             )
         )
-        runs.append_event(
-            run_id,
-            AtlasRunEventType.RUN_COMPLETED,
-            specialist=AtlasSpecialistId.ATLAS,
-            payload={"answer_grounded": True, "blocked_steps": len(blocked)},
-        )
     except HTTPException as error:
         failed = runs.get(run_id)
+        runs.append_event(
+            run_id, AtlasRunEventType.RUN_FAILED, payload={"detail": str(error.detail)}
+        )
         runs.update(
             failed.model_copy(
                 update={
@@ -708,9 +717,6 @@ def execute(run_id: str) -> None:
                     "uncertainty": str(error.detail),
                 }
             )
-        )
-        runs.append_event(
-            run_id, AtlasRunEventType.RUN_FAILED, payload={"detail": str(error.detail)}
         )
 
 
