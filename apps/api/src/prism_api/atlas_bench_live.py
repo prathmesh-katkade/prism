@@ -30,6 +30,9 @@ from .atlas_runtime import OllamaAtlasProvider
 
 router = APIRouter(prefix="/api/v1/atlas/bench", tags=["atlas-bench"])
 _bench_store = DurableAtlasBenchStore()
+# A module-level singleton, not a call in the argument default itself -- keeps ruff's B008
+# (no function calls as default values) happy without losing the enum-typed default.
+_provider_query_default = Query(default=AtlasModelProviderName.OLLAMA)
 
 
 class AtlasBenchSubjectUnavailable(RuntimeError):
@@ -119,7 +122,7 @@ def make_live_subject(provider: AtlasModelProviderName) -> AtlasBenchSubject:
 
 @router.post("/runs", response_model=AtlasBenchSuiteRun, status_code=status.HTTP_201_CREATED)
 def run_live_benchmark(
-    provider: AtlasModelProviderName = Query(default=AtlasModelProviderName.OLLAMA),
+    provider: AtlasModelProviderName = _provider_query_default,
 ) -> AtlasBenchSuiteRun:
     """Run and durably record AtlasBench against a real configured provider.
 

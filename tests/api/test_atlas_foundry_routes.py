@@ -3,8 +3,8 @@ from __future__ import annotations
 import time
 
 from fastapi.testclient import TestClient
-from prism_api.main import create_app
 from prism_api.atlas_bench_runner import FirstChoiceSubject
+from prism_api.main import create_app
 from prism_api_contracts import AtlasPlanState, AtlasRunResponse, AtlasTrainingRecipeMethod
 
 
