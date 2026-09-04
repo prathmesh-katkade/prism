@@ -1410,6 +1410,86 @@ class AtlasBenchSuiteRun(ContractModel):
     completed_at: datetime
 
 
+# --- 10Q: Shadow Brain, promotion policy, and rollback ------------------
+
+
+class AtlasPromotionVerdict(str, Enum):
+    """The three locked outcomes -- deliberately distinct from the coarser
+    ``AtlasBenchmarkVerdict`` stub, which predates this policy."""
+
+    PROMOTE_ELIGIBLE = "promote_eligible"
+    HOLD = "hold"
+    REJECT = "reject"
+
+
+class AtlasCriticalRegression(ContractModel):
+    category: AtlasBenchCategory
+    production_pass_rate: float = Field(ge=0, le=1)
+    candidate_pass_rate: float = Field(ge=0, le=1)
+
+
+class AtlasPromotionDecision(ContractModel):
+    """The result of comparing a candidate's AtlasBench run against
+    production's, under the locked policy: IMPROVE TARGET CAPABILITY + NO
+    UNACCEPTABLE CRITICAL REGRESSION. A candidate cannot win on aggregate
+    score while regressing a critical category -- ``critical_regressions``
+    is what makes that non-negotiable, auditable, and machine-checkable
+    rather than a judgment call made at promotion time.
+    """
+
+    decision_id: str = Field(min_length=1, max_length=120)
+    candidate_id: str = Field(min_length=1, max_length=120)
+    production_run_id: str = Field(min_length=1, max_length=120)
+    candidate_run_id: str = Field(min_length=1, max_length=120)
+    verdict: AtlasPromotionVerdict
+    overall_production_pass_rate: float = Field(ge=0, le=1)
+    overall_candidate_pass_rate: float = Field(ge=0, le=1)
+    critical_regressions: list[AtlasCriticalRegression] = Field(default_factory=list)
+    decided_at: datetime
+
+
+class AtlasProductionPointer(ContractModel):
+    """One durable event in the production-pointer history: a promotion or
+    a rollback. The latest row (by ``promoted_at``) is current production;
+    every prior row remains -- promotion is additive, never an overwrite,
+    so the full history is always the rollback list.
+    """
+
+    event_id: str = Field(min_length=1, max_length=120)
+    candidate_id: str = Field(min_length=1, max_length=120)
+    previous_candidate_id: Optional[str] = Field(default=None, max_length=120)
+    decision_id: Optional[str] = Field(default=None, max_length=120)
+    is_rollback: bool = False
+    reason: str = Field(min_length=1, max_length=1_000)
+    promoted_at: datetime
+
+
+class AtlasAdapterId(str, Enum):
+    ATLAS_CORE = "atlas-core"
+    ATLAS_SQL = "atlas-sql"
+    ATLAS_STATISTICS = "atlas-statistics"
+    ATLAS_ML = "atlas-ml"
+    ATLAS_FORECAST = "atlas-forecast"
+    ATLAS_RESEARCH = "atlas-research"
+
+
+class AtlasAdapterCapability(ContractModel):
+    """Truthful per-adapter capability report. No runtime wired into this
+    project today can load, unload, or hot-swap a LoRA adapter at inference
+    time -- Atlas's providers are deterministic Python logic or an Ollama
+    HTTP call, neither with adapter-loading machinery -- so every field here
+    is honestly False/empty rather than assuming a capability exists.
+    """
+
+    adapter: AtlasAdapterId
+    can_load: bool
+    can_unload: bool
+    can_hot_swap: bool
+    memory_cost_mb: Optional[int] = Field(default=None, ge=0)
+    compatible_base_models: list[str] = Field(default_factory=list)
+    detail: str = Field(min_length=1, max_length=1_000)
+
+
 class AtlasResourcePriority(int, Enum):
     USER_INTERACTION = 0
     ATLAS_INFERENCE = 1
