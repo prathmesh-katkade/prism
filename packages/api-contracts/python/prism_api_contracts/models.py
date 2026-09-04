@@ -1791,3 +1791,47 @@ class AtlasCandidateArtifact(ContractModel):
     adapter_path: str = Field(min_length=1, max_length=2_000)
     dataset_version_id: str = Field(min_length=1, max_length=120)
     created_at: datetime
+
+
+class AtlasCandidateVerificationState(str, Enum):
+    """A registered candidate records only that a job produced *some*
+    adapter output -- not that it is intact, unmodified, or safe to load.
+    PENDING means no verification pass has run yet; only VERIFIED may enter
+    AtlasBench candidate evaluation, receive an Ollama runtime binding, or
+    become promotion-eligible."""
+
+    PENDING = "pending"
+    VERIFIED = "verified"
+    REJECTED = "rejected"
+
+
+class AtlasCandidateArtifactFile(ContractModel):
+    """One real file found under a candidate's adapter workspace."""
+
+    relative_path: str = Field(min_length=1, max_length=2_000)
+    sha256: str = Field(min_length=64, max_length=64)
+    size_bytes: int = Field(ge=0)
+    file_type: str = Field(min_length=1, max_length=32)
+
+
+class AtlasCandidateVerification(ContractModel):
+    """One durable, append-only verification pass over a candidate artifact.
+
+    A later re-verification of the same candidate_id is a new row, never an
+    edit of a prior one -- verification evidence is never silently
+    overwritten, matching promotion/rollback history elsewhere in Foundry.
+    """
+
+    verification_id: str = Field(min_length=1, max_length=120)
+    candidate_id: str = Field(min_length=1, max_length=120)
+    training_job_id: str = Field(min_length=1, max_length=120)
+    recipe_id: str = Field(min_length=1, max_length=120)
+    base_model: str = Field(min_length=1, max_length=300)
+    dataset_version_id: str = Field(min_length=1, max_length=120)
+    recipe_hash: str = Field(min_length=1, max_length=64)
+    adapter_files: list[AtlasCandidateArtifactFile] = Field(default_factory=list, max_length=10_000)
+    aggregate_candidate_fingerprint: Optional[str] = Field(default=None, min_length=64, max_length=64)
+    verification_state: AtlasCandidateVerificationState
+    verification_failure_reason: Optional[str] = Field(default=None, max_length=1_000)
+    created_at: datetime
+    verified_at: Optional[datetime] = None

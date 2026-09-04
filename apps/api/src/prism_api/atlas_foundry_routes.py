@@ -25,6 +25,7 @@ from prism_api_contracts import (
     AtlasBenchSuiteRun,
     AtlasBenchTaskResult,
     AtlasCandidateArtifact,
+    AtlasCandidateVerification,
     AtlasFoundryCapability,
     AtlasFoundryPreflight,
     AtlasPreferenceDatasetVersion,
@@ -45,6 +46,11 @@ from .atlas_candidate_runtime import (
     DurableAtlasCandidateRuntimeStore,
     activate_current_ollama_model,
     ensure_configured_production_baseline,
+)
+from .atlas_candidate_trust import (
+    DurableAtlasCandidateVerificationStore,
+    is_verified,
+    verify_candidate,
 )
 from .atlas_foundry_backend import SoupFoundryBackend
 from .atlas_foundry_dataset import (
@@ -78,6 +84,7 @@ _bench_store = DurableAtlasBenchStore()
 _job_store = DurableAtlasFoundryJobStore()
 _candidate_registry = DurableAtlasCandidateRegistry()
 _candidate_runtime_store = DurableAtlasCandidateRuntimeStore()
+_candidate_verification_store = DurableAtlasCandidateVerificationStore()
 _promotion_store = DurableAtlasPromotionStore()
 _promotion_decision_store = DurableAtlasPromotionDecisionStore()
 _backend = SoupFoundryBackend()
@@ -199,6 +206,30 @@ def list_candidates(limit: int = Query(default=100, ge=1, le=500)) -> list[Atlas
     return _candidate_registry.list(limit=limit)
 
 
+@router.post("/candidates/{candidate_id}/verify", response_model=AtlasCandidateVerification, status_code=status.HTTP_201_CREATED)
+def verify_candidate_artifact(candidate_id: str) -> AtlasCandidateVerification:
+    """Real inspection of the registered candidate's files on disk.
+
+    Never a rubber stamp: this appends a new VERIFIED or REJECTED record
+    every call, and a prior REJECTED record is never silently erased.
+    """
+    candidate = _candidate_registry.get(candidate_id)
+    if candidate is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Candidate artifact was not found.")
+    recipe = _job_store.get_recipe(candidate.recipe_id)
+    if recipe is None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="The candidate's original recipe is no longer available; cannot verify.")
+    verification = verify_candidate(candidate, recipe)
+    return _candidate_verification_store.save(verification)
+
+
+@router.get("/candidates/{candidate_id}/verification", response_model=list[AtlasCandidateVerification])
+def candidate_verification_history(
+    candidate_id: str, limit: int = Query(default=50, ge=1, le=200)
+) -> list[AtlasCandidateVerification]:
+    return _candidate_verification_store.history(candidate_id, limit=limit)
+
+
 bench_router = APIRouter(prefix="/api/v1/atlas/bench", tags=["atlas-bench"])
 
 
@@ -258,6 +289,12 @@ def compute_promotion_decision(
 ) -> AtlasPromotionDecision:
     if _candidate_registry.get(candidate_id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Candidate artifact was not found.")
+    if not is_verified(_candidate_verification_store, candidate_id):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Candidate has no VERIFIED artifact-trust record; refusing to compute a promotion-eligibility decision. "
+            "Run POST /candidates/{candidate_id}/verify first.",
+        )
     production_run = _bench_store.get_run(production_run_id)
     candidate_run = _bench_store.get_run(candidate_run_id)
     if production_run is None or candidate_run is None:
@@ -289,6 +326,11 @@ def promote_candidate(decision_id: str, reason: str) -> AtlasProductionPointer:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Promotion decision was not found.")
     if _candidate_registry.get(decision.candidate_id) is None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="The decision references a candidate artifact that is no longer available.")
+    if not is_verified(_candidate_verification_store, decision.candidate_id):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Candidate has no VERIFIED artifact-trust record; refusing to promote.",
+        )
     if _candidate_runtime_store.latest(decision.candidate_id) is None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

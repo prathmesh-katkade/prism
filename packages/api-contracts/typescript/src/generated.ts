@@ -139,6 +139,31 @@ export interface AtlasCandidateArtifact {
   created_at: string;
 }
 
+export interface AtlasCandidateArtifactFile {
+  relative_path: string;
+  sha256: string;
+  size_bytes: number;
+  file_type: string;
+}
+
+export interface AtlasCandidateVerification {
+  verification_id: string;
+  candidate_id: string;
+  training_job_id: string;
+  recipe_id: string;
+  base_model: string;
+  dataset_version_id: string;
+  recipe_hash: string;
+  adapter_files?: AtlasCandidateArtifactFile[];
+  aggregate_candidate_fingerprint?: string;
+  verification_state: AtlasCandidateVerificationState;
+  verification_failure_reason?: string;
+  created_at: string;
+  verified_at?: string;
+}
+
+export type AtlasCandidateVerificationState = "pending" | "verified" | "rejected";
+
 export type AtlasCleanAction = "explain_issue" | "propose_fix" | "compare_before_after";
 
 export interface AtlasCleanRequest {
