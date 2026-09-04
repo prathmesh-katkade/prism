@@ -39,10 +39,23 @@ const populatedResponses: Record<string, unknown> = {
   ],
 };
 
+const liveBenchRun = {
+  run_id: "benchrun_live_1",
+  subject_id: "atlas_ollama_abc123",
+  corpus_version: "atlasbench-v1",
+  corpus_hash: "a".repeat(64),
+  total_tasks: 90,
+  total_passed: 72,
+  category_scores: [],
+  started_at: "2026-09-04T00:00:00Z",
+  completed_at: "2026-09-04T00:01:00Z",
+};
+
 function stubFetch(responses: Record<string, unknown>) {
   vi.stubGlobal("fetch", vi.fn(async (input: string | URL, init?: RequestInit) => {
     const path = String(input);
     if (init?.method === "POST") {
+      if (path.includes("/api/v1/atlas/bench/runs?provider=ollama")) return json(liveBenchRun, 201);
       for (const [suffix, body] of Object.entries(responses)) {
         if (path.split("?")[0]?.endsWith(suffix)) return json(body, suffix.endsWith("training-datasets") || suffix.endsWith("preference-datasets") ? 201 : 200);
       }
@@ -71,6 +84,7 @@ describe("Evolution workspace", () => {
     expect(screen.getByText(/No training job is queued or running/)).toBeInTheDocument();
     expect(screen.getByText(/No promotion or rollback has ever occurred/)).toBeInTheDocument();
     expect(screen.getByText("soup · unavailable")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Run live AtlasBench" })).toBeInTheDocument();
   });
 
   it("renders real durable state once candidates, datasets, jobs, and a promotion exist", async () => {
@@ -90,5 +104,14 @@ describe("Evolution workspace", () => {
     await waitFor(() => expect(screen.getByText(/No candidate has ever been promoted/)).toBeInTheDocument());
     fireEvent.click(screen.getAllByRole("button", { name: "Build from current history" })[0]!);
     await waitFor(() => expect(window.fetch).toHaveBeenCalled());
+  });
+
+  it("runs live AtlasBench from the Evolution workspace and renders the persisted score", async () => {
+    stubFetch(emptyResponses);
+    render(<EvolutionWorkspace />);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Run live AtlasBench" })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Run live AtlasBench" }));
+    await waitFor(() => expect(screen.getByText("72/90")).toBeInTheDocument());
+    expect(screen.getByText(/atlas_ollama_abc123/)).toBeInTheDocument();
   });
 });
