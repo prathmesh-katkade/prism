@@ -1,21 +1,23 @@
 """Run PRISM's first real local Atlas evolution experiment.
 
 This is deliberately an orchestration script over the existing Phase 10
-boundaries, not a second training/runtime implementation.  It:
+boundaries, not a second training/runtime implementation. It:
 
-1. verifies the real local Ollama provider and records a production AtlasBench baseline;
-2. builds a versioned verified training corpus and exports TRAIN split only;
-3. installs/pins Soup in an isolated local venv when requested;
-4. runs a Resource-Governor-admitted QLoRA/LoRA smoke job;
-5. exports/deploys the resulting adapter to Ollama under a candidate-only name;
-6. records a durable candidate runtime binding;
-7. runs the identical frozen AtlasBench corpus against that candidate; and
-8. stores the locked server-side promotion verdict.
+1. verifies the real local Ollama production model and records AtlasBench;
+2. persists that verified model as the rollback anchor when needed;
+3. builds a versioned verified training corpus and exports TRAIN split only;
+4. installs/pins Soup in an isolated local venv when requested;
+5. runs a Resource-Governor-admitted QLoRA/LoRA smoke job;
+6. exports/deploys the real adapter to Ollama under a candidate-only name;
+7. runs the identical frozen AtlasBench corpus against that candidate;
+8. stores the locked server-owned promotion verdict; and
+9. only when PROMOTE_ELIGIBLE, performs a real promotion/runtime-switch and
+   rollback drill, ending back on the exact production model that started the
+   experiment.
 
-It never promotes automatically.  A real PROMOTE_ELIGIBLE result is evidence
-that promotion *may* proceed through PRISM's gated promotion path; HOLD/REJECT
-are equally valid experimental outcomes.  Hidden chain-of-thought is never
-exported and validation/test training examples are never passed to Soup.
+HOLD and REJECT are valid experiment outcomes. Hidden chain-of-thought is never
+exported, validation/test training examples are never passed to Soup, and a
+candidate never controls its benchmark answer key, thresholds, or verdict.
 
 Run from repository root with Python 3.10-3.12:
     python tools/run_atlas_evolution_experiment.py
@@ -63,7 +65,11 @@ from prism_api.atlas_bench_corpus import CORPUS_VERSION, all_tasks, corpus_hash 
 from prism_api.atlas_bench_live import AtlasBenchSubjectUnavailable, AtlasProviderBenchSubject  # noqa: E402
 from prism_api.atlas_bench_runner import run_suite  # noqa: E402
 from prism_api.atlas_bench_store import DurableAtlasBenchStore  # noqa: E402
-from prism_api.atlas_candidate_runtime import DurableAtlasCandidateRuntimeStore  # noqa: E402
+from prism_api.atlas_candidate_runtime import (  # noqa: E402
+    DurableAtlasCandidateRuntimeStore,
+    activate_current_ollama_model,
+    ensure_configured_production_baseline,
+)
 from prism_api.atlas_foundry_backend import SoupFoundryBackend  # noqa: E402
 from prism_api.atlas_foundry_dataset import (  # noqa: E402
     AtlasTrainingDatasetBuilder,
@@ -76,7 +82,7 @@ from prism_api.atlas_foundry_orchestration import (  # noqa: E402
     reconcile_foundry_jobs,
     start_training_job,
 )
-from prism_api.atlas_promotion import decide_promotion  # noqa: E402
+from prism_api.atlas_promotion import DurableAtlasPromotionStore, decide_promotion  # noqa: E402
 from prism_api.atlas_promotion_decisions import DurableAtlasPromotionDecisionStore  # noqa: E402
 from prism_api.atlas_resources import governor  # noqa: E402
 from prism_api.durable_atlas_store import DurableAtlasRunStore  # noqa: E402
@@ -240,8 +246,6 @@ def wait_for_training(
         raise ExperimentBlocked(f"Soup training ended in {job.state.value}: {job.error or 'no error detail'}")
     candidate = candidates.get(f"candidate_{job.job_id}")
     if candidate is None:
-        # One final reconciliation handles the narrow race where the process
-        # exited between the prior poll and durable candidate registration.
         reconcile_foundry_jobs(governor, job_store, backend, candidates)
         candidate = candidates.get(f"candidate_{job.job_id}")
     if candidate is None:
@@ -249,7 +253,12 @@ def wait_for_training(
     return job, candidate, backend.metrics(job), backend.checkpoints(job)
 
 
-def deploy_candidate_to_ollama(soup: str, candidate, *, timeout_seconds: int) -> tuple[str, str, str]:  # type: ignore[no-untyped-def]
+def deploy_candidate_to_ollama(
+    soup: str,
+    candidate,  # type: ignore[no-untyped-def]
+    *,
+    timeout_seconds: int,
+) -> tuple[str, str, str]:
     adapter_path = Path(candidate.adapter_path)
     if not adapter_path.exists():
         raise ExperimentBlocked(f"Candidate adapter path does not exist: {adapter_path}")
@@ -324,10 +333,28 @@ def main() -> int:
             )
         os.environ.setdefault("PRISM_AI_PROVIDER", "ollama")
 
+        promotion_store = DurableAtlasPromotionStore()
+        if promotion_store.current_production() is not None:
+            activate_current_ollama_model()
+
         baseline, baseline_subject = run_live_suite()
         report["production_baseline"] = baseline.model_dump(mode="json")
         report["production_model"] = baseline_subject.model
         report["production_model_digest"] = baseline_subject.model_digest
+
+        if promotion_store.current_production() is None:
+            ensure_configured_production_baseline(
+                runtime_model_digest=baseline_subject.model_digest,
+            )
+        baseline_pointer = promotion_store.current_production()
+        if baseline_pointer is None:
+            raise ExperimentBlocked("A durable production rollback anchor could not be established.")
+        active_baseline_model = activate_current_ollama_model()
+        if active_baseline_model != baseline_subject.model:
+            raise ExperimentBlocked(
+                "Durable production pointer does not resolve to the model that was benchmarked as production."
+            )
+        report["production_pointer_before"] = baseline_pointer.model_dump(mode="json")
 
         version, dataset_path, train_count = build_training_dataset()
         report["training_dataset"] = version.model_dump(mode="json")
@@ -380,16 +407,53 @@ def main() -> int:
             or baseline.corpus_hash != candidate_run.corpus_hash
         ):
             raise ExperimentBlocked("Production and candidate AtlasBench runs did not use the identical frozen corpus.")
+
         decision = decide_promotion(candidate.candidate_id, baseline, candidate_run)
         DurableAtlasPromotionDecisionStore().save(decision)
         report["promotion_decision"] = decision.model_dump(mode="json")
-        report["status"] = "complete"
-        report["promotion_performed"] = False
-        report["promotion_note"] = (
-            "Candidate earned PROMOTE_ELIGIBLE; production was intentionally not switched by this experiment runner."
-            if decision.verdict is AtlasPromotionVerdict.PROMOTE_ELIGIBLE
-            else f"Candidate verdict was {decision.verdict.value}; production remains unchanged."
+
+        if decision.verdict is AtlasPromotionVerdict.PROMOTE_ELIGIBLE:
+            promoted = promotion_store.promote(
+                decision,
+                reason="First real Atlas evolution experiment: promotion drill.",
+            )
+            report["promotion_pointer"] = promoted.model_dump(mode="json")
+            promoted_model = activate_current_ollama_model()
+            report["promoted_runtime_model"] = promoted_model
+            if promoted_model != runtime_name:
+                raise ExperimentBlocked(
+                    "Promotion pointer was recorded but Atlas did not resolve to the candidate runtime model."
+                )
+
+            rollback = promotion_store.rollback(
+                reason="First real Atlas evolution experiment: mandatory rollback drill.",
+            )
+            report["rollback_pointer"] = rollback.model_dump(mode="json")
+            restored_model = activate_current_ollama_model()
+            report["restored_runtime_model"] = restored_model
+            if restored_model != baseline_subject.model:
+                raise ExperimentBlocked(
+                    "Rollback pointer was recorded but Atlas did not restore the exact pre-experiment production model."
+                )
+            report["promotion_performed"] = True
+            report["rollback_drill"] = "done"
+            report["promotion_note"] = (
+                "Candidate earned PROMOTE_ELIGIBLE, was activated as Atlas production, then the mandatory rollback "
+                "drill restored the exact starting production model."
+            )
+        else:
+            report["promotion_performed"] = False
+            report["rollback_drill"] = "not_required"
+            report["promotion_note"] = (
+                f"Candidate verdict was {decision.verdict.value}; production remained unchanged."
+            )
+
+        final_pointer = promotion_store.current_production()
+        report["production_pointer_after"] = (
+            final_pointer.model_dump(mode="json") if final_pointer is not None else None
         )
+        report["production_model_after"] = activate_current_ollama_model()
+        report["status"] = "complete"
         exit_code = 0
     except (ExperimentBlocked, AtlasBenchSubjectUnavailable, httpx.HTTPError, subprocess.SubprocessError) as error:
         report["status"] = "blocked"
