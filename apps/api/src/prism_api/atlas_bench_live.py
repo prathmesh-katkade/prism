@@ -66,8 +66,16 @@ class AtlasProviderBenchSubject:
             )
 
         self.provider = provider
-        self.base_url = os.environ.get("PRISM_ATLAS_OLLAMA_URL", "http://127.0.0.1:11434/api/generate")
-        self.model = os.environ.get("PRISM_ATLAS_OLLAMA_MODEL", "qwen2.5:3b")
+        # A production baseline must use the same configured Ollama endpoint
+        # and model as Atlas itself.  The older AtlasBench-specific names stay
+        # as explicit compatibility overrides, never as divergent defaults.
+        configured_base_url = os.environ.get("PRISM_OLLAMA_BASE_URL", "http://127.0.0.1:11434")
+        self.base_url = os.environ.get(
+            "PRISM_ATLAS_OLLAMA_URL", f"{configured_base_url.rstrip('/')}/api/generate"
+        )
+        self.model = os.environ.get(
+            "PRISM_ATLAS_OLLAMA_MODEL", os.environ.get("PRISM_OLLAMA_MODEL", "llama3.2:3b")
+        )
         self.model_digest = self._probe_model_digest()
         model_fingerprint = hashlib.sha256(f"{self.model}:{self.model_digest}".encode()).hexdigest()[:12]
         self.subject_id = f"atlas_ollama_{model_fingerprint}"

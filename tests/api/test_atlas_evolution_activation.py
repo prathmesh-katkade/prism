@@ -59,6 +59,28 @@ def test_live_bench_refuses_configured_but_unreachable_ollama(monkeypatch) -> No
         AtlasProviderBenchSubject(AtlasModelProviderName.OLLAMA)
 
 
+def test_live_bench_uses_the_configured_atlas_ollama_model(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    monkeypatch.setenv("PRISM_AI_PROVIDER", "ollama")
+    monkeypatch.setenv("PRISM_OLLAMA_BASE_URL", "http://ollama.test:11434")
+    monkeypatch.setenv("PRISM_OLLAMA_MODEL", "verified-local-model")
+    monkeypatch.delenv("PRISM_ATLAS_OLLAMA_URL", raising=False)
+    monkeypatch.delenv("PRISM_ATLAS_OLLAMA_MODEL", raising=False)
+
+    class TagsResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict[str, object]:
+            return {"models": [{"name": "verified-local-model", "digest": "local-digest"}]}
+
+    monkeypatch.setattr("prism_api.atlas_bench_live.httpx.get", lambda *args, **kwargs: TagsResponse())
+
+    subject = AtlasProviderBenchSubject(AtlasModelProviderName.OLLAMA)
+
+    assert subject.model == "verified-local-model"
+    assert subject.base_url == "http://ollama.test:11434/api/generate"
+
+
 def test_decision_route_rejects_unknown_candidate_before_evaluation() -> None:
     client = TestClient(create_app())
     response = client.post(
