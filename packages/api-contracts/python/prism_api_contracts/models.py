@@ -1494,3 +1494,135 @@ class AtlasPreferenceDatasetVersion(ContractModel):
     validation_count: int = Field(ge=0)
     test_count: int = Field(ge=0)
     content_hash: str = Field(min_length=32, max_length=64)
+
+
+# --- 10M: Atlas Foundry (training backend abstraction) ----------------------
+
+
+class AtlasFoundryBackendName(str, Enum):
+    SOUP = "soup"
+    MOCK = "mock"
+
+
+class AtlasFoundryCapability(ContractModel):
+    """Truthful backend capability report -- never assume, always probe.
+
+    ``can_pause`` is honestly always ``False`` in this wave: a real training
+    subprocess can be cancelled (killed), but nothing here implements a real
+    pause/resume checkpoint handshake yet. Reporting ``True`` would be lying
+    about a resource-preemption capability this project does not have.
+    """
+
+    backend: AtlasFoundryBackendName
+    soup_available: bool
+    soup_version: Optional[str] = Field(default=None, max_length=64)
+    can_train: bool
+    can_cancel: bool
+    can_pause: bool = False
+    detail: str = Field(min_length=1, max_length=1_000)
+
+
+class AtlasTrainingRecipeMethod(str, Enum):
+    LORA = "lora"
+    QLORA = "qlora"
+
+
+class AtlasTrainingRecipe(ContractModel):
+    """A fully validated, typed training configuration.
+
+    This is the ONLY path from a training request to a Soup invocation: the
+    backend renders this model to a YAML config file and always shells out
+    with a fixed, constant argv shape (``["soup", "train", "--config", path]``)
+    -- never a string built from LLM output or free-form user text. No field
+    here is a raw command fragment; everything is a bounded, typed value.
+    """
+
+    recipe_id: str = Field(min_length=1, max_length=120)
+    base_model: str = Field(min_length=1, max_length=300)
+    method: AtlasTrainingRecipeMethod
+    task: Literal["sft", "dpo"]
+    dataset_version_id: str = Field(min_length=1, max_length=120)
+    quantization: Literal["none", "4bit", "8bit"] = "4bit"
+    lora_r: int = Field(default=16, ge=1, le=256)
+    lora_alpha: int = Field(default=32, ge=1, le=512)
+    lora_dropout: float = Field(default=0.05, ge=0.0, le=0.9)
+    target_modules: list[str] = Field(default_factory=lambda: ["q_proj", "v_proj"], max_length=32)
+    epochs: int = Field(default=1, ge=1, le=100)
+    learning_rate: float = Field(default=2.0e-4, gt=0, le=1.0)
+    batch_size: int = Field(default=1, ge=1, le=1_024)
+    gradient_accumulation_steps: int = Field(default=1, ge=1, le=256)
+    max_length: int = Field(default=2_048, ge=64, le=131_072)
+    seed: int = Field(default=7, ge=0)
+    # BETA in Soup; opt-in default here because the practical hardware target
+    # for this wave is a 4 GB laptop GPU, where the frozen base cannot
+    # otherwise fit resident. See docs/performance-and-quantization.md upstream.
+    stream_layers: bool = True
+    recipe_version: str = "prism-foundry-recipe-v1"
+    created_at: datetime
+
+
+class AtlasTrainingJobState(str, Enum):
+    QUEUED = "queued"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+class AtlasTrainingJob(ContractModel):
+    job_id: str = Field(min_length=1, max_length=120)
+    recipe_id: str = Field(min_length=1, max_length=120)
+    backend: AtlasFoundryBackendName
+    state: AtlasTrainingJobState
+    resource_lease_id: Optional[str] = Field(default=None, max_length=120)
+    process_id: Optional[int] = None
+    workspace_path: Optional[str] = Field(default=None, max_length=2_000)
+    error: Optional[str] = Field(default=None, max_length=2_000)
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class AtlasTrainingMetric(ContractModel):
+    job_id: str = Field(min_length=1, max_length=120)
+    step: int = Field(ge=0)
+    loss: Optional[float] = None
+    learning_rate: Optional[float] = None
+    recorded_at: datetime
+
+
+class AtlasTrainingCheckpoint(ContractModel):
+    checkpoint_id: str = Field(min_length=1, max_length=160)
+    job_id: str = Field(min_length=1, max_length=120)
+    step: int = Field(ge=0)
+    path: str = Field(min_length=1, max_length=2_000)
+    created_at: datetime
+
+
+class AtlasFoundryPreflight(ContractModel):
+    """Result of a read-only, non-mutating resource estimate before training.
+
+    Numeric fields are ``None`` -- not a guessed number -- when the backend
+    cannot produce a real estimate (e.g. the mock backend).
+    """
+
+    compatible: bool
+    estimated_total_memory_gb: Optional[float] = Field(default=None, ge=0)
+    estimated_tokens_per_sec: Optional[float] = Field(default=None, ge=0)
+    recommended_batch_size: Optional[int] = Field(default=None, ge=1)
+    detail: str = Field(min_length=1, max_length=1_000)
+
+
+class AtlasCandidateArtifact(ContractModel):
+    """A trained adapter, durably registered -- never a production model by
+    itself; promotion (10Q) is a separate, gated decision."""
+
+    candidate_id: str = Field(min_length=1, max_length=120)
+    job_id: str = Field(min_length=1, max_length=120)
+    recipe_id: str = Field(min_length=1, max_length=120)
+    base_model: str = Field(min_length=1, max_length=300)
+    method: AtlasTrainingRecipeMethod
+    adapter_path: str = Field(min_length=1, max_length=2_000)
+    dataset_version_id: str = Field(min_length=1, max_length=120)
+    created_at: datetime

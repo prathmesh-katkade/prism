@@ -101,3 +101,70 @@ def read_memory_status_mb() -> Optional[MemoryStatusMb]:
     if os.name == "nt":
         return _windows_memory_status_mb()
     return _posix_memory_status_mb()
+
+
+def _windows_process_alive(pid: int) -> bool:
+    windll = getattr(ctypes, "windll", None)
+    if windll is None:
+        return False
+    process_query_limited_information = 0x1000
+    handle = windll.kernel32.OpenProcess(process_query_limited_information, False, pid)
+    if not handle:
+        return False
+    try:
+        still_active = 259
+        exit_code = ctypes.c_ulong()
+        if not windll.kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code)):
+            return False
+        return bool(exit_code.value == still_active)
+    finally:
+        windll.kernel32.CloseHandle(handle)
+
+
+def process_alive(pid: int) -> bool:
+    """Best-effort liveness check that works from a bare PID recovered after
+    this process restarts -- a Foundry training job outlives the API process
+    that launched it, so its durable record only ever holds an int, never a
+    live ``Popen`` handle.
+    """
+    if os.name == "nt":
+        return _windows_process_alive(pid)
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True  # exists, just owned by someone else
+    except OSError:
+        return False
+    return True
+
+
+def terminate_process_tree(pid: int, *, new_session: bool) -> None:
+    """Best-effort hard-kill of a subprocess and, on POSIX, its process group.
+
+    ``new_session`` must match whatever ``start_new_session`` value the
+    process was launched with (``os.killpg`` only makes sense when the
+    process actually leads its own group). This is a hard kill, not a
+    graceful pause: no Foundry backend in this wave implements real
+    pause/resume, and pretending otherwise would misreport a capability that
+    does not exist.
+    """
+    if os.name == "nt":
+        subprocess.run(
+            ["taskkill", "/PID", str(pid), "/T", "/F"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+            timeout=5,
+        )
+        return
+    import signal
+
+    try:
+        if new_session:
+            os.killpg(os.getpgid(pid), signal.SIGKILL)
+        else:
+            os.kill(pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass  # already exited
