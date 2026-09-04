@@ -4,7 +4,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Literal, Optional, Union
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class ContractModel(BaseModel):
@@ -1340,6 +1340,74 @@ class AtlasBenchmarkResult(ContractModel):
     critical_regressions: int = Field(ge=0)
     verdict: AtlasBenchmarkVerdict
     evaluated_at: datetime
+
+
+# --- 10P: AtlasBench (task corpus + suite runs) ------------------------
+
+
+class AtlasBenchCategory(str, Enum):
+    SQL = "sql"
+    STATISTICS = "statistics"
+    MACHINE_LEARNING = "machine_learning"
+    FORECASTING = "forecasting"
+    CAUSAL_SAFETY = "causal_safety"
+    AGENTIC = "agentic"
+    EVIDENCE = "evidence"
+    PYTHON_SANDBOX = "python_sandbox"
+    PERSONALITY = "personality"
+    GENERAL = "general"
+
+
+class AtlasBenchTask(ContractModel):
+    """One deterministic, structured benchmark item.
+
+    Task definitions and their correct answers live only in a frozen,
+    version-controlled corpus module -- never behind a runtime API that
+    could write to them -- so a candidate under evaluation can never see,
+    let alone influence, its own judge.
+    """
+
+    task_id: str = Field(min_length=1, max_length=120)
+    category: AtlasBenchCategory
+    prompt: str = Field(min_length=1, max_length=2_000)
+    choices: list[str] = Field(min_length=2, max_length=8)
+    correct_choice: int = Field(ge=0)
+    rationale: str = Field(min_length=1, max_length=1_000)
+    tags: list[str] = Field(default_factory=list, max_length=10)
+
+    @model_validator(mode="after")
+    def _correct_choice_in_range(self) -> "AtlasBenchTask":
+        if not 0 <= self.correct_choice < len(self.choices):
+            raise ValueError(f"correct_choice {self.correct_choice} is out of range for {len(self.choices)} choices")
+        return self
+
+
+class AtlasBenchTaskResult(ContractModel):
+    task_id: str = Field(min_length=1, max_length=120)
+    category: AtlasBenchCategory
+    subject_id: str = Field(min_length=1, max_length=120)
+    chosen_choice: Optional[int] = Field(default=None, ge=0)
+    correct: bool
+    raw_answer: str = Field(default="", max_length=2_000)
+    evaluated_at: datetime
+
+
+class AtlasBenchCategoryScore(ContractModel):
+    category: AtlasBenchCategory
+    total: int = Field(ge=0)
+    passed: int = Field(ge=0)
+
+
+class AtlasBenchSuiteRun(ContractModel):
+    run_id: str = Field(min_length=1, max_length=120)
+    subject_id: str = Field(min_length=1, max_length=120)
+    corpus_version: str = Field(min_length=1, max_length=64)
+    corpus_hash: str = Field(min_length=32, max_length=64)
+    total_tasks: int = Field(ge=0)
+    total_passed: int = Field(ge=0)
+    category_scores: list[AtlasBenchCategoryScore] = Field(default_factory=list)
+    started_at: datetime
+    completed_at: datetime
 
 
 class AtlasResourcePriority(int, Enum):
