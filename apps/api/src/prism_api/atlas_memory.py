@@ -119,6 +119,23 @@ class DurableAtlasMemoryStore:
             row = connection.execute(select(_memories).where(_memories.c.memory_id == memory_id)).mappings().one()
             return self._record(row)
 
+    def get(self, memory_id: str) -> Optional[AtlasMemoryRecord]:
+        row = self.engine.connect().execute(select(_memories).where(_memories.c.memory_id == memory_id)).mappings().first()
+        return None if row is None else self._record(row)
+
+    def list_superseded(self, *, limit: int = 1000) -> list[AtlasMemoryRecord]:
+        """Memories with a real ``supersede()`` event recorded against them --
+        the genuine reject/correct signal the Foundry preference-pair builder
+        (10O) sources from. Never fabricated; only what ``supersede()`` wrote.
+        """
+        statement = (
+            select(_memories)
+            .where(_memories.c.superseded_by.is_not(None))
+            .order_by(_memories.c.updated_at)
+            .limit(limit)
+        )
+        return [self._record(row) for row in self.engine.connect().execute(statement).mappings().all()]
+
     def query(self, query: AtlasMemoryQuery) -> list[AtlasMemoryRecord]:
         statement = select(_memories).order_by(_memories.c.updated_at.desc()).limit(query.limit)
         for column, value in (("scope", query.scope.value if query.scope else None), ("knowledge_class", query.knowledge_class.value if query.knowledge_class else None), ("project_id", query.project_id), ("workspace_id", query.workspace_id)):

@@ -1447,3 +1447,50 @@ class AtlasTrainingDatasetVersion(ContractModel):
     validation_count: int = Field(ge=0)
     test_count: int = Field(ge=0)
     content_hash: str = Field(min_length=32, max_length=64)
+
+
+class AtlasPreferencePairSource(str, Enum):
+    """Where a DPO pair came from. Only a real, already-durable correction
+    event qualifies -- never a manufactured negative example. KTO has no
+    typed source yet: no genuine binary accept/reject signal exists in the
+    product to source it from, and this project does not fabricate one."""
+
+    MEMORY_SUPERSESSION = "memory_supersession"
+
+
+class AtlasPreferencePair(ContractModel):
+    """One verified DPO pair: an Atlas memory a user or verifier corrected,
+    recorded via the real ``supersede()`` mechanism. ``rejected_response`` is
+    the original (superseded) content; ``chosen_response`` is the correction
+    that replaced it; ``evaluator_label`` is the real contradiction reason
+    supplied at supersession time -- never inferred or invented.
+    """
+
+    pair_id: str = Field(min_length=1, max_length=120)
+    source: AtlasPreferencePairSource
+    rejected_memory_id: str = Field(min_length=1, max_length=120)
+    chosen_memory_id: str = Field(min_length=1, max_length=120)
+    project_id: Optional[str] = Field(default=None, max_length=200)
+    prompt_context: str = Field(min_length=1, max_length=500)
+    rejected_response: str = Field(min_length=1, max_length=8_000)
+    chosen_response: str = Field(min_length=1, max_length=8_000)
+    evaluator_label: str = Field(min_length=1, max_length=2_000)
+    split: AtlasTrainingSplit
+    content_hash: str = Field(min_length=32, max_length=64)
+    created_at: datetime
+
+
+class AtlasPreferenceExclusion(ContractModel):
+    memory_id: str = Field(min_length=1, max_length=120)
+    reason: str = Field(min_length=1, max_length=500)
+
+
+class AtlasPreferenceDatasetVersion(ContractModel):
+    version_id: str = Field(min_length=1, max_length=120)
+    created_at: datetime
+    source_count: int = Field(ge=0)
+    excluded_count: int = Field(ge=0)
+    train_count: int = Field(ge=0)
+    validation_count: int = Field(ge=0)
+    test_count: int = Field(ge=0)
+    content_hash: str = Field(min_length=32, max_length=64)
