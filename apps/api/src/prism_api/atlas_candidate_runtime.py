@@ -151,11 +151,13 @@ def activate_current_ollama_model() -> str:
 
 
 def ensure_configured_production_baseline(*, runtime_model_digest: Optional[str] = None) -> str:
-    """Create the rollback anchor for the pre-Foundry configured model once.
+    """Create the rollback anchor for a *verified* pre-Foundry Ollama model.
 
-    Only active Ollama deployments are bootstrapped. The synthetic identity is
-    derived from the configured model name and optional digest; no user data or
-    benchmark information enters the identifier.
+    A missing digest means the caller has not proved that the configured model
+    exists in the active Ollama daemon. In that case this function may rehydrate
+    an already-durable production pointer, but it never creates a new one. The
+    live AtlasBench subject and the local evolution runner pass the digest only
+    after a successful `/api/tags` probe.
     """
     if os.environ.get("PRISM_AI_PROVIDER", "deterministic").lower() != "ollama":
         return configured_ollama_model()
@@ -166,9 +168,11 @@ def ensure_configured_production_baseline(*, runtime_model_digest: Optional[str]
     current = promotion_store.current_production()
     if current is not None:
         return activate_current_ollama_model()
+    if runtime_model_digest is None:
+        return configured_ollama_model()
 
     model = configured_ollama_model()
-    identity_material = f"{model}:{runtime_model_digest or 'digest-unavailable'}"
+    identity_material = f"{model}:{runtime_model_digest}"
     baseline_id = f"production_env_{hashlib.sha256(identity_material.encode()).hexdigest()[:24]}"
     runtime_store = DurableAtlasCandidateRuntimeStore()
     if runtime_store.latest(baseline_id) is None:
@@ -179,6 +183,6 @@ def ensure_configured_production_baseline(*, runtime_model_digest: Optional[str]
         )
     promotion_store.bootstrap(
         baseline_id,
-        reason="Bootstrap the configured Ollama production model as Atlas's rollback anchor.",
+        reason="Bootstrap the verified configured Ollama production model as Atlas's rollback anchor.",
     )
     return activate_current_ollama_model()
