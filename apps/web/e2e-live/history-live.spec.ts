@@ -20,7 +20,11 @@ test("History workspace shows a real SQL Lab result through the live API and ope
   // The live suite shares one API process, so earlier tests may have created
   // other local datasets. Bind SQL Lab to the dataset created by THIS test
   // instead of relying on connection-list ordering.
-  const source = page.getByLabel("Source");
+  //
+  // `exact: true` disambiguates against the toolbar's own
+  // aria-label="Query source and actions" (a substring match on "Source"
+  // would otherwise resolve to both the toolbar region and the <select>).
+  const source = page.getByLabel("Source", { exact: true });
   await expect(source).toBeVisible();
   const schemaResponse = page.waitForResponse((response) =>
     response.url().includes(`/sql-lab/connections/local%3A${dataset.dataset_id}/schema`) && response.status() === 200
