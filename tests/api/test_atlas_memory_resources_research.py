@@ -15,6 +15,7 @@ from prism_api_contracts import (
     AtlasResourcePriority,
     AtlasResourceWorkload,
 )
+from sqlalchemy import inspect as sa_inspect
 
 
 def _store(tmp_path) -> DurableAtlasMemoryStore:  # type: ignore[no-untyped-def]
@@ -45,6 +46,35 @@ def test_project_knowledge_isolated_reindexed_and_flags_injection(tmp_path) -> N
     assert flagged.injection_detected is True
     store.index_source(AtlasKnowledgeSourceRequest(project_id="a", source_ref="docs/a.md", content="Churn is customers lost during the period.", content_version="v2", kind="markdown"))
     assert not store.search(AtlasKnowledgeSearchRequest(project_id="a", query="retention"))
+
+
+def test_knowledge_chunk_index_stays_under_mysql_key_length_limit(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    # Regression guard: indexing the full String(2000) source_ref column (as
+    # opposed to its short source_ref_hash stand-in) exceeds MySQL InnoDB's
+    # 3072-byte max index key length under utf8mb4 and fails with error 1071
+    # at store-construction time -- i.e. at prism_api.main import time.
+    store = _store(tmp_path)
+    inspector = sa_inspect(store.engine)
+    lookup_index = next(
+        row
+        for row in inspector.get_indexes("prism_atlas_knowledge_chunks")
+        if row["name"] == "ix_prism_atlas_chunks_lookup"
+    )
+    assert "source_ref" not in lookup_index["column_names"]
+    assert lookup_index["column_names"] == ["project_id", "source_ref_hash"]
+
+
+def test_knowledge_source_delete_and_reindex_use_the_hash_lookup_correctly(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    store = _store(tmp_path)
+    long_ref = "docs/" + ("segment/" * 100) + "a.md"  # exercises the full String(2000) column
+    store.index_source(
+        AtlasKnowledgeSourceRequest(
+            project_id="p", source_ref=long_ref, content="Retention is active over eligible.", content_version="v1", kind="markdown"
+        )
+    )
+    assert store.search(AtlasKnowledgeSearchRequest(project_id="p", query="retention"))
+    store.delete_source("p", long_ref)
+    assert not store.search(AtlasKnowledgeSearchRequest(project_id="p", query="retention"))
 
 
 def test_researcher_blocks_unallowlisted_network_and_offline_is_clean(monkeypatch) -> None:

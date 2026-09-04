@@ -40,13 +40,24 @@ from sqlalchemy import (
 )
 from sqlalchemy.engine import Engine
 
+from .atlas_schema_utils import ensure_index
 from .durable_atlas_store import redact_atlas_payload
 from .durable_registry import history_database_url
 
 _metadata = MetaData()
 _memories = Table("prism_atlas_memories", _metadata, Column("memory_id", String(120), primary_key=True), Column("dedupe_key", String(64), nullable=False, unique=True), Column("scope", String(32), nullable=False, index=True), Column("knowledge_class", String(32), nullable=False, index=True), Column("content", Text, nullable=False), Column("source", String(500), nullable=False), Column("source_ref", String(2000)), Column("confidence", String(16), nullable=False), Column("project_id", String(200), index=True), Column("workspace_id", String(200), index=True), Column("sensitivity", String(16), nullable=False), Column("user_editable", Boolean, nullable=False), Column("deletable", Boolean, nullable=False), Column("provenance", Text, nullable=False), Column("reinforcement", Integer, nullable=False, default=0), Column("contradictions", Text, nullable=False), Column("superseded_by", String(120)), Column("created_at", DateTime(timezone=True), nullable=False), Column("updated_at", DateTime(timezone=True), nullable=False), Column("last_used_at", DateTime(timezone=True)))
 _memory_audit = Table("prism_atlas_memory_audit", _metadata, Column("audit_id", String(120), primary_key=True), Column("memory_id", String(120), nullable=False, index=True), Column("action", String(32), nullable=False), Column("occurred_at", DateTime(timezone=True), nullable=False), Column("detail", Text, nullable=False))
-_chunks = Table("prism_atlas_knowledge_chunks", _metadata, Column("chunk_id", String(120), primary_key=True), Column("project_id", String(200), nullable=False, index=True), Column("source_ref", String(2000), nullable=False, index=True), Column("content_version", String(200), nullable=False), Column("kind", String(32), nullable=False), Column("location", String(500), nullable=False), Column("content", Text, nullable=False), Column("content_hash", String(64), nullable=False), Column("injection_detected", Boolean, nullable=False), Column("created_at", DateTime(timezone=True), nullable=False))
+# ``source_ref`` is deliberately NOT indexed at its full String(2000) length:
+# MySQL InnoDB caps an index key at 3072 bytes, and utf8mb4 (4 bytes/char)
+# puts a 2000-char column at 8000 bytes -- CREATE INDEX fails with error 1071
+# on MySQL even though SQLite accepts it. ``source_ref_hash`` is a short,
+# portable stand-in carrying the lookup index; exact equality is still
+# checked against ``source_ref`` itself, so behavior is unchanged.
+_chunks = Table("prism_atlas_knowledge_chunks", _metadata, Column("chunk_id", String(120), primary_key=True), Column("project_id", String(200), nullable=False, index=True), Column("source_ref", String(2000), nullable=False), Column("source_ref_hash", String(64), nullable=False, index=True), Column("content_version", String(200), nullable=False), Column("kind", String(32), nullable=False), Column("location", String(500), nullable=False), Column("content", Text, nullable=False), Column("content_hash", String(64), nullable=False), Column("injection_detected", Boolean, nullable=False), Column("created_at", DateTime(timezone=True), nullable=False))
+
+
+def _source_ref_hash(source_ref: str) -> str:
+    return hashlib.sha256(source_ref.encode()).hexdigest()
 
 _CREDENTIAL = re.compile(r"(?:sk-[A-Za-z0-9_-]{12,}|(?:bearer|basic)\s+[A-Za-z0-9._~+/=-]{12,}|password\s*[:=])", re.I)
 _INJECTION = re.compile(r"(?:ignore (?:all |previous )?instructions|system prompt|developer message|you are chatgpt|exfiltrat|reveal (?:secret|credential))", re.I)
@@ -62,9 +73,24 @@ class DurableAtlasMemoryStore:
     def __init__(self, database_url: Optional[str] = None) -> None:
         self.engine: Engine = create_engine(database_url or history_database_url(), future=True, pool_pre_ping=True, connect_args={"check_same_thread": False} if (database_url or history_database_url()).startswith("sqlite") else {})
         _metadata.create_all(self.engine)
+        # Plain CREATE INDEX guarded by an existence check, not
+        # "IF NOT EXISTS": MySQL 8.0 has no such clause and rejects it with a
+        # 1064 syntax error. See atlas_schema_utils.ensure_index.
         with self.engine.begin() as connection:
-            connection.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_prism_atlas_memory_lookup ON prism_atlas_memories (scope, project_id, knowledge_class, updated_at)")
-            connection.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_prism_atlas_chunks_lookup ON prism_atlas_knowledge_chunks (project_id, source_ref)")
+            ensure_index(
+                connection,
+                "prism_atlas_memories",
+                "ix_prism_atlas_memory_lookup",
+                "CREATE INDEX ix_prism_atlas_memory_lookup "
+                "ON prism_atlas_memories (scope, project_id, knowledge_class, updated_at)",
+            )
+            ensure_index(
+                connection,
+                "prism_atlas_knowledge_chunks",
+                "ix_prism_atlas_chunks_lookup",
+                "CREATE INDEX ix_prism_atlas_chunks_lookup "
+                "ON prism_atlas_knowledge_chunks (project_id, source_ref_hash)",
+            )
 
     @staticmethod
     def _record(row: Mapping[str, Any]) -> AtlasMemoryRecord:
@@ -127,10 +153,11 @@ class DurableAtlasMemoryStore:
             raise HTTPException(status_code=422, detail="Project knowledge rejects credentials and secret-shaped values.")
         parts = [request.content[index:index + 1200] for index in range(0, len(request.content), 1000)]
         now = _now()
+        source_ref_hash = _source_ref_hash(request.source_ref)
         with self.engine.begin() as connection:
-            connection.execute(delete(_chunks).where((_chunks.c.project_id == request.project_id) & (_chunks.c.source_ref == request.source_ref)))
+            connection.execute(delete(_chunks).where((_chunks.c.project_id == request.project_id) & (_chunks.c.source_ref_hash == source_ref_hash) & (_chunks.c.source_ref == request.source_ref)))
             for index, content in enumerate(parts):
-                connection.execute(insert(_chunks).values(chunk_id=f"chunk_{uuid.uuid4().hex}", project_id=request.project_id, source_ref=request.source_ref, content_version=request.content_version, kind=request.kind, location=f"chars:{index * 1000}-{min(len(request.content), index * 1000 + 1200)}", content=content, content_hash=hashlib.sha256(content.encode()).hexdigest(), injection_detected=bool(_INJECTION.search(content)), created_at=now))
+                connection.execute(insert(_chunks).values(chunk_id=f"chunk_{uuid.uuid4().hex}", project_id=request.project_id, source_ref=request.source_ref, source_ref_hash=source_ref_hash, content_version=request.content_version, kind=request.kind, location=f"chars:{index * 1000}-{min(len(request.content), index * 1000 + 1200)}", content=content, content_hash=hashlib.sha256(content.encode()).hexdigest(), injection_detected=bool(_INJECTION.search(content)), created_at=now))
         return self.search(AtlasKnowledgeSearchRequest(project_id=request.project_id, query=" ".join(_terms(request.content)), limit=len(parts)))
 
     def search(self, request: AtlasKnowledgeSearchRequest) -> list[AtlasKnowledgeChunk]:
@@ -145,4 +172,4 @@ class DurableAtlasMemoryStore:
 
     def delete_source(self, project_id: str, source_ref: str) -> None:
         with self.engine.begin() as connection:
-            connection.execute(delete(_chunks).where((_chunks.c.project_id == project_id) & (_chunks.c.source_ref == source_ref)))
+            connection.execute(delete(_chunks).where((_chunks.c.project_id == project_id) & (_chunks.c.source_ref_hash == _source_ref_hash(source_ref)) & (_chunks.c.source_ref == source_ref)))

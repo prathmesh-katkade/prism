@@ -38,10 +38,10 @@ from sqlalchemy import (
     select,
     update,
 )
-from sqlalchemy import inspect as sa_inspect
-from sqlalchemy.engine import Connection, Engine
-from sqlalchemy.exc import IntegrityError, OperationalError, ProgrammingError
+from sqlalchemy.engine import Engine
+from sqlalchemy.exc import IntegrityError, OperationalError
 
+from .atlas_schema_utils import ensure_index
 from .durable_registry import history_database_url
 
 _metadata = MetaData()
@@ -101,23 +101,6 @@ _INDEX_DDL: tuple[tuple[str, str, str], ...] = (
 )
 
 
-def _index_names(connection: Connection, table_name: str) -> set[str]:
-    return {row["name"] for row in sa_inspect(connection).get_indexes(table_name)}
-
-
-def _ensure_index(connection: Connection, table_name: str, index_name: str, ddl: str) -> None:
-    if index_name in _index_names(connection, table_name):
-        return
-    try:
-        connection.exec_driver_sql(ddl)
-    except (IntegrityError, OperationalError, ProgrammingError):
-        # A concurrent starter created the same index between the check above
-        # and this statement. Confirm it now exists before treating the race
-        # as resolved; a genuine schema problem must still surface.
-        if index_name not in _index_names(connection, table_name):
-            raise
-
-
 _SECRET_KEY = re.compile(
     r"(?:api[_-]?key|authorization|credential|password|secret|token|private[_-]?key)", re.IGNORECASE
 )
@@ -172,7 +155,7 @@ class DurableAtlasRunStore:
             if connection.execute(select(_schema.c.version).limit(1)).scalar_one_or_none() is None:
                 connection.execute(insert(_schema).values(version=1))
             for table_name, index_name, ddl in _INDEX_DDL:
-                _ensure_index(connection, table_name, index_name, ddl)
+                ensure_index(connection, table_name, index_name, ddl)
 
     @staticmethod
     def _snapshot(run: AtlasRunResponse) -> str:
