@@ -50,10 +50,6 @@ from sqlalchemy.engine import Engine
 from .atlas_bench_runner import AtlasBenchSubject, run_suite
 from .durable_registry import history_database_url
 
-# Evidence correctness, causal safety, tool safety, provenance, schema
-# grounding, and critical DS methodology, per the locked policy. Forecasting,
-# personality, and general contract validity remain real signals but are not
-# treated as promotion-blocking on their own.
 CRITICAL_CATEGORIES: frozenset[AtlasBenchCategory] = frozenset(
     {
         AtlasBenchCategory.SQL,
@@ -78,14 +74,7 @@ def decide_promotion(
     *,
     critical_regression_tolerance: float = 0.0,
 ) -> AtlasPromotionDecision:
-    """Compare two AtlasBench suite runs and produce a typed verdict.
-
-    ``critical_regression_tolerance`` is a pass-rate delta (0.0 by default:
-    any drop at all in a critical category counts, since each category is a
-    curated ~8-10 item set where a single regression is meaningful). Raising
-    it is a deliberate, auditable policy choice a caller makes explicitly --
-    never something a candidate can adjust about its own evaluation.
-    """
+    """Compare two AtlasBench suite runs and produce a typed verdict."""
     production_by_category = {score.category: score for score in production_run.category_scores}
     critical_regressions: list[AtlasCriticalRegression] = []
     improved_any = False
@@ -141,11 +130,7 @@ def shadow_compare(
     corpus_hash_value: str,
     critical_regression_tolerance: float = 0.0,
 ) -> tuple[AtlasBenchSuiteRun, AtlasBenchSuiteRun, AtlasPromotionDecision]:
-    """Run production and candidate through the identical task set and
-    produce a promotion decision. Neither subject mutates anything -- see
-    module docstring -- so running this comparison is always safe to do
-    speculatively, on any schedule, without touching live state.
-    """
+    """Run production and candidate through the identical task set."""
     production_run, _ = run_suite(
         production_subject, tasks, corpus_version=corpus_version, corpus_hash_value=corpus_hash_value
     )
@@ -160,8 +145,6 @@ def shadow_compare(
     )
     return production_run, candidate_run, decision
 
-
-# --- durable production pointer / rollback history --------------------------
 
 _metadata = MetaData()
 _events = Table(
@@ -178,11 +161,7 @@ _events = Table(
 
 
 class DurableAtlasPromotionStore:
-    """Append-only production-pointer history. The latest row (by
-    ``promoted_at``) is current production; every prior row is retained --
-    that full history IS the rollback list, never a separately maintained
-    structure that could drift from what actually happened.
-    """
+    """Append-only production pointer history."""
 
     def __init__(self, database_url: Optional[str] = None) -> None:
         url = database_url or history_database_url()
@@ -194,11 +173,35 @@ class DurableAtlasPromotionStore:
         )
         _metadata.create_all(self.engine)
 
-    def promote(self, decision: AtlasPromotionDecision, *, reason: str) -> AtlasProductionPointer:
-        """Atomically append a new production pointer. Refuses to promote a
-        candidate whose own decision was not PROMOTE_ELIGIBLE -- the policy
-        is enforced at this boundary too, not only by a well-behaved caller.
+    def bootstrap(self, candidate_id: str, *, reason: str) -> AtlasProductionPointer:
+        """Persist the already-configured production model once.
+
+        This is not a promotion and has no evaluator decision. It creates the
+        immutable rollback anchor that existed before Atlas's first trained
+        candidate can ever become production. Repeated calls are idempotent.
         """
+        current = self.current_production()
+        if current is not None:
+            return current
+        now = datetime.now(timezone.utc)
+        with self.engine.begin() as connection:
+            connection.execute(
+                insert(_events).values(
+                    event_id=f"promo_{uuid.uuid4().hex}",
+                    candidate_id=candidate_id,
+                    previous_candidate_id=None,
+                    decision_id=None,
+                    is_rollback=False,
+                    reason=reason,
+                    promoted_at=now,
+                )
+            )
+        record = self.current_production()
+        assert record is not None
+        return record
+
+    def promote(self, decision: AtlasPromotionDecision, *, reason: str) -> AtlasProductionPointer:
+        """Append an eligible candidate as production."""
         if decision.verdict is not AtlasPromotionVerdict.PROMOTE_ELIGIBLE:
             raise ValueError(
                 f"Refusing to promote candidate {decision.candidate_id!r}: "
@@ -223,10 +226,7 @@ class DurableAtlasPromotionStore:
         return record
 
     def rollback(self, *, reason: str) -> AtlasProductionPointer:
-        """Restore the previous production candidate as a new, explicit
-        event -- never a silent undo of the current row, so the full
-        promote/rollback sequence stays visible in history.
-        """
+        """Restore the previous production candidate as a new explicit event."""
         history = self.history(limit=2)
         if len(history) < 2:
             raise ValueError("No prior production candidate to roll back to.")
@@ -272,4 +272,3 @@ class DurableAtlasPromotionStore:
     def history(self, *, limit: int = 100) -> list[AtlasProductionPointer]:
         statement = select(_events).order_by(_events.c.promoted_at.desc()).limit(limit)
         return [self._record(row) for row in self.engine.connect().execute(statement).mappings().all()]
-
