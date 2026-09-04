@@ -8,7 +8,11 @@ from fastapi.testclient import TestClient
 from prism_api.atlas_bench_live import AtlasBenchSubjectUnavailable, AtlasProviderBenchSubject
 from prism_api.atlas_promotion_decisions import DurableAtlasPromotionDecisionStore
 from prism_api.main import create_app
-from prism_api_contracts import AtlasModelProviderName, AtlasPromotionDecision, AtlasPromotionVerdict
+from prism_api_contracts import (
+    AtlasModelProviderName,
+    AtlasPromotionDecision,
+    AtlasPromotionVerdict,
+)
 
 
 def _decision(decision_id: str = "decision_test_1") -> AtlasPromotionDecision:
