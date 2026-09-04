@@ -187,6 +187,47 @@ GitHub Actions CPU runners cannot substitute for them.
    runtime are not yet implemented. No candidate may be trained, registered,
    benchmarked, or promoted until those gates exist.
 
+## Soup CLI runtime verification performed in the GitHub/CI sandbox (2026-09-05)
+
+This execution environment has no GPU (`lspci` shows no VGA/NVIDIA device, no
+`/dev/nvidia*`), no `ollama` binary, and its network egress policy blocks
+`ollama.com` (403 on CONNECT) while `pypi.org`/`files.pythonhosted.org` are
+reachable. A physical training/deploy/promotion experiment is therefore
+structurally impossible here, independent of the Soup install question. What
+*is* genuinely reachable from this sandbox — and was actually run, not
+assumed — is CLI/schema-level verification of the Soup integration itself:
+
+- `soup-cli==0.74.0` installed cleanly from PyPI into an isolated,
+  gitignored venv (`.prism/runtime/soup-0.74.0-venv`, not committed);
+  `soup version` reports `soup v0.74.0`.
+- `soup --help` / `soup train --help` / `soup profile --help` /
+  `soup export --help` / `soup deploy --help` / `soup deploy ollama --help`
+  confirm the exact subcommands and flags `SoupFoundryBackend` invokes
+  (`soup profile --config <path> --json`, `soup train --config <path>`,
+  GGUF export, `soup deploy ollama`) still exist in the real installed CLI.
+- PRISM's actual `_recipe_to_soup_config()` / `write_recipe_config()` was
+  called (not hand-approximated) with a real `AtlasTrainingRecipe`
+  (`Qwen/Qwen2.5-0.5B-Instruct`, task `sft`, method `qlora`) to render a real
+  config file, then that exact file was run against the real installed CLI:
+  - `soup profile --config <rendered-config> --json` → exit 0, a genuine
+    resource estimate (0.5B params, 2.11 GB estimated total memory, etc.).
+  - `soup train --config <rendered-config> --dry-run` → exit 0, `Config
+    valid. Ready to train!` (correctly auto-detected CPU-only, correctly
+    switched unsupported `4bit` quantization to `none` on CPU, correctly
+    parsed the LoRA/task/backend fields).
+  - Conclusion: PRISM's Soup config renderer is schema-compatible with the
+    real upstream Soup 0.74.0 CLI today. No drift was found between the
+    renderer and the real schema (unlike a quick hand-written test config,
+    which used the wrong nesting and was correctly rejected by Soup — that
+    was this session's own test artifact, not PRISM's renderer).
+  - The heavy `soup-cli[train]` extra (torch/transformers/peft/trl/etc.)
+    also installs successfully in this CPU-only sandbox, but `torch.cuda.is_available()`
+    is `False` here, so no real training step was attempted or claimed.
+
+This is schema/CLI-compatibility evidence only. It does not substitute for,
+and must not be read as, the physical experiment: no training, candidate,
+AtlasBench, Shadow, or promotion/rollback value came from this sandbox.
+
 ## Exact next task
 
 On the actual Windows PRISM host with the configured local Ollama model and
