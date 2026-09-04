@@ -21,10 +21,15 @@ test("History workspace shows a real SQL Lab result through the live API and ope
   // other local datasets. Bind SQL Lab to the dataset created by THIS test
   // instead of relying on connection-list ordering.
   //
-  // `exact: true` disambiguates against the toolbar's own
-  // aria-label="Query source and actions" (a substring match on "Source"
-  // would otherwise resolve to both the toolbar region and the <select>).
-  const source = page.getByLabel("Source", { exact: true });
+  // A CSS-scoped locator, not getByLabel: the <select> sits inside a
+  // <label>Source<select>...</select></label>, and per the accessible-name
+  // "embedded control" computation its computed name becomes "Source
+  // <currently selected option text>" once a connection auto-selects --
+  // exactly what happens here, since earlier tests already left connections
+  // in the list. That made getByLabel("Source", { exact: true }) match zero
+  // elements. The toolbar has exactly one <select> (Parameters is a
+  // <textarea>), so this is unambiguous without depending on accname value.
+  const source = page.locator(".query-toolbar select");
   await expect(source).toBeVisible();
   const schemaResponse = page.waitForResponse((response) =>
     response.url().includes(`/sql-lab/connections/local%3A${dataset.dataset_id}/schema`) && response.status() === 200
