@@ -15,6 +15,7 @@ import { MlLabWorkspace } from "./mllab-workspace";
 import { EvidenceInspector } from "./evidence-inspector";
 import { HistoryWorkspace } from "./history-workspace";
 import { AtlasWorkspace } from "./atlas-workspace";
+import { EvolutionWorkspace } from "./evolution-workspace";
 import { migrationPresentation, phaseTwoMigrations, type InspectorObjectState, type ShellStatus, type WorkspaceTab } from "../state/shell-model";
 import { useLayoutState } from "../state/use-layout-state";
 
@@ -30,14 +31,15 @@ const navigation: ReadonlyArray<{ workflow: string; label: string; icon: IconNam
   { workflow: "forecasting", label: "Forecasting", icon: "grid" },
   { workflow: "ml", label: "ML", icon: "spark" },
   { workflow: "history", label: "History", icon: "database" },
-  { workflow: "atlas", label: "Atlas", icon: "spark" }
+  { workflow: "atlas", label: "Atlas", icon: "spark" },
+  { workflow: "evolution", label: "Evolution", icon: "spark" }
 ];
 
 function findMigration(workflow: string): MigrationState {
   return phaseTwoMigrations.find((migration) => migration.workflow === workflow) ?? phaseTwoMigrations[0]!;
 }
 
-const nativeKinds: Record<string, WorkspaceTab["kind"]> = { overview: "overview", "sql-lab": "sql-lab", "ai-analyst": "ai-analyst", clean: "clean", visualize: "visualize", stats: "stats", forecasting: "forecasting", ml: "ml", history: "history", atlas: "atlas" };
+const nativeKinds: Record<string, WorkspaceTab["kind"]> = { overview: "overview", "sql-lab": "sql-lab", "ai-analyst": "ai-analyst", clean: "clean", visualize: "visualize", stats: "stats", forecasting: "forecasting", ml: "ml", history: "history", atlas: "atlas", evolution: "evolution" };
 
 function workflowTab(workflow: string): WorkspaceTab {
   return { id: `workspace:${workflow}`, label: navigation.find((item) => item.workflow === workflow)?.label ?? workflow, kind: nativeKinds[workflow] ?? "bridge", workflow, closeable: true };
@@ -200,6 +202,7 @@ function WorkspaceSurface({ tab, status, onStatusChange, onOpenCommand, onSelect
   if (tab.kind === "ml") return <MlLabWorkspace datasetId={activeDatasetId} onSelectContext={onSelectContext} onOpenWorkflow={onOpenWorkflow} />;
   if (tab.kind === "history") return <HistoryWorkspace onSelectContext={onSelectContext} />;
   if (tab.kind === "atlas") return <AtlasWorkspace datasetId={activeDatasetId} />;
+  if (tab.kind === "evolution") return <EvolutionWorkspace />;
   if (tab.kind === "bridge" && tab.workflow) {
     const migration = findMigration(tab.workflow);
     return <article className="bridge-surface"><span className="eyebrow">MIGRATION BRIDGE · {migrationPresentation(migration).toUpperCase()}</span><h1>{tab.label} remains in the reference system.</h1><p>This shell exposes a single migration-aware entry point without reimplementing or shadowing the underlying Streamlit workflow.</p><dl><div><dt>Reference</dt><dd><code>{migration.legacy_reference}</code></dd></div><div><dt>Parity gate</dt><dd>Required before this can become native.</dd></div><div><dt>Current channel</dt><dd><span className="migration-chip legacy">legacy</span></dd></div></dl><div className="bridge-actions"><button onClick={onOpenCommand}>Inspect migration controls</button><button className="secondary" onClick={() => onStatusChange("degraded")}>Preview degraded state</button></div></article>;
