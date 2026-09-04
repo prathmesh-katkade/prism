@@ -33,6 +33,39 @@ boundaries/secrets/contract-freshness all pass.
 real MySQL 8.0 job, passed; `mergeable_state: clean`). The Foundry wave
 (10M–10R) begins now, starting with 10N.
 
+## Foundry wave checkpoint (2026-09-04, same session, continued autonomously)
+
+User authorized continuing the Foundry wave. Delivered, one commit per
+coherent unit, each pushed after a full local `ruff`/`mypy`/pytest/
+boundaries/secrets/contract-freshness pass:
+
+- `b0926ca` — 10N verified training-dataset generator (Atlas-run-sourced SFT).
+- `4c6e8e4` — 10O DPO preference pairs from real Atlas-memory corrections.
+- `856fb30` — 10M FoundryBackend/SoupFoundryBackend (Soup inspected live at
+  https://github.com/MakazhanAlpamys/Soup, v0.73.3) + Resource Governor
+  integration + Candidate Registry.
+- `1af8562` — 10P AtlasBench: 90-task frozen corpus across all 10 categories,
+  deterministic runner, durable append-only run history.
+- `063de4d` — 10Q Shadow Brain comparison, locked promotion policy
+  (PROMOTE_ELIGIBLE/HOLD/REJECT), atomic append-only promotion/rollback
+  store, and an honest (all-unsupported) adapter-hot-swap capability report.
+
+CI: green through `1af8562`; `063de4d`'s run was in flight at last check
+(a check-in is scheduled — see the live PR for its outcome).
+`phase-4-live-e2e` intermittently fails on unrelated, pre-existing frontend
+Playwright flakiness (documented on the PR, not a regression from this
+wave's Python-only diffs).
+
+Deliberately not done, and not claimed: KTO (no real feedback signal to
+source it from), a live-wired AtlasBench subject (harness is proven against
+reference subjects only), any REST/UI wiring for any of the above, and any
+actual end-to-end Soup training run (the backend is real and tested, but
+`soup` has never been installed anywhere this project has run).
+
+Full detail, module map, and the exact next task are in
+`PHASE10_IMPLEMENTATION_LEDGER.md`. `PHASE_10_COMPLETE` remains `NO`;
+Phase 11 remains locked.
+
 ## Completed in this checkpoint
 
 - Created architecture record and ADRs 0006–0012 for providers, orchestration,

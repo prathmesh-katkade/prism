@@ -10,13 +10,25 @@ provider capabilities, typed plan/step/event/evidence contracts, durable
 SQLAlchemy run/event records, deterministic tool-registry planning, visible
 Scout/Curator/Stat/Auditor state, constrained Python execution, SSE replay, an
 operational Atlas workspace, and a Cortex V1 projection backed only by durable
-real state. The next increment adds SQL-backed scoped memory, lexical local
-project knowledge, an explicit allowlisted Researcher, compact-metadata Ollama
-plan proposals, a resource-lease governor, and a native-worker sandbox health
-boundary. It does not implement a general shell, package installation,
-unrestricted web access, Foundry, AtlasBench, Cortex 3D UI, voice, or desktop
-packaging. Windows CPU/memory quotas remain explicitly unsupported without a
-configured container worker.
+real state; SQL-backed scoped memory, lexical local project knowledge, an
+explicit allowlisted Researcher, compact-metadata Ollama plan proposals, a
+resource-lease governor, and a native-worker sandbox health boundary.
+
+The Foundry wave (10M–10Q) adds, backend-only so far (no REST/UI wiring yet):
+a verified training-dataset generator (SFT) and a real-correction-sourced DPO
+preference-pair generator; a typed `FoundryBackend` abstraction with a real
+`SoupFoundryBackend` (inspected against the actual upstream Soup CLI) and a
+`MockFoundryBackend`, Resource-Governor-integrated job admission/preemption,
+and a candidate-artifact registry; a 90-task AtlasBench corpus across all ten
+required categories with a deterministic runner and durable append-only run
+history; and Shadow Brain comparison plus the locked promotion policy
+(PROMOTE_ELIGIBLE/HOLD/REJECT) with an atomic, append-only promotion/rollback
+store. It does not implement a general shell, package installation,
+unrestricted web access, KTO, Cortex 3D UI, voice, desktop packaging, or the
+Atlas Evolution UI (10R — needs the still-missing REST endpoints first).
+Windows CPU/memory quotas remain explicitly unsupported without a configured
+container worker. No candidate has ever actually been trained or promoted;
+`soup` has never been installed in any environment this project has run in.
 See `PHASE10_ARCHITECTURE.md`, `PHASE10_IMPLEMENTATION_LEDGER.md`, and
 `.prism/checkpoints/phase-10-progress.md`.
 

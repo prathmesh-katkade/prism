@@ -1,5 +1,111 @@
 # PRISM Claude Session Handoff
 
+## Phase 10 continuation: the Foundry wave, 10M–10Q (2026-09-04)
+
+**Read this section first — it supersedes the sections below it while this
+continuation is active.** (The CI-recovery section right below this one is
+still accurate for its own scope; this section covers the work built on top
+of it, in the same session, after the user explicitly authorized continuing
+the Foundry wave autonomously.)
+
+Delivered, one commit per coherent unit, each validated locally (exact CI
+mypy/ruff invocation + full `pytest tests/api tests/contracts tests/migration
+tests/overview tests/sql_lab` + boundaries/secrets/contract-freshness) before
+pushing:
+
+- **`b0926ca` — 10N**, `atlas_foundry_dataset.py`: a durable, deterministic
+  SFT-dataset generator sourced only from completed, evidence-backed,
+  answered Atlas runs. No hidden chain-of-thought (reuses Atlas's own typed,
+  user-visible plan/council structures), no raw dataset rows, redacted a
+  second time at the export boundary, deterministic ~80/10/10 split keyed on
+  `dataset_id` so near-duplicates never straddle splits, content-hash dedup,
+  deterministic JSONL export, idempotent durable storage with preview.
+- **`4c6e8e4` — 10O**, `atlas_foundry_preference.py`: DPO pairs sourced from
+  Atlas memory's real, already-wired `supersede()` correction workflow
+  (`POST /api/v1/atlas/memories/{id}/supersede`) — rejected = the original
+  content, chosen = the real correction, evaluator_label = the real
+  contradiction text. Nothing manufactured. KTO explicitly not built: no
+  genuine binary accept/reject signal exists in the product to source it
+  from.
+- **`856fb30` — 10M + Candidate Registry**, `atlas_foundry_backend.py` /
+  `atlas_foundry_orchestration.py`: `FoundryBackend` (ABC) /
+  `MockFoundryBackend` / `SoupFoundryBackend`. Soup was inspected live
+  (cloned from https://github.com/MakazhanAlpamys/Soup, v0.73.3 — its real
+  `soup.yaml` schema, `soup profile --json` output, and
+  `checkpoint-N/trainer_state.json` conventions), not assumed. Recipes reach
+  Soup only via a validated `AtlasTrainingRecipe` rendered to YAML through a
+  fixed argv shape — never a string-built command. `soup` is not installed
+  anywhere this project has run; every backend method degrades to an honest
+  "unavailable" result rather than a crash. Every job is admitted through
+  `AtlasResourceGovernor` at `FOUNDRY_TRAINING` priority first; a preempting
+  interactive lease hard-cancels the job (the honest form of "yield" — no
+  backend here implements real pause/resume, and the capability report says
+  so explicitly). A completed job with real adapter output on disk registers
+  exactly one `AtlasCandidateArtifact`.
+- **`1af8562` — 10P**, `atlas_bench_corpus.py` / `atlas_bench_runner.py` /
+  `atlas_bench_store.py`: a 90-task frozen, version-controlled benchmark
+  corpus across all ten required categories (SQL/statistics/ML/forecasting/
+  causal-safety/agentic/evidence/Python-sandbox/personality/general),
+  hand-authored for correctness over volume. No runtime write path exists to
+  it, so a candidate under evaluation cannot see or influence its own judge.
+  Deterministic scoring via a pluggable `AtlasBenchSubject` protocol; durable
+  append-only run history (a rerun is a new `run_id`, never an edit).
+- **`063de4d` — 10Q + Adapter Foundation**, `atlas_promotion.py` /
+  `atlas_adapter_foundation.py`: `shadow_compare()` runs production and
+  candidate through the identical AtlasBench corpus (non-mutation is
+  structural — a subject only ever answers prompt+choices, nothing to
+  mutate). `decide_promotion()` enforces the locked policy — IMPROVE TARGET
+  CAPABILITY + NO UNACCEPTABLE CRITICAL REGRESSION — against
+  `CRITICAL_CATEGORIES`; a candidate cannot win on aggregate score while
+  regressing any one critical category. `DurableAtlasPromotionStore` is an
+  append-only production-pointer log: `promote()` is atomic and refuses any
+  non-`PROMOTE_ELIGIBLE` decision at the storage boundary; `rollback()`
+  appends a new event restoring the previous candidate, never an in-place
+  undo. Adapter hot-swap capability is honestly reported as unsupported
+  everywhere (no runtime here can do it).
+
+**Local verification for every commit above**: `ruff`/`mypy` clean (exact CI
+invocation), full backend test suite green (288 passed / 4 skipped at
+`063de4d`, up from 246 at the CI-recovery baseline — 42 new tests across
+these five commits), boundaries/secrets/TS-contract-freshness all pass.
+
+**CI on PR #15**: green through `1af8562`. `063de4d`'s run was in flight
+when this was last checked — a check-in was scheduled; verify current status
+before assuming it's green. `phase-4-live-e2e` has intermittently failed
+across this wave's pushes, each time on a **different, unrelated frontend
+Playwright spec** (`clean-visualize-live.spec.ts`, then `history-live.spec.ts`)
+never touched by this wave's Python-only diffs — a standing-down comment is
+posted on PR #15 documenting that this exact failure pattern (same
+`'3 returned / 3 total rows'`-style timing assertion, same
+`overview-profile` React key-collision warning) was already diagnosed and
+partially fixed multiple times during Phase 9, before Phase 10 existed. Not
+a regression introduced by this wave.
+
+**Deliberately not done, and not claimed as done — read this before assuming
+more is finished than actually is:**
+- **10R (Atlas Evolution UI)**: not started. Every module built this wave is
+  backend-only (durable stores + pure logic + tests) — **nothing is wired to
+  `apps/api/src/prism_api/atlas.py` (the FastAPI router) yet**, so there is
+  no REST surface for a frontend to consume. That wiring is the necessary
+  first step before 10R can begin.
+- **KTO** (10O): no real source signal exists; not fabricated.
+- **A live AtlasBench subject**: the harness is proven correct against
+  reference subjects (Perfect/Worst/FirstChoice) only. No subject wraps a
+  real Atlas provider (deterministic or Ollama) yet.
+- **An actual end-to-end Soup training run**: never executed anywhere —
+  `soup` has never been installed in any environment this project has run
+  in. The backend code path to it is real and tested up to that boundary,
+  not beyond it.
+- **Any promotion has ever actually happened**: `DurableAtlasPromotionStore`
+  has no production candidate registered anywhere; there is no real "current
+  production Atlas" pointer yet, by design (nothing has been promoted).
+
+Exact next task: wire REST endpoints for the above onto `atlas.py`, regenerate
+the TypeScript contract, then build 10R against real (if still-empty) data.
+`PHASE_10_COMPLETE = NO`. `PHASE_11_UNLOCKED = NO`.
+
+---
+
 ## Phase 10 continuation: CI recovery before the Foundry wave (2026-09-04)
 
 **Read this section first — it supersedes the section below it while this

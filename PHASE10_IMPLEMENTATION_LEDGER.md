@@ -64,9 +64,17 @@ confirmation. **The Foundry wave (10M–10R) begins now.**
 | 10G Cortex graph data model | ADVANCED | Cortex projects durable run, dataset, plan, specialist, declared tool, and evidence IDs only. |
 | 10H Cortex visual system | PARTIAL | Native SVG Cortex V1 provides organic curved paths, state styling, Focus Lens, zoom controls, and reduced-motion mode over only real graph records. Dense/3D visualization remains out of scope. |
 | 10I Observable execution UI | ADVANCED | Native Atlas operations desk renders objective, state, live SSE-updated plan, specialist activity, Council/evidence, cancellation, errors, grounded answer, and Cortex V1. |
-| 10L Resource Governor | PARTIAL | Typed priority leases, cancellation-aware preemption, concurrency admission, CPU/RAM/storage snapshot, optional GPU telemetry, and truthful no-GPU reporting. Cross-process scheduling and Foundry integration remain future work. |
-| 10J–10K, 10M–10T | NOT STARTED | Multimodal, voice, Foundry, training, benchmarks, promotion, experiments, and desktop packaging remain future internal gates. |
-| 10U–10W | NOT STARTED | Flagship workflow and final certification remain out of scope for this first wave. |
+| 10L Resource Governor | PARTIAL | Typed priority leases, cancellation-aware preemption, concurrency admission, CPU/RAM/storage snapshot, optional GPU telemetry, truthful no-GPU reporting, **and now real Foundry-training integration** (`atlas_foundry_orchestration.start_training_job`/`reconcile_foundry_jobs`): every training job is admitted at `FOUNDRY_TRAINING` priority, and a preempting interactive lease hard-cancels the running job (an honest "yield," not a claimed graceful pause). |
+| 10M Atlas Foundry | ADVANCED | `FoundryBackend` (ABC) / `MockFoundryBackend` / `SoupFoundryBackend` (real, tested against the actual `soup` CLI inspected from its upstream repo — v0.73.3's `soup.yaml` schema, `soup profile --json`, checkpoint conventions). Recipes reach Soup only via a validated `AtlasTrainingRecipe` rendered to YAML, never a string-built command. `soup` is absent in every environment this project runs in so far; every backend method degrades to an honest "unavailable" result rather than a crash or a pretend success. Resource-Governor-admitted job lifecycle (queue/start/poll/cancel) plus a durable, MySQL-safe job/recipe store. |
+| Candidate Registry | ADVANCED | `DurableAtlasCandidateRegistry`: a completed job with real adapter output on disk registers exactly one `AtlasCandidateArtifact`, idempotently. Deliberately just the durable fact of what was produced — no promotion-status lifecycle (DISCOVERED/PROMOTED/...) is invented here; that is 10Q's concern once AtlasBench exists to gate it. |
+| 10N Verified training-data generator | ADVANCED | `AtlasTrainingDatasetBuilder`: eligible-only (completed, evidence-backed, answered, ≥1 completed tool step), redacted a second time at the export boundary, deterministic ~80/10/10 split keyed on `dataset_id` so near-duplicates never straddle splits, content-hash dedup, deterministic JSONL export, idempotent durable versioned storage with preview/exclusion inspection. No hidden chain-of-thought: reuses Atlas's own typed, already-user-visible plan/council structures. |
+| 10O SFT/DPO/KTO | PARTIAL | SFT is 10N. DPO (`AtlasPreferenceDatasetBuilder`) sources real chosen/rejected pairs from Atlas memory's existing `supersede()` correction workflow — never a manufactured negative example; a dangling successor or no-op correction is excluded, not faked. **KTO is deliberately not implemented**: no genuine binary accept/reject feedback signal exists anywhere in the product yet, and inventing one would violate the same rule that makes the DPO source trustworthy. PPO/GRPO remain explicitly out of scope. |
+| 10P AtlasBench | ADVANCED (initial corpus) | 90 hand-authored, correctness-checked tasks across all ten required categories (SQL/statistics/ML/forecasting/causal-safety/agentic/evidence/Python-sandbox/personality/general) — an initial wave chosen for correctness over volume, not yet the "thousands of tasks" scale the architecture supports. Frozen, version-controlled answer key with no runtime write path (a candidate cannot see or influence its own judge); deterministic `run_suite()` scoring against a pluggable `AtlasBenchSubject`; append-only durable run history (a rerun is a new `run_id`, never an edit). |
+| 10Q Shadow Brain / Promotion / Rollback | ADVANCED | `shadow_compare()` runs production and candidate through the identical AtlasBench corpus — non-mutation is structural (a subject only ever receives a prompt + choices, returns an index). `decide_promotion()` enforces the locked policy: IMPROVE TARGET CAPABILITY + NO UNACCEPTABLE CRITICAL REGRESSION, against `CRITICAL_CATEGORIES` (SQL/statistics/ML/causal-safety/agentic/evidence/Python-sandbox) — a candidate cannot win on aggregate score while regressing any one critical category. `DurableAtlasPromotionStore` is an append-only production-pointer event log: `promote()` is atomic and refuses any non-`PROMOTE_ELIGIBLE` decision at the storage boundary itself; `rollback()` restores the previous production candidate as a new explicit event, never an in-place undo — the full history IS the rollback list, and no row is ever overwritten. |
+| Adapter Foundation | ADVANCED (honest stub) | Typed logical adapter identities (`atlas-core/sql/statistics/ml/forecast/research`) with a capability report that is truthfully all-`False` right now: no runtime wired into this project can load, unload, or hot-swap a LoRA adapter at inference time, and reporting otherwise would be exactly the fabricated-capability failure this module exists to prevent. Falls back to core Atlas by construction. |
+| 10R Atlas Evolution UI | NOT STARTED | Needs REST endpoints exposing the above (none are wired to `apps/api/src/prism_api/atlas.py` yet — everything so far is backend modules + durable stores + tests) before a real frontend workspace can be built against live data. Exact next task below. |
+| 10J–10K, 10S–10T | NOT STARTED | Multimodal, voice, and desktop-packaging-adjacent gates remain future internal gates untouched by this wave. |
+| 10U–10W | NOT STARTED | Flagship workflow and final certification remain out of scope for this wave. |
 
 ## Invariants preserved
 
@@ -107,8 +115,64 @@ Auditor evidence review → Atlas grounded answer`, with events available throug
 - Full repository, browser, sandbox-isolation, memory, model-trust, AtlasBench,
   and accessibility gates are intentionally not yet certification evidence.
 
+## Foundry wave (2026-09-04, 10M–10Q)
+
+Built only after PR #15's foundation CI was confirmed green at `27923a4`, in
+this order, one commit per coherent unit:
+
+| Commit | Unit | Module(s) |
+| --- | --- | --- |
+| `b0926ca` | 10N | `atlas_foundry_dataset.py` |
+| `4c6e8e4` | 10O | `atlas_foundry_preference.py` |
+| `856fb30` | 10M-1/2/3 + Candidate Registry | `atlas_foundry_backend.py`, `atlas_foundry_orchestration.py`, `atlas_platform.py` additions |
+| `1af8562` | 10P | `atlas_bench_corpus.py`, `atlas_bench_runner.py`, `atlas_bench_store.py` |
+| `063de4d` | 10Q + Adapter Foundation | `atlas_promotion.py`, `atlas_adapter_foundation.py` |
+
+Every commit above: `ruff`/`mypy` clean (exact CI invocation), full
+`pytest tests/api tests/contracts tests/migration tests/overview
+tests/sql_lab` suite green before pushing (288 passed / 4 skipped at
+`063de4d`), boundaries/secrets/contract-freshness all pass. CI on PR #15
+confirmed green through `1af8562`; `063de4d`'s run was in flight at last
+check (see `.prism/checkpoints/phase-10-progress.md` for the live status).
+`phase-4-live-e2e` intermittently fails on two different frontend Playwright
+specs unrelated to any file this wave touched — a pre-existing,
+Phase-9-documented CI-runner-timing flake (see the standing-down comment on
+PR #15); not this wave's regression.
+
+Deliberately not fabricated in this wave:
+- **KTO** (10O): no genuine binary accept/reject feedback signal exists in
+  the product.
+- **Adapter hot-swap**: no runtime here can load/unload/hot-swap a LoRA
+  adapter; `AtlasAdapterCapability` reports that honestly.
+- **Real Soup training**: `soup` is not installed anywhere this project has
+  run; `SoupFoundryBackend` is real, tested code, but has never actually
+  launched a training subprocess outside its own "absent" path. The recipe
+  → YAML rendering, capability probing, and process lifecycle logic are
+  fully tested; the live end-to-end training path is not, and should not be
+  claimed as verified until it has actually run against a real `soup`
+  install.
+- **A wired AtlasBench subject**: the corpus/runner/store are real and
+  tested against reference subjects (Perfect/Worst/FirstChoice) that prove
+  the harness itself is correct. No subject wrapping a live Atlas provider
+  (deterministic or Ollama) exists yet — that is the natural next increment,
+  not assumed done here.
+- **REST endpoints / UI**: nothing in `atlas_foundry_dataset.py`,
+  `atlas_foundry_preference.py`, `atlas_foundry_backend.py`,
+  `atlas_foundry_orchestration.py`, `atlas_bench_*.py`, or `atlas_promotion.py`
+  is wired to `apps/api/src/prism_api/atlas.py` (the FastAPI router) yet.
+  Everything above is backend modules, durable stores, and tests only.
+
 ## Exact next task
 
-Certify this second wave in supported Python 3.11/CI, then harden the sandbox
-with a platform worker/container boundary before enabling run-integrated custom
-Python or any package-management path. Do not start Phase 11.
+10R (Atlas Evolution UI) needs real data to render, which needs REST
+endpoints first: wire `GET/POST` routes for training/preference dataset
+builds, Foundry job start/status/cancel, AtlasBench suite runs, and
+promotion/rollback onto `apps/api/src/prism_api/atlas.py`, regenerate the
+TypeScript contract, then build the native Evolution workspace against that
+real data (production vs candidate, category deltas, verdict, promotion/
+rollback history, clickable benchmark failures) — no fake animations around
+nonexistent model state. In parallel: certify this Foundry wave's CI run
+once green, and consider wiring a first real AtlasBench subject (a thin
+adapter around the existing deterministic Atlas provider) so `soup train`'s
+actual end-to-end path can eventually be exercised against a real install.
+Do not start Phase 11.
