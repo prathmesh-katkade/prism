@@ -11,10 +11,23 @@ test("History workspace shows a real SQL Lab result through the live API and ope
     }
   });
   expect(upload.status()).toBe(201);
+  const dataset = await upload.json() as { dataset_id: string };
 
   await page.goto("/");
   await page.getByRole("button", { name: /SQL Lab native/i }).click();
   await expect(page.locator(".monaco-editor")).toBeVisible();
+
+  // The live suite shares one API process, so earlier tests may have created
+  // other local datasets. Bind SQL Lab to the dataset created by THIS test
+  // instead of relying on connection-list ordering.
+  const source = page.getByLabel("Source");
+  await expect(source).toBeVisible();
+  const schemaResponse = page.waitForResponse((response) =>
+    response.url().includes(`/sql-lab/connections/local%3A${dataset.dataset_id}/schema`) && response.status() === 200
+  );
+  await source.selectOption(`local:${dataset.dataset_id}`);
+  await schemaResponse;
+
   const runQuery = page.getByRole("button", { name: /Run query/ });
   await expect(runQuery).toBeEnabled();
   // Sync on the actual results response rather than a bare click - see
