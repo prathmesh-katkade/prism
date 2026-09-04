@@ -153,6 +153,40 @@ following values are **not invented and remain physically unproven**:
 Those facts must come from the runner's generated local report; test doubles or
 GitHub Actions CPU runners cannot substitute for them.
 
+## First real local execution (2026-09-04)
+
+- Machine observed: Windows 11, Intel i5-9300H, 16 GiB RAM, NVIDIA GTX 1650
+  Max-Q (4 GiB VRAM; 3.94 GiB free before the run), and 190.23 GiB free disk.
+- Ollama 0.33.3 was healthy. The installed model selected explicitly for this
+  isolated execution was `qwen3:4b-q4_K_M` (Qwen3 4B GGUF Q4_K_M,
+  digest `2bfd38a7daaf4b1037efe517ccb73d1a3bbd4822cf89f1a82be1569050a114e0`).
+- A configuration defect was found before scoring: AtlasBench defaulted to a
+  different model than Atlas. Commit `80f13e7` makes the live subject inherit
+  `PRISM_OLLAMA_BASE_URL` and `PRISM_OLLAMA_MODEL`, with the old
+  AtlasBench-specific names retained only as explicit compatibility overrides.
+- Production baseline persisted in an isolated durable SQLite runtime:
+  `benchrun_e22b23a14daa4590bc917922113f6547`, subject
+  `atlas_ollama_24b0e61eb95e`, corpus `atlasbench-v1`, hash
+  `f0af1e39a778755a925f70570c19a4e5754e2dcccbb57d44e8673627a7f4f10f`.
+  It scored **71/90** in **235.6 seconds**. Category results: agentic 8/10,
+  causal safety 5/8, evidence 6/8, forecasting 6/8, general 10/10, ML 9/10,
+  personality 6/8, Python sandbox 7/8, SQL 7/10, statistics 7/10.
+- The first real 10N/10O build truthfully produced zero eligible SFT examples
+  and zero DPO pairs. This runtime contains no completed evidence-backed Atlas
+  operations or real corrections; AtlasBench data is not training data.
+
+## Remaining operational blockers
+
+1. No verified real Atlas-run corpus or clearly-labelled system seed corpus
+   exists yet, so a training job must not start.
+2. Soup is not installed. Upstream was re-checked at commit
+   `f07e07ed7edd548a4d1d9143f77af9027b1b7036` (v0.74.0 source): Python
+   3.10-3.12, `soup profile --config`, `soup train --config`, and GGUF/Ollama
+   export remain supported. A separate pinned training environment is required.
+3. Candidate-artifact trust verification and an adapter-capable inference
+   runtime are not yet implemented. No candidate may be trained, registered,
+   benchmarked, or promoted until those gates exist.
+
 ## Exact next task
 
 On the actual Windows PRISM host with the configured local Ollama model and

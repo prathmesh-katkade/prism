@@ -60,6 +60,11 @@ experiment, but not Phase-10-complete**. Multimodal, voice, desktop packaging,
 Cortex V2/dense 3D, flagship workflow certification, and Phase 11 remain locked
 behind that evidence and the remaining Phase 10 gates.
 
+One real local Ollama baseline was separately observed on 2026-09-04: Qwen3 4B
+Q4_K_M scored 71/90 on `atlasbench-v1` in 235.6 seconds. It is only a production
+baseline, not an Evolution experiment: verified SFT/DPO data was empty, Soup was
+not installed, and no candidate, promotion, or rollback result exists.
+
 See `PHASE10_ARCHITECTURE.md`, `PHASE10_IMPLEMENTATION_LEDGER.md`,
 `.prism/checkpoints/phase-10-progress.md`, and
 `.prism/checkpoints/phase-10-evolution-activation.md`.

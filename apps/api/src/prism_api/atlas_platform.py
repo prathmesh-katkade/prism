@@ -71,9 +71,12 @@ def _posix_memory_status_mb() -> Optional[MemoryStatusMb]:
     # SC_PAGE_SIZE / SC_PHYS_PAGES are POSIX-standard sysconf names; every
     # Linux and macOS Python build exposes them, giving a truthful total even
     # without a Linux-specific dependency.
+    sysconf = getattr(os, "sysconf", None)
+    if sysconf is None:
+        return None
     try:
-        page_size = os.sysconf("SC_PAGE_SIZE")
-        total_pages = os.sysconf("SC_PHYS_PAGES")
+        page_size = sysconf("SC_PAGE_SIZE")
+        total_pages = sysconf("SC_PHYS_PAGES")
     except (ValueError, OSError, AttributeError):
         return None
     if page_size <= 0 or total_pages <= 0:
@@ -161,10 +164,17 @@ def terminate_process_tree(pid: int, *, new_session: bool) -> None:
         return
     import signal
 
+    sigkill = getattr(signal, "SIGKILL", None)
+    if sigkill is None:
+        return
     try:
         if new_session:
-            os.killpg(os.getpgid(pid), signal.SIGKILL)
+            killpg = getattr(os, "killpg", None)
+            getpgid = getattr(os, "getpgid", None)
+            if killpg is None or getpgid is None:
+                return
+            killpg(getpgid(pid), sigkill)
         else:
-            os.kill(pid, signal.SIGKILL)
+            os.kill(pid, sigkill)
     except ProcessLookupError:
         pass  # already exited

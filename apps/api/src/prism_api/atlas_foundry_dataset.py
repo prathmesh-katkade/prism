@@ -42,9 +42,11 @@ from sqlalchemy import (
     Text,
     create_engine,
     insert,
+    inspect,
     select,
+    text,
 )
-from sqlalchemy.engine import Engine
+from sqlalchemy.engine import Connection, Engine
 
 from .atlas_schema_utils import ensure_index
 from .durable_atlas_store import DurableAtlasRunStore, redact_atlas_payload
@@ -219,8 +221,12 @@ _versions = Table(
 _examples = Table(
     "prism_atlas_training_examples",
     _metadata,
+    # The same immutable example can legitimately belong to multiple immutable
+    # corpus versions as new verified runs arrive. Its content identity is only
+    # unique *within* a version; a global primary key would make a later
+    # reindex fail or silently omit prior evidence.
+    Column("version_id", String(120), primary_key=True),
     Column("example_id", String(120), primary_key=True),
-    Column("version_id", String(120), nullable=False, index=True),
     Column("split", String(16), nullable=False, index=True),
     Column("dataset_id", String(255), nullable=False, index=True),
     Column("source_run_id", String(120), nullable=False, index=True),
@@ -250,8 +256,10 @@ class DurableAtlasTrainingDatasetStore:
             pool_pre_ping=True,
             connect_args={"check_same_thread": False} if url.startswith("sqlite") else {},
         )
-        _metadata.create_all(self.engine)
         with self.engine.begin() as connection:
+            self._drop_legacy_example_indexes(connection)
+            _metadata.create_all(connection)
+            self._migrate_example_identity(connection)
             ensure_index(
                 connection,
                 "prism_atlas_training_examples",
@@ -259,6 +267,86 @@ class DurableAtlasTrainingDatasetStore:
                 "CREATE INDEX ix_prism_atlas_training_examples_version_split "
                 "ON prism_atlas_training_examples (version_id, split)",
             )
+
+    @staticmethod
+    def _drop_legacy_example_indexes(connection: Connection) -> None:
+        """Clear SQLite index names before rebuilding a legacy table.
+
+        SQLite keeps an index's globally scoped name when a table is renamed.
+        Removing the legacy indexes first lets SQLAlchemy create equivalent
+        indexes on the replacement table, then the legacy rows can be copied
+        without losing data.
+        """
+        inspector = inspect(connection)
+        legacy = "prism_atlas_training_examples_legacy"
+        if not inspector.has_table(legacy):
+            return
+        if connection.dialect.name != "sqlite":
+            raise RuntimeError("Unexpected interrupted Atlas training-example migration.")
+        for item in inspector.get_indexes(legacy):
+            name = str(item["name"])
+            safe_name = name.replace('"', '""')
+            connection.execute(text(f'DROP INDEX IF EXISTS "{safe_name}"'))
+
+    @staticmethod
+    def _migrate_example_identity(connection: Connection) -> None:
+        """Upgrade the pre-release global-example primary key in place.
+
+        Corpus versions are append-only snapshots, so older rows must remain
+        addressable when a later snapshot repeats their immutable example. The
+        initial Phase 10 schema accidentally made ``example_id`` globally
+        unique. SQLite requires a table rebuild for a primary-key change;
+        MySQL can alter the key directly. Other dialects intentionally fail
+        closed instead of pretending the history migration succeeded.
+        """
+        inspector = inspect(connection)
+        legacy = "prism_atlas_training_examples_legacy"
+        columns = inspector.get_pk_constraint("prism_atlas_training_examples").get("constrained_columns") or []
+        if inspector.has_table(legacy):
+            if columns != ["version_id", "example_id"]:
+                raise RuntimeError("Interrupted Atlas training-example migration has an unsafe replacement table.")
+            connection.execute(
+                text(
+                    "INSERT INTO prism_atlas_training_examples "
+                    "(version_id, example_id, split, dataset_id, source_run_id, payload, created_at) "
+                    "SELECT version_id, example_id, split, dataset_id, source_run_id, payload, created_at "
+                    "FROM prism_atlas_training_examples_legacy"
+                )
+            )
+            connection.execute(text("DROP TABLE prism_atlas_training_examples_legacy"))
+            return
+        if columns == ["version_id", "example_id"]:
+            return
+        if columns != ["example_id"]:
+            raise RuntimeError("Unexpected Atlas training-example primary key; refusing unsafe migration.")
+
+        dialect = connection.dialect.name
+        if dialect == "sqlite":
+            for item in inspector.get_indexes("prism_atlas_training_examples"):
+                name = str(item["name"])
+                safe_name = name.replace('"', '""')
+                connection.execute(text(f'DROP INDEX IF EXISTS "{safe_name}"'))
+            connection.execute(text("ALTER TABLE prism_atlas_training_examples RENAME TO prism_atlas_training_examples_legacy"))
+            _examples.create(connection)
+            connection.execute(
+                text(
+                    "INSERT INTO prism_atlas_training_examples "
+                    "(version_id, example_id, split, dataset_id, source_run_id, payload, created_at) "
+                    "SELECT version_id, example_id, split, dataset_id, source_run_id, payload, created_at "
+                    "FROM prism_atlas_training_examples_legacy"
+                )
+            )
+            connection.execute(text("DROP TABLE prism_atlas_training_examples_legacy"))
+            return
+        if dialect == "mysql":
+            connection.execute(
+                text(
+                    "ALTER TABLE prism_atlas_training_examples "
+                    "DROP PRIMARY KEY, ADD PRIMARY KEY (version_id, example_id)"
+                )
+            )
+            return
+        raise RuntimeError("Atlas training-example identity migration supports SQLite and MySQL only.")
 
     def save(
         self, examples: list[AtlasTrainingExample], exclusions: list[AtlasTrainingExclusion]

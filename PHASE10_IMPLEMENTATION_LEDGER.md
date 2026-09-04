@@ -10,6 +10,26 @@ Canonical starting point: `phase-6.5-integration-staging` at `ab75b5a`.
 Phase 9 remains complete; its externally blocked Render certification is not an
 engineering blocker for this phase.
 
+## First real Evolution execution (2026-09-04)
+
+The first server-owned, real local Ollama AtlasBench baseline completed on the
+user machine. Qwen3 4B Q4_K_M (`qwen3:4b-q4_K_M`, digest
+`2bfd38a7daaf4b1037efe517ccb73d1a3bbd4822cf89f1a82be1569050a114e0`) scored
+**71/90** in **235.6 seconds** on frozen `atlasbench-v1`
+(`f0af1e39a778755a925f70570c19a4e5754e2dcccbb57d44e8673627a7f4f10f`), durable
+run `benchrun_e22b23a14daa4590bc917922113f6547`. This baseline was run through
+the server-owned subject boundary; answer keys, rationales, and policy stayed
+server-only. The local machine is Windows 11 / i5-9300H / 16 GiB RAM / GTX
+1650 Max-Q 4 GiB VRAM / 190.23 GiB free disk.
+
+The first truthful dataset build contains zero eligible SFT examples and zero
+DPO pairs because the isolated runtime has no completed evidence-backed Atlas
+runs or real correction pairs. AtlasBench is not training data. Training,
+candidate registration, and promotion therefore remain blocked until a
+clearly-labelled verified corpus (or restricted smoke-only seed corpus),
+candidate-artifact trust verification, and a real adapter inference path are
+implemented.
+
 ## CI recovery increment (2026-09-04, before the Foundry wave)
 
 A prior session's Foundry work was interrupted mid-wave with PR #15's CI red.

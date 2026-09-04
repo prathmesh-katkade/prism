@@ -24,6 +24,7 @@ from prism_api_contracts import (
     AtlasStructuredPlan,
     AtlasTrainingSplit,
 )
+from sqlalchemy import create_engine, inspect, text
 
 
 def _plan(dataset_id: str, objective: str, *, plan_id: str, tool_args: dict[str, object] | None = None) -> AtlasStructuredPlan:
@@ -177,3 +178,49 @@ def test_durable_dataset_store_is_idempotent_and_supports_preview_and_exclusions
     stored_exclusions = dataset_store.exclusions(manifest_a.version_id)
     assert any(item.run_id == failed_run.run_id for item in stored_exclusions)
     assert dataset_store.list_versions()[0].version_id == manifest_a.version_id
+
+
+def test_new_immutable_version_retains_prior_examples(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    run_store = _store(tmp_path)
+    _completed_run(run_store, dataset_id="ds_1", objective="Question one.", plan_id="plan_1")
+    dataset_store = DurableAtlasTrainingDatasetStore(f"sqlite:///{(tmp_path / 'training.sqlite').as_posix()}")
+
+    first_examples, first_exclusions = AtlasTrainingDatasetBuilder(run_store).build()
+    first = dataset_store.save(first_examples, first_exclusions)
+
+    _completed_run(run_store, dataset_id="ds_2", objective="Question two.", plan_id="plan_2")
+    second_examples, second_exclusions = AtlasTrainingDatasetBuilder(run_store).build()
+    second = dataset_store.save(second_examples, second_exclusions)
+
+    assert second.version_id != first.version_id
+    assert [item.example_id for item in dataset_store.preview(second.version_id, limit=10)] == sorted(
+        item.example_id for item in second_examples
+    )
+
+
+def test_store_migrates_legacy_global_example_identity(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    database_url = f"sqlite:///{(tmp_path / 'legacy-training.sqlite').as_posix()}"
+    engine = create_engine(database_url, future=True)
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "CREATE TABLE prism_atlas_training_examples ("
+                "example_id VARCHAR(120) PRIMARY KEY, version_id VARCHAR(120) NOT NULL, "
+                "split VARCHAR(16) NOT NULL, dataset_id VARCHAR(255) NOT NULL, "
+                "source_run_id VARCHAR(120) NOT NULL, payload TEXT NOT NULL, "
+                "created_at DATETIME NOT NULL)"
+            )
+        )
+        connection.execute(
+            text(
+                "INSERT INTO prism_atlas_training_examples "
+                "(example_id, version_id, split, dataset_id, source_run_id, payload, created_at) "
+                "VALUES ('trainex_1', 'trainset_1', 'train', 'ds_1', 'atlas_1', '{}', CURRENT_TIMESTAMP)"
+            )
+        )
+
+    DurableAtlasTrainingDatasetStore(database_url)
+    assert inspect(engine).get_pk_constraint("prism_atlas_training_examples")["constrained_columns"] == [
+        "version_id",
+        "example_id",
+    ]
