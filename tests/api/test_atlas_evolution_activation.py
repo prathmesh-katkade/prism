@@ -2,10 +2,13 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+import httpx
+import pytest
 from fastapi.testclient import TestClient
+from prism_api.atlas_bench_live import AtlasBenchSubjectUnavailable, AtlasProviderBenchSubject
 from prism_api.atlas_promotion_decisions import DurableAtlasPromotionDecisionStore
 from prism_api.main import create_app
-from prism_api_contracts import AtlasPromotionDecision, AtlasPromotionVerdict
+from prism_api_contracts import AtlasModelProviderName, AtlasPromotionDecision, AtlasPromotionVerdict
 
 
 def _decision(decision_id: str = "decision_test_1") -> AtlasPromotionDecision:
@@ -36,6 +39,20 @@ def test_promotion_decisions_are_durable_append_only_records(tmp_path) -> None: 
 
     listed = store.list_for_candidate(first.candidate_id)
     assert [item.decision_id for item in listed] == [first.decision_id]
+
+
+def test_live_bench_refuses_configured_but_unreachable_ollama(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    monkeypatch.setenv("PRISM_AI_PROVIDER", "ollama")
+    monkeypatch.setenv("PRISM_ATLAS_OLLAMA_MODEL", "missing-test-model")
+
+    def unavailable(*args, **kwargs):  # type: ignore[no-untyped-def]
+        request = httpx.Request("GET", "http://127.0.0.1:11434/api/tags")
+        raise httpx.ConnectError("offline", request=request)
+
+    monkeypatch.setattr("prism_api.atlas_bench_live.httpx.get", unavailable)
+
+    with pytest.raises(AtlasBenchSubjectUnavailable, match="no AtlasBench baseline was recorded"):
+        AtlasProviderBenchSubject(AtlasModelProviderName.OLLAMA)
 
 
 def test_decision_route_rejects_unknown_candidate_before_evaluation() -> None:
