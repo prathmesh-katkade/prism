@@ -99,3 +99,28 @@ def test_atlas_exposes_a_deterministic_provider_and_atlas_as_sole_voice() -> Non
         "auditor",
     ]
     assert [item["display_name"] for item in specialists if item["speaks_to_user"]] == ["Atlas"]
+
+
+def test_atlas_memory_delete_returns_204_with_no_body() -> None:
+    # Regression guard: FastAPI infers ``response_model`` from a bare ``-> None``
+    # return annotation as the *class* ``NoneType`` (truthy), which previously
+    # tripped FastAPI's "status code 204 must not have a response body" assert
+    # at import time -- breaking every test and script that imports the app.
+    client = TestClient(create_app())
+    created = client.post(
+        "/api/v1/atlas/memories",
+        json={
+            "scope": "project",
+            "knowledge_class": "user_memory",
+            "content": "Prefer explicit uncertainty in statistical answers.",
+            "source": "user correction",
+            "confidence": "high",
+            "project_id": "project-a",
+        },
+    )
+    assert created.status_code == 201
+    memory_id = created.json()["memory_id"]
+
+    deleted = client.delete(f"/api/v1/atlas/memories/{memory_id}")
+    assert deleted.status_code == 204
+    assert deleted.content == b""

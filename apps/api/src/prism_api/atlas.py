@@ -103,7 +103,7 @@ def supersede_memory(memory_id: str, successor_id: str, contradiction: str) -> A
     return memory.supersede(memory_id, successor_id, contradiction)
 
 
-@router.delete("/memories/{memory_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/memories/{memory_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 def delete_memory(memory_id: str) -> None:
     memory.delete_memory(memory_id)
 
@@ -118,7 +118,7 @@ def search_project_knowledge(request: AtlasKnowledgeSearchRequest) -> list[Atlas
     return memory.search(request)
 
 
-@router.delete("/knowledge/sources", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/knowledge/sources", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 def delete_project_knowledge(project_id: str, source_ref: str) -> None:
     memory.delete_source(project_id, source_ref)
 
