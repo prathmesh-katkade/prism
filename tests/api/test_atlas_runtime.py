@@ -94,6 +94,8 @@ def test_atlas_exposes_a_deterministic_provider_and_atlas_as_sole_voice() -> Non
         "scout",
         "curator",
         "stat",
+        "researcher",
+        "librarian",
         "auditor",
     ]
     assert [item["display_name"] for item in specialists if item["speaks_to_user"]] == ["Atlas"]

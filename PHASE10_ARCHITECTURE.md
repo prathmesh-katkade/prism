@@ -35,6 +35,15 @@ network operations. SQL remains inspectable and executable only through SQL Lab.
    stored or surfaced.
 5. **PRISM deterministic tools** remain authoritative for profile, SQL,
    statistics, forecasting, and ML outputs.
+6. **Memory and knowledge** are separate SQL-backed operational records. Memory
+   scopes are user-reviewable and auditable; project text retrieval retains
+   source/version/location and must be isolated by project. Retrieval labels
+   data evidence, project knowledge, user memory, model knowledge, and web
+   research distinctly.
+7. **Researcher and resource governance** are explicit server-side boundaries.
+   Researcher accepts only allowlisted HTTPS sources and returns bounded,
+   untrusted, cited content. The governor admits typed workloads by priority;
+   unavailable GPU telemetry and unenforceable quotas are reported honestly.
 
 ## Evidence and provenance
 
@@ -47,8 +56,11 @@ It never invents an internal-thought node.
 
 Raw datasets remain server-held. Provider calls receive compact schema/quality
 metadata only unless a later, explicit policy grants more. The first slice has
-no generic command endpoint, no shell surface, and no network tool. Cancellation
-and retry are typed per run; recoverable step retries cap at three attempts.
+no generic command endpoint, no shell surface, and no network tool. The sandbox
+uses a separate native worker process with a cleared user environment and
+process-tree termination, while Windows CPU/memory quotas are not claimed until
+a container-worker adapter is configured. Cancellation and retry are typed per
+run; recoverable step retries cap at three attempts.
 
 ## Evolution path
 

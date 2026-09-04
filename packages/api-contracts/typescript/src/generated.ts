@@ -104,7 +104,7 @@ export interface AtlasEvidence {
 
 export interface AtlasEvidenceReference {
   evidence_id: string;
-  kind: "dataset_revision" | "overview_profile" | "analytical_object" | "tool_output" | "web_research";
+  kind: "dataset_revision" | "overview_profile" | "analytical_object" | "tool_output" | "web_research" | "memory" | "project_knowledge";
   summary: string;
   dataset_id?: string;
   dataset_revision?: number;
@@ -126,6 +126,31 @@ export interface AtlasForecastResponse {
   evidence: AtlasEvidence[];
 }
 
+export interface AtlasKnowledgeChunk {
+  chunk_id: string;
+  project_id: string;
+  source_ref: string;
+  content_version: string;
+  location: string;
+  content: string;
+  injection_detected?: boolean;
+  score?: number;
+}
+
+export interface AtlasKnowledgeSearchRequest {
+  project_id: string;
+  query: string;
+  limit?: number;
+}
+
+export interface AtlasKnowledgeSourceRequest {
+  project_id: string;
+  source_ref: string;
+  content: string;
+  content_version: string;
+  kind: "markdown" | "text" | "python" | "sql" | "notebook_metadata" | "documentation";
+}
+
 export type AtlasLineageAction = "explain_provenance" | "explain_staleness" | "explain_lineage" | "compare_versions" | "recommend_reruns" | "explain_evidence";
 
 export interface AtlasLineageRequest {
@@ -139,6 +164,48 @@ export interface AtlasLineageResponse {
   uncertainty: string;
   evidence: AtlasEvidence[];
   limitation?: string;
+}
+
+export type AtlasMemoryClass = "data_evidence" | "project_knowledge" | "user_memory" | "model_knowledge" | "web_research";
+
+export interface AtlasMemoryRecord {
+  memory_id: string;
+  scope: AtlasMemoryScope;
+  knowledge_class: AtlasMemoryClass;
+  content: string;
+  source: string;
+  confidence: "low" | "medium" | "high";
+  timestamp: string;
+  source_ref?: string;
+  workspace_id?: string;
+  sensitivity?: "public" | "internal" | "private" | "restricted";
+  user_editable?: boolean;
+  deletable?: boolean;
+  provenance?: AtlasEvidenceReference[];
+  reinforcement?: number;
+  last_used?: string;
+  contradictions?: string[];
+  superseded_by?: string;
+  project_id?: string;
+  created_at?: string;
+  updated_at?: string;
+  last_used_at?: string;
+}
+
+export type AtlasMemoryScope = "session" | "project" | "workspace" | "global";
+
+export interface AtlasMemoryWriteRequest {
+  scope: AtlasMemoryScope;
+  knowledge_class: AtlasMemoryClass;
+  content: string;
+  source: string;
+  source_ref?: string;
+  confidence?: "low" | "medium" | "high";
+  project_id?: string;
+  workspace_id?: string;
+  sensitivity?: "public" | "internal" | "private" | "restricted";
+  user_editable?: boolean;
+  provenance?: AtlasEvidenceReference[];
 }
 
 export type AtlasMlAction = "explain_task_type" | "compare_models" | "explain_cross_validation" | "explain_imbalance" | "explain_feature_importance" | "identify_overfitting";
@@ -205,6 +272,64 @@ export interface AtlasPlanStep {
 
 export type AtlasProviderCapability = "structured_planning" | "local_inference" | "streaming";
 
+export interface AtlasResearchRequest {
+  query: string;
+  url?: string;
+  project_id?: string;
+  offline?: boolean;
+}
+
+export interface AtlasResearchResult {
+  research_id: string;
+  query: string;
+  status: "completed" | "blocked" | "offline" | "failed";
+  source_url?: string;
+  title?: string;
+  retrieved_at: string;
+  content_hash?: string;
+  excerpt?: string;
+  citations?: AtlasEvidenceReference[];
+  injection_detected?: boolean;
+  detail: string;
+}
+
+export interface AtlasResourceLease {
+  lease_id: string;
+  workload: AtlasResourceWorkload;
+  state: "active" | "queued" | "preempted" | "released" | "cancelled";
+  granted_at?: string;
+  reason: string;
+}
+
+export interface AtlasResourceLeaseRequest {
+  workload: AtlasResourceWorkload;
+  allow_preemption?: boolean;
+}
+
+export type AtlasResourcePriority = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+
+export interface AtlasResourceSnapshot {
+  cpu_count: number;
+  memory_total_mb?: number;
+  memory_available_mb?: number;
+  storage_free_mb?: number;
+  gpu_available?: boolean;
+  gpu_name?: string;
+  vram_total_mb?: number;
+  gpu_telemetry_detail: string;
+  active_leases?: AtlasResourceLease[];
+}
+
+export interface AtlasResourceWorkload {
+  workload_id: string;
+  priority: AtlasResourcePriority;
+  cancellable?: boolean;
+  description: string;
+  requires_gpu?: boolean;
+  cpu_slots?: number;
+  memory_mb?: number;
+}
+
 export interface AtlasRunEvent {
   event_id: string;
   run_id: string;
@@ -265,7 +390,18 @@ export interface AtlasSandboxExecutionResult {
   limits_enforced?: string[];
 }
 
-export type AtlasSpecialistId = "atlas" | "scout" | "curator" | "query" | "stat" | "forge" | "oracle" | "lens" | "auditor";
+export interface AtlasSandboxWorkerHealth {
+  state: "ready" | "degraded";
+  execution_mode: "native_worker" | "container_worker";
+  network_policy: string;
+  process_tree_termination: boolean;
+  cpu_quota_enforced: boolean;
+  memory_quota_enforced: boolean;
+  container_available: boolean;
+  detail: string;
+}
+
+export type AtlasSpecialistId = "atlas" | "scout" | "curator" | "query" | "stat" | "forge" | "oracle" | "lens" | "researcher" | "librarian" | "auditor";
 
 export interface AtlasSpecialistIdentity {
   specialist: AtlasSpecialistId;
@@ -310,7 +446,7 @@ export interface AtlasStatsResponse {
   evidence: AtlasEvidence[];
 }
 
-export type AtlasStepKind = "profile_dataset" | "data_quality" | "sql_question" | "methodology_review" | "statistical_analysis" | "forecast" | "machine_learning" | "visualization" | "explain_history" | "python_analysis" | "audit_evidence";
+export type AtlasStepKind = "profile_dataset" | "data_quality" | "sql_question" | "methodology_review" | "statistical_analysis" | "forecast" | "machine_learning" | "visualization" | "explain_history" | "python_analysis" | "research" | "audit_evidence";
 
 export type AtlasStepState = "pending" | "running" | "completed" | "failed" | "cancelled" | "blocked";
 

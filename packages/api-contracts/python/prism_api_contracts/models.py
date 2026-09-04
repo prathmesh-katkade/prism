@@ -1018,6 +1018,7 @@ class AtlasStepKind(str, Enum):
     VISUALIZATION = "visualization"
     EXPLAIN_HISTORY = "explain_history"
     PYTHON_ANALYSIS = "python_analysis"
+    RESEARCH = "research"
     AUDIT_EVIDENCE = "audit_evidence"
 
 
@@ -1030,6 +1031,8 @@ class AtlasSpecialistId(str, Enum):
     FORGE = "forge"
     ORACLE = "oracle"
     LENS = "lens"
+    RESEARCHER = "researcher"
+    LIBRARIAN = "librarian"
     AUDITOR = "auditor"
 
 
@@ -1043,7 +1046,7 @@ class AtlasSpecialistIdentity(ContractModel):
 
 class AtlasEvidenceReference(ContractModel):
     evidence_id: str = Field(min_length=1, max_length=200)
-    kind: Literal["dataset_revision", "overview_profile", "analytical_object", "tool_output", "web_research"]
+    kind: Literal["dataset_revision", "overview_profile", "analytical_object", "tool_output", "web_research", "memory", "project_knowledge"]
     summary: str = Field(min_length=1, max_length=1_000)
     dataset_id: Optional[str] = None
     dataset_revision: Optional[int] = Field(default=None, ge=0)
@@ -1150,12 +1153,90 @@ class AtlasMemoryRecord(ContractModel):
     source: str = Field(min_length=1, max_length=500)
     confidence: Literal["low", "medium", "high"]
     timestamp: datetime
+    source_ref: Optional[str] = None
+    workspace_id: Optional[str] = None
+    sensitivity: Literal["public", "internal", "private", "restricted"] = "internal"
+    user_editable: bool = True
+    deletable: bool = True
     provenance: list[AtlasEvidenceReference] = Field(default_factory=list)
     reinforcement: int = Field(default=0, ge=0)
     last_used: Optional[datetime] = None
     contradictions: list[str] = Field(default_factory=list)
     superseded_by: Optional[str] = None
     project_id: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    last_used_at: Optional[datetime] = None
+
+
+class AtlasMemoryWriteRequest(ContractModel):
+    scope: AtlasMemoryScope
+    knowledge_class: AtlasMemoryClass
+    content: str = Field(min_length=1, max_length=8_000)
+    source: str = Field(min_length=1, max_length=500)
+    source_ref: Optional[str] = Field(default=None, max_length=2_000)
+    confidence: Literal["low", "medium", "high"] = "medium"
+    project_id: Optional[str] = Field(default=None, max_length=200)
+    workspace_id: Optional[str] = Field(default=None, max_length=200)
+    sensitivity: Literal["public", "internal", "private", "restricted"] = "internal"
+    user_editable: bool = True
+    provenance: list[AtlasEvidenceReference] = Field(default_factory=list)
+
+
+class AtlasMemoryQuery(ContractModel):
+    scope: Optional[AtlasMemoryScope] = None
+    knowledge_class: Optional[AtlasMemoryClass] = None
+    project_id: Optional[str] = None
+    workspace_id: Optional[str] = None
+    min_confidence: Optional[Literal["low", "medium", "high"]] = None
+    updated_after: Optional[datetime] = None
+    limit: int = Field(default=25, ge=1, le=100)
+
+
+class AtlasKnowledgeSourceRequest(ContractModel):
+    project_id: str = Field(min_length=1, max_length=200)
+    source_ref: str = Field(min_length=1, max_length=2_000)
+    content: str = Field(min_length=1, max_length=200_000)
+    content_version: str = Field(min_length=1, max_length=200)
+    kind: Literal["markdown", "text", "python", "sql", "notebook_metadata", "documentation"]
+
+
+class AtlasKnowledgeChunk(ContractModel):
+    chunk_id: str = Field(min_length=1)
+    project_id: str = Field(min_length=1)
+    source_ref: str = Field(min_length=1)
+    content_version: str = Field(min_length=1)
+    location: str = Field(min_length=1)
+    content: str = Field(min_length=1)
+    injection_detected: bool = False
+    score: float = 0
+
+
+class AtlasKnowledgeSearchRequest(ContractModel):
+    project_id: str = Field(min_length=1, max_length=200)
+    query: str = Field(min_length=1, max_length=2_000)
+    limit: int = Field(default=8, ge=1, le=25)
+
+
+class AtlasResearchRequest(ContractModel):
+    query: str = Field(min_length=1, max_length=2_000)
+    url: Optional[str] = Field(default=None, max_length=2_000)
+    project_id: Optional[str] = Field(default=None, max_length=200)
+    offline: bool = False
+
+
+class AtlasResearchResult(ContractModel):
+    research_id: str = Field(min_length=1)
+    query: str = Field(min_length=1)
+    status: Literal["completed", "blocked", "offline", "failed"]
+    source_url: Optional[str] = None
+    title: Optional[str] = None
+    retrieved_at: datetime
+    content_hash: Optional[str] = None
+    excerpt: Optional[str] = None
+    citations: list[AtlasEvidenceReference] = Field(default_factory=list)
+    injection_detected: bool = False
+    detail: str = Field(min_length=1, max_length=2_000)
 
 
 class CortexNodeKind(str, Enum):
@@ -1227,6 +1308,17 @@ class AtlasSandboxExecutionResult(ContractModel):
     limits_enforced: list[str] = Field(default_factory=list)
 
 
+class AtlasSandboxWorkerHealth(ContractModel):
+    state: Literal["ready", "degraded"]
+    execution_mode: Literal["native_worker", "container_worker"]
+    network_policy: Literal["deny_by_default"]
+    process_tree_termination: bool
+    cpu_quota_enforced: bool
+    memory_quota_enforced: bool
+    container_available: bool
+    detail: str = Field(min_length=1, max_length=2_000)
+
+
 class AtlasModelTrust(ContractModel):
     source_verified: bool = False
     license_verified: bool = False
@@ -1265,3 +1357,31 @@ class AtlasResourceWorkload(ContractModel):
     priority: AtlasResourcePriority
     cancellable: bool = True
     description: str = Field(min_length=1, max_length=500)
+    requires_gpu: bool = False
+    cpu_slots: int = Field(default=1, ge=1, le=64)
+    memory_mb: int = Field(default=256, ge=64, le=262_144)
+
+
+class AtlasResourceLeaseRequest(ContractModel):
+    workload: AtlasResourceWorkload
+    allow_preemption: bool = True
+
+
+class AtlasResourceLease(ContractModel):
+    lease_id: str = Field(min_length=1)
+    workload: AtlasResourceWorkload
+    state: Literal["active", "queued", "preempted", "released", "cancelled"]
+    granted_at: Optional[datetime] = None
+    reason: str = Field(min_length=1, max_length=1_000)
+
+
+class AtlasResourceSnapshot(ContractModel):
+    cpu_count: int = Field(ge=1)
+    memory_total_mb: Optional[int] = Field(default=None, ge=0)
+    memory_available_mb: Optional[int] = Field(default=None, ge=0)
+    storage_free_mb: Optional[int] = Field(default=None, ge=0)
+    gpu_available: bool = False
+    gpu_name: Optional[str] = None
+    vram_total_mb: Optional[int] = Field(default=None, ge=0)
+    gpu_telemetry_detail: str = Field(min_length=1, max_length=1_000)
+    active_leases: list[AtlasResourceLease] = Field(default_factory=list)

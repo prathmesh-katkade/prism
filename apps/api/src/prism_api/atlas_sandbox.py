@@ -6,6 +6,7 @@ import ast
 import hashlib
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -18,6 +19,7 @@ from prism_api_contracts import (
     AtlasSandboxErrorKind,
     AtlasSandboxExecutionRequest,
     AtlasSandboxExecutionResult,
+    AtlasSandboxWorkerHealth,
 )
 
 _ALLOWED_TOP_LEVEL = {
@@ -121,6 +123,45 @@ class AtlasPythonSandbox:
             )
         return found
 
+    @staticmethod
+    def _terminate_tree(process: subprocess.Popen[str]) -> None:
+        """Terminate descendants as well as the worker interpreter on timeout/cancel."""
+        if os.name == "nt":
+            subprocess.run(
+                ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+                timeout=5,
+            )
+        else:
+            process.kill()
+
+    @staticmethod
+    def worker_health() -> AtlasSandboxWorkerHealth:
+        container_available = bool(shutil.which("docker") or shutil.which("podman"))
+        if os.name == "nt":
+            return AtlasSandboxWorkerHealth(
+                state="degraded",
+                execution_mode="native_worker",
+                network_policy="deny_by_default",
+                process_tree_termination=True,
+                cpu_quota_enforced=False,
+                memory_quota_enforced=False,
+                container_available=container_available,
+                detail="Native Windows worker clears user environment and kills process trees, but cannot honestly enforce CPU or memory quotas. Configure a container-worker adapter for hard quotas.",
+            )
+        return AtlasSandboxWorkerHealth(
+            state="ready",
+            execution_mode="native_worker",
+            network_policy="deny_by_default",
+            process_tree_termination=True,
+            cpu_quota_enforced=False,
+            memory_quota_enforced=False,
+            container_available=container_available,
+            detail="Native worker provides a separate process and process-group termination. Container worker is required for portable hard CPU/memory quotas.",
+        )
+
     def execute(
         self,
         request: AtlasSandboxExecutionRequest,
@@ -169,11 +210,13 @@ class AtlasPythonSandbox:
             text=True,
             encoding="utf-8",
             errors="replace",
+            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0,
+            start_new_session=os.name != "nt",
         )
-        limits = ["timeout", "environment", "network", "filesystem", "import_policy"]
+        limits = ["timeout", "process_tree", "environment", "network", "filesystem", "import_policy"]
         while process.poll() is None:
             if cancelled and cancelled():
-                process.kill()
+                self._terminate_tree(process)
                 stdout, stderr = process.communicate()
                 return AtlasSandboxExecutionResult(
                     execution_id=execution_id,
@@ -186,7 +229,7 @@ class AtlasPythonSandbox:
                     limits_enforced=limits,
                 )
             if time.monotonic() >= started + request.timeout_ms / 1000:
-                process.kill()
+                self._terminate_tree(process)
                 stdout, stderr = process.communicate()
                 return AtlasSandboxExecutionResult(
                     execution_id=execution_id,

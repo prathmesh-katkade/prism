@@ -14,16 +14,17 @@ engineering blocker for this phase.
 
 | Internal gate | Status | Evidence |
 | --- | --- | --- |
-| 10A Runtime/provider abstraction | PARTIAL | Typed deterministic/Ollama provider capability registry; deterministic fallback is always available and raw data policy is `never`. Ollama remains advisory-only until a compact-metadata adapter is separately certified. |
+| 10A Runtime/provider abstraction | ADVANCED | Deterministic fallback is always available. Ollama may now propose JSON plans from capped compact metadata only; schema/tool validation rejects invalid output and records provider/model/prompt-schema provenance. It cannot execute tools or receive raw rows. |
 | 10B Orchestrator/planning | ADVANCED | SQLAlchemy-backed runs/event journal, deterministic event sequence, idempotency key, durable cancellation intent/replay, dynamic typed planner, declared-tool validation, and safe insufficient-context blocking. |
 | 10C Specialist team/Council | ADVANCED | Visible Atlas/Scout/Curator/Stat/Auditor identities; Curator now performs actual quality review. Query/Forge/Oracle/Lens are typed plan identities only when the required native request context exists; none is faked as an executor. |
-| 10D Secure Python sandbox | PARTIAL | Explicit typed sandbox endpoint uses a project-scoped child process, empty user environment, import/network/filesystem policy, deterministic seed, timeout/cancellation, captured output, and allowlisted artifacts. It is not a generic shell or package installer. Windows CPU/memory limits are not claimed as enforced; production worker isolation remains a later hardening gate. |
-| 10E Memory/RAG | CONTRACT ONLY | Scope/provenance contract and ADR; no persistence or retrieval implementation. |
-| 10F Researcher | NOT STARTED | No web tool is exposed in the first slice. |
+| 10D Secure Python sandbox | PARTIAL | Native-worker process boundary now has an empty user environment, new process group/tree termination, deny-by-default network/import/filesystem policy, bounded output, artifacts, health/capability reporting, and honest Windows quota status. Hard CPU/memory enforcement requires a configured container worker and remains unclaimed. |
+| 10E Memory/RAG | PARTIAL | SQL-backed scoped memory CRUD/reinforcement/supersession/audit plus project-isolated lexical knowledge indexing, source version/reindex/delete, provenance and prompt-injection flags. Local embedding adapter and analytical-history ingestion remain next increments. |
+| 10F Researcher | PARTIAL | Explicit server-side allowlisted-HTTPS Researcher has typed results/citations, offline/blocked behavior, bounded untrusted content, and injection flags. It is not unrestricted search or a sandbox capability. |
 | 10G Cortex graph data model | ADVANCED | Cortex projects durable run, dataset, plan, specialist, declared tool, and evidence IDs only. |
 | 10H Cortex visual system | PARTIAL | Native SVG Cortex V1 provides organic curved paths, state styling, Focus Lens, zoom controls, and reduced-motion mode over only real graph records. Dense/3D visualization remains out of scope. |
 | 10I Observable execution UI | ADVANCED | Native Atlas operations desk renders objective, state, live SSE-updated plan, specialist activity, Council/evidence, cancellation, errors, grounded answer, and Cortex V1. |
-| 10J–10T | NOT STARTED | Multimodal, voice, resource governor implementation, Foundry, training, benchmarks, promotion, experiments, desktop packaging remain future internal gates. |
+| 10L Resource Governor | PARTIAL | Typed priority leases, cancellation-aware preemption, concurrency admission, CPU/RAM/storage snapshot, optional GPU telemetry, and truthful no-GPU reporting. Cross-process scheduling and Foundry integration remain future work. |
+| 10J–10K, 10M–10T | NOT STARTED | Multimodal, voice, Foundry, training, benchmarks, promotion, experiments, and desktop packaging remain future internal gates. |
 | 10U–10W | NOT STARTED | Flagship workflow and final certification remain out of scope for this first wave. |
 
 ## Invariants preserved

@@ -22,17 +22,24 @@ Phase 10 is active.**
 - `POST /api/v1/atlas/sandbox/executions` is a typed constrained Python surface,
   not a shell: project workspace, empty user environment, direct import/network
   and ordinary file-path containment, timeout/cancellation, seed, bounded logs,
-  and allowlisted artifacts. No package installation exists. CPU/memory caps are
-  not honestly enforceable on this Windows host and remain a worker hardening
-  task before any run-integrated generated Python capability.
+  and allowlisted artifacts. No package installation exists. It now runs in a
+  separate native worker process group and kills the process tree on timeout or
+  cancellation; CPU/memory caps are still honestly unavailable on Windows until
+  a container-worker adapter is configured.
+- Atlas now has durable scoped memory (with audit/dedupe/supersession), local
+  project-isolated lexical knowledge retrieval, a bounded allowlisted-HTTPS
+  Researcher, priority resource leases/snapshots, and compact-metadata-only
+  Ollama JSON plan proposals with deterministic fallback. None are raw-data or
+  unrestricted-network paths.
 - Native Atlas operations desk and SVG Cortex V1 are wired to real REST/SSE
   records, including live plan state, specialist activity, Council evidence,
   cancellation, errors, and Focus Lens/reduced-motion graph behavior.
-- Current local verification: focused Atlas/backend regression tests **27 passed** and
-  TypeScript typecheck passed. Full Phase 10/CI certification is not claimed.
-- Exact next task: run repo-standard gates in supported Python 3.11/CI, then
-  introduce an OS-isolated worker/container boundary before expanding sandbox
-  privileges. Do not start Phase 11.
+- Current local verification must be refreshed after this increment. Full
+  Phase 10/CI certification is not claimed because this host lacks Python 3.11.
+- Exact next task: run repo-standard gates in supported Python 3.11/CI and
+  browser E2E, then add a real container-worker adapter, embeddings, durable
+  research records, and guarded run-integrated Python only when the foundations
+  are green. Do not start Phase 11.
 
 ---
 

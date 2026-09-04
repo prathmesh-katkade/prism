@@ -10,10 +10,13 @@ provider capabilities, typed plan/step/event/evidence contracts, durable
 SQLAlchemy run/event records, deterministic tool-registry planning, visible
 Scout/Curator/Stat/Auditor state, constrained Python execution, SSE replay, an
 operational Atlas workspace, and a Cortex V1 projection backed only by durable
-real state. It does not implement a general shell, package installation,
-memory/RAG persistence, web research, Foundry, AtlasBench, Cortex 3D UI, voice,
-or desktop packaging. Windows resource quotas are not claimed for the sandbox;
-OS-isolated worker hardening remains a later Phase 10 gate.
+real state. The next increment adds SQL-backed scoped memory, lexical local
+project knowledge, an explicit allowlisted Researcher, compact-metadata Ollama
+plan proposals, a resource-lease governor, and a native-worker sandbox health
+boundary. It does not implement a general shell, package installation,
+unrestricted web access, Foundry, AtlasBench, Cortex 3D UI, voice, or desktop
+packaging. Windows CPU/memory quotas remain explicitly unsupported without a
+configured container worker.
 See `PHASE10_ARCHITECTURE.md`, `PHASE10_IMPLEMENTATION_LEDGER.md`, and
 `.prism/checkpoints/phase-10-progress.md`.
 

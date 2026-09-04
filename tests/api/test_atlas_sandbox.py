@@ -43,3 +43,10 @@ def test_sandbox_containment_timeout_and_artifact_collection(tmp_path) -> None: 
     assert artifact.state == "completed" and [item.filename for item in artifact.artifacts] == [
         "result.json"
     ]
+
+
+def test_sandbox_worker_capabilities_are_explicit_about_platform_quotas(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    health = AtlasPythonSandbox(tmp_path).worker_health()
+    assert health.network_policy == "deny_by_default"
+    assert health.process_tree_termination is True
+    assert health.execution_mode == "native_worker"

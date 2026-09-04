@@ -67,6 +67,24 @@ contracts/ADRs do not imply implementation.
 
 ## Exact continuation
 
-Run supported Python 3.11/CI and browser certification for this wave, then
-hardening of OS-level sandbox resource isolation. Preserve all Phase 8/9
-invariants and do not start Phase 11.
+### Third foundation increment (in progress)
+
+- SQL-backed Atlas memory now supports session/project/workspace/global scope,
+  dedupe reinforcement, supersession, deletion policy, provenance, and an
+  append-only audit trail. It rejects credential-shaped content.
+- Local project knowledge has project-isolated lexical retrieval with chunk
+  source/version/location, reindex/delete semantics, and prompt-injection
+  flags. Embedding retrieval and analytical-history ingestion are not yet done.
+- Researcher is a separate server-side allowlisted HTTPS boundary with bounded,
+  citation-backed, untrusted results and clean offline behavior.
+- Resource Governor exposes typed priority leases and hardware snapshots without
+  assuming a GPU. The sandbox now declares native-worker capabilities and kills
+  worker process trees, but Windows CPU/memory quotas still require container
+  execution for enforcement.
+- Ollama can propose a strict JSON plan only from capped compact metadata;
+  malformed output falls back deterministically and cannot execute a tool.
+
+Run supported Python 3.11/CI and browser certification for this increment, then
+add a container-worker adapter, embedding provider, durable research records,
+and run-integrated guarded Python only if their gates remain coherent. Preserve
+all Phase 8/9 invariants and do not start Phase 11.

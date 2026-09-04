@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { AtlasRunResponse, CortexGraphState, CortexNode } from "@prism/api-contracts";
+import type { AtlasMemoryRecord, AtlasResourceSnapshot, AtlasRunResponse, CortexGraphState, CortexNode } from "@prism/api-contracts";
 import { apiUrl } from "../config/api";
 
 const terminal = new Set(["completed", "failed", "cancelled"]);
@@ -10,6 +10,8 @@ export function AtlasWorkspace({ datasetId }: { datasetId: string | undefined })
   const [objective, setObjective] = useState("Profile this dataset and identify the evidence needed for the next decision.");
   const [run, setRun] = useState<AtlasRunResponse | null>(null);
   const [graph, setGraph] = useState<CortexGraphState | null>(null);
+  const [memories, setMemories] = useState<AtlasMemoryRecord[]>([]);
+  const [resources, setResources] = useState<AtlasResourceSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
   const cancelStream = useRef<AbortController | null>(null);
   useEffect(() => () => cancelStream.current?.abort(), []);
@@ -35,19 +37,25 @@ export function AtlasWorkspace({ datasetId }: { datasetId: string | undefined })
     const created = await response.json() as AtlasRunResponse; setRun(created); await refresh(created.run_id); void watch(created.run_id);
   }
   async function cancel() { if (!run) return; await fetch(apiUrl(`/api/v1/atlas/runs/${run.run_id}/cancel`), { method: "POST" }); await refresh(run.run_id); }
+  async function refreshPulse() {
+    const [memoryResponse, resourceResponse] = await Promise.all([fetch(apiUrl("/api/v1/atlas/memories?limit=8")), fetch(apiUrl("/api/v1/atlas/resources/snapshot"))]);
+    if (memoryResponse.ok) setMemories(await memoryResponse.json() as AtlasMemoryRecord[]);
+    if (resourceResponse.ok) setResources(await resourceResponse.json() as AtlasResourceSnapshot);
+  }
   if (!datasetId) return <section className="atlas-state empty-state"><span className="eyebrow">ATLAS · LOCAL ORCHESTRATION</span><h1>Load a dataset before opening an investigation.</h1><p>Atlas plans against durable dataset metadata and never ships raw rows to a provider.</p></section>;
   const state = run?.plan.state ?? "ready";
   return <article className="atlas-workspace">
     <header className="atlas-heading"><div><span className="eyebrow">ATLAS · OPERATIONS DESK</span><h1>Make the analytical route inspectable.</h1><p>Plans are advisory until PRISM validates every declared tool. Evidence, objections, and events are durable.</p></div><span className={`migration-chip ${state === "failed" ? "unavailable" : "ready"}`} aria-live="polite">{state.replaceAll("_", " ")}</span></header>
     <section className="atlas-command" aria-label="Atlas investigation"><label htmlFor="atlas-objective">Investigation objective</label><textarea id="atlas-objective" value={objective} onChange={(event) => setObjective(event.target.value)} maxLength={2000} /><div><button onClick={() => void start()} disabled={state === "running"}>Run investigation</button>{run && !terminal.has(run.plan.state ?? "") ? <button className="secondary" onClick={() => void cancel()}>Cancel run</button> : null}</div></section>
     {error ? <p className="query-error" role="alert">{error}</p> : null}
-    {run ? <><section className="atlas-run-grid"><PlanTimeline run={run} /><SpecialistRail run={run} /><CouncilInspector run={run} /></section><section className="atlas-answer" aria-live="polite"><span className="eyebrow">ATLAS · GROUNDED ANSWER</span><h2>{run.answer ?? "Atlas is collecting durable evidence."}</h2>{run.uncertainty ? <p><strong>Uncertainty:</strong> {run.uncertainty}</p> : null}</section>{graph ? <CortexV1 graph={graph} /> : null}</> : null}
+    {run ? <><section className="atlas-run-grid"><PlanTimeline run={run} /><SpecialistRail run={run} /><CouncilInspector run={run} /></section><section className="atlas-answer" aria-live="polite"><span className="eyebrow">ATLAS · GROUNDED ANSWER</span><h2>{run.answer ?? "Atlas is collecting durable evidence."}</h2>{run.uncertainty ? <p><strong>Uncertainty:</strong> {run.uncertainty}</p> : null}</section><AtlasPulse memories={memories} resources={resources} onRefresh={() => void refreshPulse()} />{graph ? <CortexV1 graph={graph} /> : null}</> : null}
   </article>;
 }
 
 function PlanTimeline({ run }: { run: AtlasRunResponse }) { return <section className="atlas-plan"><span className="eyebrow">PLAN · {run.plan.plan_id.slice(-8)}</span><h2>{run.plan.objective}</h2><ol>{(run.plan.steps ?? []).map((step) => <li key={step.step_id} data-state={step.state}><span className="plan-marker" /><div><strong>{step.title}</strong><small>{step.specialist} · {step.tool_name} · attempt {step.attempts}/{step.max_attempts}</small><p>{step.rationale}</p>{step.error ? <em>{step.error}</em> : null}</div></li>)}</ol></section>; }
 function SpecialistRail({ run }: { run: AtlasRunResponse }) { const steps = run.plan.steps ?? []; const active = new Set(steps.map((step) => step.specialist)); return <aside className="atlas-specialists"><span className="eyebrow">SPECIALISTS</span>{[...active].map((specialist) => { const step = steps.find((item) => item.specialist === specialist); return <div key={specialist}><span className={`specialist-signal ${step?.state ?? "pending"}`} /><strong>{specialist}</strong><small>{step?.state ?? "pending"}</small></div>; })}</aside>; }
 function CouncilInspector({ run }: { run: AtlasRunResponse }) { const council = run.council ?? []; return <aside className="atlas-council"><span className="eyebrow">COUNCIL · EVIDENCE</span>{council.length ? council.map((item) => <article key={`${item.specialist}-${item.conclusion}`}><strong>{item.specialist}</strong><p>{item.conclusion}</p>{(item.objections ?? []).map((objection) => <small key={objection}>Objection: {objection}</small>)}{(item.evidence ?? []).map((evidence) => <code key={evidence.evidence_id}>{evidence.evidence_id}</code>)}</article>) : <p>Conclusions will appear only after a real tool records evidence.</p>}</aside>; }
+function AtlasPulse({ memories, resources, onRefresh }: { memories: AtlasMemoryRecord[]; resources: AtlasResourceSnapshot | null; onRefresh: () => void }) { return <section className="atlas-run-grid" aria-label="Atlas memory and resource pulse"><aside className="atlas-council"><span className="eyebrow">MEMORY · INSPECTOR</span>{memories.length ? memories.map((memory) => <article key={memory.memory_id}><strong>{memory.scope} · {memory.confidence}</strong><p>{memory.content}</p><small>{memory.source}</small></article>) : <p>No memories loaded. Atlas memory is durable, scoped, and user-reviewable.</p>}</aside><aside className="atlas-specialists"><span className="eyebrow">ATLAS PULSE</span>{resources ? <><strong>{resources.cpu_count} CPU threads</strong><small>{resources.memory_available_mb ?? "Unknown"} MB RAM available</small><small>{resources.gpu_available ? `${resources.gpu_name ?? "GPU"} · ${resources.vram_total_mb ?? "unknown"} MB VRAM` : resources.gpu_telemetry_detail}</small></> : <p>Refresh to inspect real host capability and active workloads.</p>}<button className="secondary" onClick={onRefresh}>Refresh Atlas Pulse</button></aside><aside className="atlas-council"><span className="eyebrow">RESEARCH · CITATIONS</span><p>Researcher only accepts specific allowlisted HTTPS sources. Web material stays untrusted and is kept distinct from local evidence.</p></aside></section>; }
 
 function CortexV1({ graph }: { graph: CortexGraphState }) {
   const [focus, setFocus] = useState<string | null>(null); const [zoom, setZoom] = useState(1); const nodes = useMemo(() => graph.nodes ?? [], [graph]); const edges = graph.edges ?? []; const positions = useMemo(() => Object.fromEntries(nodes.map((node, index) => [node.node_id, positionFor(node, index, nodes.length)])), [nodes]); const visible = (node: CortexNode) => !focus || node.node_id === focus || edges.some((edge) => (edge.source_node_id === focus && edge.target_node_id === node.node_id) || (edge.target_node_id === focus && edge.source_node_id === node.node_id));
