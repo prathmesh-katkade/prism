@@ -16,6 +16,13 @@ from prism_config.settings import get_settings
 
 from .ai_analyst import router as ai_analyst_router
 from .analytical_objects import registry as analytical_registry
+from .atlas import router as atlas_router
+from .atlas_bench_live import router as atlas_bench_live_router
+from .atlas_foundry_routes import adapter_router as atlas_adapter_router
+from .atlas_foundry_routes import bench_router as atlas_bench_router
+from .atlas_foundry_routes import promotion_router as atlas_promotion_router
+from .atlas_foundry_routes import router as atlas_foundry_router
+from .atlas_runtime import runs as atlas_runs
 from .clean import router as clean_router
 from .durable_registry import DurableAnalyticalObjectRegistry
 from .forecasting import router as forecasting_router
@@ -66,6 +73,12 @@ def create_app() -> FastAPI:
     app.include_router(overview_router)
     app.include_router(sql_lab_router)
     app.include_router(ai_analyst_router)
+    app.include_router(atlas_router)
+    app.include_router(atlas_foundry_router)
+    app.include_router(atlas_bench_router)
+    app.include_router(atlas_bench_live_router)
+    app.include_router(atlas_promotion_router)
+    app.include_router(atlas_adapter_router)
     app.include_router(clean_router)
     app.include_router(visualize_router)
     app.include_router(stats_router)
@@ -133,6 +146,12 @@ def create_app() -> FastAPI:
                 "unavailable",
                 "Analytical-history persistence is unavailable; no new durable evidence can be certified.",
             )
+        try:
+            atlas_runs.ping()
+            atlas_status, atlas_detail = "ready", "Atlas run/event persistence is reachable."
+        except Exception:
+            logger.exception("atlas_persistence_readiness_failed")
+            atlas_status, atlas_detail = "unavailable", "Atlas durable runs cannot be created or certified until persistence recovers."
         providers = (
             ProviderReadiness(
                 name="ollama",
@@ -145,6 +164,7 @@ def create_app() -> FastAPI:
                 ),
             ),
             ProviderReadiness(name="analytical_history", status=history_status, detail=history_detail),
+            ProviderReadiness(name="atlas_persistence", status=atlas_status, detail=atlas_detail),
         )
         return ReadinessResponse(generated_at=datetime.now(timezone.utc), providers=providers)
 

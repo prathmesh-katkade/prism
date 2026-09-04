@@ -1,310 +1,146 @@
 # PRISM Claude Session Handoff
 
-## Phase 9: COMPLETE — durable analytical history and productization (2026-09-01)
+## Read this first — Phase 10 Evolution activation (2026-09-04)
 
-**Read this section first — it supersedes everything below it until the next
-session updates this file again.**
+This file is intentionally reset to the current continuation state. Historical
+Phase 7/8/9/early-Phase-10 detail remains in the phase reports, implementation
+ledgers, and `.prism/checkpoints/`; do not use an older handoff paragraph to
+infer current capability.
 
-- **Phase 9 is CERTIFIED COMPLETE.** [PR #14](https://github.com/prathmesh-katkade/prism/pull/14)
-  (`phase-9-productization` → `phase-6.5-integration-staging`) merged at merge
-  commit `2013f41faa8a515b039b6a37a493abc2c05c7b23` on 2026-09-01. All 5 CI
-  checks passed on the final head `4a1b68e`. Canonical base for whatever comes
-  next: `phase-6.5-integration-staging` at `2013f41faa8a515b039b6a37a493abc2c05c7b23`.
-- Full picture: `PHASE9_FINAL_REPORT.md` and `.prism/checkpoints/phase-9-final.md`.
-  222 Python tests (plus the new `test_durable_registry.py` suite, 4 of which
-  are MySQL-only and run for real in CI), 33 frontend tests, 6 live-browser
-  e2e tests, all passing.
-- Scope delivered, one line each (full detail in `PHASE9_IMPLEMENTATION_LEDGER.md`
-  and `PHASE9_FINAL_REPORT.md`):
-  - **Durable history.** `DurableAnalyticalObjectRegistry` and
-    `DurableDatasetStore` (SQLAlchemy) persist what Phase 8's registry kept
-    in process memory — proven to survive a restart (two independent
-    instances against the same database, including a real CI MySQL run).
-    `DatasetStore` stays the sole authority for active revision identity;
-    `AnalyticalObject` stays fully immutable. No Phase 8 contract changed.
-  - **Evidence Inspector everywhere.** One shared architecture, wired
-    through SQL Lab, Clean, AI Analyst, Visualize, Forecasting, Stats, and
-    ML Lab.
-  - **Native History workspace.** Searchable, kind-filterable, with
-    live-computed current/stale state and direct Evidence Inspector
-    navigation; unit + live-browser e2e coverage.
-  - **Reproducibility where safe.** Current-revision Clean reapply; SQL
-    rerun stays explicitly unsupported (documented, not silently dropped).
-  - **Lightweight governance.** Append-only audit trail with an explicit
-    `system` actor — no RBAC, no invented identity layer.
-  - **Operations hardening.** Additive schema versioning, managed-MySQL CI
-    restart coverage, `/api/v1/platform/ready` readiness, documented
-    migration/rollback.
-- Deployment verification remains `BLOCKED_EXTERNAL_DEPLOYMENT_ACCESS` — no
-  Render credentials in this environment, and this session additionally
-  confirmed its egress proxy rejects outbound connections to `*.onrender.com`
-  under organization policy. `render.yaml` correctly declares the
-  durable-history environment variables for staging; the live deploy and
-  restart-survival proof against a real deployment remain undone.
-- Remaining, by design, not blockers: authenticated actor/session
-  correlation (deferred until PRISM has an identity boundary) and
-  deterministic SQL rerun (deferred until an async-safe design exists).
-- **Next phase is unscoped.** See `PHASE10_HANDOFF.md` — a pointer with
-  candidate directions, not an implementation plan. Do not start Phase 10
-  work without deliberately picking a direction first.
+### Repository truth
 
----
+- Repository: `prathmesh-katkade/prism`
+- Active branch: `phase-10-atlas-local-intelligence`
+- PR: #15 → `phase-6.5-integration-staging`
+- Canonical Phase 10 base: `ab75b5a08f03a553fe4d6229c100d0be4c1dc158`
+- Activation code head certified before documentation-only commits:
+  `5ee368e8df911c65c1121be346b0f8c9ccef504f`
+- PR #15 CI run #166 (`33904258400`) at that code head: all five jobs PASS,
+  including the real MySQL 8.0 + browser-to-API flow.
+- Current head: `07d549a` (Atlas System Seed Corpus V1); CI green through the
+  Trusted Evolution wave (Candidate Artifact Trust Registry, System Seed
+  Corpus V1, and three real CI-discovered bugs fixed -- see
+  `.prism/checkpoints/phase-10-progress.md` for the full list).
+- Do not merge PR #15 yet.
 
-## Phase 8: COMPLETE — all sub-phases (8A–8H) merged (2026-08-31)
+```text
+PHASE_9_COMPLETE = YES
+PHASE_10_UNLOCKED = YES
+PHASE_10_IN_PROGRESS = YES
+PHASE_10_COMPLETE = NO
+PHASE_11_UNLOCKED = NO
+CONTINUATION_SAFE = YES
+```
 
-**Read this section first — it supersedes everything below it until the next
-session updates this file again.**
+### What is actually implemented now
 
-- **Phase 8 is CERTIFIED COMPLETE.** [PR #13](https://github.com/prathmesh-katkade/prism/pull/13)
-  (`phase-8-completion` → `phase-6.5-integration-staging`, covering 8D–8H)
-  merged at merge commit `4b291898d38e4397a335aef761ab13b3be197d68` on
-  2026-08-31. All 5 CI checks passed on the final head
-  `e3c72258faa4cf5c71ea25e6bb9c1bb95c377e60`. Canonical base for whatever
-  comes next: `phase-6.5-integration-staging` at
-  `4b291898d38e4397a335aef761ab13b3be197d68`.
-- Phase 8A (PR #10), 8B (PR #11), 8C (PR #12) are also MERGED, underneath
-  8D–8H. Do not rebuild any of them.
-- Full picture: `PHASE8_FINAL_REPORT.md` and `.prism/checkpoints/phase-8-final.md`
-  — every gate PASS, including live CI and a post-push automated-review pass
-  (see below). 826 Python tests (40 new across 8D–8H, 1 more from the
-  post-push fixes), 32 frontend tests (10 new), all passing.
-- Scope delivered, one line each (full detail in `PHASE8_IMPLEMENTATION_LEDGER.md`'s
-  8D–8H sections and each phase's own `.prism/checkpoints/phase-8{d,e,f,g}.md`):
-  - **8D:** live-computed freshness (`current`/`stale`/`superseded`/`unknown`)
-    against `DatasetStore`'s active identity; `AnalyticalObject` stays fully
-    immutable.
-  - **8E:** a dedicated `EvidenceInspector` UI, integrated additively into the
-    existing shell/Inspector architecture, wired through Stats Lab.
-  - **8F:** safe, non-destructive rerun (`same_revision`/`current_revision`)
-    — never overwrites, always creates a new object; Stats/Forecast/ML/
-    Visualize supported, SQL/Clean/others deliberately and honestly
-    unsupported.
-  - **8G:** Atlas lineage awareness — six deterministic explain/compare/
-    recommend actions, grounded entirely in recorded data (Atlas here is a
-    rule-based explainer, not an LLM call, exactly like every other native
-    workspace's existing Atlas actions).
-  - **8H:** end-to-end integration audit (5 real-HTTP flows), self-code-review,
-    full regression, full repo-standard gates, `PHASE8_FINAL_REPORT.md`.
-- Post-push automated review (Codex) found three real gaps in this session's
-  own new code before merge, all fixed and regression-tested in the final
-  head (`e3c7225`): (P1) `EvidenceInspector`'s `ReproducibilitySection`/
-  `AtlasLineageSection` weren't keyed by object id, so a rerun/Atlas result
-  could stay visibly attached to a previously-selected object after lineage
-  navigation — fixed by keying both on `object.object_id`; (P2) `load()` had
-  no guard against a superseded navigation's response resolving after a
-  later one — fixed with a ref-tracked latest-requested-id check; (P2)
-  `atlas_lineage.py`'s `compare_versions` omitted `dataset_id` from its
-  identity comparison, so two separately-uploaded, byte-identical datasets
-  could be reported as "the same dataset identity" — fixed.
-- Invariants held throughout: no historical object ever mutated (rerun always
-  creates a new one); fingerprint-aware `(dataset_id, revision,
-  source_fingerprint)` identity used everywhere, never revision alone; no
-  secret leak through freshness/rerun/Atlas (verified over HTTP in every
-  sub-phase); no full-registry scan introduced; only one write route exists
-  anywhere under `/lineage` (`/rerun`, and even it only ever creates, never
-  overwrites); Atlas structurally cannot invent a dependency/version/stale
-  reason.
-- Known limitation, unchanged: the registry is process-local and in-memory —
-  an API restart resets all analytical history. Persistence needs a dedicated
-  ADR in a later phase, not attempted anywhere in Phase 8.
-- Deployment: `BLOCKED_EXTERNAL_DEPLOYMENT_ACCESS` — no Render credentials
-  available to this session (checked directly); engineering- and
-  CI-completeness is this repository's established release bar (see
-  `PHASE8_FINAL_REPORT.md`'s "Deployment status" section), not a live
-  deployment verification this session cannot perform. Live deployment
-  remains unverified regardless of merge status.
-- **PHASE_8A_COMPLETE = YES, PHASE_8B_COMPLETE = YES, PHASE_8C_COMPLETE = YES,
-  PHASE_8D_COMPLETE = YES, PHASE_8E_COMPLETE = YES, PHASE_8F_COMPLETE = YES,
-  PHASE_8G_COMPLETE = YES, PHASE_8H_COMPLETE = YES, PHASE_8_COMPLETE = YES,
-  PHASE_9_UNLOCKED = YES.**
-- **Nothing is pending from Phase 8.** Per explicit scope boundary, this
-  session stopped here and did **not** start Phase 9. Candidate (unscoped)
-  Phase 9 directions — a persistence-architecture ADR, completing Evidence
-  Inspector coverage across the remaining native workspaces, rerun coverage
-  expansion, governance — are in `PHASE9_HANDOFF.md`. None of them is
-  pre-selected; whoever resumes should make that scope decision explicitly
-  before implementing anything.
-- Canonical records: `PHASE8_FINAL_REPORT.md`, `PHASE8_IMPLEMENTATION_LEDGER.md`
-  (8A–8H sections), `.prism/checkpoints/phase-8-final.md` (and the individual
-  `phase-8a.md` through `phase-8g.md`), `PHASE9_HANDOFF.md`.
+Phase 10's earlier runtime foundation remains intact: durable Atlas runs/events,
+dynamic declared-tool planning, visible specialists/Council, constrained Python
+sandbox, memory/RAG foundation, allowlisted Researcher, Resource Governor,
+observable Atlas workspace, and truthful Cortex V1.
 
----
+The Foundry/Evolution software path is now also operational rather than only
+scaffolded:
 
-Timestamp: 2026-08-29T22:10:00Z (approx.)
-Repository: prathmesh-katkade/prism
-Current branch: `phase-6.5-integration-staging` (this session's working branch, `phase-7-staging-hardening`, is merged and can be deleted)
-Current commit: `371572d` (verify with `git log -1`)
-Remote tracking branch: `origin/phase-6.5-integration-staging`
-Working tree clean: YES (verify with `git status --short` on resume)
+- verified SFT training-data builder and real-correction DPO pairs;
+- `SoupFoundryBackend` with Resource-Governor job admission;
+- frozen ten-category AtlasBench and durable run history;
+- real Ollama AtlasBench subject using the same provider/model configuration as
+  production Atlas;
+- `/api/tags` reachability/model check before any live baseline can exist;
+- no production rollback anchor may be created from configuration alone — a
+  verified live model digest is required;
+- server-owned durable promotion decisions under the locked
+  `PROMOTE_ELIGIBLE` / `HOLD` / `REJECT` policy;
+- durable append-only candidate → Ollama runtime bindings;
+- promotion requires an eligible evaluator decision + real candidate artifact
+  + verified runtime binding and changes Atlas's active model immediately;
+- rollback verifies its target runtime before changing the production pointer,
+  then restores the previous bound model as a new append-only event;
+- Foundry trains on TRAIN split only; validation/test-only datasets fail closed;
+- native Evolution UI reads real durable state; no synthetic candidate/promotion
+  values are injected;
+- recurring History live-E2E dataset-ordering race is fixed and green in the
+  real browser/MySQL job;
+- duplicate AI Analyst evidence React key warning is fixed.
 
-## Canonical migration lineage
-`phase-5-ai-analyst` ← PR #6 ← `phase-6.5-integration-staging` ← PR #7 (`phase-7-advanced-
-analytics`, merge commit `d39b8ea`, 2026-08-29T21:16:38Z) ← PR #8 (`phase-7-staging-hardening`,
-merge commit `371572d`, 2026-08-29T22:07Z) — **`371572d` is the current tip and the exact,
-fully CI-tested commit any deployment should use.**
+### Current Soup activation contract
 
-## Current phase
-Phase: 7 — COMPLETE and staging-hardened. Phase 8 — NOT STARTED (see `PHASE8_HANDOFF.md`).
-This session's task: "PRISM — PHASE 7 STAGING RELEASE + LIVE PRODUCT VERIFICATION + UI/UX
-AUDIT" — verify Phase 7 branch, PR it into the canonical staging lineage, get CI green, merge,
-deploy, live-verify, audit UI/UX, fix release-blocking defects, redeploy, certify, **stop
-before Phase 8**.
+The physical experiment runner pins the first activation to:
 
-## Completed in this session
-1. Verified repository truth (Phase 7 branch head `996754c8ba71...`, matched the task's stated
-   context; all 8 workflows genuinely `ENABLED`, confirmed via live health-endpoint checks,
-   not just documentation claims).
-2. Opened [PR #7](https://github.com/prathmesh-katkade/prism/pull/7)
-   (`phase-7-advanced-analytics` → `phase-6.5-integration-staging` — verified via
-   `git merge-base --is-ancestor` that 6.5 supersedes `phase-5-ai-analyst`, the master
-   prompt's suggested default base). All 5 CI checks green. **Merged** (`d39b8ea`).
-3. Created release tag `prism-native-v0.7` locally (now at `371572d`, moved once after the
-   hardening merge). Push to origin blocked: `BLOCKED_EXTERNAL_TAG_PERMISSION` (HTTP 403,
-   same credential-scope limit as every prior session's `prism-native-v0.6`). Branch pushes
-   work; tag-ref pushes do not.
-4. Verified `render.yaml`: native staging services present/additive, legacy `prism` untouched,
-   `apps/api/requirements.txt` has all five Phase 7 dependencies.
-5. **No Render deployment access exists in this session** — checked directly (no `RENDER_*`
-   env var, no browser-automation/computer-use tool capable of an authenticated login, no
-   Render MCP connector; a `Vercel` connector became available mid-session but is a different
-   platform, doesn't match `render.yaml`'s services or CORS/origin config, and is a poor fit
-   for the API's scipy/statsmodels/sklearn/shap dependencies under serverless limits — noted,
-   not used). Classified `BLOCKED_EXTERNAL_DEPLOYMENT_ACCESS`. Substituted the most honest
-   available equivalent: real **production-mode** local servers (`next build`+`next start`,
-   real `uvicorn`), using Render's own literal build/start commands from `render.yaml`, hit
-   with zero route mocking — for live API checks, the full product smoke test, performance
-   timing, and the UI/UX audit.
-6. Ran a genuine (non-mocked) Playwright smoke suite (A–J per the task's checklist) against
-   that real local stack — all 8 native workflows, SSE, revision/undo, provenance. All passed.
-7. **UI/UX audit — found and fixed real defects**, all in
-   [PR #8](https://github.com/prathmesh-katkade/prism/pull/8) (merged, `371572d`):
-   - **P0**: Contextual Inspector text clipping on every workspace — `ResizeHandle`'s
-     `className="resize-handle inspector"` collided with the Inspector aside's own
-     `.inspector` class, painting a near-black bar over the first 1–2 characters of every
-     line of inspector text. Renamed to `resize-handle-{panel}`.
-   - **P1**: Clean/Visualize/Stats/Forecasting/ML Lab severely word-wrapped at common laptop
-     widths (~1280–1350px) — `.three-pane`'s breakpoints didn't account for the outer shell's
-     own rail+inspector also being on screen. Widened the thresholds.
-   - **P1**: Nav buttons had no accessible name when collapsed/narrow (WCAG 4.1.2). Added
-     `aria-label`.
-   - **P1**: `.data-table-wrap` keyboard-focusability gap (named technical debt from
-     `PHASE7_FINAL_REPORT.md`) — fixed in Overview, Clean, Stats (ML Lab already had it).
-   - **P3**: missing favicon — added `apps/web/app/icon.svg`.
-   - An automated Codex review landed on PR #7 *after* it had already merged (5 findings).
-     Verified each: one (ML Lab losing track of which columns are features when the target
-     changes) was real and native-only — fixed with a regression test. The other four
-     (pandas 2.3 frequency-alias handling in Forecasting, an unvalidated stratified split in
-     ML Lab, ANOVA's effect size computed from a different group set than its p-value, Pearson
-     on a constant column) are real but **pre-existing in both the legacy Streamlit modules
-     and their exact native ports** — fixing only native would break the parity tests that
-     assert native's output against legacy's, and fixing both means touching legacy code,
-     which this native-staging pass deliberately leaves untouched. Documented as a follow-up
-     needing a coordinated legacy+native fix; commented on PR #7 explaining the reasoning.
-   - Two additional visual anomalies (light-theme text color not updating on toggle,
-     `.workspace-area` measuring 0 width at ~900px with the inspector open) were investigated
-     exhaustively — DOM/CSS traced correct in both cases, reproducible even on a plain
-     JS-injected element with no PRISM code involved — and attributed to this sandbox's
-     specific pinned/version-mismatched Chromium build (independently confirmed mismatched:
-     the installed Playwright driver expects browser revision 1234, only 1194 is on disk),
-     not to product code. Recommend a real-browser spot-check as inexpensive follow-up.
-8. `PHASE7_STAGING_RELEASE_REPORT.md` — the full required-format report: services, CI, live
-   API, live product smoke tests, performance, accessibility, UI/UX audit (P0–P3), fixes made,
-   known limitations, legacy regression, rollback, and all six gate flags.
-9. Confirmed legacy Streamlit unaffected: zero diff to `app.py`/`modules/`, `py_compile` clean,
-   `eval/autocleaner_eval.py` 8/8, a real local `streamlit run` boot served HTTP 200.
-10. `docs/migration/CURRENT_PHASE.md` updated to reflect `371572d` as the current tip.
+- Soup: `soup-cli==0.74.0`
+- Python: 3.10–3.12
+- first trust-locked smoke base model: `Qwen/Qwen2.5-0.5B-Instruct`
+- default method: QLoRA/SFT, deliberately small to prove the complete evolution
+  loop before scaling model size.
 
-## Currently implemented
-Everything through Phase 7 (Stats Lab, Forecasting, ML Lab, all `ENABLED`), plus this session's
-staging-hardening fixes (see above). All merged into `phase-6.5-integration-staging` at
-`371572d`.
+Canonical runner:
 
-## In progress
-Nothing. Working tree clean as of `371572d`. Both this session's PRs are merged and closed.
+```text
+python tools/run_atlas_evolution_experiment.py
+```
 
-## NOT implemented / NOT live
-- **Live Render deployment**: `prism-native-api-staging`/`prism-native-web-staging` still
-  reflect the pre-Phase-7 (Phase 6.5) commit as of this session's end. `371572d` has never been
-  deployed to a real Render URL. This is the single reason `NATIVE_V07_DEPLOYED=NO` and
-  `PHASE8_READY=NO` in `PHASE7_STAGING_RELEASE_REPORT.md` despite everything else passing.
-  Needs the same Render credentials the user (or a session with real deployment access) used
-  for the Phase 6.5 live-staging addendum.
-- Tag `prism-native-v0.7` not on origin (local only) — needs elevated git credential scope.
-- The four pre-existing legacy+native shared bugs from the post-merge Codex review (see above)
-  — needs a coordinated fix touching both `modules/*.py` and their native ports together.
-- A container-query-based precise fix for `.three-pane`'s responsive breakpoints (the
-  threshold-widening fix in PR #8 is a pragmatic match for common widths, not a general
-  solution for every rail/inspector width combination).
-- Phase 8: nothing — no code, no contracts, no brief. See `PHASE8_HANDOFF.md`.
+It performs, in order:
 
-## Exact next task
-**None specified beyond what's listed above.** This session's task explicitly ends with
-certification, not a live deploy or Phase 8 — "Stop after certification." The next task is
-whatever the user asks for; the most likely candidates, in the order this session would
-recommend if asked:
-1. A real, credentialed Render deployment of `371572d` to `prism-native-api-staging`/
-   `prism-native-web-staging`, then a live (not local-equivalent) re-verification of the same
-   smoke-test matrix in `PHASE7_STAGING_RELEASE_REPORT.md`.
-2. The coordinated legacy+native fix for the four pre-existing bugs found by Codex's review.
-3. A Phase 8 scope decision from the user/product owner (see `PHASE8_HANDOFF.md`) — do not
-   infer one from the repository's recurring "still forbidden" phrase.
+1. rehydrate an existing durable production pointer when present;
+2. genuine production Ollama AtlasBench;
+3. verified production rollback-anchor bootstrap on the first run;
+4. durable verified training-data build and TRAIN-only export;
+5. isolated pinned Soup environment setup if needed;
+6. Resource-Governor-admitted LoRA/QLoRA smoke training;
+7. real adapter/candidate registration;
+8. Soup GGUF export + candidate-only Ollama deployment;
+9. durable candidate runtime binding and `/api/tags` verification;
+10. candidate AtlasBench on the identical frozen corpus version/hash;
+11. locked server-side promotion decision;
+12. if `PROMOTE_ELIGIBLE` only: real production switch, runtime verification,
+    mandatory rollback drill, and exact starting-model restoration;
+13. no promotion for HOLD/REJECT;
+14. JSON evidence report beneath
+    `.prism/runtime/evolution-experiments/experiment-*.json`.
 
-## Latest verification (as of `371572d`)
-Python: `pytest tests/ apps/api -q` → 707 passed, 4 skipped (pre-existing, no local MySQL —
-not a regression). `ruff`, `mypy`, `check_boundaries.py`, `check_secrets.py`,
-`generate_typescript_contracts.py --check` → all clean.
-Frontend: `npm run lint`, `npm run typecheck`, `npm run test:web` (7 files/22 tests, +1 from
-the ML Lab regression test), `npm run build:web` → all clean.
-Playwright: `apps/web/e2e/shell.spec.ts` 12/12 (mocked-route mode, matches CI). A genuine
-(non-mocked) smoke suite against the real local production-mode stack: 8/9 passed, 1 skipped
-(Clean's specific fixture had no detectable issues — expected).
-CI (both PRs): `phase-1-python`, `phase-1-web`, `phase-4-live-e2e`, `legacy-regression`,
-`secret-scan` all green on the final head of each PR. One flake (`sql-lab-live.spec.ts`,
-unrelated to either PR's diff) self-resolved on the next push with no code change.
-Legacy Streamlit: `py_compile` clean, `eval/autocleaner_eval.py` 8/8, real local
-`streamlit run app.py` boot served HTTP 200. Zero diff to `app.py`/`modules/` all session.
+### What is NOT proven yet
 
-## Known failures
-- MySQL-source-parity tests: skipped (not failed), no local MySQL server — pre-existing, not
-  a regression.
-- Live staging does not yet reflect this session's commits (see "NOT implemented" above).
+The actual Windows host is accessible and was checked on 2026-09-05: Ollama
+0.33.3, Qwen3 4B Q4_K_M, and an NVIDIA GTX 1650 Max-Q are available. `soup` is
+not installed, so the experiment must stop before training. Therefore do not
+claim values for:
 
-## Important invariants
-- Legacy Streamlit (`app.py`, `modules/*`) is the parity/rollback reference for every native
-  slice and must never be modified as part of native-stack work — held throughout this session.
-- No secrets committed; `tools/check_secrets.py` clean on every commit.
-- No fitted model object, raw transformed feature matrix, or other unserializable server-side
-  object crosses the HTTP boundary.
-- `ResizeHandle`'s per-panel class must stay `resize-handle-{panel}` (hyphenated, one merged
-  class), never `resize-handle ${panel}` (space-separated) — the latter reintroduces the P0
-  class collision with `.inspector`/`.rail` fixed in PR #8.
+- local OS/CPU/RAM/GPU/VRAM at experiment time;
+- Ollama version/model inventory;
+- real production AtlasBench scores;
+- real local training-dataset counts;
+- Soup loss/elapsed/VRAM/RAM/checkpoint hash;
+- candidate ID/model;
+- candidate AtlasBench/Shadow result;
+- final promotion verdict;
+- physical promotion/rollback drill.
 
-## Git
-Latest commit: `371572d` on `phase-6.5-integration-staging`.
-Push status: both `phase-7-staging-hardening` (now merged) and `phase-6.5-integration-staging`
-are in sync with origin as of `371572d`.
-PRs this session: [#7](https://github.com/prathmesh-katkade/prism/pull/7) (merged, `d39b8ea`),
-[#8](https://github.com/prathmesh-katkade/prism/pull/8) (merged, `371572d`). Both closed.
-CI state: green on both PRs' final heads.
+A HOLD or REJECT result is a valid successful experiment outcome. Never force a
+promotion to make the demo look successful.
 
-## Files the next session should read first
-- `PHASE7_STAGING_RELEASE_REPORT.md` — this session's complete report; read this first.
-- `docs/migration/CURRENT_PHASE.md` — states true current status.
-- `PHASE7_FINAL_REPORT.md` — the underlying Phase 7 feature summary (still accurate for the
-  feature work itself; superseded only on deployment/staging status by the report above).
-- `PHASE8_HANDOFF.md` — why Phase 8 has no defined scope yet.
+### Exact next task
 
-## Files/directories the next session should NOT reread unless needed
-- Every `.prism/checkpoints/phase-*.md` file — historical, fully reflected in the reports above.
-- `PHASE6_5_RELEASE_REPORT.md`, `docs/ROLLBACK.md` — only needed if a Phase 6.5/staging
-  regression is suspected.
-- `PHASE7_BRIEF.md` — historical planning doc.
-- Any `modules/*.py` beyond `stats_lab.py`/`forecasting.py`/`mllab.py`, unless working the
-  coordinated legacy+native fix noted above.
+Continue the approved Memory/RAG V2 through Cortex V2 data-architecture wave.
+Treat Soup installation as a separate physical-runtime dependency decision;
+without it, the canonical evolution experiment must remain blocked and no
+candidate evidence can exist.
 
-## Stop boundary
-**Phase 8 is not started and must not be started without an explicit scope decision from the
-user/product owner.** This session stopped immediately after certification, per its own
-explicit instruction: "Even if `PHASE8_READY = YES` DO NOT START PHASE 8. Stop after
-certification." (`PHASE8_READY` in fact resolved to `NO` this session, specifically because
-`371572d` has not been deployed live — see `PHASE7_STAGING_RELEASE_REPORT.md`.)
+If the report is `blocked` or `failed`, diagnose that concrete local runtime
+failure and rerun. Do not start another Phase 10 product wave to avoid the
+physical gate.
+
+### Stop boundary
+
+Do not begin multimodal, voice, Desktop packaging, Cortex V2/dense 3D, flagship
+workflow/final certification, merge PR #15, or Phase 11 until the first physical
+Evolution experiment has coherent evidence and the user explicitly advances
+scope.
+
+Canonical current records:
+
+- `docs/migration/CURRENT_PHASE.md`
+- `PHASE10_IMPLEMENTATION_LEDGER.md`
+- `.prism/checkpoints/phase-10-evolution-activation.md`
+- `.prism/checkpoints/phase-10-progress.md`
+- `PHASE10_ARCHITECTURE.md`
