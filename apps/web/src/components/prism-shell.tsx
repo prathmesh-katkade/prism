@@ -14,6 +14,7 @@ import { ForecastingWorkspace } from "./forecasting-workspace";
 import { MlLabWorkspace } from "./mllab-workspace";
 import { EvidenceInspector } from "./evidence-inspector";
 import { HistoryWorkspace } from "./history-workspace";
+import { AtlasWorkspace } from "./atlas-workspace";
 import { migrationPresentation, phaseTwoMigrations, type InspectorObjectState, type ShellStatus, type WorkspaceTab } from "../state/shell-model";
 import { useLayoutState } from "../state/use-layout-state";
 
@@ -27,15 +28,16 @@ const navigation: ReadonlyArray<{ workflow: string; label: string; icon: IconNam
   { workflow: "visualize", label: "Visualize", icon: "grid" },
   { workflow: "stats", label: "Stats", icon: "grid" },
   { workflow: "forecasting", label: "Forecasting", icon: "grid" },
-  { workflow: "ml", label: "ML", icon: "spark" }
-  , { workflow: "history", label: "History", icon: "database" }
+  { workflow: "ml", label: "ML", icon: "spark" },
+  { workflow: "history", label: "History", icon: "database" },
+  { workflow: "atlas", label: "Atlas", icon: "spark" }
 ];
 
 function findMigration(workflow: string): MigrationState {
   return phaseTwoMigrations.find((migration) => migration.workflow === workflow) ?? phaseTwoMigrations[0]!;
 }
 
-const nativeKinds: Record<string, WorkspaceTab["kind"]> = { overview: "overview", "sql-lab": "sql-lab", "ai-analyst": "ai-analyst", clean: "clean", visualize: "visualize", stats: "stats", forecasting: "forecasting", ml: "ml", history: "history" };
+const nativeKinds: Record<string, WorkspaceTab["kind"]> = { overview: "overview", "sql-lab": "sql-lab", "ai-analyst": "ai-analyst", clean: "clean", visualize: "visualize", stats: "stats", forecasting: "forecasting", ml: "ml", history: "history", atlas: "atlas" };
 
 function workflowTab(workflow: string): WorkspaceTab {
   return { id: `workspace:${workflow}`, label: navigation.find((item) => item.workflow === workflow)?.label ?? workflow, kind: nativeKinds[workflow] ?? "bridge", workflow, closeable: true };
@@ -174,7 +176,7 @@ export function PrismShell() {
             {layout.splitView ? <aside className="split-foundation" aria-label="Secondary tab group foundation"><p>SECONDARY TAB GROUP</p><strong>Drop a tab here</strong><span>Split-view layout is saved locally. Analytical content does not duplicate here until its migration phase.</span></aside> : null}
           </section>
           <button className={layout.atlasExpanded ? "atlas-presence is-expanded" : "atlas-presence"} onClick={() => updateLayout({ atlasExpanded: !layout.atlasExpanded })} aria-expanded={layout.atlasExpanded} aria-label="Expand Atlas workspace"><span className="atlas-signal"><i /><i /><i /></span><span><strong>Atlas</strong><small>{layout.atlasExpanded ? "Context workspace ready" : "Watching workspace context"}</small></span><Icon name="arrow" /></button>
-          {layout.atlasExpanded ? <section className="atlas-drawer" aria-label="Atlas contextual workspace"><div><span className="eyebrow">ATLAS · AMBIENT OPERATING PRESENCE</span><h2>What should we investigate?</h2><p>AI Analyst is native in Phase 5. Atlas keeps context compact, grounds responses in evidence, and requires SQL Lab review before execution.</p></div><button onClick={() => openWorkflow("ai-analyst")}>Open AI Analyst <kbd>⌘ K</kbd></button></section> : null}
+          {layout.atlasExpanded ? <section className="atlas-drawer" aria-label="Atlas contextual workspace"><div><span className="eyebrow">ATLAS · AMBIENT OPERATING PRESENCE</span><h2>What should we investigate?</h2><p>Run Atlas from durable data context, inspect each declared tool, and keep executable SQL in SQL Lab.</p></div><button onClick={() => openWorkflow("atlas")}>Open Atlas <kbd>⌘ K</kbd></button></section> : null}
         </section>
         {layout.inspectorOpen ? <><ResizeHandle panel="inspector" value={layout.inspectorWidth} onPointerDown={startResize} onKeyboardResize={(delta) => updateLayout({ inspectorWidth: Math.max(240, Math.min(420, layout.inspectorWidth + delta)) })} /><Inspector state={inspector} onClose={() => updateLayout({ inspectorOpen: false })} /></> : <><div className="resize-spacer" /><button className="inspector-restore" onClick={() => updateLayout({ inspectorOpen: true })} aria-label="Show inspector"><Icon name="panel" /></button></>}
       </div>
@@ -197,6 +199,7 @@ function WorkspaceSurface({ tab, status, onStatusChange, onOpenCommand, onSelect
   if (tab.kind === "forecasting") return <ForecastingWorkspace datasetId={activeDatasetId} onSelectContext={onSelectContext} onOpenWorkflow={onOpenWorkflow} />;
   if (tab.kind === "ml") return <MlLabWorkspace datasetId={activeDatasetId} onSelectContext={onSelectContext} onOpenWorkflow={onOpenWorkflow} />;
   if (tab.kind === "history") return <HistoryWorkspace onSelectContext={onSelectContext} />;
+  if (tab.kind === "atlas") return <AtlasWorkspace datasetId={activeDatasetId} />;
   if (tab.kind === "bridge" && tab.workflow) {
     const migration = findMigration(tab.workflow);
     return <article className="bridge-surface"><span className="eyebrow">MIGRATION BRIDGE · {migrationPresentation(migration).toUpperCase()}</span><h1>{tab.label} remains in the reference system.</h1><p>This shell exposes a single migration-aware entry point without reimplementing or shadowing the underlying Streamlit workflow.</p><dl><div><dt>Reference</dt><dd><code>{migration.legacy_reference}</code></dd></div><div><dt>Parity gate</dt><dd>Required before this can become native.</dd></div><div><dt>Current channel</dt><dd><span className="migration-chip legacy">legacy</span></dd></div></dl><div className="bridge-actions"><button onClick={onOpenCommand}>Inspect migration controls</button><button className="secondary" onClick={() => onStatusChange("degraded")}>Preview degraded state</button></div></article>;

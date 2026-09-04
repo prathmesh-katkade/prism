@@ -16,6 +16,7 @@ from prism_config.settings import get_settings
 
 from .ai_analyst import router as ai_analyst_router
 from .atlas import router as atlas_router
+from .atlas_runtime import runs as atlas_runs
 from .analytical_objects import registry as analytical_registry
 from .clean import router as clean_router
 from .durable_registry import DurableAnalyticalObjectRegistry
@@ -135,6 +136,12 @@ def create_app() -> FastAPI:
                 "unavailable",
                 "Analytical-history persistence is unavailable; no new durable evidence can be certified.",
             )
+        try:
+            atlas_runs.ping()
+            atlas_status, atlas_detail = "ready", "Atlas run/event persistence is reachable."
+        except Exception:
+            logger.exception("atlas_persistence_readiness_failed")
+            atlas_status, atlas_detail = "unavailable", "Atlas durable runs cannot be created or certified until persistence recovers."
         providers = (
             ProviderReadiness(
                 name="ollama",
@@ -147,6 +154,7 @@ def create_app() -> FastAPI:
                 ),
             ),
             ProviderReadiness(name="analytical_history", status=history_status, detail=history_detail),
+            ProviderReadiness(name="atlas_persistence", status=atlas_status, detail=atlas_detail),
         )
         return ReadinessResponse(generated_at=datetime.now(timezone.utc), providers=providers)
 

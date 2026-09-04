@@ -52,7 +52,8 @@ export const phaseTwoMigrations: readonly MigrationState[] = [
   { workflow: "visualize", channel: "enabled", legacy_reference: "legacy://visualize", parity_required: true },
   { workflow: "stats", channel: "enabled", legacy_reference: "modules/stats_lab.py", parity_required: true },
   { workflow: "forecasting", channel: "enabled", legacy_reference: "modules/forecasting.py", parity_required: true },
-  { workflow: "ml", channel: "enabled", legacy_reference: "modules/mllab.py", parity_required: true }
+  { workflow: "ml", channel: "enabled", legacy_reference: "modules/mllab.py", parity_required: true },
+  { workflow: "atlas", channel: "enabled", legacy_reference: "phase-10://atlas-runtime", parity_required: true }
 ];
 
 export function migrationPresentation(migration: MigrationState): "native" | "bridged" | "legacy" {

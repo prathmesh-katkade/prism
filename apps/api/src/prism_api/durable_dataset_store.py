@@ -82,7 +82,7 @@ class DurableDatasetStore:
 
     @staticmethod
     def _frame_json(frame: pd.DataFrame) -> str:
-        return frame.to_json(orient="table", date_format="iso", index=True)
+        return str(frame.to_json(orient="table", date_format="iso", index=True))
 
     def put(self, frame: pd.DataFrame, source_name: str, source_fingerprint: str) -> OverviewDataset:
         dataset = OverviewDataset(dataset_id=f"ds_{uuid.uuid4().hex}", revision=0, source_name=source_name, source_fingerprint=source_fingerprint, row_count=len(frame), column_count=len(frame.columns))

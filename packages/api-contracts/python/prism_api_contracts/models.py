@@ -1009,14 +1009,27 @@ class AtlasStepState(str, Enum):
 
 class AtlasStepKind(str, Enum):
     PROFILE_DATASET = "profile_dataset"
+    DATA_QUALITY = "data_quality"
+    SQL_QUESTION = "sql_question"
     METHODOLOGY_REVIEW = "methodology_review"
+    STATISTICAL_ANALYSIS = "statistical_analysis"
+    FORECAST = "forecast"
+    MACHINE_LEARNING = "machine_learning"
+    VISUALIZATION = "visualization"
+    EXPLAIN_HISTORY = "explain_history"
+    PYTHON_ANALYSIS = "python_analysis"
     AUDIT_EVIDENCE = "audit_evidence"
 
 
 class AtlasSpecialistId(str, Enum):
     ATLAS = "atlas"
     SCOUT = "scout"
+    CURATOR = "curator"
+    QUERY = "query"
     STAT = "stat"
+    FORGE = "forge"
+    ORACLE = "oracle"
+    LENS = "lens"
     AUDITOR = "auditor"
 
 
@@ -1043,6 +1056,10 @@ class AtlasPlanStep(ContractModel):
     kind: AtlasStepKind
     specialist: AtlasSpecialistId
     tool_name: str = Field(min_length=1, max_length=120)
+    rationale: str = Field(default="", max_length=1_000)
+    dependencies: list[str] = Field(default_factory=list, max_length=20)
+    tool_args: dict[str, object] = Field(default_factory=dict)
+    expected_evidence: list[str] = Field(default_factory=list, max_length=20)
     state: AtlasStepState = AtlasStepState.PENDING
     max_attempts: int = Field(default=3, ge=1, le=3)
     attempts: int = Field(default=0, ge=0, le=3)
@@ -1094,6 +1111,7 @@ class AtlasRunEvent(ContractModel):
 class AtlasRunRequest(ContractModel):
     dataset_id: str = Field(min_length=1)
     objective: str = Field(min_length=3, max_length=2_000)
+    idempotency_key: Optional[str] = Field(default=None, min_length=8, max_length=120)
 
 
 class AtlasRunResponse(ContractModel):
@@ -1104,6 +1122,9 @@ class AtlasRunResponse(ContractModel):
     evidence: list[AtlasEvidenceReference] = Field(default_factory=list)
     council: list[AtlasCouncilConclusion] = Field(default_factory=list)
     events: list[AtlasRunEvent] = Field(default_factory=list)
+    cancellation_requested: bool = False
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
 
 class AtlasMemoryScope(str, Enum):
@@ -1142,6 +1163,10 @@ class CortexNodeKind(str, Enum):
     PLAN_STEP = "plan_step"
     SPECIALIST = "specialist"
     EVIDENCE = "evidence"
+    DATASET = "dataset"
+    ANALYTICAL_OBJECT = "analytical_object"
+    TOOL = "tool"
+    ARTIFACT = "artifact"
 
 
 class CortexNode(ContractModel):
@@ -1156,7 +1181,7 @@ class CortexEdge(ContractModel):
     edge_id: str = Field(min_length=1)
     source_node_id: str = Field(min_length=1)
     target_node_id: str = Field(min_length=1)
-    relation: Literal["contains", "executed_by", "produced", "supports"]
+    relation: Literal["contains", "executed_by", "produced", "supports", "uses", "generated_by"]
 
 
 class CortexGraphState(ContractModel):
@@ -1164,6 +1189,42 @@ class CortexGraphState(ContractModel):
     nodes: list[CortexNode] = Field(default_factory=list)
     edges: list[CortexEdge] = Field(default_factory=list)
     generated_at: datetime
+
+
+class AtlasSandboxErrorKind(str, Enum):
+    POLICY = "policy"
+    PATH = "path"
+    NETWORK = "network"
+    TIMEOUT = "timeout"
+    CANCELLED = "cancelled"
+    RESOURCE_LIMIT = "resource_limit"
+    EXECUTION = "execution"
+
+
+class AtlasSandboxArtifact(ContractModel):
+    artifact_id: str = Field(min_length=1, max_length=160)
+    filename: str = Field(min_length=1, max_length=255)
+    media_type: str = Field(min_length=1, max_length=120)
+    byte_count: int = Field(ge=0)
+    sha256: str = Field(min_length=64, max_length=64)
+
+
+class AtlasSandboxExecutionRequest(ContractModel):
+    code: str = Field(min_length=1, max_length=24_000)
+    timeout_ms: int = Field(default=15_000, ge=100, le=60_000)
+    seed: int = Field(default=42, ge=0, le=2_147_483_647)
+
+
+class AtlasSandboxExecutionResult(ContractModel):
+    execution_id: str = Field(min_length=1, max_length=160)
+    state: Literal["completed", "failed", "cancelled", "timed_out"]
+    stdout: str = Field(default="", max_length=32_000)
+    stderr: str = Field(default="", max_length=32_000)
+    artifacts: list[AtlasSandboxArtifact] = Field(default_factory=list)
+    error_kind: Optional[AtlasSandboxErrorKind] = None
+    error: Optional[str] = Field(default=None, max_length=2_000)
+    duration_ms: int = Field(ge=0)
+    limits_enforced: list[str] = Field(default_factory=list)
 
 
 class AtlasModelTrust(ContractModel):

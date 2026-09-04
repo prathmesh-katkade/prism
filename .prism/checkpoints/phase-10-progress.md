@@ -45,6 +45,28 @@ contracts/ADRs do not imply implementation.
 
 ## Exact continuation
 
-Durably persist Atlas run state/events with the existing Phase 9 history policy;
-then build and isolate the project-scoped sandbox before exposing any code
-execution capability. Preserve all Phase 8/9 invariants and do not start Phase 11.
+### Second-wave implementation (in progress)
+
+- Atlas runs, plans, Council conclusions, evidence, cancellation intent, and
+  append-only events now use Phase 9's SQLAlchemy/database policy in distinct
+  Atlas tables. Restart/replay and deterministic sequence tests use independent
+  store instances; Phase 8/9 analytical objects remain untouched.
+- The planner validates every declared tool against a registry. It can choose
+  quality, SQL, forecasting, ML, visualization, history, and Python intents,
+  but safely blocks an action without the explicitly required context rather
+  than generating a hidden command or model run.
+- A typed project-scoped Python sandbox now exists. It has no shell/package
+  surface, clears user environment values, blocks direct network/import escapes,
+  contains ordinary file APIs to its workspace, captures output, terminates on
+  timeout/cancellation, and collects allowlisted artifacts. Windows cannot
+  honestly enforce CPU/memory quotas in this implementation; that needs a later
+  worker/container boundary and is not certified here.
+- Native Atlas operations UI and Cortex V1 consume real backend contracts/SSE.
+  Cortex draws only durable run, dataset, step, specialist, tool, and evidence
+  records; it contains no private thoughts or decorative fake nodes.
+
+## Exact continuation
+
+Run supported Python 3.11/CI and browser certification for this wave, then
+hardening of OS-level sandbox resource isolation. Preserve all Phase 8/9
+invariants and do not start Phase 11.

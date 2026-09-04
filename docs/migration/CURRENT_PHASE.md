@@ -5,12 +5,15 @@
 **Phase 10 integration branch:** `phase-10-atlas-local-intelligence`, based on
 `phase-6.5-integration-staging` at `ab75b5a08f03a553fe4d6229c100d0be4c1dc158`.
 
-The first internal wave establishes Atlas's contract-first runtime foundation:
-provider capabilities, typed plan/step/event/evidence contracts, visible
-Scout/Stat/Auditor specialist state, a deterministic CSV profile demonstrator,
-SSE execution events, and a Cortex graph projection backed by real stored run
-state. It does not implement a general execution shell, memory/RAG persistence,
-web research, Foundry, AtlasBench, Cortex 3D UI, voice, or desktop packaging.
+The first two internal waves establish Atlas's contract-first runtime foundation:
+provider capabilities, typed plan/step/event/evidence contracts, durable
+SQLAlchemy run/event records, deterministic tool-registry planning, visible
+Scout/Curator/Stat/Auditor state, constrained Python execution, SSE replay, an
+operational Atlas workspace, and a Cortex V1 projection backed only by durable
+real state. It does not implement a general shell, package installation,
+memory/RAG persistence, web research, Foundry, AtlasBench, Cortex 3D UI, voice,
+or desktop packaging. Windows resource quotas are not claimed for the sandbox;
+OS-isolated worker hardening remains a later Phase 10 gate.
 See `PHASE10_ARCHITECTURE.md`, `PHASE10_IMPLEMENTATION_LEDGER.md`, and
 `.prism/checkpoints/phase-10-progress.md`.
 

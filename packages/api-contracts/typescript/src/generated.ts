@@ -191,6 +191,10 @@ export interface AtlasPlanStep {
   kind: AtlasStepKind;
   specialist: AtlasSpecialistId;
   tool_name: string;
+  rationale?: string;
+  dependencies?: string[];
+  tool_args?: Record<string, unknown>;
+  expected_evidence?: string[];
   state?: AtlasStepState;
   max_attempts?: number;
   attempts?: number;
@@ -217,6 +221,7 @@ export type AtlasRunEventType = "run_created" | "plan_created" | "step_started" 
 export interface AtlasRunRequest {
   dataset_id: string;
   objective: string;
+  idempotency_key?: string;
 }
 
 export interface AtlasRunResponse {
@@ -227,9 +232,40 @@ export interface AtlasRunResponse {
   evidence?: AtlasEvidenceReference[];
   council?: AtlasCouncilConclusion[];
   events?: AtlasRunEvent[];
+  cancellation_requested?: boolean;
+  created_at?: string;
+  updated_at?: string;
 }
 
-export type AtlasSpecialistId = "atlas" | "scout" | "stat" | "auditor";
+export interface AtlasSandboxArtifact {
+  artifact_id: string;
+  filename: string;
+  media_type: string;
+  byte_count: number;
+  sha256: string;
+}
+
+export type AtlasSandboxErrorKind = "policy" | "path" | "network" | "timeout" | "cancelled" | "resource_limit" | "execution";
+
+export interface AtlasSandboxExecutionRequest {
+  code: string;
+  timeout_ms?: number;
+  seed?: number;
+}
+
+export interface AtlasSandboxExecutionResult {
+  execution_id: string;
+  state: "completed" | "failed" | "cancelled" | "timed_out";
+  stdout?: string;
+  stderr?: string;
+  artifacts?: AtlasSandboxArtifact[];
+  error_kind?: AtlasSandboxErrorKind;
+  error?: string;
+  duration_ms: number;
+  limits_enforced?: string[];
+}
+
+export type AtlasSpecialistId = "atlas" | "scout" | "curator" | "query" | "stat" | "forge" | "oracle" | "lens" | "auditor";
 
 export interface AtlasSpecialistIdentity {
   specialist: AtlasSpecialistId;
@@ -274,7 +310,7 @@ export interface AtlasStatsResponse {
   evidence: AtlasEvidence[];
 }
 
-export type AtlasStepKind = "profile_dataset" | "methodology_review" | "audit_evidence";
+export type AtlasStepKind = "profile_dataset" | "data_quality" | "sql_question" | "methodology_review" | "statistical_analysis" | "forecast" | "machine_learning" | "visualization" | "explain_history" | "python_analysis" | "audit_evidence";
 
 export type AtlasStepState = "pending" | "running" | "completed" | "failed" | "cancelled" | "blocked";
 
@@ -417,7 +453,7 @@ export interface CortexEdge {
   edge_id: string;
   source_node_id: string;
   target_node_id: string;
-  relation: "contains" | "executed_by" | "produced" | "supports";
+  relation: "contains" | "executed_by" | "produced" | "supports" | "uses" | "generated_by";
 }
 
 export interface CortexGraphState {
@@ -435,7 +471,7 @@ export interface CortexNode {
   source_id: string;
 }
 
-export type CortexNodeKind = "run" | "plan_step" | "specialist" | "evidence";
+export type CortexNodeKind = "run" | "plan_step" | "specialist" | "evidence" | "dataset" | "analytical_object" | "tool" | "artifact";
 
 export interface DatasetRef {
   dataset_id: string;
@@ -1025,6 +1061,8 @@ export interface ValidationError {
   loc: string | number[];
   msg: string;
   type: string;
+  input?: unknown;
+  ctx?: Record<string, unknown>;
 }
 
 export interface VisualizationDataResponse {

@@ -11,20 +11,28 @@ Phase 10 is active.**
   checkout was a dirty unrelated Phase 8 worktree and was not altered.
 - Phase 10 work lives in the clean isolated worktree
   `C:\Users\prath\prism-phase10`, branch `phase-10-atlas-local-intelligence`.
-- First wave completed: `PHASE10_ARCHITECTURE.md`, ADRs 0006–0012, typed Atlas
-  contracts, safe deterministic/Ollama capability abstraction, explicit
-  profile→methodology→audit plan, visible Atlas/Scout/Stat/Auditor state,
-  stored events/SSE, Cortex runtime graph projection, and direct API tests.
-- The first live demonstrator uses only existing deterministic Overview profiling
-  for an uploaded CSV. It neither transfers raw rows to a provider nor exposes
-  arbitrary SQL/Python/shell/network/package/model operations. Atlas alone is
-  user-facing; Council preserves evidence, conclusions, and objections only.
-- Current verification: targeted API tests **19 passed**; ruff, targeted mypy,
-  and TypeScript contract freshness passed. Full Phase 10 certification has not
-  been attempted and must not be claimed.
-- Exact next task: persist Atlas run/event records with the Phase 9 durable
-  history policy, then build the project-scoped sandbox and isolation tests
-  before adding generated Python execution. Do not start Phase 11.
+- Second wave is implemented but not Phase 10 certification: Atlas has its own
+  SQLAlchemy tables under the Phase 9 database policy for durable snapshots,
+  cancellation intent, idempotency, and append-only sequence-ordered events.
+  Cortex/SSE replay read this durable source, not process memory.
+- The dynamic deterministic planner validates a strict tool registry. Curator
+  performs real quality review; other specialist identities appear only in a
+  plan when their native context exists, and safely block otherwise. No model
+  provider directly executes tools or receives raw rows.
+- `POST /api/v1/atlas/sandbox/executions` is a typed constrained Python surface,
+  not a shell: project workspace, empty user environment, direct import/network
+  and ordinary file-path containment, timeout/cancellation, seed, bounded logs,
+  and allowlisted artifacts. No package installation exists. CPU/memory caps are
+  not honestly enforceable on this Windows host and remain a worker hardening
+  task before any run-integrated generated Python capability.
+- Native Atlas operations desk and SVG Cortex V1 are wired to real REST/SSE
+  records, including live plan state, specialist activity, Council evidence,
+  cancellation, errors, and Focus Lens/reduced-motion graph behavior.
+- Current local verification: focused Atlas/backend regression tests **27 passed** and
+  TypeScript typecheck passed. Full Phase 10/CI certification is not claimed.
+- Exact next task: run repo-standard gates in supported Python 3.11/CI, then
+  introduce an OS-isolated worker/container boundary before expanding sandbox
+  privileges. Do not start Phase 11.
 
 ---
 
