@@ -219,3 +219,92 @@ benchmark suite" REST action once that subject exists; and exercise an actual
 end-to-end `soup train` run against a real Soup install to move
 `SoupFoundryBackend` from "real and tested" to "verified end-to-end."
 `PHASE_10_COMPLETE` remains `NO`. Do not start Phase 11.
+
+## Evolution activation hardening — canonical current state (2026-09-04)
+
+This section supersedes earlier statements above that describe live AtlasBench,
+Foundry REST wiring, History live-E2E, or promotion as not yet operational at
+the software boundary. Those entries are retained as historical implementation
+records.
+
+### Gate status after activation
+
+| Gate | Current state |
+| --- | --- |
+| 10M Atlas Foundry | **ADVANCED / PHYSICAL RUN PENDING.** Current upstream contract was re-verified and the first experiment is pinned to `soup-cli==0.74.0`; the normal API and local runner use the same typed `SoupFoundryBackend`. |
+| 10N training data | **ADVANCED.** Normal Foundry and experiment activation export `TRAIN` only; validation/test-only versions fail closed. Hidden CoT, secrets, and raw private rows remain excluded. |
+| 10P AtlasBench | **ADVANCED / LIVE OLLAMA SUBJECT IMPLEMENTED.** A real Ollama subject probes `/api/tags`, uses the production model/provider configuration, receives prompt+choices only, and persists no fake baseline when the runtime/model is unavailable. |
+| 10Q Shadow/Promotion/Rollback | **ADVANCED / RUNTIME-EFFECTIVE.** Candidate→Ollama bindings are durable. A verified model digest is required before the first production rollback anchor may be created. Promotion requires an evaluator-owned eligible decision plus a real runtime binding, changes Atlas's active model, and rollback verifies/binds the previous runtime before changing the pointer. |
+| 10R Evolution UI | **ADVANCED.** It reads durable production/candidate/benchmark/training/history state. Synthetic demo data is not introduced. |
+
+### CI and browser recovery
+
+The recurring History live-E2E failure was fixed at the actual synchronization
+boundary: the test now binds SQL Lab to the exact dataset it created and waits
+on real API state instead of depending on cross-test connection ordering or
+arbitrary timeout growth. The duplicate AI Analyst evidence React key was also
+removed.
+
+Activation code head `5ee368e8df911c65c1121be346b0f8c9ccef504f`
+is certified by PR #15 CI run **#166** (`33904258400`):
+
+- `phase-1-python` PASS
+- `phase-1-web` PASS
+- `phase-4-live-e2e` PASS, including real MySQL 8.0/browser-to-API flow
+- `legacy-regression` PASS
+- `secret-scan` PASS
+
+The earlier lifecycle head was independently all-green on run #163, and the
+History root fix was independently all-green on run #152.
+
+### One-command real evolution experiment
+
+`tools/run_atlas_evolution_experiment.py` is now the canonical first physical
+activation path. It:
+
+1. restores any already-durable production runtime pointer;
+2. benchmarks the actual reachable Ollama production model;
+3. creates the first rollback anchor only from that successful model probe and
+   digest;
+4. builds/persists verified training data and exports TRAIN only;
+5. installs/uses isolated pinned Soup 0.74.0 when required;
+6. runs a Resource-Governor-admitted SFT LoRA/QLoRA smoke job using the first
+   trust-locked base model `Qwen/Qwen2.5-0.5B-Instruct`;
+7. requires actual adapter output before registering a candidate;
+8. exports/deploys the candidate to Ollama and verifies it appears in
+   `/api/tags`;
+9. persists the candidate runtime binding;
+10. runs candidate AtlasBench on the identical frozen corpus version/hash;
+11. computes and persists the locked server-side verdict;
+12. for `PROMOTE_ELIGIBLE` only, performs a real runtime promotion, verifies
+    Atlas resolves to the candidate, then performs the mandatory rollback drill
+    and verifies the exact pre-experiment production model is restored;
+13. leaves production untouched for HOLD/REJECT;
+14. writes the complete local evidence report beneath
+    `.prism/runtime/evolution-experiments/`.
+
+### Remaining non-fabricated boundary
+
+The GitHub/CI environment does not have access to the user's local Ollama daemon
+or physical NVIDIA GPU. Therefore no baseline score, training loss, VRAM/RAM
+peak, local candidate artifact, candidate AtlasBench score, Shadow result, or
+promotion verdict is claimed here. Those values must come from the real local
+experiment report.
+
+### Exact next task — supersedes the older next-task section above
+
+On the actual PRISM host, from repository root, run:
+
+```text
+python tools/run_atlas_evolution_experiment.py
+```
+
+Inspect `.prism/runtime/evolution-experiments/experiment-*.json`. If the report
+is blocked/failed, fix the concrete local issue and rerun; do not skip or
+manufacture a gate. If it completes, record its real baseline, training,
+candidate, Shadow, verdict, and rollback evidence here before continuing to
+multimodal, voice, Desktop packaging, Cortex V2, flagship certification, or
+Phase 11.
+
+`PHASE_10_COMPLETE = NO`
+`PHASE_11_UNLOCKED = NO`
