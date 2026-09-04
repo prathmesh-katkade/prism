@@ -1,22 +1,15 @@
-"""REST surface for the 10M-10Q Foundry wave.
+"""REST surface for the Phase 10 Foundry / Evolution system.
 
-Deliberately narrower than the full backend surface those modules expose:
+Security boundaries are intentional:
 
-- AtlasBench tasks are never returned with their answer key. Only
-  ``AtlasBenchCorpusSummary`` (counts, no ``correct_choice``/``rationale``)
-  is public; browsing full task content over HTTP would hand any client --
-  including a candidate under evaluation -- its own judge's answer key.
-- There is no "promote" endpoint. A promotion decision must come from a
-  real server-side ``decide_promotion()`` call over a real suite run, never
-  from a client-supplied ``AtlasPromotionDecision`` -- accepting one over
-  HTTP would let any caller fabricate a PROMOTE_ELIGIBLE verdict and force
-  a promotion. Only read-only history/current-production and the
-  no-client-input ``rollback`` action are exposed until a live subject and
-  a real end-to-end promotion flow exist to drive this safely.
-- There is no "run the benchmark suite" endpoint yet: no AtlasBenchSubject
-  wraps a live Atlas provider yet (see the Foundry-wave ledger), so the
-  only subjects available are reference/mock ones not worth exposing as a
-  production action.
+- AtlasBench tasks are never returned with their answer key. Only corpus
+  counts and post-run results are public; a candidate never receives
+  ``correct_choice`` or evaluator rationale.
+- Promotion verdicts are computed server-side from two stored AtlasBench runs
+  under the locked policy. The client cannot submit a verdict, thresholds, or
+  evaluator output.
+- A promote request references a durable server-computed decision. The storage
+  boundary independently refuses every verdict except PROMOTE_ELIGIBLE.
 """
 
 from __future__ import annotations
@@ -40,6 +33,7 @@ from prism_api_contracts import (
     AtlasPreferenceDatasetVersion,
     AtlasPreferencePair,
     AtlasProductionPointer,
+    AtlasPromotionDecision,
     AtlasTrainingDatasetVersion,
     AtlasTrainingExample,
     AtlasTrainingJob,
@@ -67,7 +61,8 @@ from .atlas_foundry_preference import (
     DurableAtlasPreferenceDatasetStore,
 )
 from .atlas_memory import DurableAtlasMemoryStore
-from .atlas_promotion import DurableAtlasPromotionStore
+from .atlas_promotion import DurableAtlasPromotionStore, decide_promotion
+from .atlas_promotion_decisions import DurableAtlasPromotionDecisionStore
 from .atlas_resources import governor
 from .durable_atlas_store import DurableAtlasRunStore
 
@@ -81,6 +76,7 @@ _bench_store = DurableAtlasBenchStore()
 _job_store = DurableAtlasFoundryJobStore()
 _candidate_registry = DurableAtlasCandidateRegistry()
 _promotion_store = DurableAtlasPromotionStore()
+_promotion_decision_store = DurableAtlasPromotionDecisionStore()
 _backend = SoupFoundryBackend()
 
 _EXPORT_ROOT = Path(".prism/runtime/foundry-exports")
@@ -147,8 +143,8 @@ def foundry_preflight(recipe: AtlasTrainingRecipe) -> AtlasFoundryPreflight:
 
 @router.post("/jobs", response_model=AtlasTrainingJob, status_code=status.HTTP_202_ACCEPTED)
 def start_foundry_job(recipe: AtlasTrainingRecipe, dataset_version_id: str) -> AtlasTrainingJob:
-    """Exports the named training-dataset version to JSONL, then admits and
-    starts (or durably queues) a job through the Resource Governor."""
+    """Export the named dataset version, then admit/start it through the
+    Resource Governor. Foundry never starts unmanaged."""
     if recipe.dataset_version_id != dataset_version_id:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -187,10 +183,6 @@ def cancel_foundry_job(job_id: str) -> AtlasTrainingJob:
 
 @router.post("/jobs:reconcile", response_model=list[AtlasTrainingJob])
 def reconcile_jobs() -> list[AtlasTrainingJob]:
-    """Advance every non-terminal job by one step (see
-    ``atlas_foundry_orchestration.reconcile_foundry_jobs``) -- there is no
-    background daemon in this wave, so a caller (a scheduled poll, an
-    operator action) must call this periodically for jobs to progress."""
     return reconcile_foundry_jobs(governor, _job_store, _backend, _candidate_registry)
 
 
@@ -199,7 +191,7 @@ def list_candidates(limit: int = Query(default=100, ge=1, le=500)) -> list[Atlas
     return _candidate_registry.list(limit=limit)
 
 
-# --- 10P: AtlasBench (read-only; never exposes the answer key) -------------
+# --- 10P: AtlasBench read surface (live execution is atlas_bench_live.py) --
 
 bench_router = APIRouter(prefix="/api/v1/atlas/bench", tags=["atlas-bench"])
 
@@ -239,7 +231,7 @@ def get_bench_run_failures(run_id: str, limit: int = Query(default=200, ge=1, le
     return _bench_store.failed_tasks(run_id, limit=limit)
 
 
-# --- 10Q: promotion history / rollback (never accepts a client decision) --
+# --- 10Q: server-owned decisions, promotion history, rollback --------------
 
 promotion_router = APIRouter(prefix="/api/v1/atlas/promotion", tags=["atlas-promotion"])
 
@@ -254,6 +246,61 @@ def promotion_history(limit: int = Query(default=100, ge=1, le=500)) -> list[Atl
     return _promotion_store.history(limit=limit)
 
 
+@promotion_router.post("/decisions", response_model=AtlasPromotionDecision, status_code=status.HTTP_201_CREATED)
+def compute_promotion_decision(
+    candidate_id: str,
+    production_run_id: str,
+    candidate_run_id: str,
+) -> AtlasPromotionDecision:
+    """Compute the locked promotion policy from two immutable stored runs.
+
+    The client supplies identities only. It cannot submit a verdict,
+    regression tolerance, answer key, or scoring policy.
+    """
+    if _candidate_registry.get(candidate_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Candidate artifact was not found.")
+    production_run = _bench_store.get_run(production_run_id)
+    candidate_run = _bench_store.get_run(candidate_run_id)
+    if production_run is None or candidate_run is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Both AtlasBench runs must exist before a decision can be computed.")
+    if production_run.run_id == candidate_run.run_id:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Production and candidate AtlasBench runs must be distinct.")
+    if (
+        production_run.corpus_version != candidate_run.corpus_version
+        or production_run.corpus_hash != candidate_run.corpus_hash
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Production and candidate must be evaluated against the identical AtlasBench corpus.",
+        )
+    decision = decide_promotion(candidate_id, production_run, candidate_run)
+    return _promotion_decision_store.save(decision)
+
+
+@promotion_router.get("/decisions/{candidate_id}", response_model=list[AtlasPromotionDecision])
+def list_promotion_decisions(candidate_id: str, limit: int = Query(default=50, ge=1, le=200)) -> list[AtlasPromotionDecision]:
+    return _promotion_decision_store.list_for_candidate(candidate_id, limit=limit)
+
+
+@promotion_router.post("/promote", response_model=AtlasProductionPointer)
+def promote_candidate(decision_id: str, reason: str) -> AtlasProductionPointer:
+    """Promote only from a durable evaluator-owned eligible decision.
+
+    ``DurableAtlasPromotionStore.promote`` checks PROMOTE_ELIGIBLE again at
+    the storage boundary, so this route cannot bypass policy even if called
+    directly.
+    """
+    decision = _promotion_decision_store.get(decision_id)
+    if decision is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Promotion decision was not found.")
+    if _candidate_registry.get(decision.candidate_id) is None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="The decision references a candidate artifact that is no longer available.")
+    try:
+        return _promotion_store.promote(decision, reason=reason)
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
+
+
 @promotion_router.post("/rollback", response_model=AtlasProductionPointer)
 def rollback_production(reason: str) -> AtlasProductionPointer:
     try:
@@ -262,7 +309,7 @@ def rollback_production(reason: str) -> AtlasProductionPointer:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
 
 
-# --- Adapter foundation ------------------------------------------------
+# --- Adapter foundation ----------------------------------------------------
 
 adapter_router = APIRouter(prefix="/api/v1/atlas/adapters", tags=["atlas-adapters"])
 
