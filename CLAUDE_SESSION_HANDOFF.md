@@ -34,8 +34,11 @@ Phase 10 is active.**
 - Native Atlas operations desk and SVG Cortex V1 are wired to real REST/SSE
   records, including live plan state, specialist activity, Council evidence,
   cancellation, errors, and Focus Lens/reduced-motion graph behavior.
-- Current local verification must be refreshed after this increment. Full
-  Phase 10/CI certification is not claimed because this host lacks Python 3.11.
+- Current local verification: focused Atlas runtime/sandbox/memory/research/
+  resource suite **16 passed**; web typecheck/lint/Vitest **35 passed**;
+  boundaries, secret scan, and contract freshness passed. Full Phase 10/CI
+  certification is not claimed because this host lacks Python 3.11 and its
+  web worktree has an out-of-root `node_modules` symlink that Turbopack refuses.
 - Exact next task: run repo-standard gates in supported Python 3.11/CI and
   browser E2E, then add a real container-worker adapter, embeddings, durable
   research records, and guarded run-integrated Python only when the foundations

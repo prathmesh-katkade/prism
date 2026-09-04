@@ -50,6 +50,10 @@ Auditor evidence review → Atlas grounded answer`, with events available throug
 
 ## Verification to date
 
+- `pytest tests/api/test_atlas_runtime.py tests/api/test_atlas_durable_runtime.py tests/api/test_atlas_sandbox.py tests/api/test_atlas_memory_resources_research.py -q` → **16 passed** (one non-failing FastAPI deprecation warning).
+- `npm run typecheck`, `npm run lint`, and `npm run test:web` → **passed** (35 frontend tests).
+- `python tools/check_boundaries.py`, `python tools/check_secrets.py`, and TypeScript contract freshness → **passed**.
+- `npm run build:web` is **BLOCKED_LOCAL_WORKTREE**: Next/Turbopack rejects this worktree's `node_modules` symlink because it points outside the worktree root. This is not a source compilation/type failure; supported CI must build from a normal checkout.
 - `pytest tests/api/test_atlas_runtime.py tests/api/test_ai_analyst.py tests/api/test_contracts.py -q` → **19 passed**.
 - Broader API/contract/parity run reached **42 passed** before the known local
   Python 3.9 incompatibility in pre-existing Forecasting tests

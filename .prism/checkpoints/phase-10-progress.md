@@ -84,6 +84,17 @@ contracts/ADRs do not imply implementation.
 - Ollama can propose a strict JSON plan only from capped compact metadata;
   malformed output falls back deterministically and cannot execute a tool.
 
+### Current local evidence
+
+- Focused Atlas runtime/sandbox/memory/research/resource suite: **16 passed**.
+- Web typecheck, lint, and Vitest: **35 passed**.
+- Boundaries, local secret scan, and contract freshness: **PASS**.
+- Full API regression: **NOT READY locally** — the first failure after 55 tests
+  is the known Python 3.9-only Forecasting `zip(..., strict=True)` issue.
+- Web production build: **BLOCKED_LOCAL_WORKTREE** by an existing Next/Turbopack
+  out-of-root `node_modules` symlink. Browser/CI certification still needs a
+  supported normal checkout and Python 3.11.
+
 Run supported Python 3.11/CI and browser certification for this increment, then
 add a container-worker adapter, embedding provider, durable research records,
 and run-integrated guarded Python only if their gates remain coherent. Preserve
