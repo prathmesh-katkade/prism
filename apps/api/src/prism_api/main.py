@@ -15,9 +15,9 @@ from prism_api_contracts import HealthResponse, ProviderReadiness, ReadinessResp
 from prism_config.settings import get_settings
 
 from .ai_analyst import router as ai_analyst_router
+from .analytical_objects import registry as analytical_registry
 from .atlas import router as atlas_router
 from .atlas_runtime import runs as atlas_runs
-from .analytical_objects import registry as analytical_registry
 from .clean import router as clean_router
 from .durable_registry import DurableAnalyticalObjectRegistry
 from .forecasting import router as forecasting_router
