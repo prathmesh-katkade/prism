@@ -2,18 +2,15 @@
 
 Security boundaries are intentional:
 
-- AtlasBench tasks are never returned with their answer key. Only corpus
-  counts and post-run results are public; a candidate never receives
-  ``correct_choice`` or evaluator rationale.
-- Promotion verdicts are computed server-side from two stored AtlasBench runs
-  under the locked policy. The client cannot submit a verdict, thresholds, or
-  evaluator output.
-- A promote request references a durable server-computed decision. The storage
-  boundary independently refuses every verdict except PROMOTE_ELIGIBLE.
+- AtlasBench tasks are never returned with their answer key.
+- Promotion verdicts are computed server-side from stored AtlasBench runs.
+- A promote request references a durable server-computed decision and a real
+  candidate runtime binding; promotion changes Atlas's active runtime model.
 """
 
 from __future__ import annotations
 
+import os
 import uuid
 from pathlib import Path
 from typing import Optional
@@ -44,6 +41,11 @@ from prism_api_contracts import (
 from .atlas_adapter_foundation import report_adapter_capability, report_all_adapter_capabilities
 from .atlas_bench_corpus import CORPUS_VERSION, all_tasks, corpus_hash
 from .atlas_bench_store import DurableAtlasBenchStore
+from .atlas_candidate_runtime import (
+    DurableAtlasCandidateRuntimeStore,
+    activate_current_ollama_model,
+    ensure_configured_production_baseline,
+)
 from .atlas_foundry_backend import SoupFoundryBackend
 from .atlas_foundry_dataset import (
     AtlasTrainingDatasetBuilder,
@@ -75,14 +77,18 @@ _preference_dataset_store = DurableAtlasPreferenceDatasetStore()
 _bench_store = DurableAtlasBenchStore()
 _job_store = DurableAtlasFoundryJobStore()
 _candidate_registry = DurableAtlasCandidateRegistry()
+_candidate_runtime_store = DurableAtlasCandidateRuntimeStore()
 _promotion_store = DurableAtlasPromotionStore()
 _promotion_decision_store = DurableAtlasPromotionDecisionStore()
 _backend = SoupFoundryBackend()
 
 _EXPORT_ROOT = Path(".prism/runtime/foundry-exports")
 
-
-# --- 10N: verified training datasets --------------------------------------
+# On an Ollama deployment, persist the pre-Foundry configured model once as the
+# rollback anchor and then rehydrate any previously promoted runtime pointer.
+# Deterministic deployments are untouched.
+if os.environ.get("PRISM_AI_PROVIDER", "deterministic").lower() == "ollama":
+    ensure_configured_production_baseline()
 
 
 @router.post("/training-datasets", response_model=AtlasTrainingDatasetVersion, status_code=status.HTTP_201_CREATED)
@@ -105,9 +111,6 @@ def preview_training_dataset(
     return _training_dataset_store.preview(version_id, split=split, limit=limit)
 
 
-# --- 10O: DPO preference datasets ------------------------------------------
-
-
 @router.post("/preference-datasets", response_model=AtlasPreferenceDatasetVersion, status_code=status.HTTP_201_CREATED)
 def build_preference_dataset() -> AtlasPreferenceDatasetVersion:
     pairs, exclusions = AtlasPreferenceDatasetBuilder(_memory_store).build()
@@ -128,9 +131,6 @@ def preview_preference_dataset(
     return _preference_dataset_store.preview(version_id, split=split, limit=limit)
 
 
-# --- 10M: Foundry backend + jobs -------------------------------------------
-
-
 @router.get("/capability", response_model=AtlasFoundryCapability)
 def foundry_capability() -> AtlasFoundryCapability:
     return _backend.capability()
@@ -143,9 +143,7 @@ def foundry_preflight(recipe: AtlasTrainingRecipe) -> AtlasFoundryPreflight:
 
 @router.post("/jobs", response_model=AtlasTrainingJob, status_code=status.HTTP_202_ACCEPTED)
 def start_foundry_job(recipe: AtlasTrainingRecipe, dataset_version_id: str) -> AtlasTrainingJob:
-    """Export only the TRAIN split of the named dataset version, then
-    admit/start it through the Resource Governor. Validation/test examples
-    remain evaluator-only and never enter Foundry training."""
+    """Export TRAIN only; validation/test examples never enter Foundry."""
     if recipe.dataset_version_id != dataset_version_id:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -201,8 +199,6 @@ def list_candidates(limit: int = Query(default=100, ge=1, le=500)) -> list[Atlas
     return _candidate_registry.list(limit=limit)
 
 
-# --- 10P: AtlasBench read surface (live execution is atlas_bench_live.py) --
-
 bench_router = APIRouter(prefix="/api/v1/atlas/bench", tags=["atlas-bench"])
 
 
@@ -241,8 +237,6 @@ def get_bench_run_failures(run_id: str, limit: int = Query(default=200, ge=1, le
     return _bench_store.failed_tasks(run_id, limit=limit)
 
 
-# --- 10Q: server-owned decisions, promotion history, rollback --------------
-
 promotion_router = APIRouter(prefix="/api/v1/atlas/promotion", tags=["atlas-promotion"])
 
 
@@ -262,11 +256,6 @@ def compute_promotion_decision(
     production_run_id: str,
     candidate_run_id: str,
 ) -> AtlasPromotionDecision:
-    """Compute the locked promotion policy from two immutable stored runs.
-
-    The client supplies identities only. It cannot submit a verdict,
-    regression tolerance, answer key, or scoring policy.
-    """
     if _candidate_registry.get(candidate_id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Candidate artifact was not found.")
     production_run = _bench_store.get_run(production_run_id)
@@ -294,32 +283,43 @@ def list_promotion_decisions(candidate_id: str, limit: int = Query(default=50, g
 
 @promotion_router.post("/promote", response_model=AtlasProductionPointer)
 def promote_candidate(decision_id: str, reason: str) -> AtlasProductionPointer:
-    """Promote only from a durable evaluator-owned eligible decision.
-
-    ``DurableAtlasPromotionStore.promote`` checks PROMOTE_ELIGIBLE again at
-    the storage boundary, so this route cannot bypass policy even if called
-    directly.
-    """
+    """Promote only a benchmark-eligible candidate with a real runtime binding."""
     decision = _promotion_decision_store.get(decision_id)
     if decision is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Promotion decision was not found.")
     if _candidate_registry.get(decision.candidate_id) is None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="The decision references a candidate artifact that is no longer available.")
+    if _candidate_runtime_store.latest(decision.candidate_id) is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Candidate has no verified Ollama runtime binding; promotion cannot change Atlas safely.",
+        )
     try:
-        return _promotion_store.promote(decision, reason=reason)
+        pointer = _promotion_store.promote(decision, reason=reason)
+        activate_current_ollama_model()
+        return pointer
     except ValueError as error:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
 
 
 @promotion_router.post("/rollback", response_model=AtlasProductionPointer)
 def rollback_production(reason: str) -> AtlasProductionPointer:
+    history = _promotion_store.history(limit=2)
+    if len(history) < 2:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="No prior production candidate to roll back to.")
+    rollback_target = history[1].candidate_id
+    if _candidate_runtime_store.latest(rollback_target) is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Rollback target has no durable runtime binding; production pointer was not changed.",
+        )
     try:
-        return _promotion_store.rollback(reason=reason)
+        pointer = _promotion_store.rollback(reason=reason)
+        activate_current_ollama_model()
+        return pointer
     except ValueError as error:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
 
-
-# --- Adapter foundation ----------------------------------------------------
 
 adapter_router = APIRouter(prefix="/api/v1/atlas/adapters", tags=["atlas-adapters"])
 
