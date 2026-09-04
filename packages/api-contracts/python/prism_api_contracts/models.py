@@ -1614,6 +1614,81 @@ class AtlasTrainingDatasetVersion(ContractModel):
     content_hash: str = Field(min_length=32, max_length=64)
 
 
+class AtlasSystemSeedDomain(str, Enum):
+    """The specific weak-benchmark areas this V1 corpus was written to teach.
+    Distinct from every real-data source class below -- a seed example never
+    claims to be a real Atlas run, real user correction, or real feedback."""
+
+    CAUSAL_SAFETY = "causal_safety"
+    EVIDENCE = "evidence"
+    SQL = "sql"
+    STATISTICS = "statistics"
+    FORECASTING = "forecasting"
+    SENIOR_DS_BEHAVIOR = "senior_ds_behavior"
+    SECURITY_AGENTIC = "security_agentic"
+
+
+class AtlasSystemSeedReviewStatus(str, Enum):
+    DRAFT = "draft"
+    REVIEWED = "reviewed"
+
+
+class AtlasSystemSeedExample(ContractModel):
+    """One hand-authored, reviewed SFT example teaching a specific
+    analytical or safety concept -- never presented as a real Atlas run or
+    real user interaction. ``source_kind`` is always ``"system_seed"``,
+    structurally distinct from ``AtlasTrainingExampleSource.ATLAS_RUN`` and
+    from ``AtlasPreferencePairSource`` (real corrections): mixing these
+    source classes so they become indistinguishable is exactly what this
+    field exists to prevent."""
+
+    seed_example_id: str = Field(min_length=1, max_length=120)
+    seed_version: str = Field(min_length=1, max_length=40)
+    domain: AtlasSystemSeedDomain
+    topic: str = Field(min_length=1, max_length=120)
+    source_kind: Literal["system_seed"] = "system_seed"
+    user_request: str = Field(min_length=1, max_length=2_000)
+    final_answer: str = Field(min_length=1, max_length=4_000)
+    uncertainty: Optional[str] = Field(default=None, max_length=1_000)
+    review_status: AtlasSystemSeedReviewStatus
+    content_hash: str = Field(min_length=32, max_length=64)
+    created_at: datetime
+
+
+class AtlasSystemSeedDomainCount(ContractModel):
+    domain: AtlasSystemSeedDomain
+    example_count: int = Field(ge=0)
+
+
+class AtlasSystemSeedManifest(ContractModel):
+    """Durable, immutable manifest for one released system-seed version.
+
+    A seed version is never mutated after release -- a content change is a
+    new ``seed_version`` and a new manifest, exactly like an immutable
+    ``AtlasTrainingDatasetVersion``."""
+
+    seed_version: str = Field(min_length=1, max_length=40)
+    created_at: datetime
+    example_count: int = Field(ge=0)
+    domain_counts: list[AtlasSystemSeedDomainCount] = Field(default_factory=list)
+    aggregate_content_hash: str = Field(min_length=32, max_length=64)
+    leakage_guard_passed: bool
+
+
+class AtlasCombinedTrainingSourceSummary(ContractModel):
+    """Counts each SFT source class separately -- never blended into one
+    indistinguishable pool, per the locked source-class-separation rule.
+    ``total_eligible`` is a sum for convenience only; the per-source counts
+    remain the auditable record of what actually went into that total."""
+
+    seed_version: str = Field(min_length=1, max_length=40)
+    system_seed_examples: int = Field(ge=0)
+    verified_history_examples: int = Field(ge=0)
+    user_correction_examples: int = Field(ge=0)
+    total_eligible: int = Field(ge=0)
+    computed_at: datetime
+
+
 class AtlasPreferencePairSource(str, Enum):
     """Where a DPO pair came from. Only a real, already-durable correction
     event qualifies -- never a manufactured negative example. KTO has no

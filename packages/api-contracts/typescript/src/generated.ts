@@ -179,6 +179,15 @@ export interface AtlasCleanResponse {
   proposed_operation?: CleanTransformationRequest;
 }
 
+export interface AtlasCombinedTrainingSourceSummary {
+  seed_version: string;
+  system_seed_examples: number;
+  verified_history_examples: number;
+  user_correction_examples: number;
+  total_eligible: number;
+  computed_at: string;
+}
+
 export interface AtlasCouncilConclusion {
   specialist: AtlasSpecialistId;
   conclusion: string;
@@ -627,6 +636,38 @@ export interface AtlasStructuredPlan {
   steps: AtlasPlanStep[];
   created_at: string;
 }
+
+export type AtlasSystemSeedDomain = "causal_safety" | "evidence" | "sql" | "statistics" | "forecasting" | "senior_ds_behavior" | "security_agentic";
+
+export interface AtlasSystemSeedDomainCount {
+  domain: AtlasSystemSeedDomain;
+  example_count: number;
+}
+
+export interface AtlasSystemSeedExample {
+  seed_example_id: string;
+  seed_version: string;
+  domain: AtlasSystemSeedDomain;
+  topic: string;
+  source_kind?: string;
+  user_request: string;
+  final_answer: string;
+  uncertainty?: string;
+  review_status: AtlasSystemSeedReviewStatus;
+  content_hash: string;
+  created_at: string;
+}
+
+export interface AtlasSystemSeedManifest {
+  seed_version: string;
+  created_at: string;
+  example_count: number;
+  domain_counts?: AtlasSystemSeedDomainCount[];
+  aggregate_content_hash: string;
+  leakage_guard_passed: boolean;
+}
+
+export type AtlasSystemSeedReviewStatus = "draft" | "reviewed";
 
 export interface AtlasTrainingDatasetVersion {
   version_id: string;

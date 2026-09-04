@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import os
 import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -26,12 +27,15 @@ from prism_api_contracts import (
     AtlasBenchTaskResult,
     AtlasCandidateArtifact,
     AtlasCandidateVerification,
+    AtlasCombinedTrainingSourceSummary,
     AtlasFoundryCapability,
     AtlasFoundryPreflight,
     AtlasPreferenceDatasetVersion,
     AtlasPreferencePair,
     AtlasProductionPointer,
     AtlasPromotionDecision,
+    AtlasSystemSeedExample,
+    AtlasSystemSeedManifest,
     AtlasTrainingDatasetVersion,
     AtlasTrainingExample,
     AtlasTrainingJob,
@@ -72,6 +76,13 @@ from .atlas_memory import DurableAtlasMemoryStore
 from .atlas_promotion import DurableAtlasPromotionStore, decide_promotion
 from .atlas_promotion_decisions import DurableAtlasPromotionDecisionStore
 from .atlas_resources import governor
+from .atlas_system_seed import (
+    SEED_VERSION,
+    DurableAtlasSystemSeedStore,
+    build_manifest,
+    build_system_seed_corpus,
+    build_verified_system_seed_corpus,
+)
 from .durable_atlas_store import DurableAtlasRunStore
 
 router = APIRouter(prefix="/api/v1/atlas/foundry", tags=["atlas-foundry"])
@@ -87,6 +98,7 @@ _candidate_runtime_store = DurableAtlasCandidateRuntimeStore()
 _candidate_verification_store = DurableAtlasCandidateVerificationStore()
 _promotion_store = DurableAtlasPromotionStore()
 _promotion_decision_store = DurableAtlasPromotionDecisionStore()
+_system_seed_store = DurableAtlasSystemSeedStore()
 _backend = SoupFoundryBackend()
 
 _EXPORT_ROOT = Path(".prism/runtime/foundry-exports")
@@ -116,6 +128,47 @@ def preview_training_dataset(
     limit: int = Query(default=10, ge=1, le=100),
 ) -> list[AtlasTrainingExample]:
     return _training_dataset_store.preview(version_id, split=split, limit=limit)
+
+
+@router.post("/system-seed/release", response_model=AtlasSystemSeedManifest, status_code=status.HTTP_201_CREATED)
+def release_system_seed_corpus() -> AtlasSystemSeedManifest:
+    """Build, leakage-check, and durably release the current system-seed
+    version. Idempotent: releasing an already-released version returns the
+    existing immutable manifest rather than creating a second copy."""
+    examples = build_verified_system_seed_corpus()  # raises on any AtlasBench leakage
+    manifest = build_manifest(examples, leakage_guard_passed=True)
+    return _system_seed_store.release(examples, manifest)
+
+
+@router.get("/system-seed", response_model=list[AtlasSystemSeedManifest])
+def list_system_seed_versions(limit: int = Query(default=50, ge=1, le=200)) -> list[AtlasSystemSeedManifest]:
+    return _system_seed_store.list_manifests(limit=limit)
+
+
+@router.get("/system-seed/{seed_version}/preview", response_model=list[AtlasSystemSeedExample])
+def preview_system_seed_version(
+    seed_version: str, limit: int = Query(default=10, ge=1, le=200)
+) -> list[AtlasSystemSeedExample]:
+    return _system_seed_store.examples(seed_version, limit=limit)
+
+
+@router.get("/training-datasets:combined-summary", response_model=AtlasCombinedTrainingSourceSummary)
+def combined_training_source_summary() -> AtlasCombinedTrainingSourceSummary:
+    """Real counts per SFT source class, kept separate rather than blended:
+    system-seed examples, verified real Atlas-run history, and real user
+    corrections (DPO pairs). Never mixed into one indistinguishable pool --
+    see ``AtlasCombinedTrainingSourceSummary``."""
+    system_seed_examples = len(build_system_seed_corpus())
+    history_examples, _ = AtlasTrainingDatasetBuilder(_run_store).eligible_runs()
+    correction_pairs, _ = AtlasPreferenceDatasetBuilder(_memory_store).eligible_pairs()
+    return AtlasCombinedTrainingSourceSummary(
+        seed_version=SEED_VERSION,
+        system_seed_examples=system_seed_examples,
+        verified_history_examples=len(history_examples),
+        user_correction_examples=len(correction_pairs),
+        total_eligible=system_seed_examples + len(history_examples) + len(correction_pairs),
+        computed_at=datetime.now(timezone.utc),
+    )
 
 
 @router.post("/preference-datasets", response_model=AtlasPreferenceDatasetVersion, status_code=status.HTTP_201_CREATED)
