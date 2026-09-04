@@ -14,20 +14,26 @@ real state; SQL-backed scoped memory, lexical local project knowledge, an
 explicit allowlisted Researcher, compact-metadata Ollama plan proposals, a
 resource-lease governor, and a native-worker sandbox health boundary.
 
-The Foundry wave (10M–10Q) adds, backend-only so far (no REST/UI wiring yet):
-a verified training-dataset generator (SFT) and a real-correction-sourced DPO
-preference-pair generator; a typed `FoundryBackend` abstraction with a real
-`SoupFoundryBackend` (inspected against the actual upstream Soup CLI) and a
-`MockFoundryBackend`, Resource-Governor-integrated job admission/preemption,
-and a candidate-artifact registry; a 90-task AtlasBench corpus across all ten
+The Foundry wave (10M–10R) adds a verified training-dataset generator (SFT)
+and a real-correction-sourced DPO preference-pair generator; a typed
+`FoundryBackend` abstraction with a real `SoupFoundryBackend` (inspected
+against the actual upstream Soup CLI) and a `MockFoundryBackend`,
+Resource-Governor-integrated job admission/preemption, and a
+candidate-artifact registry; a 90-task AtlasBench corpus across all ten
 required categories with a deterministic runner and durable append-only run
-history; and Shadow Brain comparison plus the locked promotion policy
+history; Shadow Brain comparison plus the locked promotion policy
 (PROMOTE_ELIGIBLE/HOLD/REJECT) with an atomic, append-only promotion/rollback
-store. It does not implement a general shell, package installation,
-unrestricted web access, KTO, Cortex 3D UI, voice, desktop packaging, or the
-Atlas Evolution UI (10R — needs the still-missing REST endpoints first).
+store; a REST surface (`atlas_foundry_routes.py`) exposing all of the above
+while deliberately never returning an AtlasBench answer key and never
+accepting a client-supplied promotion decision; and a native Atlas Evolution
+UI (10R) that reads that surface with honest, specific empty states — no
+candidate has ever actually been trained or promoted in any environment this
+project has run in, so those panels are genuinely empty rather than
+fabricated. It does not implement a general shell, package installation,
+unrestricted web access, KTO, Cortex 3D UI, voice, or desktop packaging.
 Windows CPU/memory quotas remain explicitly unsupported without a configured
-container worker. No candidate has ever actually been trained or promoted;
+container worker. No live `AtlasBenchSubject` wraps a real Atlas provider
+yet, so there is no "run the benchmark suite" REST action or UI control; and
 `soup` has never been installed in any environment this project has run in.
 See `PHASE10_ARCHITECTURE.md`, `PHASE10_IMPLEMENTATION_LEDGER.md`, and
 `.prism/checkpoints/phase-10-progress.md`.

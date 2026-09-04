@@ -50,17 +50,46 @@ boundaries/secrets/contract-freshness pass:
   (PROMOTE_ELIGIBLE/HOLD/REJECT), atomic append-only promotion/rollback
   store, and an honest (all-unsupported) adapter-hot-swap capability report.
 
-CI: green through `1af8562`; `063de4d`'s run was in flight at last check
-(a check-in is scheduled — see the live PR for its outcome).
-`phase-4-live-e2e` intermittently fails on unrelated, pre-existing frontend
-Playwright flakiness (documented on the PR, not a regression from this
-wave's Python-only diffs).
+CI: green through `1af8562`; `063de4d` and `fb42013` (docs) both came back
+green too. `phase-4-live-e2e` intermittently fails on unrelated, pre-existing
+frontend Playwright flakiness (documented on the PR, not a regression from
+this wave's Python-only diffs).
 
-Deliberately not done, and not claimed: KTO (no real feedback signal to
-source it from), a live-wired AtlasBench subject (harness is proven against
-reference subjects only), any REST/UI wiring for any of the above, and any
-actual end-to-end Soup training run (the backend is real and tested, but
-`soup` has never been installed anywhere this project has run).
+Deliberately not done, and not claimed at that point: KTO (no real feedback
+signal to source it from), a live-wired AtlasBench subject (harness is
+proven against reference subjects only), any REST/UI wiring for any of the
+above, and any actual end-to-end Soup training run (the backend is real and
+tested, but `soup` has never been installed anywhere this project has run).
+
+## REST wiring + 10R checkpoint (2026-09-04, same session, continued autonomously)
+
+- `61124f5` — wired the entire 10M–10Q backend surface onto FastAPI via a
+  new `atlas_foundry_routes.py` (`/api/v1/atlas/foundry`, `/api/v1/atlas/bench`,
+  `/api/v1/atlas/promotion`, `/api/v1/atlas/adapters`), deliberately narrower
+  than the backend it wraps: no route ever returns an AtlasBench answer key,
+  and there is no client-facing "promote" endpoint. 9 new integration tests.
+  Full local `ruff`/`mypy`/pytest (297 passed)/boundaries/secrets/contract-
+  freshness pass before pushing; frontend typecheck/lint/test:web (35 tests)
+  also passed against the regenerated contract.
+- CI run #131 (`61124f5`) failed `phase-4-live-e2e` on `history-live.spec.ts`
+  — the same pre-existing timing flake already documented in the standing-down
+  PR comment, now its third occurrence (after `b0926ca` and `4c6e8e4`), still
+  on a spec unrelated to this wave's diff. Not re-diagnosed further per that
+  comment's stated scope boundary.
+- `779222b` — 10R Atlas Evolution UI: a native `EvolutionWorkspace` tab
+  wired into the shell (`prism-shell.tsx`, `shell-model.ts`), consuming the
+  routes above with honest empty states throughout (no candidate has ever
+  been trained or promoted in any environment this project has run in).
+  `npm run typecheck`/`lint`/`test:web` (38/38 across 11 suites)/
+  `a11y:baseline`/`contract:check` all passed; no backend files touched.
+  CI run #132 is this session's natural re-run of the `phase-4-live-e2e`
+  flake (the standing-down comment said the next push would retry it
+  naturally) — see the workflow-run status for its outcome as of this
+  checkpoint.
+
+This completes the build order specified for this session's Foundry wave:
+10N, 10O, 10M, Candidate Registry, 10P, 10Q, Promotion/Rollback, Adapter
+Foundation, 10R.
 
 Full detail, module map, and the exact next task are in
 `PHASE10_IMPLEMENTATION_LEDGER.md`. `PHASE_10_COMPLETE` remains `NO`;

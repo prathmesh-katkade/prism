@@ -1,6 +1,6 @@
 # PRISM Claude Session Handoff
 
-## Phase 10 continuation: the Foundry wave, 10M–10Q (2026-09-04)
+## Phase 10 continuation: the Foundry wave, 10M–10R + REST wiring (2026-09-04)
 
 **Read this section first — it supersedes the sections below it while this
 continuation is active.** (The CI-recovery section right below this one is
@@ -81,28 +81,63 @@ posted on PR #15 documenting that this exact failure pattern (same
 partially fixed multiple times during Phase 9, before Phase 10 existed. Not
 a regression introduced by this wave.
 
+**REST wiring + 10R, delivered next in the same session:**
+- **`61124f5` — REST wiring**: new `atlas_foundry_routes.py` exposes the
+  entire 10M–10Q backend surface via `/api/v1/atlas/foundry`,
+  `/api/v1/atlas/bench`, `/api/v1/atlas/promotion`, and
+  `/api/v1/atlas/adapters`, registered on `main.py`. Deliberately narrower
+  than the backend it wraps on two security-relevant boundaries: no route
+  ever returns an `AtlasBenchTask`'s `correct_choice`/`rationale` (only the
+  safe `AtlasBenchCorpusSummary` counts view is public — a route returning
+  full task content would hand any client, including a candidate under
+  evaluation, its own judge's answer key), and there is no "promote"
+  endpoint — only read-only current-production/history and the
+  no-client-input `rollback` action, because a promotion decision must come
+  from a real server-side `decide_promotion()` call over a real suite run,
+  never a client-supplied `AtlasPromotionDecision`. 9 new integration tests.
+  TypeScript contract regenerated.
+- **`779222b` — 10R (Atlas Evolution UI)**: native `EvolutionWorkspace` tab
+  (`apps/web/src/components/evolution-workspace.tsx`) wired into the shell
+  (`prism-shell.tsx`, `shell-model.ts`), consuming exactly the REST surface
+  above. Panels: production pointer + rollback, candidate registry,
+  AtlasBench corpus summary, training/preference dataset builders with
+  version history, training-job list with manual reconcile, append-only
+  promotion/rollback timeline, and the honest (all-unsupported) adapter
+  capability report. Every panel renders a specific empty state when no
+  real data exists — no candidate has ever been trained or promoted in any
+  environment this project has run in, so those panels are genuinely empty,
+  not placeholder UI. New `.evolution-*` CSS classes in `prism.css`; new
+  `evolution-workspace.test.tsx` covers the empty-state render, a fully
+  populated render, and the dataset-build action round-tripping through
+  fetch. `npm run typecheck`/`lint`/`test:web` (38/38 across 11 suites)/
+  `a11y:baseline`/`contract:check` all pass; no backend files touched.
+
 **Deliberately not done, and not claimed as done — read this before assuming
 more is finished than actually is:**
-- **10R (Atlas Evolution UI)**: not started. Every module built this wave is
-  backend-only (durable stores + pure logic + tests) — **nothing is wired to
-  `apps/api/src/prism_api/atlas.py` (the FastAPI router) yet**, so there is
-  no REST surface for a frontend to consume. That wiring is the necessary
-  first step before 10R can begin.
 - **KTO** (10O): no real source signal exists; not fabricated.
 - **A live AtlasBench subject**: the harness is proven correct against
   reference subjects (Perfect/Worst/FirstChoice) only. No subject wraps a
-  real Atlas provider (deterministic or Ollama) yet.
+  real Atlas provider (deterministic or Ollama) yet, so there is no "run the
+  benchmark suite" REST action or UI control either.
 - **An actual end-to-end Soup training run**: never executed anywhere —
   `soup` has never been installed in any environment this project has run
   in. The backend code path to it is real and tested up to that boundary,
-  not beyond it.
+  not beyond it; starting a job through the new UI queues or fails honestly,
+  exactly as the backend already did before this wiring.
 - **Any promotion has ever actually happened**: `DurableAtlasPromotionStore`
   has no production candidate registered anywhere; there is no real "current
-  production Atlas" pointer yet, by design (nothing has been promoted).
+  production Atlas" pointer yet, by design (nothing has been promoted), and
+  the Evolution UI's production panel says so explicitly rather than
+  inventing one.
 
-Exact next task: wire REST endpoints for the above onto `atlas.py`, regenerate
-the TypeScript contract, then build 10R against real (if still-empty) data.
-`PHASE_10_COMPLETE = NO`. `PHASE_11_UNLOCKED = NO`.
+This completes the build order specified for this session's Foundry wave:
+10N, 10O, 10M, Candidate Registry, 10P, 10Q, Promotion/Rollback, Adapter
+Foundation, 10R. Exact next task: wire a first real `AtlasBenchSubject`
+around the existing deterministic Atlas provider so `shadow_compare()`/
+`decide_promotion()` can run against a live subject instead of only the
+reference subjects, then expose a "run the benchmark suite" REST action;
+separately, exercise an actual end-to-end `soup train` run against a real
+Soup install. `PHASE_10_COMPLETE = NO`. `PHASE_11_UNLOCKED = NO`.
 
 ---
 

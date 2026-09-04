@@ -72,7 +72,7 @@ confirmation. **The Foundry wave (10M–10R) begins now.**
 | 10P AtlasBench | ADVANCED (initial corpus) | 90 hand-authored, correctness-checked tasks across all ten required categories (SQL/statistics/ML/forecasting/causal-safety/agentic/evidence/Python-sandbox/personality/general) — an initial wave chosen for correctness over volume, not yet the "thousands of tasks" scale the architecture supports. Frozen, version-controlled answer key with no runtime write path (a candidate cannot see or influence its own judge); deterministic `run_suite()` scoring against a pluggable `AtlasBenchSubject`; append-only durable run history (a rerun is a new `run_id`, never an edit). |
 | 10Q Shadow Brain / Promotion / Rollback | ADVANCED | `shadow_compare()` runs production and candidate through the identical AtlasBench corpus — non-mutation is structural (a subject only ever receives a prompt + choices, returns an index). `decide_promotion()` enforces the locked policy: IMPROVE TARGET CAPABILITY + NO UNACCEPTABLE CRITICAL REGRESSION, against `CRITICAL_CATEGORIES` (SQL/statistics/ML/causal-safety/agentic/evidence/Python-sandbox) — a candidate cannot win on aggregate score while regressing any one critical category. `DurableAtlasPromotionStore` is an append-only production-pointer event log: `promote()` is atomic and refuses any non-`PROMOTE_ELIGIBLE` decision at the storage boundary itself; `rollback()` restores the previous production candidate as a new explicit event, never an in-place undo — the full history IS the rollback list, and no row is ever overwritten. |
 | Adapter Foundation | ADVANCED (honest stub) | Typed logical adapter identities (`atlas-core/sql/statistics/ml/forecast/research`) with a capability report that is truthfully all-`False` right now: no runtime wired into this project can load, unload, or hot-swap a LoRA adapter at inference time, and reporting otherwise would be exactly the fabricated-capability failure this module exists to prevent. Falls back to core Atlas by construction. |
-| 10R Atlas Evolution UI | NOT STARTED | Needs REST endpoints exposing the above (none are wired to `apps/api/src/prism_api/atlas.py` yet — everything so far is backend modules + durable stores + tests) before a real frontend workspace can be built against live data. Exact next task below. |
+| 10R Atlas Evolution UI | ADVANCED (real data, no live promotable candidate yet) | Native `EvolutionWorkspace` tab wired into the shell, reading Foundry capability, AtlasBench corpus summary, current/history promotion pointers, candidates, training/preference dataset versions, training jobs, and adapter capabilities from the routes below. Every panel renders a specific, honest empty state (no candidate trained, no promotion made, no job queued) rather than a placeholder — there is nothing to fake because no candidate has ever actually been trained or promoted in this environment. The only mutating action on the promotion panel is rollback (operator-supplied reason, never a client-supplied verdict); dataset builders and job reconciliation call the same read/write boundary the REST layer enforces. |
 | 10J–10K, 10S–10T | NOT STARTED | Multimodal, voice, and desktop-packaging-adjacent gates remain future internal gates untouched by this wave. |
 | 10U–10W | NOT STARTED | Flagship workflow and final certification remain out of scope for this wave. |
 
@@ -162,17 +162,60 @@ Deliberately not fabricated in this wave:
   is wired to `apps/api/src/prism_api/atlas.py` (the FastAPI router) yet.
   Everything above is backend modules, durable stores, and tests only.
 
+## REST wiring + 10R (2026-09-04, same session, continued autonomously)
+
+| Commit | Unit | Module(s) |
+| --- | --- | --- |
+| `61124f5` | REST wiring for 10M–10Q | `atlas_foundry_routes.py` (new), `main.py` router registration, `generated.ts` regenerated |
+| `779222b` | 10R Atlas Evolution UI | `evolution-workspace.tsx` (new), `evolution-workspace.test.tsx` (new), `prism-shell.tsx`, `shell-model.ts`, `prism.css` |
+
+`atlas_foundry_routes.py` exposes `/api/v1/atlas/foundry`, `/api/v1/atlas/bench`,
+`/api/v1/atlas/promotion`, and `/api/v1/atlas/adapters`, deliberately narrower
+than the backend surface it wraps on two security-relevant boundaries: no
+route ever returns an `AtlasBenchTask`'s `correct_choice`/`rationale` (only
+the safe `AtlasBenchCorpusSummary` — counts, no answer key — is public), and
+there is no "promote" endpoint — only read-only current-production/history
+and the no-client-input `rollback` action, because a promotion decision must
+come from a real server-side `decide_promotion()` call over a real suite run,
+never a client-supplied `AtlasPromotionDecision`. 9 new integration tests
+verify both boundaries plus the training/preference dataset build-list-preview
+round trip, job start/cancel/reconcile, and clean 404s. 10R's
+`EvolutionWorkspace` consumes exactly this surface; see the 10R row above for
+what it renders and why every empty state is honest rather than a fabricated
+"current model."
+
+Both commits: `npm run typecheck`/`lint`/`test:web` pass (38/38 across 11
+suites at `779222b`); `61124f5`'s backend changes also passed the full
+`ruff`/`mypy`/pytest (297 passed)/boundaries/secrets/contract-freshness
+pass locally before pushing. `phase-4-live-e2e` failed a third time at
+`61124f5` (CI run #131) on the same pre-existing `history-live.spec.ts`
+timing flake already documented in the standing-down PR comment (see
+`b0926ca`/`4c6e8e4`'s occurrences above) — same assertion
+(`'3 returned / 3 total rows'`), still nowhere near this wave's diff.
+`779222b`'s CI run (#132) is the natural re-run this situation calls for;
+see `.prism/checkpoints/phase-10-progress.md` for its outcome.
+
+Deliberately not done in this increment:
+- No live `AtlasBenchSubject` wraps a real Atlas provider yet, so there is
+  no "run the benchmark suite" REST action — only read-only run history for
+  whatever a caller runs out-of-band.
+- No candidate has ever actually been promoted in any environment this
+  project has run in, so the Evolution UI's production/candidate/history
+  panels are exercised by tests against real (empty or seeded-in-test) durable
+  state, not against a real end-to-end promotion that has actually happened.
+- `soup` remains absent from every environment this project runs in; starting
+  a real Foundry job through the UI will queue or fail honestly, exactly as
+  the backend already did before this wiring.
+
 ## Exact next task
 
-10R (Atlas Evolution UI) needs real data to render, which needs REST
-endpoints first: wire `GET/POST` routes for training/preference dataset
-builds, Foundry job start/status/cancel, AtlasBench suite runs, and
-promotion/rollback onto `apps/api/src/prism_api/atlas.py`, regenerate the
-TypeScript contract, then build the native Evolution workspace against that
-real data (production vs candidate, category deltas, verdict, promotion/
-rollback history, clickable benchmark failures) — no fake animations around
-nonexistent model state. In parallel: certify this Foundry wave's CI run
-once green, and consider wiring a first real AtlasBench subject (a thin
-adapter around the existing deterministic Atlas provider) so `soup train`'s
-actual end-to-end path can eventually be exercised against a real install.
-Do not start Phase 11.
+The build order specified for this session (10N, 10O, 10M, Candidate
+Registry, 10P, 10Q, Promotion/Rollback, Adapter Foundation, 10R) is now
+complete. Remaining natural next increments, none started here: wire a first
+real `AtlasBenchSubject` around the existing deterministic Atlas provider so
+`shadow_compare`/`decide_promotion` can run against a live subject instead of
+only the reference (Perfect/Worst/FirstChoice) subjects; expose a "run the
+benchmark suite" REST action once that subject exists; and exercise an actual
+end-to-end `soup train` run against a real Soup install to move
+`SoupFoundryBackend` from "real and tested" to "verified end-to-end."
+`PHASE_10_COMPLETE` remains `NO`. Do not start Phase 11.
