@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import type {
   AtlasAdapterCapability,
   AtlasBenchCorpusSummary,
+  AtlasBenchSuiteRun,
   AtlasCandidateArtifact,
   AtlasFoundryCapability,
   AtlasPreferenceDatasetVersion,
@@ -16,6 +17,7 @@ import { apiUrl } from "../config/api";
 export function EvolutionWorkspace() {
   const [capability, setCapability] = useState<AtlasFoundryCapability | null>(null);
   const [corpus, setCorpus] = useState<AtlasBenchCorpusSummary | null>(null);
+  const [lastBenchRun, setLastBenchRun] = useState<AtlasBenchSuiteRun | null>(null);
   const [current, setCurrent] = useState<AtlasProductionPointer | null>(null);
   const [history, setHistory] = useState<AtlasProductionPointer[]>([]);
   const [candidates, setCandidates] = useState<AtlasCandidateArtifact[]>([]);
@@ -67,6 +69,22 @@ export function EvolutionWorkspace() {
     }
   }
 
+  async function runLiveAtlasBench() {
+    setBusy(true); setError(null);
+    try {
+      const response = await fetch(apiUrl("/api/v1/atlas/bench/runs?provider=ollama"), { method: "POST" });
+      if (!response.ok) {
+        setError(((await response.json()) as { detail?: string }).detail ?? "AtlasBench could not run against the live provider.");
+        return;
+      }
+      setLastBenchRun((await response.json()) as AtlasBenchSuiteRun);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "AtlasBench failed to run.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <article className="evolution-workspace">
       <header className="atlas-heading">
@@ -90,7 +108,7 @@ export function EvolutionWorkspace() {
           }}
         />
         <CandidatePanel candidates={candidates} />
-        <CorpusPanel corpus={corpus} />
+        <CorpusPanel corpus={corpus} lastRun={lastBenchRun} busy={busy} onRun={() => void runLiveAtlasBench()} />
       </section>
 
       <section className="evolution-grid">
@@ -149,7 +167,7 @@ function CandidatePanel({ candidates }: { candidates: AtlasCandidateArtifact[] }
   );
 }
 
-function CorpusPanel({ corpus }: { corpus: AtlasBenchCorpusSummary | null }) {
+function CorpusPanel({ corpus, lastRun, busy, onRun }: { corpus: AtlasBenchCorpusSummary | null; lastRun: AtlasBenchSuiteRun | null; busy: boolean; onRun: () => void }) {
   return (
     <aside className="atlas-council evolution-panel">
       <span className="eyebrow">ATLASBENCH CORPUS</span>
@@ -159,6 +177,10 @@ function CorpusPanel({ corpus }: { corpus: AtlasBenchCorpusSummary | null }) {
           <ul className="evolution-category-list">
             {(corpus.category_counts ?? []).map((entry) => <li key={entry.category}><span>{entry.category.replaceAll("_", " ")}</span><span>{entry.task_count}</span></li>)}
           </ul>
+          <button className="secondary" disabled={busy} onClick={onRun}>Run live AtlasBench</button>
+          {lastRun ? (
+            <p><strong>{lastRun.total_passed}/{lastRun.total_tasks}</strong> passed · {lastRun.subject_id}</p>
+          ) : <small>No live provider benchmark has been run from this workspace yet.</small>}
         </>
       ) : <p>Corpus summary is unavailable.</p>}
     </aside>
