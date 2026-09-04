@@ -4,6 +4,7 @@ import time
 
 from fastapi.testclient import TestClient
 from prism_api.main import create_app
+from prism_api.atlas_bench_runner import FirstChoiceSubject
 from prism_api_contracts import AtlasPlanState, AtlasRunResponse, AtlasTrainingRecipeMethod
 
 
@@ -46,6 +47,44 @@ def test_bench_corpus_summary_never_leaks_the_answer_key() -> None:
     raw = response.text
     assert "correct_choice" not in raw
     assert "rationale" not in raw
+
+
+def test_live_bench_refuses_to_fabricate_a_deterministic_provider_score() -> None:
+    client = TestClient(create_app())
+    response = client.post("/api/v1/atlas/bench/runs", params={"provider": "deterministic"})
+    assert response.status_code == 409
+    assert "does not implement general multiple-choice inference" in response.json()["detail"]
+
+
+def test_live_bench_server_owns_scoring_and_persists_the_run(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    from prism_api import atlas_bench_live
+
+    monkeypatch.setattr(
+        atlas_bench_live,
+        "make_live_subject",
+        lambda provider: FirstChoiceSubject(subject_id=f"live_test_{provider.value}"),
+    )
+    client = TestClient(create_app())
+
+    response = client.post("/api/v1/atlas/bench/runs", params={"provider": "ollama"})
+    assert response.status_code == 201
+    run = response.json()
+    assert run["subject_id"] == "live_test_ollama"
+    assert run["total_tasks"] >= 80
+    assert 0 <= run["total_passed"] <= run["total_tasks"]
+
+    fetched = client.get(f"/api/v1/atlas/bench/runs/detail/{run['run_id']}")
+    assert fetched.status_code == 200
+    assert fetched.json()["run_id"] == run["run_id"]
+
+    # The client still cannot supply an answer, judge, threshold or verdict.
+    forbidden = client.post(
+        "/api/v1/atlas/bench/runs",
+        params={"provider": "ollama", "correct_choice": 0, "verdict": "promote_eligible"},
+    )
+    assert forbidden.status_code == 201
+    assert "correct_choice" not in forbidden.text
+    assert "rationale" not in forbidden.text
 
 
 def test_adapter_capabilities_endpoint_is_honest() -> None:
