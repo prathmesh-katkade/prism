@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from datetime import datetime, timezone
 
 import pytest
@@ -51,6 +52,20 @@ def test_candidate_runtime_binding_rejects_command_shaped_model_names(tmp_path) 
         store.bind_ollama("candidate_1", "candidate; rm -rf /")
 
 
+def test_unverified_ollama_configuration_does_not_create_production_pointer(
+    tmp_path, monkeypatch
+) -> None:  # type: ignore[no-untyped-def]
+    database_url = f"sqlite:///{tmp_path / 'unverified-bootstrap.db'}"
+    monkeypatch.setenv("PRISM_ANALYTICAL_HISTORY_DATABASE_URL", database_url)
+    monkeypatch.setenv("PRISM_AI_PROVIDER", "ollama")
+    monkeypatch.setenv("PRISM_ATLAS_OLLAMA_MODEL", "configured-but-unprobed:1")
+
+    active = ensure_configured_production_baseline()
+
+    assert active == "configured-but-unprobed:1"
+    assert DurableAtlasPromotionStore(database_url).current_production() is None
+
+
 def test_configured_ollama_bootstrap_is_durable_idempotent_and_runtime_effective(
     tmp_path, monkeypatch
 ) -> None:  # type: ignore[no-untyped-def]
@@ -73,8 +88,9 @@ def test_configured_ollama_bootstrap_is_durable_idempotent_and_runtime_effective
 
     first_event_id = pointer.event_id
     assert ensure_configured_production_baseline(runtime_model_digest="different-digest") == "production-model:1"
-    assert promotion_store.current_production() is not None
-    assert promotion_store.current_production().event_id == first_event_id  # type: ignore[union-attr]
+    current = promotion_store.current_production()
+    assert current is not None
+    assert current.event_id == first_event_id
     assert len(promotion_store.history()) == 1
 
 
@@ -109,19 +125,13 @@ def test_promotion_activation_and_rollback_restore_exact_bound_model(
     promoted = promotion_store.promote(decision, reason="test promotion")
     assert promoted.candidate_id == "candidate_1"
     assert activate_current_ollama_model() == "candidate-model:1"
-    assert os_environ_model() == "candidate-model:1"
+    assert os.environ.get("PRISM_ATLAS_OLLAMA_MODEL") == "candidate-model:1"
 
     rolled_back = promotion_store.rollback(reason="test rollback")
     assert rolled_back.candidate_id != "candidate_1"
     assert activate_current_ollama_model() == "production-model:1"
-    assert os_environ_model() == "production-model:1"
+    assert os.environ.get("PRISM_ATLAS_OLLAMA_MODEL") == "production-model:1"
     assert len(promotion_store.history()) == 3
-
-
-def os_environ_model() -> str | None:
-    import os
-
-    return os.environ.get("PRISM_ATLAS_OLLAMA_MODEL")
 
 
 class _NoTrainDatasetStore:
