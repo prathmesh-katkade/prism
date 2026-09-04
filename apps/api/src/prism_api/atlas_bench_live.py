@@ -28,12 +28,11 @@ from prism_api_contracts import AtlasBenchSuiteRun, AtlasModelProviderName
 from .atlas_bench_corpus import CORPUS_VERSION, all_tasks, corpus_hash
 from .atlas_bench_runner import AtlasBenchSubject, run_suite
 from .atlas_bench_store import DurableAtlasBenchStore
+from .atlas_candidate_runtime import ensure_configured_production_baseline
 from .atlas_runtime import OllamaAtlasProvider
 
 router = APIRouter(prefix="/api/v1/atlas/bench", tags=["atlas-bench"])
 _bench_store = DurableAtlasBenchStore()
-# A module-level singleton, not a call in the argument default itself -- keeps ruff's B008
-# (no function calls as default values) happy without losing the enum-typed default.
 _provider_query_default = Query(default=AtlasModelProviderName.OLLAMA)
 
 
@@ -66,9 +65,6 @@ class AtlasProviderBenchSubject:
             )
 
         self.provider = provider
-        # A production baseline must use the same configured Ollama endpoint
-        # and model as Atlas itself.  The older AtlasBench-specific names stay
-        # as explicit compatibility overrides, never as divergent defaults.
         configured_base_url = os.environ.get("PRISM_OLLAMA_BASE_URL", "http://127.0.0.1:11434")
         self.base_url = os.environ.get(
             "PRISM_ATLAS_OLLAMA_URL", f"{configured_base_url.rstrip('/')}/api/generate"
@@ -81,13 +77,7 @@ class AtlasProviderBenchSubject:
         self.subject_id = f"atlas_ollama_{model_fingerprint}"
 
     def _probe_model_digest(self) -> str:
-        """Verify the Ollama daemon is reachable and the requested model exists.
-
-        A configured-but-dead provider must never be persisted as a real 0/90
-        benchmark. The subject is constructed only after a successful `/api/tags`
-        probe that finds the configured model.
-        """
-
+        """Verify the Ollama daemon is reachable and the requested model exists."""
         tags_url = self.base_url.rsplit("/api/generate", 1)[0].rstrip("/") + "/api/tags"
         try:
             response = httpx.get(tags_url, timeout=3.0)
@@ -109,14 +99,7 @@ class AtlasProviderBenchSubject:
         )
 
     def answer(self, prompt: str, choices: Sequence[str]) -> int:
-        """Return one choice index, or ``-1`` when one task response is invalid.
-
-        Runtime reachability is validated at construction time. A malformed
-        individual model response is scored as an incorrect task rather than
-        leaking evaluator information back into the prompt or aborting and
-        losing the rest of the append-only suite evidence.
-        """
-
+        """Return one choice index, or ``-1`` when one task response is invalid."""
         safe_choices = [str(choice)[:2_000] for choice in choices]
         model_prompt: dict[str, Any] = {
             "instruction": (
@@ -151,9 +134,7 @@ class AtlasProviderBenchSubject:
 
 
 def make_live_subject(provider: AtlasModelProviderName) -> AtlasBenchSubject:
-    """Factory kept separate so route tests can substitute a non-model subject
-    without ever exposing or modifying the frozen answer key."""
-
+    """Factory separated so tests can substitute a non-model subject safely."""
     return AtlasProviderBenchSubject(provider)
 
 
@@ -163,15 +144,18 @@ def run_live_benchmark(
 ) -> AtlasBenchSuiteRun:
     """Run and durably record AtlasBench against a real configured provider.
 
-    The client chooses only the provider. The server owns the corpus, answer
-    key, scorer, thresholds, and persistence. No client answer, evaluator,
-    promotion verdict, or threshold is accepted by this endpoint.
+    A real Ollama subject has already passed the live `/api/tags` model probe
+    before this function persists anything. That verified model may therefore
+    establish the initial durable production rollback anchor. Test/reference
+    subjects never create such an anchor.
     """
-
     try:
         subject = make_live_subject(provider)
     except AtlasBenchSubjectUnavailable as error:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
+
+    if isinstance(subject, AtlasProviderBenchSubject):
+        ensure_configured_production_baseline(runtime_model_digest=subject.model_digest)
 
     tasks = all_tasks()
     suite_run, results = run_suite(
