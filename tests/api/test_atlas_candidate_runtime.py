@@ -5,8 +5,19 @@ from datetime import datetime, timezone
 import pytest
 from fastapi import HTTPException
 from prism_api import atlas_foundry_routes
-from prism_api.atlas_candidate_runtime import DurableAtlasCandidateRuntimeStore
-from prism_api_contracts import AtlasTrainingRecipe, AtlasTrainingRecipeMethod, AtlasTrainingSplit
+from prism_api.atlas_candidate_runtime import (
+    DurableAtlasCandidateRuntimeStore,
+    activate_current_ollama_model,
+    ensure_configured_production_baseline,
+)
+from prism_api.atlas_promotion import DurableAtlasPromotionStore
+from prism_api_contracts import (
+    AtlasPromotionDecision,
+    AtlasPromotionVerdict,
+    AtlasTrainingRecipe,
+    AtlasTrainingRecipeMethod,
+    AtlasTrainingSplit,
+)
 
 
 def test_candidate_runtime_binding_is_durable_and_append_only(tmp_path) -> None:  # type: ignore[no-untyped-def]
@@ -38,6 +49,79 @@ def test_candidate_runtime_binding_rejects_command_shaped_model_names(tmp_path) 
 
     with pytest.raises(ValueError, match="unsupported characters"):
         store.bind_ollama("candidate_1", "candidate; rm -rf /")
+
+
+def test_configured_ollama_bootstrap_is_durable_idempotent_and_runtime_effective(
+    tmp_path, monkeypatch
+) -> None:  # type: ignore[no-untyped-def]
+    database_url = f"sqlite:///{tmp_path / 'bootstrap.db'}"
+    monkeypatch.setenv("PRISM_ANALYTICAL_HISTORY_DATABASE_URL", database_url)
+    monkeypatch.setenv("PRISM_AI_PROVIDER", "ollama")
+    monkeypatch.setenv("PRISM_ATLAS_OLLAMA_MODEL", "production-model:1")
+
+    active = ensure_configured_production_baseline(runtime_model_digest="prod-digest")
+    promotion_store = DurableAtlasPromotionStore(database_url)
+    pointer = promotion_store.current_production()
+
+    assert active == "production-model:1"
+    assert pointer is not None
+    assert pointer.decision_id is None
+    binding = DurableAtlasCandidateRuntimeStore(database_url).latest(pointer.candidate_id)
+    assert binding is not None
+    assert binding.runtime_model == "production-model:1"
+    assert binding.runtime_model_digest == "prod-digest"
+
+    first_event_id = pointer.event_id
+    assert ensure_configured_production_baseline(runtime_model_digest="different-digest") == "production-model:1"
+    assert promotion_store.current_production() is not None
+    assert promotion_store.current_production().event_id == first_event_id  # type: ignore[union-attr]
+    assert len(promotion_store.history()) == 1
+
+
+def test_promotion_activation_and_rollback_restore_exact_bound_model(
+    tmp_path, monkeypatch
+) -> None:  # type: ignore[no-untyped-def]
+    database_url = f"sqlite:///{tmp_path / 'promotion-runtime.db'}"
+    monkeypatch.setenv("PRISM_ANALYTICAL_HISTORY_DATABASE_URL", database_url)
+    monkeypatch.setenv("PRISM_AI_PROVIDER", "ollama")
+    monkeypatch.setenv("PRISM_ATLAS_OLLAMA_MODEL", "production-model:1")
+
+    ensure_configured_production_baseline(runtime_model_digest="prod-digest")
+    runtime_store = DurableAtlasCandidateRuntimeStore(database_url)
+    runtime_store.bind_ollama(
+        "candidate_1",
+        "candidate-model:1",
+        runtime_model_digest="candidate-digest",
+    )
+    decision = AtlasPromotionDecision(
+        decision_id="decision_1",
+        candidate_id="candidate_1",
+        production_run_id="bench_prod",
+        candidate_run_id="bench_candidate",
+        verdict=AtlasPromotionVerdict.PROMOTE_ELIGIBLE,
+        overall_production_pass_rate=0.5,
+        overall_candidate_pass_rate=0.6,
+        critical_regressions=[],
+        decided_at=datetime.now(timezone.utc),
+    )
+    promotion_store = DurableAtlasPromotionStore(database_url)
+
+    promoted = promotion_store.promote(decision, reason="test promotion")
+    assert promoted.candidate_id == "candidate_1"
+    assert activate_current_ollama_model() == "candidate-model:1"
+    assert os_environ_model() == "candidate-model:1"
+
+    rolled_back = promotion_store.rollback(reason="test rollback")
+    assert rolled_back.candidate_id != "candidate_1"
+    assert activate_current_ollama_model() == "production-model:1"
+    assert os_environ_model() == "production-model:1"
+    assert len(promotion_store.history()) == 3
+
+
+def os_environ_model() -> str | None:
+    import os
+
+    return os.environ.get("PRISM_ATLAS_OLLAMA_MODEL")
 
 
 class _NoTrainDatasetStore:
