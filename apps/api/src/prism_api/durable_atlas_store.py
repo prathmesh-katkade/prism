@@ -180,6 +180,18 @@ class DurableAtlasRunStore:
             connection.exec_driver_sql("SELECT 1")
         return True
 
+    def list_run_ids(self, *, state: Optional[str] = None, limit: int = 1000) -> list[str]:
+        """List run ids, oldest first, optionally filtered to one plan state.
+
+        Used by consumers (the Foundry training-dataset builder, so far) that
+        need to walk durable run history rather than fetch one run by id.
+        """
+        statement = select(_runs.c.run_id).order_by(_runs.c.created_at).limit(limit)
+        if state is not None:
+            statement = statement.where(_runs.c.state == state)
+        with self.engine.connect() as connection:
+            return [str(row) for row in connection.execute(statement).scalars().all()]
+
     def create(
         self, request: AtlasRunRequest, provider: AtlasModelProviderName, plan: AtlasStructuredPlan
     ) -> AtlasRunResponse:

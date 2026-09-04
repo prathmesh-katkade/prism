@@ -1385,3 +1385,65 @@ class AtlasResourceSnapshot(ContractModel):
     vram_total_mb: Optional[int] = Field(default=None, ge=0)
     gpu_telemetry_detail: str = Field(min_length=1, max_length=1_000)
     active_leases: list[AtlasResourceLease] = Field(default_factory=list)
+
+
+class AtlasTrainingExampleSource(str, Enum):
+    """Where a training example was derived from. Only ATLAS_RUN exists so
+    far; USER_CORRECTION (for DPO pairs) and others arrive with 10O."""
+
+    ATLAS_RUN = "atlas_run"
+
+
+class AtlasTrainingSplit(str, Enum):
+    TRAIN = "train"
+    VALIDATION = "validation"
+    TEST = "test"
+
+
+class AtlasTrainingExample(ContractModel):
+    """One verified SFT sample built from real, durable Atlas run history.
+
+    Deliberately excludes hidden chain-of-thought: ``plan_steps`` and
+    ``council`` carry only the same typed, already-redacted structures Atlas
+    exposes to the user (declared tool calls/state, visible specialist
+    conclusions and objections) -- never private model reasoning. Dataset
+    context stays compact metadata (an id/revision reference); no raw
+    dataset rows are ever included.
+    """
+
+    example_id: str = Field(min_length=1, max_length=120)
+    source: AtlasTrainingExampleSource
+    source_run_id: str = Field(min_length=1, max_length=120)
+    dataset_id: str = Field(min_length=1, max_length=255)
+    split: AtlasTrainingSplit
+    user_request: str = Field(min_length=1, max_length=2_000)
+    dataset_metadata: dict[str, object] = Field(default_factory=dict)
+    plan_steps: list[AtlasPlanStep] = Field(default_factory=list, max_length=20)
+    evidence: list[AtlasEvidenceReference] = Field(default_factory=list)
+    council: list[AtlasCouncilConclusion] = Field(default_factory=list)
+    final_answer: str = Field(min_length=1, max_length=4_000)
+    uncertainty: Optional[str] = Field(default=None, max_length=1_000)
+    quality_label: str = Field(min_length=1, max_length=64)
+    content_hash: str = Field(min_length=32, max_length=64)
+    created_at: datetime
+
+
+class AtlasTrainingExclusion(ContractModel):
+    """A run considered but not turned into a training example, and why --
+    the dataset builder must be inspectable, not a black box."""
+
+    run_id: str = Field(min_length=1, max_length=120)
+    reason: str = Field(min_length=1, max_length=500)
+
+
+class AtlasTrainingDatasetVersion(ContractModel):
+    """Durable manifest for one deterministic export of the training corpus."""
+
+    version_id: str = Field(min_length=1, max_length=120)
+    created_at: datetime
+    source_run_count: int = Field(ge=0)
+    excluded_count: int = Field(ge=0)
+    train_count: int = Field(ge=0)
+    validation_count: int = Field(ge=0)
+    test_count: int = Field(ge=0)
+    content_hash: str = Field(min_length=32, max_length=64)
