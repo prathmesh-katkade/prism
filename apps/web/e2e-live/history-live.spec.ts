@@ -19,23 +19,30 @@ test("History workspace shows a real SQL Lab result through the live API and ope
 
   // The live suite shares one API process, so earlier tests may have created
   // other local datasets. Bind SQL Lab to the dataset created by THIS test
-  // instead of relying on connection-list ordering.
-  //
-  // A CSS-scoped locator, not getByLabel: the <select> sits inside a
-  // <label>Source<select>...</select></label>, and per the accessible-name
-  // "embedded control" computation its computed name becomes "Source
-  // <currently selected option text>" once a connection auto-selects --
-  // exactly what happens here, since earlier tests already left connections
-  // in the list. That made getByLabel("Source", { exact: true }) match zero
-  // elements. The toolbar has exactly one <select> (Parameters is a
-  // <textarea>), so this is unambiguous without depending on accname value.
+  // instead of relying on connection-list ordering. Use the toolbar's actual
+  // select rather than its accessible label because Monaco/query hydration can
+  // render before the labelled control is exposed to the accessibility tree,
+  // and because the <select>'s accessible name computation includes its
+  // currently selected option text once earlier tests have left connections
+  // registered -- the toolbar has exactly one <select> (Parameters is a
+  // <textarea>), so this stays unambiguous without depending on accname value.
   const source = page.locator(".query-toolbar select");
-  await expect(source).toBeVisible();
-  const schemaResponse = page.waitForResponse((response) =>
-    response.url().includes(`/sql-lab/connections/local%3A${dataset.dataset_id}/schema`) && response.status() === 200
-  );
-  await source.selectOption(`local:${dataset.dataset_id}`);
-  await schemaResponse;
+  await expect(source).toBeVisible({ timeout: 10_000 });
+  const targetConnectionId = `local:${dataset.dataset_id}`;
+  await expect(source.locator(`option[value="${targetConnectionId}"]`)).toHaveCount(1, { timeout: 10_000 });
+
+  // In the common case the newly uploaded dataset is already the selected
+  // connection and its schema request has completed before this assertion. Do
+  // not wait for a second response that will never arrive. Only synchronize on
+  // the schema request when we actually change the connection.
+  if (await source.inputValue() !== targetConnectionId) {
+    const schemaResponse = page.waitForResponse((response) => {
+      const decodedUrl = decodeURIComponent(response.url());
+      return decodedUrl.includes(`/sql-lab/connections/${targetConnectionId}/schema`) && response.status() === 200;
+    });
+    await source.selectOption(targetConnectionId);
+    await schemaResponse;
+  }
 
   const runQuery = page.getByRole("button", { name: /Run query/ });
   await expect(runQuery).toBeEnabled();
