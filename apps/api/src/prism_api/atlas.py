@@ -29,10 +29,11 @@ from prism_api_contracts import (
     CortexGraphState,
 )
 
+from .atlas_event_stream import durable_stream_events
 from .atlas_memory import DurableAtlasMemoryStore
 from .atlas_research import researcher
 from .atlas_resources import governor
-from .atlas_runtime import SPECIALISTS, cortex_graph, execute, providers, runs, stream_events
+from .atlas_runtime import SPECIALISTS, cortex_graph, execute, providers, runs
 from .atlas_sandbox import AtlasPythonSandbox
 from .transport import sse_response
 
@@ -148,7 +149,7 @@ def resource_snapshot() -> AtlasResourceSnapshot:
 
 @router.get("/runs/{run_id}/events")
 async def events(run_id: str):  # type: ignore[no-untyped-def]
-    return sse_response(stream_events(run_id))
+    return sse_response(durable_stream_events(runs, run_id))
 
 
 @router.get("/runs/{run_id}/cortex", response_model=CortexGraphState)
