@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import os
+
+from prism_api import atlas_platform
 from prism_api.atlas_sandbox import AtlasPythonSandbox
 from prism_api_contracts import AtlasSandboxErrorKind, AtlasSandboxExecutionRequest
 
@@ -50,3 +53,19 @@ def test_sandbox_worker_capabilities_are_explicit_about_platform_quotas(tmp_path
     assert health.network_policy == "deny_by_default"
     assert health.process_tree_termination is True
     assert health.execution_mode == "native_worker"
+
+
+def test_new_process_group_flag_is_a_noop_off_windows() -> None:
+    # This process is not Windows in CI; the Windows-only creation flag must
+    # resolve to a portable no-op rather than raising AttributeError.
+    if os.name != "nt":
+        assert atlas_platform.new_process_group_flag() == 0
+
+
+def test_memory_status_reads_something_truthful_or_admits_it_cannot(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    # Never fabricate a number: either a real (total, available) pair or an
+    # honest "unknown" -- the Resource Governor's truthful-telemetry contract.
+    status = atlas_platform.read_memory_status_mb()
+    if status is not None:
+        assert status.total_mb > 0
+        assert status.available_mb >= 0

@@ -61,3 +61,18 @@ def test_resource_governor_preempts_lower_priority_cancellable_work() -> None:
     interactive = governor.acquire(AtlasResourceLeaseRequest(workload=AtlasResourceWorkload(workload_id="chat", priority=AtlasResourcePriority.USER_INTERACTION, description="chat")))
     assert indexing.state == "active" and interactive.state == "active"
     assert any(item.lease_id == indexing.lease_id and item.state == "preempted" for item in governor.snapshot().active_leases)
+
+
+def test_resource_governor_snapshot_reports_truthful_memory_on_any_platform() -> None:
+    # Regression guard: this used to reach for ``ctypes.windll`` unconditionally
+    # (only caught AttributeError/OSError at runtime, but unresolved on non-nt
+    # typeshed for mypy). It must never crash, and must never fabricate a
+    # memory figure it cannot actually read.
+    snapshot = AtlasResourceGovernor().snapshot()
+    assert snapshot.cpu_count >= 1
+    if snapshot.memory_total_mb is not None:
+        assert snapshot.memory_total_mb > 0
+        assert snapshot.memory_available_mb is not None
+        assert snapshot.memory_available_mb >= 0
+    else:
+        assert snapshot.memory_available_mb is None

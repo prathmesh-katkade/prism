@@ -22,6 +22,8 @@ from prism_api_contracts import (
     AtlasSandboxWorkerHealth,
 )
 
+from .atlas_platform import new_process_group_flag
+
 _ALLOWED_TOP_LEVEL = {
     "pandas",
     "numpy",
@@ -210,7 +212,7 @@ class AtlasPythonSandbox:
             text=True,
             encoding="utf-8",
             errors="replace",
-            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0,
+            creationflags=new_process_group_flag(),
             start_new_session=os.name != "nt",
         )
         limits = ["timeout", "process_tree", "environment", "network", "filesystem", "import_policy"]

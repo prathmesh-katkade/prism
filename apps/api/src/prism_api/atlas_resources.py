@@ -20,6 +20,8 @@ from prism_api_contracts import (
     AtlasResourceSnapshot,
 )
 
+from .atlas_platform import read_memory_status_mb
+
 
 class AtlasResourceGovernor:
     def __init__(self, max_active: int | None = None) -> None:
@@ -67,17 +69,9 @@ class AtlasResourceGovernor:
         return False, None, None, "GPU telemetry is unavailable; Atlas will not assume a GPU or VRAM budget."
 
     def snapshot(self) -> AtlasResourceSnapshot:
-        total = available = None
-        try:
-            import ctypes
-            class MemoryStatus(ctypes.Structure):
-                _fields_ = [("length", ctypes.c_ulong), ("memory_load", ctypes.c_ulong), ("total_phys", ctypes.c_ulonglong), ("avail_phys", ctypes.c_ulonglong), ("total_page", ctypes.c_ulonglong), ("avail_page", ctypes.c_ulonglong), ("total_virtual", ctypes.c_ulonglong), ("avail_virtual", ctypes.c_ulonglong), ("avail_extended_virtual", ctypes.c_ulonglong)]
-            status = MemoryStatus()
-            status.length = ctypes.sizeof(status)
-            ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(status))
-            total, available = status.total_phys // 1_048_576, status.avail_phys // 1_048_576
-        except (AttributeError, OSError):
-            pass
+        memory = read_memory_status_mb()
+        total = memory.total_mb if memory else None
+        available = memory.available_mb if memory else None
         gpu, name, vram, detail = self._gpu()
         return AtlasResourceSnapshot(cpu_count=os.cpu_count() or 1, memory_total_mb=total, memory_available_mb=available, storage_free_mb=shutil.disk_usage(Path.cwd()).free // 1_048_576, gpu_available=gpu, gpu_name=name, vram_total_mb=vram, gpu_telemetry_detail=detail, active_leases=list(self._leases.values()))
 
