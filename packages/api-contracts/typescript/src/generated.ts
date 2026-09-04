@@ -162,6 +162,12 @@ export interface AtlasCouncilConclusion {
   evidence?: AtlasEvidenceReference[];
 }
 
+export interface AtlasCriticalRegression {
+  category: AtlasBenchCategory;
+  production_pass_rate: number;
+  candidate_pass_rate: number;
+}
+
 export interface AtlasEvidence {
   label: string;
   value: string;
@@ -392,6 +398,20 @@ export interface AtlasProductionPointer {
   reason: string;
   promoted_at: string;
 }
+
+export interface AtlasPromotionDecision {
+  decision_id: string;
+  candidate_id: string;
+  production_run_id: string;
+  candidate_run_id: string;
+  verdict: AtlasPromotionVerdict;
+  overall_production_pass_rate: number;
+  overall_candidate_pass_rate: number;
+  critical_regressions?: AtlasCriticalRegression[];
+  decided_at: string;
+}
+
+export type AtlasPromotionVerdict = "promote_eligible" | "hold" | "reject";
 
 export type AtlasProviderCapability = "structured_planning" | "local_inference" | "streaming";
 

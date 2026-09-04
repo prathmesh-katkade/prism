@@ -16,7 +16,17 @@ from prism_api_contracts import (
     AtlasPromotionDecision,
     AtlasPromotionVerdict,
 )
-from sqlalchemy import Column, DateTime, MetaData, String, Table, Text, create_engine, insert, select
+from sqlalchemy import (
+    Column,
+    DateTime,
+    MetaData,
+    String,
+    Table,
+    Text,
+    create_engine,
+    insert,
+    select,
+)
 from sqlalchemy.engine import Engine
 
 from .atlas_schema_utils import ensure_index
