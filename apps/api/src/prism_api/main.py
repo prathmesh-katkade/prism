@@ -17,6 +17,10 @@ from prism_config.settings import get_settings
 from .ai_analyst import router as ai_analyst_router
 from .analytical_objects import registry as analytical_registry
 from .atlas import router as atlas_router
+from .atlas_foundry_routes import adapter_router as atlas_adapter_router
+from .atlas_foundry_routes import bench_router as atlas_bench_router
+from .atlas_foundry_routes import promotion_router as atlas_promotion_router
+from .atlas_foundry_routes import router as atlas_foundry_router
 from .atlas_runtime import runs as atlas_runs
 from .clean import router as clean_router
 from .durable_registry import DurableAnalyticalObjectRegistry
@@ -69,6 +73,10 @@ def create_app() -> FastAPI:
     app.include_router(sql_lab_router)
     app.include_router(ai_analyst_router)
     app.include_router(atlas_router)
+    app.include_router(atlas_foundry_router)
+    app.include_router(atlas_bench_router)
+    app.include_router(atlas_promotion_router)
+    app.include_router(atlas_adapter_router)
     app.include_router(clean_router)
     app.include_router(visualize_router)
     app.include_router(stats_router)

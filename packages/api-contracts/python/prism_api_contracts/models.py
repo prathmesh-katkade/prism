@@ -1398,6 +1398,23 @@ class AtlasBenchCategoryScore(ContractModel):
     passed: int = Field(ge=0)
 
 
+class AtlasBenchCategoryCount(ContractModel):
+    category: AtlasBenchCategory
+    task_count: int = Field(ge=0)
+
+
+class AtlasBenchCorpusSummary(ContractModel):
+    """A safe, public view of the corpus: counts only, never the tasks'
+    ``correct_choice`` or ``rationale`` -- exposing those over an API would
+    hand any client (including a candidate under evaluation) the answer key.
+    """
+
+    corpus_version: str = Field(min_length=1, max_length=64)
+    corpus_hash: str = Field(min_length=32, max_length=64)
+    total_tasks: int = Field(ge=0)
+    category_counts: list[AtlasBenchCategoryCount] = Field(default_factory=list)
+
+
 class AtlasBenchSuiteRun(ContractModel):
     run_id: str = Field(min_length=1, max_length=120)
     subject_id: str = Field(min_length=1, max_length=120)
