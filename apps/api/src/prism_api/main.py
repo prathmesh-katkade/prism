@@ -15,6 +15,7 @@ from prism_api_contracts import HealthResponse, ProviderReadiness, ReadinessResp
 from prism_config.settings import get_settings
 
 from .ai_analyst import router as ai_analyst_router
+from .atlas import router as atlas_router
 from .analytical_objects import registry as analytical_registry
 from .clean import router as clean_router
 from .durable_registry import DurableAnalyticalObjectRegistry
@@ -66,6 +67,7 @@ def create_app() -> FastAPI:
     app.include_router(overview_router)
     app.include_router(sql_lab_router)
     app.include_router(ai_analyst_router)
+    app.include_router(atlas_router)
     app.include_router(clean_router)
     app.include_router(visualize_router)
     app.include_router(stats_router)

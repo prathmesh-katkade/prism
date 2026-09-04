@@ -966,3 +966,241 @@ class AtlasLineageResponse(ContractModel):
     uncertainty: str = Field(min_length=1)
     evidence: list[AtlasEvidence]
     limitation: Optional[str] = None
+
+
+# --- Phase 10: Atlas Local Intelligence Foundry ------------------------------
+
+
+class AtlasModelProviderName(str, Enum):
+    DETERMINISTIC = "deterministic"
+    OLLAMA = "ollama"
+
+
+class AtlasProviderCapability(str, Enum):
+    STRUCTURED_PLANNING = "structured_planning"
+    LOCAL_INFERENCE = "local_inference"
+    STREAMING = "streaming"
+
+
+class AtlasModelProviderCapabilities(ContractModel):
+    provider: AtlasModelProviderName
+    available: bool
+    capabilities: list[AtlasProviderCapability] = Field(default_factory=list)
+    raw_data_policy: Literal["never", "explicitly_authorized"] = "never"
+    detail: str = Field(min_length=1)
+
+
+class AtlasPlanState(str, Enum):
+    DRAFT = "draft"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+class AtlasStepState(str, Enum):
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+    BLOCKED = "blocked"
+
+
+class AtlasStepKind(str, Enum):
+    PROFILE_DATASET = "profile_dataset"
+    METHODOLOGY_REVIEW = "methodology_review"
+    AUDIT_EVIDENCE = "audit_evidence"
+
+
+class AtlasSpecialistId(str, Enum):
+    ATLAS = "atlas"
+    SCOUT = "scout"
+    STAT = "stat"
+    AUDITOR = "auditor"
+
+
+class AtlasSpecialistIdentity(ContractModel):
+    specialist: AtlasSpecialistId
+    display_name: str = Field(min_length=1, max_length=80)
+    role: str = Field(min_length=1, max_length=240)
+    visible: bool = True
+    speaks_to_user: bool = False
+
+
+class AtlasEvidenceReference(ContractModel):
+    evidence_id: str = Field(min_length=1, max_length=200)
+    kind: Literal["dataset_revision", "overview_profile", "analytical_object", "tool_output", "web_research"]
+    summary: str = Field(min_length=1, max_length=1_000)
+    dataset_id: Optional[str] = None
+    dataset_revision: Optional[int] = Field(default=None, ge=0)
+    source_fingerprint: Optional[str] = Field(default=None, min_length=16)
+
+
+class AtlasPlanStep(ContractModel):
+    step_id: str = Field(min_length=1, max_length=120)
+    title: str = Field(min_length=1, max_length=240)
+    kind: AtlasStepKind
+    specialist: AtlasSpecialistId
+    tool_name: str = Field(min_length=1, max_length=120)
+    state: AtlasStepState = AtlasStepState.PENDING
+    max_attempts: int = Field(default=3, ge=1, le=3)
+    attempts: int = Field(default=0, ge=0, le=3)
+    requires_approval: bool = False
+    evidence: list[AtlasEvidenceReference] = Field(default_factory=list)
+    error: Optional[str] = None
+
+
+class AtlasStructuredPlan(ContractModel):
+    plan_id: str = Field(min_length=1, max_length=120)
+    objective: str = Field(min_length=1, max_length=2_000)
+    dataset_id: str = Field(min_length=1)
+    state: AtlasPlanState = AtlasPlanState.DRAFT
+    provider: AtlasModelProviderName
+    steps: list[AtlasPlanStep] = Field(min_length=1, max_length=20)
+    created_at: datetime
+
+
+class AtlasCouncilConclusion(ContractModel):
+    specialist: AtlasSpecialistId
+    conclusion: str = Field(min_length=1, max_length=2_000)
+    confidence: Literal["low", "medium", "high"]
+    objections: list[str] = Field(default_factory=list)
+    evidence: list[AtlasEvidenceReference] = Field(default_factory=list)
+
+
+class AtlasRunEventType(str, Enum):
+    RUN_CREATED = "run_created"
+    PLAN_CREATED = "plan_created"
+    STEP_STARTED = "step_started"
+    STEP_COMPLETED = "step_completed"
+    COUNCIL_CONCLUSION = "council_conclusion"
+    RUN_COMPLETED = "run_completed"
+    RUN_FAILED = "run_failed"
+    RUN_CANCELLED = "run_cancelled"
+
+
+class AtlasRunEvent(ContractModel):
+    event_id: str = Field(min_length=1, max_length=120)
+    run_id: str = Field(min_length=1, max_length=120)
+    sequence: int = Field(ge=1)
+    type: AtlasRunEventType
+    occurred_at: datetime
+    specialist: Optional[AtlasSpecialistId] = None
+    step_id: Optional[str] = None
+    payload: dict[str, object] = Field(default_factory=dict)
+
+
+class AtlasRunRequest(ContractModel):
+    dataset_id: str = Field(min_length=1)
+    objective: str = Field(min_length=3, max_length=2_000)
+
+
+class AtlasRunResponse(ContractModel):
+    run_id: str = Field(min_length=1, max_length=120)
+    plan: AtlasStructuredPlan
+    answer: Optional[str] = None
+    uncertainty: Optional[str] = None
+    evidence: list[AtlasEvidenceReference] = Field(default_factory=list)
+    council: list[AtlasCouncilConclusion] = Field(default_factory=list)
+    events: list[AtlasRunEvent] = Field(default_factory=list)
+
+
+class AtlasMemoryScope(str, Enum):
+    SESSION = "session"
+    PROJECT = "project"
+    WORKSPACE = "workspace"
+    GLOBAL = "global"
+
+
+class AtlasMemoryClass(str, Enum):
+    DATA_EVIDENCE = "data_evidence"
+    PROJECT_KNOWLEDGE = "project_knowledge"
+    USER_MEMORY = "user_memory"
+    MODEL_KNOWLEDGE = "model_knowledge"
+    WEB_RESEARCH = "web_research"
+
+
+class AtlasMemoryRecord(ContractModel):
+    memory_id: str = Field(min_length=1)
+    scope: AtlasMemoryScope
+    knowledge_class: AtlasMemoryClass
+    content: str = Field(min_length=1, max_length=8_000)
+    source: str = Field(min_length=1, max_length=500)
+    confidence: Literal["low", "medium", "high"]
+    timestamp: datetime
+    provenance: list[AtlasEvidenceReference] = Field(default_factory=list)
+    reinforcement: int = Field(default=0, ge=0)
+    last_used: Optional[datetime] = None
+    contradictions: list[str] = Field(default_factory=list)
+    superseded_by: Optional[str] = None
+    project_id: Optional[str] = None
+
+
+class CortexNodeKind(str, Enum):
+    RUN = "run"
+    PLAN_STEP = "plan_step"
+    SPECIALIST = "specialist"
+    EVIDENCE = "evidence"
+
+
+class CortexNode(ContractModel):
+    node_id: str = Field(min_length=1)
+    kind: CortexNodeKind
+    label: str = Field(min_length=1, max_length=240)
+    state: str = Field(min_length=1, max_length=80)
+    source_id: str = Field(min_length=1)
+
+
+class CortexEdge(ContractModel):
+    edge_id: str = Field(min_length=1)
+    source_node_id: str = Field(min_length=1)
+    target_node_id: str = Field(min_length=1)
+    relation: Literal["contains", "executed_by", "produced", "supports"]
+
+
+class CortexGraphState(ContractModel):
+    run_id: str = Field(min_length=1)
+    nodes: list[CortexNode] = Field(default_factory=list)
+    edges: list[CortexEdge] = Field(default_factory=list)
+    generated_at: datetime
+
+
+class AtlasModelTrust(ContractModel):
+    source_verified: bool = False
+    license_verified: bool = False
+    manifest_verified: bool = False
+    checksum_verified: bool = False
+    compatibility_verified: bool = False
+    atlasbench_verified: bool = False
+
+
+class AtlasBenchmarkVerdict(str, Enum):
+    PENDING = "pending"
+    PROMOTED = "promoted"
+    REJECTED = "rejected"
+
+
+class AtlasBenchmarkResult(ContractModel):
+    suite_id: str = Field(min_length=1)
+    candidate_id: str = Field(min_length=1)
+    critical_regressions: int = Field(ge=0)
+    verdict: AtlasBenchmarkVerdict
+    evaluated_at: datetime
+
+
+class AtlasResourcePriority(int, Enum):
+    USER_INTERACTION = 0
+    ATLAS_INFERENCE = 1
+    ACTIVE_ANALYSIS = 2
+    SPECIALIST_INFERENCE = 3
+    INDEXING = 4
+    FOUNDRY_TRAINING = 5
+    MAINTENANCE = 6
+
+
+class AtlasResourceWorkload(ContractModel):
+    workload_id: str = Field(min_length=1)
+    priority: AtlasResourcePriority
+    cancellable: bool = True
+    description: str = Field(min_length=1, max_length=500)

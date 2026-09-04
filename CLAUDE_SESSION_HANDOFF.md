@@ -1,5 +1,33 @@
 # PRISM Claude Session Handoff
 
+## Phase 10: IN PROGRESS — Atlas Local Intelligence Foundry (2026-09-04)
+
+**Read this section first — it supersedes the Phase 9 handoff below while
+Phase 10 is active.**
+
+- Repository truth was recovered after fetch: canonical Phase 9 completion is
+  `ab75b5a` on `phase-6.5-integration-staging`; PR #14 merged at `2013f41` and
+  final PR head `4a1b68e` was CI green. The original `C:\Users\prath\prism`
+  checkout was a dirty unrelated Phase 8 worktree and was not altered.
+- Phase 10 work lives in the clean isolated worktree
+  `C:\Users\prath\prism-phase10`, branch `phase-10-atlas-local-intelligence`.
+- First wave completed: `PHASE10_ARCHITECTURE.md`, ADRs 0006–0012, typed Atlas
+  contracts, safe deterministic/Ollama capability abstraction, explicit
+  profile→methodology→audit plan, visible Atlas/Scout/Stat/Auditor state,
+  stored events/SSE, Cortex runtime graph projection, and direct API tests.
+- The first live demonstrator uses only existing deterministic Overview profiling
+  for an uploaded CSV. It neither transfers raw rows to a provider nor exposes
+  arbitrary SQL/Python/shell/network/package/model operations. Atlas alone is
+  user-facing; Council preserves evidence, conclusions, and objections only.
+- Current verification: targeted API tests **19 passed**; ruff, targeted mypy,
+  and TypeScript contract freshness passed. Full Phase 10 certification has not
+  been attempted and must not be claimed.
+- Exact next task: persist Atlas run/event records with the Phase 9 durable
+  history policy, then build the project-scoped sandbox and isolation tests
+  before adding generated Python execution. Do not start Phase 11.
+
+---
+
 ## Phase 9: COMPLETE — durable analytical history and productization (2026-09-01)
 
 **Read this section first — it supersedes everything below it until the next

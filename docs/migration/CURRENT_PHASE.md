@@ -1,5 +1,27 @@
 # Current migration phase
 
+**Phase:** 10 — IN PROGRESS (Atlas Local Intelligence Foundry)
+
+**Phase 10 integration branch:** `phase-10-atlas-local-intelligence`, based on
+`phase-6.5-integration-staging` at `ab75b5a08f03a553fe4d6229c100d0be4c1dc158`.
+
+The first internal wave establishes Atlas's contract-first runtime foundation:
+provider capabilities, typed plan/step/event/evidence contracts, visible
+Scout/Stat/Auditor specialist state, a deterministic CSV profile demonstrator,
+SSE execution events, and a Cortex graph projection backed by real stored run
+state. It does not implement a general execution shell, memory/RAG persistence,
+web research, Foundry, AtlasBench, Cortex 3D UI, voice, or desktop packaging.
+See `PHASE10_ARCHITECTURE.md`, `PHASE10_IMPLEMENTATION_LEDGER.md`, and
+`.prism/checkpoints/phase-10-progress.md`.
+
+```
+PHASE_9_COMPLETE = YES
+PHASE_10_UNLOCKED = YES
+PHASE_10_IN_PROGRESS = YES
+PHASE_10_COMPLETE = NO
+PHASE_11_UNLOCKED = NO
+```
+
 **Phase:** 9 — COMPLETE (durable analytical history and productization,
 **PHASE_10_UNLOCKED**)
 

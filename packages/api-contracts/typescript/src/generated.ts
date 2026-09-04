@@ -89,9 +89,26 @@ export interface AtlasCleanResponse {
   proposed_operation?: CleanTransformationRequest;
 }
 
+export interface AtlasCouncilConclusion {
+  specialist: AtlasSpecialistId;
+  conclusion: string;
+  confidence: "low" | "medium" | "high";
+  objections?: string[];
+  evidence?: AtlasEvidenceReference[];
+}
+
 export interface AtlasEvidence {
   label: string;
   value: string;
+}
+
+export interface AtlasEvidenceReference {
+  evidence_id: string;
+  kind: "dataset_revision" | "overview_profile" | "analytical_object" | "tool_output" | "web_research";
+  summary: string;
+  dataset_id?: string;
+  dataset_revision?: number;
+  source_fingerprint?: string;
 }
 
 export type AtlasForecastAction = "explain_method" | "explain_trend" | "explain_seasonality" | "explain_changepoints" | "explain_intervals";
@@ -140,6 +157,16 @@ export interface AtlasMlResponse {
   evidence: AtlasEvidence[];
 }
 
+export interface AtlasModelProviderCapabilities {
+  provider: AtlasModelProviderName;
+  available: boolean;
+  capabilities?: AtlasProviderCapability[];
+  raw_data_policy?: "never" | "explicitly_authorized";
+  detail: string;
+}
+
+export type AtlasModelProviderName = "deterministic" | "ollama";
+
 export type AtlasOverviewAction = "explain_dataset" | "diagnose_quality" | "inspect_anomaly" | "suggest_next_analysis" | "trace_source" | "compare_columns" | "summarize_risks";
 
 export interface AtlasOverviewRequest {
@@ -154,6 +181,62 @@ export interface AtlasOverviewResponse {
   uncertainty: string;
   evidence: AtlasEvidence[];
   provenance: OverviewProvenance;
+}
+
+export type AtlasPlanState = "draft" | "running" | "completed" | "failed" | "cancelled";
+
+export interface AtlasPlanStep {
+  step_id: string;
+  title: string;
+  kind: AtlasStepKind;
+  specialist: AtlasSpecialistId;
+  tool_name: string;
+  state?: AtlasStepState;
+  max_attempts?: number;
+  attempts?: number;
+  requires_approval?: boolean;
+  evidence?: AtlasEvidenceReference[];
+  error?: string;
+}
+
+export type AtlasProviderCapability = "structured_planning" | "local_inference" | "streaming";
+
+export interface AtlasRunEvent {
+  event_id: string;
+  run_id: string;
+  sequence: number;
+  type: AtlasRunEventType;
+  occurred_at: string;
+  specialist?: AtlasSpecialistId;
+  step_id?: string;
+  payload?: Record<string, unknown>;
+}
+
+export type AtlasRunEventType = "run_created" | "plan_created" | "step_started" | "step_completed" | "council_conclusion" | "run_completed" | "run_failed" | "run_cancelled";
+
+export interface AtlasRunRequest {
+  dataset_id: string;
+  objective: string;
+}
+
+export interface AtlasRunResponse {
+  run_id: string;
+  plan: AtlasStructuredPlan;
+  answer?: string;
+  uncertainty?: string;
+  evidence?: AtlasEvidenceReference[];
+  council?: AtlasCouncilConclusion[];
+  events?: AtlasRunEvent[];
+}
+
+export type AtlasSpecialistId = "atlas" | "scout" | "stat" | "auditor";
+
+export interface AtlasSpecialistIdentity {
+  specialist: AtlasSpecialistId;
+  display_name: string;
+  role: string;
+  visible?: boolean;
+  speaks_to_user?: boolean;
 }
 
 export type AtlasSqlAction = "explain_query" | "optimize_query" | "debug_error" | "inspect_plan" | "generate_sql" | "compare_queries" | "explain_selection" | "trace_lineage" | "convert_result";
@@ -189,6 +272,20 @@ export interface AtlasStatsResponse {
   summary: string;
   uncertainty: string;
   evidence: AtlasEvidence[];
+}
+
+export type AtlasStepKind = "profile_dataset" | "methodology_review" | "audit_evidence";
+
+export type AtlasStepState = "pending" | "running" | "completed" | "failed" | "cancelled" | "blocked";
+
+export interface AtlasStructuredPlan {
+  plan_id: string;
+  objective: string;
+  dataset_id: string;
+  state?: AtlasPlanState;
+  provider: AtlasModelProviderName;
+  steps: AtlasPlanStep[];
+  created_at: string;
 }
 
 export type AtlasVisualizeAction = "explain_chart" | "identify_anomaly" | "propose_alternative";
@@ -315,6 +412,30 @@ export interface CorrelationFinding {
   right: string;
   coefficient: number;
 }
+
+export interface CortexEdge {
+  edge_id: string;
+  source_node_id: string;
+  target_node_id: string;
+  relation: "contains" | "executed_by" | "produced" | "supports";
+}
+
+export interface CortexGraphState {
+  run_id: string;
+  nodes?: CortexNode[];
+  edges?: CortexEdge[];
+  generated_at: string;
+}
+
+export interface CortexNode {
+  node_id: string;
+  kind: CortexNodeKind;
+  label: string;
+  state: string;
+  source_id: string;
+}
+
+export type CortexNodeKind = "run" | "plan_step" | "specialist" | "evidence";
 
 export interface DatasetRef {
   dataset_id: string;
