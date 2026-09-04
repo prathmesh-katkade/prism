@@ -10,6 +10,34 @@ Canonical starting point: `phase-6.5-integration-staging` at `ab75b5a`.
 Phase 9 remains complete; its externally blocked Render certification is not an
 engineering blocker for this phase.
 
+## CI recovery increment (2026-09-04, before the Foundry wave)
+
+A prior session's Foundry work was interrupted mid-wave with PR #15's CI red.
+Recovery check found no interrupted local work anywhere (fresh clone, empty
+`git status`/`diff`/`stash`, no Foundry-named branch or commit repo-wide) — the
+pushed HEAD (`351f299`) was the honest last state. Fixed, tested, and pushed
+(`9134f99`, `eb3a12b`, `65faec8`):
+
+- Windows-only mypy symbols (`subprocess.CREATE_NEW_PROCESS_GROUP`,
+  `ctypes.windll`) isolated behind a new `atlas_platform` module so Linux CI
+  type-checks; Windows behavior unchanged, POSIX now gets real memory
+  telemetry instead of always `None`.
+- `CREATE INDEX IF NOT EXISTS` (invalid on MySQL 8.0) replaced with an
+  Inspector-checked, restart-safe, MySQL/SQLite-portable `_ensure_index()`.
+- A third, previously CI-unreached failure: `-> None` DELETE routes made
+  FastAPI infer a truthy `NoneType` response_model, tripping its 204 assert
+  at import time and breaking every test/tooling import of `prism_api.main`.
+  Fixed with explicit `response_model=None`; stale generated TS contract
+  regenerated.
+
+Local evidence: `ruff`/`mypy` clean (exact CI invocation), `pytest tests/api
+tests/contracts tests/migration tests/overview tests/sql_lab` → 244 passed, 4
+skipped, boundaries/secrets/contract-freshness all pass. The live-MySQL job
+could not be reproduced locally (no Docker daemon, no installable
+`mysql-server` in this sandbox) — confirmation is CI-authoritative on PR #15
+following commit `65faec8`. **The Foundry wave (10M–10R) has not started**;
+that begins once this run is confirmed green.
+
 ## First implementation wave
 
 | Internal gate | Status | Evidence |

@@ -1,5 +1,37 @@
 # PRISM Claude Session Handoff
 
+## Phase 10 continuation: CI recovery before the Foundry wave (2026-09-04)
+
+**Read this section first — it supersedes the section below it while this
+continuation is active.**
+
+This session picked up an interrupted Codex Foundry-wave session per an
+explicit recovery mandate. Findings and work:
+
+- **Recovery check (done first, before touching anything):** this remote
+  session's checkout is a fresh clone, not the Windows worktree
+  (`C:\Users\prath\prism-phase10`) referenced by earlier sessions — that path
+  does not exist in this environment. `git status`, `git diff`, `git stash
+  list`, and `git ls-files --others` all came back empty: no uncommitted,
+  staged, or untracked local work to recover here. `git log --all --grep` for
+  Foundry/Soup/AtlasBench/candidate/promotion terms across every branch found
+  nothing on any branch. **Conclusion: no interrupted Codex Foundry work
+  exists to recover in this environment or on any pushed branch.** The
+  remote `phase-10-atlas-local-intelligence` HEAD matched the last known-good
+  commit (`351f299`, "fix: satisfy Atlas Python import ordering") exactly, so
+  nothing was lost — the branch is simply at the state Codex last pushed
+  before running out of budget, one wave short of Foundry work ever starting.
+- **CI on PR #15 (`phase-10-atlas-local-intelligence` → `phase-6.5-integration-staging`) was red** on run #120 (`351f299`) with the two failures already diagnosed: a Windows-only mypy attr-defined error and a MySQL 1064 syntax error on `CREATE INDEX IF NOT EXISTS`. Both fixed:
+  - `apps/api/src/prism_api/atlas_platform.py` (new): `new_process_group_flag()` and `read_memory_status_mb()` isolate the Windows-only symbols (`subprocess.CREATE_NEW_PROCESS_GROUP`, `ctypes.windll`) behind `os.name` guards and `getattr`, so Linux mypy type-checks cleanly and Windows behavior is unchanged. Non-Windows platforms now also get a truthful memory reading (POSIX `sysconf`/`/proc/meminfo`) instead of always `None`.
+  - `apps/api/src/prism_api/durable_atlas_store.py`: the three `CREATE INDEX IF NOT EXISTS` statements became a portable `_ensure_index()` helper (SQLAlchemy Inspector existence check + plain `CREATE (UNIQUE) INDEX`, with a re-check on a concurrent-creation race) — MySQL- and SQLite-safe, restart-safe, and the `(run_id, sequence)` uniqueness guarantee is unchanged.
+  - **A third failure was found and fixed that CI had not yet reached:** `DELETE /api/v1/atlas/memories/{id}` and `DELETE /api/v1/atlas/knowledge/sources` returned `-> None` with no explicit `response_model`; FastAPI infers `response_model = NoneType` (truthy) from a bare `None` return annotation, which trips its "204 must not have a response body" assertion **at import time** — breaking every test that imports `prism_api.main`, the TypeScript contract generator, and any real server boot. This was invisible in CI run #120 only because that job died earlier at the mypy step, before ever reaching `pytest`. Fixed by passing `response_model=None` explicitly on both routes; regenerated the now-stale checked-in `packages/api-contracts/typescript/src/generated.ts` once the app could import again.
+  - Regression tests added: `tests/api/test_atlas_sandbox.py` (platform helpers), `tests/api/test_atlas_memory_resources_research.py` (resource snapshot never crashes/fabricates), `tests/api/test_atlas_durable_runtime.py` (MySQL-safe DDL + restart-safety across 3 store instantiations), `tests/api/test_atlas_runtime.py` (the 204 delete route end-to-end).
+- **Local verification** (Python 3.11.15 venv, exact pinned `requirements.txt` + `apps/api/requirements.txt`): `ruff check` clean, `mypy --follow-imports=skip ...` clean (the exact CI invocation), `pytest tests/api tests/contracts tests/migration tests/overview tests/sql_lab` → **244 passed, 4 skipped**, `tools/generate_typescript_contracts.py --check`/`check_boundaries.py`/`check_secrets.py` all pass. Could **not** locally reproduce the live-MySQL job (no Docker daemon, no installable `mysql-server` package in this sandbox) — pushed to CI for authoritative confirmation instead; watch PR #15 for the result of run following commit `65faec8`.
+- **The Foundry wave (10M–10R: training-data generator, Soup backend, AtlasBench, Shadow Brain, promotion, Evolution UI) has NOT been started.** This is deliberate: the instructions are explicit not to claim Foundry progress while the foundation CI is red. Once the CI run following `65faec8` is confirmed green, the next task is 10N (verified training-dataset generator from Atlas run history) as the first coherent Foundry unit.
+- `PHASE_10_COMPLETE = NO`. `PHASE_11_UNLOCKED = NO`.
+
+---
+
 ## Phase 10: IN PROGRESS — Atlas Local Intelligence Foundry (2026-09-04)
 
 **Read this section first — it supersedes the Phase 9 handoff below while

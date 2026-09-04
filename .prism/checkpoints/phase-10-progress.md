@@ -11,6 +11,26 @@ was present. The original `C:\Users\prath\prism` checkout was a dirty,
 unrelated Phase 8 worktree, so it was left untouched. Phase 10 is isolated in
 `C:\Users\prath\prism-phase10`.
 
+## CI recovery checkpoint (2026-09-04, continuation session)
+
+A follow-up session was asked to recover interrupted Codex Foundry work and
+fix PR #15's red CI before continuing. This session's checkout is a fresh
+clone (not the Windows worktree above); `git status`/`diff`/`stash list`/
+`ls-files --others` were all empty and no branch anywhere carried a
+Foundry/Soup/AtlasBench-named commit — there was nothing local to recover.
+The pushed HEAD (`351f299`) matched the last known-good state exactly.
+
+Fixed and pushed (`9134f99` platform portability, `eb3a12b` MySQL-safe
+indexes, `65faec8` the 204/response_model import crash + regenerated TS
+contract — see `PHASE10_IMPLEMENTATION_LEDGER.md` for detail). Local
+evidence: `ruff`/`mypy` clean using the exact CI invocation, `pytest
+tests/api tests/contracts tests/migration tests/overview tests/sql_lab` →
+244 passed / 4 skipped, boundaries/secrets/contract-freshness all pass. The
+live-MySQL job itself could not be reproduced in this sandbox (no Docker
+daemon, no installable `mysql-server`); CI on PR #15 is the authoritative
+check for that fix. The Foundry wave (10M–10R) has deliberately not started
+yet — next task is 10N once CI is confirmed green.
+
 ## Completed in this checkpoint
 
 - Created architecture record and ADRs 0006–0012 for providers, orchestration,
