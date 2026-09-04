@@ -1,6 +1,6 @@
 # Phase 10 Progress Checkpoint
 
-Date: 2026-09-04
+Date: 2026-09-05
 
 `PHASE_10_COMPLETE = NO`
 `PHASE_10_IN_PROGRESS = YES`
@@ -16,6 +16,13 @@ Shadow/promotion policy, Evolution UI, and the software activation path for the
 first real self-improvement experiment.
 
 PR #15 remains open against `phase-6.5-integration-staging`; do not merge it yet.
+
+CI #171's single Foundry route failure was corrected without weakening the
+TRAIN-only boundary. The route fixture now creates a real completed run whose
+existing deterministic split is TRAIN; the route continues to return 409 for
+validation/test-only manifests. The same change fixed immutable corpus
+reindexing so an example may be retained in more than one immutable dataset
+version. PR CI #172 (`33907188462`) is green at `ee0fb53`.
 
 Activation code head before documentation-only commits:
 `5ee368e8df911c65c1121be346b0f8c9ccef504f`.
@@ -59,11 +66,13 @@ live-E2E root fix independently passed all five on run #152.
   candidate AtlasBench → locked verdict → eligible-only promotion → mandatory
   rollback drill sequence and writes an inspectable JSON report.
 
-## Remaining physical gate
+## Physical Evolution status
 
-No GPU/Soup training result is claimed in this checkpoint because this
-GitHub/CI execution environment cannot reach the user's local Ollama daemon or
-physical NVIDIA GPU.
+The actual host was rechecked on 2026-09-05: Ollama 0.33.3 is reachable, both
+Qwen3 4B local models are installed, and the NVIDIA GTX 1650 Max-Q reports
+3,733 MiB free of 4,096 MiB. `soup` is not installed. The physical experiment
+is therefore `BLOCKED_EXTERNAL_PHYSICAL_RUNTIME` at the Soup dependency gate;
+no training, candidate, verdict, or rollback value has been fabricated.
 
 The only accepted evidence for the first real experiment is the report produced
 on the actual PRISM host by:
@@ -82,10 +91,10 @@ HOLD or REJECT is valid; do not force promotion.
 
 ## Next task
 
-Run the physical Evolution experiment on the local Windows PRISM host, inspect
-and preserve its JSON evidence, then update
-`.prism/checkpoints/phase-10-evolution-activation.md` and
-`PHASE10_IMPLEMENTATION_LEDGER.md` with those real values.
+Implement the next approved Phase 10 wave: local-embedding hybrid RAG V2,
+durable feedback signals, AtlasBench V2/Model Arena, durable hypothesis and
+experiment records, and Cortex V2's truthful data projection. Soup installation
+or a physical experiment rerun remains a separate dependency decision.
 
 Do not start multimodal, voice, Desktop packaging, Cortex V2, Phase 10 final
 certification, merge PR #15, or Phase 11 before that evidence exists.

@@ -17,6 +17,9 @@ infer current capability.
   `5ee368e8df911c65c1121be346b0f8c9ccef504f`
 - PR #15 CI run #166 (`33904258400`) at that code head: all five jobs PASS,
   including the real MySQL 8.0 + browser-to-API flow.
+- Current head: `ee0fb53d9549969159ac5b3f99e85fa9d8005c15`; PR CI #172
+  (`33907188462`) is green after preserving the TRAIN-only Foundry refusal and
+  correcting immutable training-corpus reindexing.
 - Do not merge PR #15 yet.
 
 ```text
@@ -97,8 +100,10 @@ It performs, in order:
 
 ### What is NOT proven yet
 
-This GitHub/CI session cannot access the user's physical local Ollama daemon or
-NVIDIA GPU. Therefore do not claim values for:
+The actual Windows host is accessible and was checked on 2026-09-05: Ollama
+0.33.3, Qwen3 4B Q4_K_M, and an NVIDIA GTX 1650 Max-Q are available. `soup` is
+not installed, so the experiment must stop before training. Therefore do not
+claim values for:
 
 - local OS/CPU/RAM/GPU/VRAM at experiment time;
 - Ollama version/model inventory;
@@ -115,11 +120,10 @@ promotion to make the demo look successful.
 
 ### Exact next task
 
-Run the canonical experiment command on the actual PRISM Windows host with its
-local Ollama/GPU. Read the generated JSON report and update
-`.prism/checkpoints/phase-10-evolution-activation.md` plus
-`PHASE10_IMPLEMENTATION_LEDGER.md` with the real IDs, scores, hardware,
-training metrics, candidate, verdict, and rollback evidence.
+Continue the approved Memory/RAG V2 through Cortex V2 data-architecture wave.
+Treat Soup installation as a separate physical-runtime dependency decision;
+without it, the canonical evolution experiment must remain blocked and no
+candidate evidence can exist.
 
 If the report is `blocked` or `failed`, diagnose that concrete local runtime
 failure and rerun. Do not start another Phase 10 product wave to avoid the
