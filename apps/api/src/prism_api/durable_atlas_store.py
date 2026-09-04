@@ -8,6 +8,7 @@ while run snapshots and event journal remain a distinct operational record.
 from __future__ import annotations
 
 import json
+import random
 import re
 import time
 import uuid
@@ -326,9 +327,19 @@ class DurableAtlasRunStore:
         step_id: Optional[str] = None,
         payload: Optional[dict[str, object]] = None,
     ) -> AtlasRunEvent:
-        # A short retry is purposeful: an event journal must never gamble with
-        # duplicate sequence numbers when two workers complete safe independent steps.
-        for attempt in range(3):
+        # A retry is purposeful: an event journal must never gamble with
+        # duplicate sequence numbers when two workers complete safe independent
+        # steps. SQLite has no real row lock behind ``with_for_update()``, so
+        # this is a genuine optimistic-concurrency compare-and-swap: under N
+        # real concurrent writers, a given attempt can lose to any of the
+        # other N-1 in flight, but the pool only shrinks as writers succeed and
+        # stop contending, so a retry budget with headroom above the observed
+        # concurrency (plus jitter, to avoid every loser retrying in lockstep)
+        # converges. Three attempts was proven too few by a real four-worker
+        # CI failure (``sequence race`` on the third attempt); this budget
+        # comfortably covers the concurrency this store's own tests exercise.
+        max_attempts = 20
+        for attempt in range(max_attempts):
             event = AtlasRunEvent(
                 event_id=f"evt_{uuid.uuid4().hex}",
                 run_id=run_id,
@@ -382,7 +393,7 @@ class DurableAtlasRunStore:
                     )
                 return event
             except (IntegrityError, OperationalError):
-                if attempt == 2:
+                if attempt == max_attempts - 1:
                     raise
-                time.sleep(0.01 * (attempt + 1))
+                time.sleep(0.01 * (attempt + 1) + random.uniform(0, 0.01))
         raise AssertionError("unreachable")
