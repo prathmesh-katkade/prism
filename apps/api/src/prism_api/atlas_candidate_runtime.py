@@ -1,17 +1,16 @@
 """Durable runtime bindings for trained Atlas candidates.
 
 A promotion pointer is only meaningful if the runtime can resolve it to an
-actual inference artifact.  This module keeps that mapping append-only and
-provider-specific without making Soup a runtime dependency.  Today the only
+actual inference artifact. This module keeps that mapping append-only and
+provider-specific without making Soup a runtime dependency. Today the only
 live binding is Ollama: Foundry may export/deploy a candidate there, then Atlas
-can resolve the current production pointer to the recorded Ollama model name.
-
-The environment-configured model remains the safe fallback when no production
-pointer/binding exists, preserving local-first startup and rollback compatibility.
+resolves the production pointer to the recorded Ollama model name.
 """
 
 from __future__ import annotations
 
+import hashlib
+import os
 import re
 import uuid
 from dataclasses import dataclass
@@ -123,14 +122,15 @@ class DurableAtlasCandidateRuntimeStore:
         return None if row is None else self._record(row)
 
 
+def configured_ollama_model() -> str:
+    return os.environ.get(
+        "PRISM_ATLAS_OLLAMA_MODEL",
+        os.environ.get("PRISM_OLLAMA_MODEL", "llama3.2:3b"),
+    )
+
+
 def resolve_current_ollama_model(configured_model: str) -> str:
-    """Resolve the production pointer to a real Ollama model when possible.
-
-    Imports promotion storage lazily to keep Atlas runtime/provider imports
-    acyclic.  Missing/corrupt optional history never prevents Atlas startup;
-    the explicitly configured local model remains the deterministic fallback.
-    """
-
+    """Resolve the durable production pointer to its Ollama runtime binding."""
     try:
         from .atlas_promotion import DurableAtlasPromotionStore
 
@@ -141,3 +141,44 @@ def resolve_current_ollama_model(configured_model: str) -> str:
         return configured_model if binding is None else binding.runtime_model
     except (OSError, ValueError):
         return configured_model
+
+
+def activate_current_ollama_model() -> str:
+    """Apply the durable production pointer to the live Atlas process."""
+    model = resolve_current_ollama_model(configured_ollama_model())
+    os.environ["PRISM_ATLAS_OLLAMA_MODEL"] = model
+    return model
+
+
+def ensure_configured_production_baseline(*, runtime_model_digest: Optional[str] = None) -> str:
+    """Create the rollback anchor for the pre-Foundry configured model once.
+
+    Only active Ollama deployments are bootstrapped. The synthetic identity is
+    derived from the configured model name and optional digest; no user data or
+    benchmark information enters the identifier.
+    """
+    if os.environ.get("PRISM_AI_PROVIDER", "deterministic").lower() != "ollama":
+        return configured_ollama_model()
+
+    from .atlas_promotion import DurableAtlasPromotionStore
+
+    promotion_store = DurableAtlasPromotionStore()
+    current = promotion_store.current_production()
+    if current is not None:
+        return activate_current_ollama_model()
+
+    model = configured_ollama_model()
+    identity_material = f"{model}:{runtime_model_digest or 'digest-unavailable'}"
+    baseline_id = f"production_env_{hashlib.sha256(identity_material.encode()).hexdigest()[:24]}"
+    runtime_store = DurableAtlasCandidateRuntimeStore()
+    if runtime_store.latest(baseline_id) is None:
+        runtime_store.bind_ollama(
+            baseline_id,
+            model,
+            runtime_model_digest=runtime_model_digest,
+        )
+    promotion_store.bootstrap(
+        baseline_id,
+        reason="Bootstrap the configured Ollama production model as Atlas's rollback anchor.",
+    )
+    return activate_current_ollama_model()
