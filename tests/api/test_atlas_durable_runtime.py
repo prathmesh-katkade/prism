@@ -3,7 +3,11 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor
 
 from prism_api.atlas_runtime import AtlasRunStore, DynamicAtlasPlanner, cortex_graph
-from prism_api.durable_atlas_store import DurableAtlasRunStore, redact_atlas_payload
+from prism_api.durable_atlas_store import (
+    _INDEX_DDL,
+    DurableAtlasRunStore,
+    redact_atlas_payload,
+)
 from prism_api_contracts import (
     AtlasModelProviderName,
     AtlasRunEventType,
@@ -11,12 +15,46 @@ from prism_api_contracts import (
     AtlasStepKind,
     AtlasStepState,
 )
+from sqlalchemy import inspect as sa_inspect
 
 
 def _store(tmp_path) -> AtlasRunStore:  # type: ignore[no-untyped-def]
     return AtlasRunStore(
         DurableAtlasRunStore(f"sqlite:///{(tmp_path / 'atlas.sqlite').as_posix()}")
     )
+
+
+def test_index_ddl_is_mysql_safe(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """MySQL 8.0 has no ``CREATE INDEX IF NOT EXISTS`` and rejects it with a
+    1064 syntax error; regression guard against reintroducing that syntax."""
+    for _table_name, _index_name, ddl in _INDEX_DDL:
+        assert "IF NOT EXISTS" not in ddl.upper()
+        assert ddl.upper().startswith("CREATE ")
+
+
+def test_durable_atlas_indexes_survive_repeated_restarts(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """Restarting the API (a fresh ``DurableAtlasRunStore``) against the same
+    database must not fail on indexes a previous process already created --
+    the bug this guards against required a full DROP/recreate to reproduce on
+    MySQL, where ``CREATE INDEX IF NOT EXISTS`` is not valid syntax."""
+    url = f"sqlite:///{(tmp_path / 'atlas.sqlite').as_posix()}"
+    for _ in range(3):
+        DurableAtlasRunStore(url)
+    store = DurableAtlasRunStore(url)
+    inspector = sa_inspect(store.engine)
+    names_by_table = {
+        table: {row["name"] for row in inspector.get_indexes(table)}
+        for table in ("prism_atlas_runs", "prism_atlas_run_events")
+    }
+    for table_name, index_name, _ddl in _INDEX_DDL:
+        assert index_name in names_by_table[table_name]
+    event_index = next(
+        row
+        for row in inspector.get_indexes("prism_atlas_run_events")
+        if row["name"] == "ux_prism_atlas_event_sequence"
+    )
+    assert bool(event_index["unique"]) is True
+    assert event_index["column_names"] == ["run_id", "sequence"]
 
 
 def test_atlas_run_and_journal_survive_an_independent_store_restart(tmp_path) -> None:  # type: ignore[no-untyped-def]

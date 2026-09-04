@@ -38,8 +38,9 @@ from sqlalchemy import (
     select,
     update,
 )
-from sqlalchemy.engine import Engine
-from sqlalchemy.exc import IntegrityError, OperationalError
+from sqlalchemy import inspect as sa_inspect
+from sqlalchemy.engine import Connection, Engine
+from sqlalchemy.exc import IntegrityError, OperationalError, ProgrammingError
 
 from .durable_registry import history_database_url
 
@@ -73,6 +74,49 @@ _events = Table(
 _schema = Table(
     "prism_atlas_schema_version", _metadata, Column("version", Integer, primary_key=True)
 )
+
+# ``CREATE INDEX IF NOT EXISTS`` is SQLite/Postgres syntax; MySQL 8.0 rejects
+# it with a 1064 syntax error. Every backend gets a plain ``CREATE INDEX``
+# guarded by an Inspector existence check instead, so table backfill stays
+# idempotent -- and restart-safe -- everywhere Atlas runs.
+_INDEX_DDL: tuple[tuple[str, str, str], ...] = (
+    (
+        "prism_atlas_run_events",
+        "ux_prism_atlas_event_sequence",
+        "CREATE UNIQUE INDEX ux_prism_atlas_event_sequence "
+        "ON prism_atlas_run_events (run_id, sequence)",
+    ),
+    (
+        "prism_atlas_runs",
+        "ix_prism_atlas_runs_dataset_state_created",
+        "CREATE INDEX ix_prism_atlas_runs_dataset_state_created "
+        "ON prism_atlas_runs (dataset_id, state, created_at)",
+    ),
+    (
+        "prism_atlas_run_events",
+        "ix_prism_atlas_events_run_sequence",
+        "CREATE INDEX ix_prism_atlas_events_run_sequence "
+        "ON prism_atlas_run_events (run_id, sequence)",
+    ),
+)
+
+
+def _index_names(connection: Connection, table_name: str) -> set[str]:
+    return {row["name"] for row in sa_inspect(connection).get_indexes(table_name)}
+
+
+def _ensure_index(connection: Connection, table_name: str, index_name: str, ddl: str) -> None:
+    if index_name in _index_names(connection, table_name):
+        return
+    try:
+        connection.exec_driver_sql(ddl)
+    except (IntegrityError, OperationalError, ProgrammingError):
+        # A concurrent starter created the same index between the check above
+        # and this statement. Confirm it now exists before treating the race
+        # as resolved; a genuine schema problem must still surface.
+        if index_name not in _index_names(connection, table_name):
+            raise
+
 
 _SECRET_KEY = re.compile(
     r"(?:api[_-]?key|authorization|credential|password|secret|token|private[_-]?key)", re.IGNORECASE
@@ -127,12 +171,8 @@ class DurableAtlasRunStore:
         with self.engine.begin() as connection:
             if connection.execute(select(_schema.c.version).limit(1)).scalar_one_or_none() is None:
                 connection.execute(insert(_schema).values(version=1))
-            for statement in (
-                "CREATE UNIQUE INDEX IF NOT EXISTS ux_prism_atlas_event_sequence ON prism_atlas_run_events (run_id, sequence)",
-                "CREATE INDEX IF NOT EXISTS ix_prism_atlas_runs_dataset_state_created ON prism_atlas_runs (dataset_id, state, created_at)",
-                "CREATE INDEX IF NOT EXISTS ix_prism_atlas_events_run_sequence ON prism_atlas_run_events (run_id, sequence)",
-            ):
-                connection.exec_driver_sql(statement)
+            for table_name, index_name, ddl in _INDEX_DDL:
+                _ensure_index(connection, table_name, index_name, ddl)
 
     @staticmethod
     def _snapshot(run: AtlasRunResponse) -> str:
