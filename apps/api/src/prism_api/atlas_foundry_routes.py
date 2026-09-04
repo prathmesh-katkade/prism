@@ -143,8 +143,9 @@ def foundry_preflight(recipe: AtlasTrainingRecipe) -> AtlasFoundryPreflight:
 
 @router.post("/jobs", response_model=AtlasTrainingJob, status_code=status.HTTP_202_ACCEPTED)
 def start_foundry_job(recipe: AtlasTrainingRecipe, dataset_version_id: str) -> AtlasTrainingJob:
-    """Export the named dataset version, then admit/start it through the
-    Resource Governor. Foundry never starts unmanaged."""
+    """Export only the TRAIN split of the named dataset version, then
+    admit/start it through the Resource Governor. Validation/test examples
+    remain evaluator-only and never enter Foundry training."""
     if recipe.dataset_version_id != dataset_version_id:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -153,7 +154,16 @@ def start_foundry_job(recipe: AtlasTrainingRecipe, dataset_version_id: str) -> A
     manifest = _training_dataset_store.get_version(dataset_version_id)
     if manifest is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Training dataset version was not found.")
-    examples = _training_dataset_store.preview(dataset_version_id, limit=100_000)
+    examples = _training_dataset_store.preview(
+        dataset_version_id,
+        split=AtlasTrainingSplit.TRAIN,
+        limit=100_000,
+    )
+    if not examples:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Training dataset version contains no TRAIN examples; Foundry refused to train on validation/test data.",
+        )
     export_path = _EXPORT_ROOT / dataset_version_id / f"{uuid.uuid4().hex}.jsonl"
     export_jsonl(examples, export_path)
     return start_training_job(governor, _job_store, _backend, recipe, dataset_path=export_path)
