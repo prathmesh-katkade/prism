@@ -30,13 +30,26 @@ pushed HEAD (`351f299`) was the honest last state. Fixed, tested, and pushed
   Fixed with explicit `response_model=None`; stale generated TS contract
   regenerated.
 
+- A fourth failure, found only once the live-MySQL job got this far:
+  `prism_atlas_knowledge_chunks.source_ref` was indexed at its full
+  `String(2000)` length, exceeding MySQL InnoDB's 3072-byte max index key
+  under utf8mb4 (error 1071) — failing at `DurableAtlasMemoryStore`
+  construction, i.e. `prism_api.main` import time. Fixed (`27923a4`) with a
+  short `source_ref_hash` lookup column; `source_ref` keeps its full value
+  and exact-equality semantics for callers. The MySQL-safe index helper was
+  extracted into a shared `atlas_schema_utils` module used by both durable
+  stores.
+
 Local evidence: `ruff`/`mypy` clean (exact CI invocation), `pytest tests/api
-tests/contracts tests/migration tests/overview tests/sql_lab` → 244 passed, 4
-skipped, boundaries/secrets/contract-freshness all pass. The live-MySQL job
-could not be reproduced locally (no Docker daemon, no installable
-`mysql-server` in this sandbox) — confirmation is CI-authoritative on PR #15
-following commit `65faec8`. **The Foundry wave (10M–10R) has not started**;
-that begins once this run is confirmed green.
+tests/contracts tests/migration tests/overview tests/sql_lab` → 246 passed, 4
+skipped, boundaries/secrets/contract-freshness all pass.
+
+**CI on PR #15 is confirmed green at `27923a4`**: `phase-1-python`,
+`phase-1-web`, `phase-4-live-e2e` (the real MySQL 8.0 job), `legacy-regression`,
+and `secret-scan` all passed; `mergeable_state: clean`. The live-MySQL fixes
+could not be reproduced locally in this sandbox (no Docker daemon, no
+installable `mysql-server`), so this CI run is the authoritative
+confirmation. **The Foundry wave (10M–10R) begins now.**
 
 ## First implementation wave
 
