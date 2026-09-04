@@ -19,18 +19,26 @@ test("History workspace shows a real SQL Lab result through the live API and ope
 
   // The live suite shares one API process, so earlier tests may have created
   // other local datasets. Bind SQL Lab to the dataset created by THIS test
-  // instead of relying on connection-list ordering.
-  //
-  // `exact: true` disambiguates against the toolbar's own
-  // aria-label="Query source and actions" (a substring match on "Source"
-  // would otherwise resolve to both the toolbar region and the <select>).
-  const source = page.getByLabel("Source", { exact: true });
-  await expect(source).toBeVisible();
-  const schemaResponse = page.waitForResponse((response) =>
-    response.url().includes(`/sql-lab/connections/local%3A${dataset.dataset_id}/schema`) && response.status() === 200
-  );
-  await source.selectOption(`local:${dataset.dataset_id}`);
-  await schemaResponse;
+  // instead of relying on connection-list ordering. Use the toolbar's actual
+  // select rather than its accessible label because Monaco/query hydration can
+  // render before the labelled control is exposed to the accessibility tree.
+  const source = page.locator(".query-toolbar select");
+  await expect(source).toBeVisible({ timeout: 10_000 });
+  const targetConnectionId = `local:${dataset.dataset_id}`;
+  await expect(source.locator(`option[value="${targetConnectionId}"]`)).toHaveCount(1, { timeout: 10_000 });
+
+  // In the common case the newly uploaded dataset is already the selected
+  // connection and its schema request has completed before this assertion. Do
+  // not wait for a second response that will never arrive. Only synchronize on
+  // the schema request when we actually change the connection.
+  if (await source.inputValue() !== targetConnectionId) {
+    const schemaResponse = page.waitForResponse((response) => {
+      const decodedUrl = decodeURIComponent(response.url());
+      return decodedUrl.includes(`/sql-lab/connections/${targetConnectionId}/schema`) && response.status() === 200;
+    });
+    await source.selectOption(targetConnectionId);
+    await schemaResponse;
+  }
 
   const runQuery = page.getByRole("button", { name: /Run query/ });
   await expect(runQuery).toBeEnabled();
