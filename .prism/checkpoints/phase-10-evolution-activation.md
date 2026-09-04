@@ -3,88 +3,174 @@
 Date: 2026-09-04
 
 `PHASE_10_COMPLETE = NO`
+`PHASE_10_IN_PROGRESS = YES`
 `PHASE_11_UNLOCKED = NO`
+`CONTINUATION_SAFE = YES`
 
-This checkpoint records the first operational activation increment built on top
-of the completed 10M–10R Foundry wave. It must not be read as evidence that a
-real Soup training job or model promotion has occurred.
+This checkpoint supersedes the earlier Evolution-activation checkpoint text.
+The software path required for PRISM's **first real Atlas evolution experiment**
+is now implemented and CI-certified. It must still not be misread as evidence
+that a physical Soup/GPU training experiment has run on the user's local
+machine: that evidence does not exist in this execution environment.
 
-## Implemented in this activation increment
+## Authoritative code gate
 
-- Live AtlasBench subject boundary (`atlas_bench_live.py`) for the real optional
-  Ollama Atlas provider.
-  - The subject receives only benchmark prompt + choices.
-  - It never receives `correct_choice`, rationale, scoring thresholds,
-    promotion policy, or another subject's result.
-  - The deterministic Atlas provider deliberately refuses a general MCQ score
-    because it does not expose a general inference capability; PRISM will not
-    fabricate a baseline for it.
-  - Configuring Ollama is not enough: the subject probes `/api/tags` and
-    requires the configured model to be present before a suite can start. A
-    dead daemon/missing model yields an unavailable result and no persisted
-    fake 0/90 benchmark.
-- Server-owned live benchmark action:
-  `POST /api/v1/atlas/bench/runs?provider=ollama`.
-  AtlasBench corpus, answer key, scorer, and persistence remain server-owned.
-- Evolution UI now exposes `Run live AtlasBench` and renders the returned
-  durable score/subject identity. Provider-unavailable errors stay explicit.
-- Durable immutable promotion-decision store
-  (`atlas_promotion_decisions.py`). Recomputing a comparison creates a new
-  decision; prior evaluator output is never mutated.
-- Server-owned promotion decision action:
-  `POST /api/v1/atlas/promotion/decisions` accepts only candidate/run
-  identities, loads the two immutable AtlasBench runs, requires the identical
-  corpus version/hash, executes the locked `decide_promotion()` policy with no
-  client-controlled regression tolerance, and durably records the result.
-- Safe promote action:
-  `POST /api/v1/atlas/promotion/promote` accepts a durable `decision_id` and
-  reason only. The referenced candidate must exist, and
-  `DurableAtlasPromotionStore.promote()` independently refuses any decision
-  whose verdict is not `PROMOTE_ELIGIBLE`.
-- Focused tests cover deterministic-provider refusal, server-owned live-suite
-  scoring/persistence, answer-key non-exposure, immutable decision persistence,
-  unknown-candidate rejection, promotion requiring a stored decision, and a
-  configured-but-unreachable Ollama provider refusing to create a baseline.
+Activation code head before documentation-only commits:
+`5ee368e8df911c65c1121be346b0f8c9ccef504f`.
 
-## Commits in this increment
+PR #15 CI run **#166** (`33904258400`) is fully green at that code head:
 
-- `5705ca9` — `feat: activate AtlasBench against live Atlas provider`
-- `267fb3b` — `feat: wire live AtlasBench provider route`
-- `ce4dee9` — `test: cover live AtlasBench provider activation`
-- `abfe860` — `feat: add live AtlasBench control to Evolution`
-- `b72376e` — `test: cover Evolution live AtlasBench action`
-- `659c767` — `feat: persist Atlas promotion decisions`
-- `f3a85d8` — `feat: add server-owned Atlas promotion decisions`
-- `1efd1fa` — `test: cover durable Atlas promotion decisions`
-- `f7add33` — `fix: refuse fake AtlasBench scores when Ollama is unavailable`
-- `1cffd7c` — `test: reject unreachable Ollama benchmark baselines`
+- `phase-1-python` — PASS
+- `phase-1-web` — PASS
+- `phase-4-live-e2e` — PASS, including real MySQL 8.0 + browser-to-API flow
+- `legacy-regression` — PASS, including compile check for every Python file
+- `secret-scan` — PASS
 
-## Still not operationally proven
+The repeated `history-live.spec.ts` failure is closed at its root, not hidden by
+larger timeouts. SQL Lab is bound to the exact dataset created by the live test,
+and the test synchronizes on real API state before asserting `3 returned / 3
+total rows`. The duplicate AI Analyst `overview-profile` React-key warning was
+also removed.
 
-The following require a real execution environment and are NOT claimed done:
+## Live AtlasBench production baseline
 
-1. A genuine production AtlasBench baseline against a reachable local Ollama
-   model.
-2. Installing/activating Soup in a real training environment.
-3. A real `soup train` smoke run.
-4. A real adapter/candidate artifact produced by that job.
-5. Candidate inference through a supported provider/runtime.
-6. A real production-vs-candidate Shadow Brain comparison.
-7. A real promotion verdict derived from those live runs.
-8. A real promotion (only if eligible) and rollback drill.
+`atlas_bench_live.py` now exposes a genuine non-mutating Ollama benchmark
+subject. It receives benchmark prompt + choices only; evaluator answer key,
+rationale, category scores, thresholds, and promotion policy remain entirely
+server-owned.
 
-Those cannot be manufactured from test/reference subjects. A rejected first
-candidate is a successful validation outcome; promoting an unworthy candidate
-would be a failure.
+A production baseline is fail-closed:
+
+- `PRISM_AI_PROVIDER=ollama` configuration alone creates no benchmark and no
+  production pointer.
+- the subject must reach Ollama `/api/tags` and find the exact configured model;
+- the model digest from that successful probe is required before PRISM may
+  persist the configured model as the initial production rollback anchor;
+- unreachable/missing Ollama therefore produces no fabricated 0-score baseline
+  and no fabricated production state.
+
+## Soup / Foundry activation path
+
+Current verified Soup contract is pinned in the experiment runner to
+`soup-cli==0.74.0` (Python >=3.10,<3.13). The first smoke experiment is
+trust-locked to `Qwen/Qwen2.5-0.5B-Instruct` to prove the full evolution loop
+before attempting a larger model.
+
+`tools/run_atlas_evolution_experiment.py` now performs one coherent physical
+experiment through existing Phase 10 boundaries:
+
+1. restore an already-durable production pointer if one exists;
+2. run genuine production AtlasBench against the reachable configured Ollama
+   model;
+3. if this is the first experiment, persist that verified model/digest as the
+   immutable rollback anchor;
+4. build a durable verified training-dataset version from eligible Atlas run
+   history;
+5. export **TRAIN split only** — validation/test examples never enter Soup;
+6. create/use the isolated pinned Soup training environment;
+7. run a Resource-Governor-admitted SFT LoRA/QLoRA smoke job;
+8. persist real job metrics/checkpoints/candidate artifact from actual adapter
+   output;
+9. export/deploy that candidate to Ollama under a candidate-only runtime name;
+10. persist an append-only candidate → Ollama runtime binding and verify the
+    deployed model is visible in `/api/tags`;
+11. run candidate AtlasBench against the exact same frozen corpus version/hash;
+12. compute and durably store the locked server-owned promotion verdict;
+13. if and only if the verdict is `PROMOTE_ELIGIBLE`, append a real production
+    promotion event, activate the candidate runtime, verify Atlas resolves to
+    that candidate, then perform the mandatory rollback drill and verify the
+    exact starting production model is restored;
+14. leave production unchanged for `HOLD` or `REJECT`;
+15. write an inspectable JSON experiment report under
+    `.prism/runtime/evolution-experiments/`.
+
+The runner does **not** force an eligible result. A HOLD or REJECT is a valid
+successful test of the evaluator.
+
+## Durable runtime-effective promotion
+
+The former gap where promotion could be an auditable pointer without changing
+Atlas's actual runtime is closed.
+
+- `atlas_candidate_runtime.py` adds append-only candidate runtime bindings.
+- runtime model names are validated and command-shaped names are rejected.
+- `DurableAtlasPromotionStore.bootstrap()` creates the pre-Foundry rollback
+  anchor once without pretending it was an evaluated candidate promotion.
+- a new anchor requires a verified live model digest; startup configuration by
+  itself cannot create one.
+- existing pointers are rehydrated on restart.
+- `POST /api/v1/atlas/promotion/promote` requires a durable evaluator-owned
+  eligible decision, a real candidate artifact, and a verified candidate
+  runtime binding before changing the pointer; Atlas's live Ollama model is
+  activated immediately afterward.
+- rollback verifies the target runtime binding **before** mutating production,
+  appends a rollback event, and activates the restored model.
+- no production or rollback event is edited in place.
+
+## Training-data isolation
+
+The normal Foundry REST path and the one-command experiment runner both train on
+`AtlasTrainingSplit.TRAIN` only. A dataset version with zero TRAIN examples is
+rejected rather than silently training on validation/test examples. Existing
+redaction, deduplication, project/run grouping, split isolation, and hidden-CoT
+exclusion remain intact.
+
+## Regression coverage added in this activation
+
+Coverage now includes:
+
+- durable append-only candidate runtime bindings;
+- runtime model-name injection rejection;
+- configured-but-unprobed Ollama cannot create a production pointer;
+- verified production bootstrap is durable and idempotent;
+- promotion activation changes Atlas to the bound candidate model;
+- rollback restores the exact bound starting model and preserves append-only
+  history;
+- Foundry refuses validation/test-only datasets;
+- dead/missing Ollama cannot create a fake AtlasBench baseline;
+- History live-E2E deterministic dataset binding;
+- unique AI Analyst evidence keys.
+
+## What is deliberately NOT claimed
+
+This GitHub/CI execution environment cannot access the user's local Ollama
+daemon, NVIDIA GPU, or a locally installed Soup training stack. Therefore the
+following values are **not invented and remain physically unproven**:
+
+- local OS/CPU/RAM/GPU/VRAM snapshot for the experiment;
+- Ollama version and currently installed local models;
+- genuine production AtlasBench score/category breakdown;
+- actual `atlas-training-v0001` example counts produced from the user's local
+  durable history;
+- Soup training job ID, loss trajectory, elapsed time, VRAM/RAM peak, and
+  checkpoint hash;
+- real candidate ID/runtime model;
+- candidate AtlasBench score;
+- Shadow comparison result;
+- final `PROMOTE_ELIGIBLE` / `HOLD` / `REJECT` result;
+- a physical promotion/rollback drill.
+
+Those facts must come from the runner's generated local report; test doubles or
+GitHub Actions CPU runners cannot substitute for them.
 
 ## Exact next task
 
-After CI for this checkpoint is green, run the new live AtlasBench action in an
-environment with the user's actual Ollama runtime/model to establish a real
-baseline. Then install/pin a verified Soup revision in a controlled local
-training environment, build/inspect a real 10N dataset version, perform a tiny
-LoRA/QLoRA smoke training job, register its adapter as a candidate, and wire the
-candidate into an inference-capable benchmark subject. Only then run Shadow
-Brain and `decide_promotion()`.
+On the actual Windows PRISM host with the configured local Ollama model and
+Python 3.10–3.12, run from repository root:
 
-Do not start Phase 11.
+```text
+python tools/run_atlas_evolution_experiment.py
+```
+
+Then inspect the generated
+`.prism/runtime/evolution-experiments/experiment-*.json` and promote its real
+IDs/metrics into this checkpoint/ledger. If the report is `blocked` or
+`failed`, fix the concrete local runtime issue and rerun; do not fabricate or
+skip a failed gate.
+
+Do **not** start multimodal, voice, Desktop packaging, Cortex V2/dense 3D,
+Phase 10 final certification, or Phase 11 until that first physical experiment
+has coherent evidence.
+
+`PHASE_10_COMPLETE = NO`
+`PHASE_11_UNLOCKED = NO`
