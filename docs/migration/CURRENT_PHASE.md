@@ -65,6 +65,16 @@ Q4_K_M scored 71/90 on `atlasbench-v1` in 235.6 seconds. It is only a production
 baseline, not an Evolution experiment: verified SFT/DPO data was empty, Soup was
 not installed, and no candidate, promotion, or rollback result exists.
 
+The Trusted Evolution wave (2026-09-05) added two mandatory pieces of that
+scope at the software boundary: a Candidate Artifact Trust Registry (real
+per-file SHA-256/type/path verification, enforced server-side before
+promotion evaluation or promotion) and a System Seed Corpus V1 (125 reviewed
+SFT examples targeting the first AtlasBench baseline's weak categories,
+verified against a real programmatic leakage guard so nothing overlaps
+AtlasBench itself). Both are structurally kept as distinct source/trust
+classes from real Atlas-run history -- never blended into one indistinguishable
+pool. Full detail: `.prism/checkpoints/phase-10-progress.md`.
+
 See `PHASE10_ARCHITECTURE.md`, `PHASE10_IMPLEMENTATION_LEDGER.md`,
 `.prism/checkpoints/phase-10-progress.md`, and
 `.prism/checkpoints/phase-10-evolution-activation.md`.

@@ -228,6 +228,39 @@ This is schema/CLI-compatibility evidence only. It does not substitute for,
 and must not be read as, the physical experiment: no training, candidate,
 AtlasBench, Shadow, or promotion/rollback value came from this sandbox.
 
+## Trusted Evolution wave (2026-09-05): Candidate Trust Registry + System Seed V1
+
+Two mandatory pieces from the approved "Trusted Evolution Wave" scope are now
+real, not scaffolded:
+
+- **Candidate Artifact Trust Registry** (`atlas_candidate_trust.py`): real
+  file-level verification of a candidate's adapter workspace before it may
+  enter promotion evaluation or be promoted -- SHA-256 per file, an
+  allowlist of real adapter file types, path-traversal/symlink-escape and
+  executable-file rejection, recipe/base-model/dataset cross-checks, and a
+  required real weight file. `POST /promotion/decisions` and
+  `POST /promotion/promote` both refuse (409) an unverified candidate,
+  enforced server-side, not just in a client.
+- **Atlas System Seed Corpus V1** (`atlas_system_seed.py`): 125 reviewed SFT
+  examples targeting the first AtlasBench baseline's weak categories,
+  structurally distinct from real Atlas-run/correction data
+  (`source_kind="system_seed"`), passing a real programmatic leakage guard
+  against the actual AtlasBench corpus (the guard caught and forced a fix
+  of 2 real accidental overlaps during authoring -- proof it works, not a
+  rubber stamp).
+
+Also fixed this wave: three real CI-discovered bugs (a terminal-event/
+plan-state race, an under-provisioned optimistic-concurrency retry budget,
+and a duplicate `evidence_id` causing real React key collisions), plus a
+separate session's defense-in-depth SSE transport guard
+(`atlas_event_stream.py`) wired into the `/events` route. Full detail:
+`.prism/checkpoints/phase-10-progress.md`.
+
+Not attempted: physically merging system-seed examples into the one JSONL
+file Soup actually trains on -- `export_jsonl()`'s current shape assumes a
+real `source_run_id` per example, which seed examples don't have. This is a
+real open design question, not solved by this wave.
+
 ## Exact next task
 
 On the actual Windows PRISM host with the configured local Ollama model and

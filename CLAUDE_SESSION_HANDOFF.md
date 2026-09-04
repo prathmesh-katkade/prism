@@ -17,9 +17,10 @@ infer current capability.
   `5ee368e8df911c65c1121be346b0f8c9ccef504f`
 - PR #15 CI run #166 (`33904258400`) at that code head: all five jobs PASS,
   including the real MySQL 8.0 + browser-to-API flow.
-- Current head: `ee0fb53d9549969159ac5b3f99e85fa9d8005c15`; PR CI #172
-  (`33907188462`) is green after preserving the TRAIN-only Foundry refusal and
-  correcting immutable training-corpus reindexing.
+- Current head: `07d549a` (Atlas System Seed Corpus V1); CI green through the
+  Trusted Evolution wave (Candidate Artifact Trust Registry, System Seed
+  Corpus V1, and three real CI-discovered bugs fixed -- see
+  `.prism/checkpoints/phase-10-progress.md` for the full list).
 - Do not merge PR #15 yet.
 
 ```text

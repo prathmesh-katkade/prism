@@ -89,12 +89,70 @@ production baseline, training dataset counts/hash, Soup job metrics, candidate,
 candidate benchmark, Shadow comparison/verdict, and promotion/rollback result.
 HOLD or REJECT is valid; do not force promotion.
 
+## Trusted Evolution wave (2026-09-05)
+
+Real CI failures were found and root-caused, not papered over -- each is a
+genuine, previously-undiscovered bug in already-implemented Phase 10 code:
+
+- `execute()` (Atlas run execution, background thread) wrote terminal
+  plan state before appending the matching terminal event, so a concurrent
+  poller could observe COMPLETED/FAILED/CANCELLED before the event existed.
+  Fixed by reordering all three terminal paths (event first, then state).
+- `DurableAtlasRunStore.append_event()`'s optimistic-concurrency retry loop
+  allowed only 3 attempts, provably too few under the real concurrent load
+  its own regression test exercises. Raised to 20 with jittered backoff.
+- `register_ai_evidence()` set every `EvidenceRef.evidence_id` to the
+  shared `provenance_ref` instead of a per-item id, producing real
+  duplicate React keys in the History workspace's Evidence Inspector. Fixed
+  to `{provenance_ref}:{kind}:{index}`, unique per item.
+- A separate session added `atlas_event_stream.py`, a defense-in-depth SSE
+  transport guard that never closes a terminal stream until the matching
+  durable event is actually observed, and wired it into the `/events` route.
+
+**Candidate Artifact Trust Registry** (10M-3 hardening, `atlas_candidate_trust.py`):
+real inspection of a candidate's adapter workspace -- recipe/base-model/
+dataset cross-checks, SHA-256 per file, an allowlist of real adapter file
+types, path-traversal/symlink-escape and executable-file rejection, at
+least one real weight file required. Append-only verification history.
+`POST /promotion/decisions` and `POST /promotion/promote` now both refuse
+(409) a candidate whose latest verification is not VERIFIED, enforced
+server-side. 11 regression tests, including a genuinely unverified
+candidate refused at both routes and a genuinely verified one passing.
+
+**Atlas System Seed Corpus V1** (`atlas_system_seed.py` +
+`atlas_system_seed_content.py`): 125 hand-authored, reviewed SFT examples
+across the seven weak areas the first real AtlasBench baseline (71/90)
+showed room to improve -- causal safety (20), evidence (20), SQL (20),
+statistics (22), forecasting (17), senior-DS behavior (12),
+security/agentic (14). `source_kind` is always the literal `"system_seed"`,
+structurally distinct from real Atlas-run history and real user
+corrections -- never blended into one pool. `check_atlasbench_leakage()` is
+a real 8-word-shingle overlap check against AtlasBench's actual
+prompts/choices/rationale; it genuinely caught 2 accidental phrase-level
+overlaps during authoring (both reworded until it reports zero findings).
+`GET /training-datasets:combined-summary` reports
+`system_seed_examples` / `verified_history_examples` /
+`user_correction_examples` / `total_eligible` as separate counts.
+
+Still open, not attempted: merging system-seed examples with real history
+into one physical Soup-consumable TRAIN export -- `export_jsonl()`'s
+current per-`AtlasTrainingExample` shape is `source_run_id`-anchored, which
+seed examples don't have by construction; that merge is a design decision
+for a future session, not solved here.
+
+Full backend suite: 333 passed, 4 skipped, 0 failed (was 312 at the start of
+this wave). ruff/mypy/boundaries/secret-scan/TS-contracts/frontend
+typecheck+lint all clean throughout.
+
 ## Next task
 
-Implement the next approved Phase 10 wave: local-embedding hybrid RAG V2,
-durable feedback signals, AtlasBench V2/Model Arena, durable hypothesis and
-experiment records, and Cortex V2's truthful data projection. Soup installation
-or a physical experiment rerun remains a separate dependency decision.
+On the actual PRISM host (Windows, GPU, Ollama reachable): install Soup,
+re-run `python tools/run_atlas_evolution_experiment.py` using the now-larger
+combined training source (once the physical merge above is resolved), and
+capture real physical evidence. Only after that evidence exists: continue
+local-embedding hybrid RAG V2, durable feedback signals, AtlasBench V2/Model
+Arena, durable hypothesis and experiment records, and Cortex V2's truthful
+data projection.
 
 Do not start multimodal, voice, Desktop packaging, Cortex V2, Phase 10 final
 certification, merge PR #15, or Phase 11 before that evidence exists.
