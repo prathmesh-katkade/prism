@@ -5,38 +5,64 @@
 **Phase 10 integration branch:** `phase-10-atlas-local-intelligence`, based on
 `phase-6.5-integration-staging` at `ab75b5a08f03a553fe4d6229c100d0be4c1dc158`.
 
-The first two internal waves establish Atlas's contract-first runtime foundation:
-provider capabilities, typed plan/step/event/evidence contracts, durable
-SQLAlchemy run/event records, deterministic tool-registry planning, visible
-Scout/Curator/Stat/Auditor state, constrained Python execution, SSE replay, an
-operational Atlas workspace, and a Cortex V1 projection backed only by durable
-real state; SQL-backed scoped memory, lexical local project knowledge, an
-explicit allowlisted Researcher, compact-metadata Ollama plan proposals, a
-resource-lease governor, and a native-worker sandbox health boundary.
+Phase 10 now has the contract-first Atlas runtime, durable run/event state,
+dynamic declared-tool planning, specialist/Council visibility, constrained
+Python execution, local memory/RAG foundations, allowlisted Researcher,
+Resource Governor, Atlas operations UI, and truthful Cortex V1 built in the
+earlier waves.
 
-The Foundry wave (10M–10R) adds a verified training-dataset generator (SFT)
-and a real-correction-sourced DPO preference-pair generator; a typed
-`FoundryBackend` abstraction with a real `SoupFoundryBackend` (inspected
-against the actual upstream Soup CLI) and a `MockFoundryBackend`,
-Resource-Governor-integrated job admission/preemption, and a
-candidate-artifact registry; a 90-task AtlasBench corpus across all ten
-required categories with a deterministic runner and durable append-only run
-history; Shadow Brain comparison plus the locked promotion policy
-(PROMOTE_ELIGIBLE/HOLD/REJECT) with an atomic, append-only promotion/rollback
-store; a REST surface (`atlas_foundry_routes.py`) exposing all of the above
-while deliberately never returning an AtlasBench answer key and never
-accepting a client-supplied promotion decision; and a native Atlas Evolution
-UI (10R) that reads that surface with honest, specific empty states — no
-candidate has ever actually been trained or promoted in any environment this
-project has run in, so those panels are genuinely empty rather than
-fabricated. It does not implement a general shell, package installation,
-unrestricted web access, KTO, Cortex 3D UI, voice, or desktop packaging.
-Windows CPU/memory quotas remain explicitly unsupported without a configured
-container worker. No live `AtlasBenchSubject` wraps a real Atlas provider
-yet, so there is no "run the benchmark suite" REST action or UI control; and
-`soup` has never been installed in any environment this project has run in.
-See `PHASE10_ARCHITECTURE.md`, `PHASE10_IMPLEMENTATION_LEDGER.md`, and
-`.prism/checkpoints/phase-10-progress.md`.
+The Foundry/Evolution stack (10M–10R) is also implemented end-to-end at the
+software boundary. It includes versioned verified SFT data, real-correction DPO
+pairs, a typed Soup backend, Resource-Governor-admitted training jobs, durable
+candidate artifacts, the frozen ten-category AtlasBench corpus, live Ollama
+AtlasBench subjects, Shadow Brain comparison, server-owned promotion decisions,
+append-only promotion/rollback history, and the native Evolution workspace.
+KTO remains deliberately absent because PRISM still has no genuine binary
+accept/reject signal to train from.
+
+The activation hardening completed on 2026-09-04 adds the pieces required for a
+real first evolution experiment rather than a simulated one:
+
+- the recurring History live-E2E race was fixed by binding SQL Lab to the exact
+  dataset created by the test and synchronizing on durable API state; the real
+  MySQL/browser CI flow is green;
+- the duplicate AI Analyst evidence React key was removed;
+- live AtlasBench refuses to persist a baseline unless the configured Ollama
+  daemon is reachable and the requested model is present in `/api/tags`;
+- the pre-Foundry production rollback anchor is created only after that live
+  probe yields a model digest — configuration alone cannot manufacture a
+  production pointer;
+- candidate-to-Ollama runtime bindings are durable and append-only;
+- Foundry exports TRAIN split only and refuses validation/test-only datasets;
+- promotion requires both a durable evaluator-owned `PROMOTE_ELIGIBLE`
+  decision and a verified candidate runtime binding, then changes the model
+  Atlas resolves at runtime;
+- rollback verifies the target runtime binding before changing the pointer and
+  restores the previous bound model as a new append-only event;
+- `tools/run_atlas_evolution_experiment.py` is the one-command physical
+  activation path. It pins the first smoke experiment to Soup 0.74.0 and
+  `Qwen/Qwen2.5-0.5B-Instruct`, records a real production AtlasBench baseline,
+  builds TRAIN-only verified data, performs Soup LoRA/QLoRA training through
+  the existing Foundry backend, exports/deploys the candidate to Ollama,
+  benchmarks the identical frozen corpus, computes the locked verdict, and —
+  only if eligible — performs a real production switch followed by a mandatory
+  rollback drill ending on the exact model that started the experiment.
+
+No real GPU/Soup experiment result is claimed by this document yet. The current
+GitHub/CI environment cannot execute the user's local Ollama daemon or GPU, so
+loss, VRAM/RAM peak, candidate score, Shadow result, promotion verdict, and the
+rollback drill remain evidence that must come from the generated local
+experiment report. A HOLD or REJECT first candidate is a valid successful test
+of the evaluator; PRISM must not force promotion.
+
+Phase 10 is therefore **software-ready for the first physical Evolution
+experiment, but not Phase-10-complete**. Multimodal, voice, desktop packaging,
+Cortex V2/dense 3D, flagship workflow certification, and Phase 11 remain locked
+behind that evidence and the remaining Phase 10 gates.
+
+See `PHASE10_ARCHITECTURE.md`, `PHASE10_IMPLEMENTATION_LEDGER.md`,
+`.prism/checkpoints/phase-10-progress.md`, and
+`.prism/checkpoints/phase-10-evolution-activation.md`.
 
 ```
 PHASE_9_COMPLETE = YES
