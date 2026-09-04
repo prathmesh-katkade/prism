@@ -4,10 +4,9 @@ from datetime import datetime, timezone
 
 import pytest
 from fastapi import HTTPException
-from prism_api_contracts import AtlasTrainingRecipe, AtlasTrainingRecipeMethod, AtlasTrainingSplit
-
 from prism_api import atlas_foundry_routes
 from prism_api.atlas_candidate_runtime import DurableAtlasCandidateRuntimeStore
+from prism_api_contracts import AtlasTrainingRecipe, AtlasTrainingRecipeMethod, AtlasTrainingSplit
 
 
 def test_candidate_runtime_binding_is_durable_and_append_only(tmp_path) -> None:  # type: ignore[no-untyped-def]
