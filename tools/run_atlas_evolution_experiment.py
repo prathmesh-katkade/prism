@@ -52,14 +52,12 @@ for relative in (
         sys.path.insert(0, path)
 
 import httpx  # noqa: E402
-from prism_api.atlas_bench_corpus import CORPUS_VERSION, all_tasks, corpus_hash  # noqa: E402
 from prism_api.atlas_bench_live import (  # noqa: E402
     AtlasBenchSubjectUnavailable,
     AtlasProviderBenchSubject,
     run_candidate_benchmark,  # noqa: E402
+    run_live_benchmark,
 )
-from prism_api.atlas_bench_runner import run_suite  # noqa: E402
-from prism_api.atlas_bench_store import DurableAtlasBenchStore  # noqa: E402
 from prism_api.atlas_candidate_runtime import (  # noqa: E402
     DurableAtlasCandidateRuntimeStore,
     activate_current_ollama_model,
@@ -85,8 +83,12 @@ from prism_api.atlas_foundry_orchestration import (  # noqa: E402
     reconcile_foundry_jobs,
     start_training_job,
 )
-from prism_api.atlas_promotion import DurableAtlasPromotionStore, decide_promotion  # noqa: E402
-from prism_api.atlas_promotion_decisions import DurableAtlasPromotionDecisionStore  # noqa: E402
+from prism_api.atlas_foundry_routes import (  # noqa: E402
+    compute_promotion_decision,
+    promote_candidate,
+    rollback_production,
+)
+from prism_api.atlas_promotion import DurableAtlasPromotionStore  # noqa: E402
 from prism_api.atlas_resources import governor  # noqa: E402
 from prism_api.atlas_system_seed import (  # noqa: E402
     DurableAtlasSystemSeedStore,
@@ -186,18 +188,19 @@ def run_live_suite(*, candidate_model: Optional[str] = None):  # type: ignore[no
     if candidate_model is not None:
         updates["PRISM_ATLAS_OLLAMA_MODEL"] = candidate_model
     with temporary_environment(updates):
+        suite = run_live_benchmark(AtlasModelProviderName.OLLAMA)
         subject = AtlasProviderBenchSubject(AtlasModelProviderName.OLLAMA)
-        suite, results = run_suite(
-            subject,
-            all_tasks(),
-            corpus_version=CORPUS_VERSION,
-            corpus_hash_value=corpus_hash(),
-        )
-        DurableAtlasBenchStore().save(suite, results)
+        if (
+            suite.subject_kind != "production"
+            or suite.runtime_model != subject.model
+            or suite.runtime_model_digest != subject.model_digest
+            or suite.provider != "ollama"
+        ):
+            raise ExperimentBlocked("Production AtlasBench run lacks the required durable Ollama runtime binding.")
         return suite, subject
 
 
-def build_training_dataset() -> tuple[object, Path, int]:
+def build_training_dataset() -> tuple[object, Path, int, str, str]:
     history_store = DurableAtlasTrainingDatasetStore()
     history, exclusions = AtlasTrainingDatasetBuilder(DurableAtlasRunStore()).build()
     history_version = history_store.save(history, exclusions)
@@ -209,8 +212,8 @@ def build_training_dataset() -> tuple[object, Path, int]:
     if not train_records:
         raise ExperimentBlocked("Combined SFT corpus contains zero TRAIN records; refusing Soup execution.")
     export_path = EXPERIMENT_ROOT / version.version_id / "train.jsonl"
-    _export_hash, _provenance_hash = export_alpaca_jsonl(train_records, export_path)
-    return version, export_path, len(train_records)
+    train_sha256, provenance_sha256 = export_alpaca_jsonl(train_records, export_path)
+    return version, export_path, len(train_records), train_sha256, provenance_sha256
 
 
 def make_recipe(version_id: str, base_model: str, method: AtlasTrainingRecipeMethod) -> AtlasTrainingRecipe:
@@ -373,10 +376,12 @@ def main() -> int:
             )
         report["production_pointer_before"] = baseline_pointer.model_dump(mode="json")
 
-        version, dataset_path, train_count = build_training_dataset()
+        version, dataset_path, train_count, train_sha256, provenance_sha256 = build_training_dataset()
         report["training_dataset"] = version.model_dump(mode="json")
         report["training_examples_used"] = train_count
         report["training_export"] = str(dataset_path)
+        report["training_export_sha256"] = train_sha256
+        report["training_provenance_sha256"] = provenance_sha256
 
         soup = ensure_soup(install=args.install_soup)
         backend = SoupFoundryBackend()
@@ -430,13 +435,14 @@ def main() -> int:
         ):
             raise ExperimentBlocked("Production and candidate AtlasBench runs did not use the identical frozen corpus.")
 
-        decision = decide_promotion(candidate.candidate_id, baseline, candidate_run)
-        DurableAtlasPromotionDecisionStore().save(decision)
+        decision = compute_promotion_decision(
+            candidate.candidate_id, baseline.run_id, candidate_run.run_id
+        )
         report["promotion_decision"] = decision.model_dump(mode="json")
 
         if decision.verdict is AtlasPromotionVerdict.PROMOTE_ELIGIBLE:
-            promoted = promotion_store.promote(
-                decision,
+            promoted = promote_candidate(
+                decision.decision_id,
                 reason="First real Atlas evolution experiment: promotion drill.",
             )
             report["promotion_pointer"] = promoted.model_dump(mode="json")
@@ -447,7 +453,7 @@ def main() -> int:
                     "Promotion pointer was recorded but Atlas did not resolve to the candidate runtime model."
                 )
 
-            rollback = promotion_store.rollback(
+            rollback = rollback_production(
                 reason="First real Atlas evolution experiment: mandatory rollback drill.",
             )
             report["rollback_pointer"] = rollback.model_dump(mode="json")
