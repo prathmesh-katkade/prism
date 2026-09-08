@@ -32,6 +32,12 @@ def test_alpaca_export_is_train_only_and_byte_stable(tmp_path) -> None:  # type:
     first = path.read_bytes()
     assert b"Evaluation-only" not in first
     assert set(__import__("json").loads(first.decode()).keys()) == {"instruction", "input", "output"}
+    provenance = __import__("json").loads(path.with_suffix(".provenance.json").read_text(encoding="utf-8"))
+    assert provenance == [{
+        "record_id": "sft_train", "source_kind": "system_seed", "source_ref": "seed1",
+        "source_version": "v1", "project_id": None, "dataset_id": None,
+        "split": "train", "content_hash": "1" * 64,
+    }]
     second_hash, second_provenance_hash = export_alpaca_jsonl(list(reversed(records)), path)
     assert path.read_bytes() == first
     assert (file_hash, provenance_hash) == (second_hash, second_provenance_hash)
@@ -54,3 +60,13 @@ def test_combined_manifest_is_immutable_and_reproducible(tmp_path) -> None:  # t
     assert first.system_seed_count == len(seeds)
     assert first.atlas_history_count == 0
     assert len(store.records(first.version_id)) == len(seeds)
+
+
+def test_combined_manifest_identity_includes_source_lineage(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    seeds = build_verified_system_seed_corpus()
+    records = build_combined_records(seeds, [])
+    store = DurableAtlasCombinedSftStore(database_url=f"sqlite:///{tmp_path / 'combined.db'}")
+    first = store.save(records, seed_version=seeds[0].seed_version, seed_hash=manifest_content_hash(seeds), history_version=None, history_hash=None)
+    relined = [record.model_copy(update={"source_version": "system-seed-v2"}) for record in records]
+    second = store.save(relined, seed_version="system-seed-v2", seed_hash=manifest_content_hash(seeds), history_version=None, history_hash=None)
+    assert second.version_id != first.version_id

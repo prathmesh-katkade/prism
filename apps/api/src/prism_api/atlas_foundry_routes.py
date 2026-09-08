@@ -406,6 +406,8 @@ def compute_promotion_decision(
         or candidate_run.runtime_model != candidate_binding.runtime_model
         or candidate_run.runtime_model_digest != candidate_binding.runtime_model_digest
         or candidate_run.trust_verification_id != verification.verification_id
+        or candidate_run.candidate_fingerprint != verification.aggregate_candidate_fingerprint
+        or candidate_run.provider != candidate_binding.provider
     ):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Candidate AtlasBench run is not server-bound to this exact verified candidate runtime.")
     production = _promotion_store.current_production()

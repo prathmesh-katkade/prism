@@ -73,6 +73,26 @@ def _hash(payload: object) -> str:
     return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
+def _record_identity(record: AtlasSftTrainingRecord) -> dict[str, object]:
+    """The reproducible identity of one combined record and its lineage.
+
+    A content hash alone is insufficient here: the same reviewed text can be
+    released under a new seed or historical-dataset version.  That must create
+    a distinct immutable combined manifest rather than silently reusing the
+    old source provenance.
+    """
+    return {
+        "record_id": record.record_id,
+        "source_kind": record.source_kind,
+        "source_ref": record.source_ref,
+        "source_version": record.source_version,
+        "project_id": record.project_id,
+        "dataset_id": record.dataset_id,
+        "split": record.split.value,
+        "content_hash": record.content_hash,
+    }
+
+
 def _seed_record(seed: AtlasSystemSeedExample) -> AtlasSftTrainingRecord:
     return AtlasSftTrainingRecord(
         record_id=f"sft_{seed.content_hash[:32]}", source_kind="system_seed",
@@ -141,7 +161,7 @@ def export_alpaca_jsonl(records: Sequence[AtlasSftTrainingRecord], path: Path) -
     with path.open("w", encoding="utf-8", newline="\n") as handle:
         for record in train:
             handle.write(json.dumps({"instruction": record.instruction, "input": record.input, "output": record.output}, sort_keys=True, separators=(",", ":")) + "\n")
-    provenance = [{"record_id": r.record_id, "source_kind": r.source_kind, "source_ref": r.source_ref, "source_version": r.source_version, "content_hash": r.content_hash} for r in train]
+    provenance = [_record_identity(record) for record in train]
     # ``Path.write_text`` did not accept ``newline`` on the Python 3.9 floor.
     # Keep the sidecar byte-stable by explicitly controlling newline translation.
     with provenance_path.open("w", encoding="utf-8", newline="\n") as handle:
@@ -155,7 +175,7 @@ class DurableAtlasCombinedSftStore:
         _metadata.create_all(self.engine)
 
     def save(self, records: Sequence[AtlasSftTrainingRecord], *, seed_version: str, seed_hash: str, history_version: str | None, history_hash: str | None) -> AtlasCombinedSftDatasetVersion:
-        aggregate = _hash([r.content_hash for r in sorted(records, key=lambda item: item.record_id)])
+        aggregate = _hash([_record_identity(record) for record in sorted(records, key=lambda item: item.record_id)])
         version_id = f"combinedsft_{aggregate[:24]}"
         existing = self.get_version(version_id)
         if existing is not None:

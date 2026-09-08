@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from datetime import datetime, timezone
+from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
@@ -13,12 +14,46 @@ from prism_api.atlas_candidate_runtime import (
 )
 from prism_api.atlas_promotion import DurableAtlasPromotionStore
 from prism_api_contracts import (
+    AtlasBenchSuiteRun,
     AtlasPromotionDecision,
     AtlasPromotionVerdict,
     AtlasTrainingRecipe,
     AtlasTrainingRecipeMethod,
     AtlasTrainingSplit,
 )
+
+
+def _bound_bench_run(*, run_id: str, candidate_id: str, subject_kind: str, corpus_hash: str = "a" * 64) -> AtlasBenchSuiteRun:
+    now = datetime.now(timezone.utc)
+    return AtlasBenchSuiteRun(
+        run_id=run_id,
+        subject_id=f"subject_{run_id}",
+        corpus_version="atlasbench-v1",
+        corpus_hash=corpus_hash,
+        total_tasks=1,
+        total_passed=1,
+        category_scores=[],
+        started_at=now,
+        completed_at=now,
+        subject_kind=subject_kind,  # type: ignore[arg-type]
+        candidate_id=candidate_id,
+        candidate_fingerprint="candidate-fingerprint" if subject_kind == "candidate" else None,
+        trust_verification_id="verification-1" if subject_kind == "candidate" else None,
+        runtime_model=f"{candidate_id}-model",
+        runtime_model_digest=f"{candidate_id}-digest",
+        provider="ollama",
+    )
+
+
+def _configure_promotion_decision_dependencies(monkeypatch, candidate_run: AtlasBenchSuiteRun, production_run: AtlasBenchSuiteRun) -> None:  # type: ignore[no-untyped-def]
+    candidate_binding = SimpleNamespace(provider="ollama", runtime_model="candidate_a-model", runtime_model_digest="candidate_a-digest")
+    production_binding = SimpleNamespace(provider="ollama", runtime_model="production-model", runtime_model_digest="production-digest")
+    monkeypatch.setattr(atlas_foundry_routes, "_candidate_registry", SimpleNamespace(get=lambda _: object()))
+    monkeypatch.setattr(atlas_foundry_routes, "is_verified", lambda *_: True)
+    monkeypatch.setattr(atlas_foundry_routes, "_candidate_verification_store", SimpleNamespace(latest=lambda _: SimpleNamespace(verification_id="verification-1", aggregate_candidate_fingerprint="candidate-fingerprint")))
+    monkeypatch.setattr(atlas_foundry_routes, "_candidate_runtime_store", SimpleNamespace(latest=lambda candidate_id: candidate_binding if candidate_id == "candidate_a" else production_binding))
+    monkeypatch.setattr(atlas_foundry_routes, "_bench_store", SimpleNamespace(get_run=lambda run_id: candidate_run if run_id == "candidate-run" else production_run))
+    monkeypatch.setattr(atlas_foundry_routes, "_promotion_store", SimpleNamespace(current_production=lambda: SimpleNamespace(candidate_id="production")))
 
 
 def test_candidate_runtime_binding_is_durable_and_append_only(tmp_path) -> None:  # type: ignore[no-untyped-def]
@@ -50,6 +85,34 @@ def test_candidate_runtime_binding_rejects_command_shaped_model_names(tmp_path) 
 
     with pytest.raises(ValueError, match="unsupported characters"):
         store.bind_ollama("candidate_1", "candidate; rm -rf /")
+
+
+@pytest.mark.parametrize(
+    "candidate_update",
+    [
+        {"candidate_id": "candidate_b"},
+        {"subject_kind": "generic"},
+        {"candidate_fingerprint": "substituted-fingerprint"},
+    ],
+)
+def test_promotion_decision_rejects_substituted_or_unbound_candidate_benchmark(
+    monkeypatch, candidate_update: dict[str, str]
+) -> None:  # type: ignore[no-untyped-def]
+    candidate = _bound_bench_run(run_id="candidate-run", candidate_id="candidate_a", subject_kind="candidate").model_copy(update=candidate_update)
+    production = _bound_bench_run(run_id="production-run", candidate_id="production", subject_kind="production")
+    _configure_promotion_decision_dependencies(monkeypatch, candidate, production)
+
+    with pytest.raises(HTTPException, match="server-bound"):
+        atlas_foundry_routes.compute_promotion_decision("candidate_a", "production-run", "candidate-run")
+
+
+def test_promotion_decision_rejects_a_corpus_mismatch_after_trust_binding(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    candidate = _bound_bench_run(run_id="candidate-run", candidate_id="candidate_a", subject_kind="candidate")
+    production = _bound_bench_run(run_id="production-run", candidate_id="production", subject_kind="production", corpus_hash="b" * 64)
+    _configure_promotion_decision_dependencies(monkeypatch, candidate, production)
+
+    with pytest.raises(HTTPException, match="identical AtlasBench corpus"):
+        atlas_foundry_routes.compute_promotion_decision("candidate_a", "production-run", "candidate-run")
 
 
 def test_unverified_ollama_configuration_does_not_create_production_pointer(
