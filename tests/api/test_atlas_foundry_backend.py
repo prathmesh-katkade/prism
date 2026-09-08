@@ -114,3 +114,26 @@ def test_soup_backend_reports_absence_honestly_rather_than_crashing(tmp_path) ->
     assert backend.cancel(job).state is AtlasTrainingJobState.FAILED
     assert backend.metrics(job) == []
     assert backend.checkpoints(job) == []
+
+
+def test_soup_backend_confirms_the_noninteractive_train_command(tmp_path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    captured: dict[str, object] = {}
+
+    class _Process:
+        pid = 42
+
+    def fake_popen(command, **kwargs):  # type: ignore[no-untyped-def]
+        captured["command"] = command
+        captured["kwargs"] = kwargs
+        return _Process()
+
+    monkeypatch.setattr("prism_api.atlas_foundry_backend.shutil.which", lambda _: "soup")
+    monkeypatch.setattr("prism_api.atlas_foundry_backend.subprocess.Popen", fake_popen)
+    backend = SoupFoundryBackend(workspace_root=tmp_path / "foundry")
+    dataset_path = tmp_path / "train.jsonl"
+    dataset_path.write_text('{"instruction":"safe","input":"","output":"yes"}\n', encoding="utf-8")
+
+    job = backend.start(_recipe(), dataset_path=dataset_path)
+
+    assert job.state is AtlasTrainingJobState.RUNNING
+    assert captured["command"][-1] == "--yes"  # type: ignore[index]

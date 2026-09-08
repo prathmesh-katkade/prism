@@ -322,7 +322,10 @@ class SoupFoundryBackend(FoundryBackend):
         log_path = workspace / "soup.log"
         with log_path.open("w", encoding="utf-8") as log_file:
             process = subprocess.Popen(
-                [soup, "train", "--config", str(config_path)],
+                # Foundry is a non-interactive service boundary.  Soup asks
+                # for confirmation by default; its documented --yes flag is
+                # required so an admitted job actually reaches training.
+                [soup, "train", "--config", str(config_path), "--yes"],
                 cwd=str(workspace),
                 stdout=log_file,
                 stderr=subprocess.STDOUT,
