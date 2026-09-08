@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -79,6 +80,8 @@ def test_verify_rejects_an_invalid_file_type(tmp_path) -> None:  # type: ignore[
 
 
 def test_verify_rejects_an_executable_file_masquerading_as_an_allowed_type(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    if os.name == "nt":
+        pytest.skip("Windows does not expose POSIX execute permission bits for this guard")
     recipe = _recipe("recipe_exec_1")
     workspace = tmp_path / "exec"
     _write_real_adapter(workspace)

@@ -1425,6 +1425,15 @@ class AtlasBenchSuiteRun(ContractModel):
     category_scores: list[AtlasBenchCategoryScore] = Field(default_factory=list)
     started_at: datetime
     completed_at: datetime
+    # Server-owned subject provenance.  Legacy generic runs retain the
+    # defaults, while candidate science must populate every binding field.
+    subject_kind: Literal["generic", "production", "candidate"] = "generic"
+    candidate_id: Optional[str] = Field(default=None, max_length=120)
+    candidate_fingerprint: Optional[str] = Field(default=None, max_length=64)
+    trust_verification_id: Optional[str] = Field(default=None, max_length=120)
+    runtime_model: Optional[str] = Field(default=None, max_length=300)
+    runtime_model_digest: Optional[str] = Field(default=None, max_length=200)
+    provider: Optional[str] = Field(default=None, max_length=32)
 
 
 # --- 10Q: Shadow Brain, promotion policy, and rollback ------------------
@@ -1687,6 +1696,42 @@ class AtlasCombinedTrainingSourceSummary(ContractModel):
     user_correction_examples: int = Field(ge=0)
     total_eligible: int = Field(ge=0)
     computed_at: datetime
+
+
+class AtlasSftTrainingRecord(ContractModel):
+    """A source-neutral, immutable SFT record.  It deliberately has no
+    ``source_run_id``: a system seed must never impersonate Atlas history."""
+
+    record_id: str = Field(min_length=1, max_length=120)
+    source_kind: Literal["system_seed", "atlas_run"]
+    source_ref: str = Field(min_length=1, max_length=255)
+    source_version: str = Field(min_length=1, max_length=120)
+    project_id: Optional[str] = Field(default=None, max_length=200)
+    dataset_id: Optional[str] = Field(default=None, max_length=255)
+    instruction: str = Field(min_length=1, max_length=2_000)
+    input: str = Field(default="", max_length=2_000)
+    output: str = Field(min_length=1, max_length=4_000)
+    uncertainty: Optional[str] = Field(default=None, max_length=1_000)
+    split: AtlasTrainingSplit
+    content_hash: str = Field(min_length=32, max_length=64)
+    provenance: dict[str, object] = Field(default_factory=dict)
+    created_at: datetime
+
+
+class AtlasCombinedSftDatasetVersion(ContractModel):
+    version_id: str = Field(min_length=1, max_length=120)
+    seed_version: str = Field(min_length=1, max_length=40)
+    history_dataset_version: Optional[str] = Field(default=None, max_length=120)
+    history_dataset_hash: Optional[str] = Field(default=None, max_length=64)
+    system_seed_count: int = Field(ge=0)
+    atlas_history_count: int = Field(ge=0)
+    total_sft_count: int = Field(ge=0)
+    train_count: int = Field(ge=0)
+    validation_count: int = Field(ge=0)
+    test_count: int = Field(ge=0)
+    aggregate_content_hash: str = Field(min_length=32, max_length=64)
+    source_manifests: dict[str, str] = Field(default_factory=dict)
+    created_at: datetime
 
 
 class AtlasPreferencePairSource(str, Enum):

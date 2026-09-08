@@ -27,6 +27,7 @@ from prism_api_contracts import (
     AtlasBenchTaskResult,
     AtlasCandidateArtifact,
     AtlasCandidateVerification,
+    AtlasCombinedSftDatasetVersion,
     AtlasCombinedTrainingSourceSummary,
     AtlasFoundryCapability,
     AtlasFoundryPreflight,
@@ -34,6 +35,7 @@ from prism_api_contracts import (
     AtlasPreferencePair,
     AtlasProductionPointer,
     AtlasPromotionDecision,
+    AtlasSftTrainingRecord,
     AtlasSystemSeedExample,
     AtlasSystemSeedManifest,
     AtlasTrainingDatasetVersion,
@@ -55,6 +57,11 @@ from .atlas_candidate_trust import (
     DurableAtlasCandidateVerificationStore,
     is_verified,
     verify_candidate,
+)
+from .atlas_combined_sft_dataset import (
+    DurableAtlasCombinedSftStore,
+    build_combined_records,
+    export_alpaca_jsonl,
 )
 from .atlas_foundry_backend import SoupFoundryBackend
 from .atlas_foundry_dataset import (
@@ -99,6 +106,7 @@ _candidate_verification_store = DurableAtlasCandidateVerificationStore()
 _promotion_store = DurableAtlasPromotionStore()
 _promotion_decision_store = DurableAtlasPromotionDecisionStore()
 _system_seed_store = DurableAtlasSystemSeedStore()
+_combined_sft_store = DurableAtlasCombinedSftStore()
 _backend = SoupFoundryBackend()
 
 _EXPORT_ROOT = Path(".prism/runtime/foundry-exports")
@@ -128,6 +136,33 @@ def preview_training_dataset(
     limit: int = Query(default=10, ge=1, le=100),
 ) -> list[AtlasTrainingExample]:
     return _training_dataset_store.preview(version_id, split=split, limit=limit)
+
+
+@router.post("/combined-sft-datasets", response_model=AtlasCombinedSftDatasetVersion, status_code=status.HTTP_201_CREATED)
+def build_combined_sft_dataset() -> AtlasCombinedSftDatasetVersion:
+    """Release the reviewed seed and combine it with genuine eligible history.
+
+    The historical run-only corpus remains available for inspection, but every
+    ordinary SFT Foundry job is expected to use this immutable combined type.
+    """
+    seeds = build_verified_system_seed_corpus()
+    seed_manifest = _system_seed_store.release(seeds, build_manifest(seeds, leakage_guard_passed=True))
+    history, exclusions = AtlasTrainingDatasetBuilder(_run_store).build()
+    history_manifest = _training_dataset_store.save(history, exclusions)
+    records = build_combined_records(seeds, history, history_version=history_manifest.version_id)
+    return _combined_sft_store.save(records, seed_version=seed_manifest.seed_version, seed_hash=seed_manifest.aggregate_content_hash, history_version=history_manifest.version_id, history_hash=history_manifest.content_hash)
+
+
+@router.get("/combined-sft-datasets", response_model=list[AtlasCombinedSftDatasetVersion])
+def list_combined_sft_datasets(limit: int = Query(default=50, ge=1, le=200)) -> list[AtlasCombinedSftDatasetVersion]:
+    return _combined_sft_store.list_versions(limit=limit)
+
+
+@router.get("/combined-sft-datasets/{version_id}/preview", response_model=list[AtlasSftTrainingRecord])
+def preview_combined_sft_dataset(version_id: str, split: Optional[AtlasTrainingSplit] = None, limit: int = Query(default=10, ge=1, le=100)) -> list[AtlasSftTrainingRecord]:
+    if _combined_sft_store.get_version(version_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Combined SFT dataset version was not found.")
+    return _combined_sft_store.records(version_id, split=split, limit=limit)
 
 
 @router.post("/system-seed/release", response_model=AtlasSystemSeedManifest, status_code=status.HTTP_201_CREATED)
@@ -209,14 +244,21 @@ def start_foundry_job(recipe: AtlasTrainingRecipe, dataset_version_id: str) -> A
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="recipe.dataset_version_id must match the dataset_version_id being trained on.",
         )
-    manifest = _training_dataset_store.get_version(dataset_version_id)
-    if manifest is None:
+    manifest = _combined_sft_store.get_version(dataset_version_id)
+    if manifest is not None:
+        records = _combined_sft_store.records(dataset_version_id, split=AtlasTrainingSplit.TRAIN, limit=100_000)
+        if not records:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Combined SFT dataset version contains no TRAIN examples; Foundry refused to train on validation/test data.")
+        export_path = _EXPORT_ROOT / dataset_version_id / f"{uuid.uuid4().hex}.jsonl"
+        export_alpaca_jsonl(records, export_path)
+        return start_training_job(governor, _job_store, _backend, recipe, dataset_path=export_path)
+
+    # Compatibility-only route for pre-bridge run-only manifests. New SFT
+    # callers use combined versions above, which always export explicit Alpaca.
+    historical = _training_dataset_store.get_version(dataset_version_id)
+    if historical is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Training dataset version was not found.")
-    examples = _training_dataset_store.preview(
-        dataset_version_id,
-        split=AtlasTrainingSplit.TRAIN,
-        limit=100_000,
-    )
+    examples = _training_dataset_store.preview(dataset_version_id, split=AtlasTrainingSplit.TRAIN, limit=100_000)
     if not examples:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -354,6 +396,28 @@ def compute_promotion_decision(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Both AtlasBench runs must exist before a decision can be computed.")
     if production_run.run_id == candidate_run.run_id:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Production and candidate AtlasBench runs must be distinct.")
+    candidate_binding = _candidate_runtime_store.latest(candidate_id)
+    verification = _candidate_verification_store.latest(candidate_id)
+    if candidate_binding is None or verification is None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Candidate has no current verified runtime binding.")
+    if (
+        candidate_run.subject_kind != "candidate"
+        or candidate_run.candidate_id != candidate_id
+        or candidate_run.runtime_model != candidate_binding.runtime_model
+        or candidate_run.runtime_model_digest != candidate_binding.runtime_model_digest
+        or candidate_run.trust_verification_id != verification.verification_id
+    ):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Candidate AtlasBench run is not server-bound to this exact verified candidate runtime.")
+    production = _promotion_store.current_production()
+    production_binding = _candidate_runtime_store.latest(production.candidate_id) if production else None
+    if (
+        production is None or production_binding is None
+        or production_run.subject_kind != "production"
+        or production_run.candidate_id != production.candidate_id
+        or production_run.runtime_model != production_binding.runtime_model
+        or production_run.runtime_model_digest != production_binding.runtime_model_digest
+    ):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Production AtlasBench run is not bound to the current durable production runtime.")
     if (
         production_run.corpus_version != candidate_run.corpus_version
         or production_run.corpus_hash != candidate_run.corpus_hash

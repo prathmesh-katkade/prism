@@ -6,6 +6,12 @@
 `PHASE_10_IN_PROGRESS = YES`
 `PHASE_11_UNLOCKED = NO`
 
+## Superseding 2026-09-08 status
+
+Combined SFT dataset/export and trust-bound candidate benchmark provenance are
+implemented. Physical Soup/GPU/Ollama experiment evidence remains pending; no
+training result or promotion is claimed.
+
 Canonical starting point: `phase-6.5-integration-staging` at `ab75b5a`.
 Phase 9 remains complete; its externally blocked Render certification is not an
 engineering blocker for this phase.

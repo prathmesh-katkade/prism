@@ -51,7 +51,7 @@ def _recipe_to_soup_config(
         "backend": "transformers",
         "data": {
             "train": str(dataset_path),
-            "format": "dpo" if recipe.task == "dpo" else "auto",
+            "format": "dpo" if recipe.task == "dpo" else "alpaca",
             "max_length": recipe.max_length,
         },
         "training": {

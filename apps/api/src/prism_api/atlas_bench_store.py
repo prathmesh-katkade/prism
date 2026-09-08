@@ -29,7 +29,9 @@ from sqlalchemy import (
     Text,
     create_engine,
     insert,
+    inspect,
     select,
+    text,
 )
 from sqlalchemy.engine import Engine
 
@@ -49,6 +51,13 @@ _runs = Table(
     Column("category_scores_payload", Text, nullable=False),
     Column("started_at", DateTime(timezone=True), nullable=False),
     Column("completed_at", DateTime(timezone=True), nullable=False, index=True),
+    Column("subject_kind", String(16), nullable=False, server_default="generic"),
+    Column("candidate_id", String(120), nullable=True, index=True),
+    Column("candidate_fingerprint", String(64), nullable=True),
+    Column("trust_verification_id", String(120), nullable=True),
+    Column("runtime_model", String(300), nullable=True),
+    Column("runtime_model_digest", String(200), nullable=True),
+    Column("provider", String(32), nullable=True),
 )
 _task_results = Table(
     "prism_atlas_bench_task_results",
@@ -76,6 +85,16 @@ class DurableAtlasBenchStore:
         )
         _metadata.create_all(self.engine)
         with self.engine.begin() as connection:
+            existing = {str(item["name"]) for item in inspect(connection).get_columns("prism_atlas_bench_runs")}
+            additions = {
+                "subject_kind": "VARCHAR(16) NOT NULL DEFAULT 'generic'",
+                "candidate_id": "VARCHAR(120)", "candidate_fingerprint": "VARCHAR(64)",
+                "trust_verification_id": "VARCHAR(120)", "runtime_model": "VARCHAR(300)",
+                "runtime_model_digest": "VARCHAR(200)", "provider": "VARCHAR(32)",
+            }
+            for name, definition in additions.items():
+                if name not in existing:
+                    connection.execute(text(f"ALTER TABLE prism_atlas_bench_runs ADD COLUMN {name} {definition}"))
             ensure_index(
                 connection,
                 "prism_atlas_bench_task_results",
@@ -106,6 +125,13 @@ class DurableAtlasBenchStore:
                     ),
                     started_at=suite_run.started_at,
                     completed_at=suite_run.completed_at,
+                    subject_kind=suite_run.subject_kind,
+                    candidate_id=suite_run.candidate_id,
+                    candidate_fingerprint=suite_run.candidate_fingerprint,
+                    trust_verification_id=suite_run.trust_verification_id,
+                    runtime_model=suite_run.runtime_model,
+                    runtime_model_digest=suite_run.runtime_model_digest,
+                    provider=suite_run.provider,
                 )
             )
             for result in results:
@@ -144,6 +170,13 @@ class DurableAtlasBenchStore:
             category_scores=scores,
             started_at=row["started_at"],  # type: ignore[index]
             completed_at=row["completed_at"],  # type: ignore[index]
+            subject_kind=row["subject_kind"],  # type: ignore[index]
+            candidate_id=row["candidate_id"],  # type: ignore[index]
+            candidate_fingerprint=row["candidate_fingerprint"],  # type: ignore[index]
+            trust_verification_id=row["trust_verification_id"],  # type: ignore[index]
+            runtime_model=row["runtime_model"],  # type: ignore[index]
+            runtime_model_digest=row["runtime_model_digest"],  # type: ignore[index]
+            provider=row["provider"],  # type: ignore[index]
         )
 
     def list_runs_for_subject(self, subject_id: str, *, limit: int = 50) -> list[AtlasBenchSuiteRun]:

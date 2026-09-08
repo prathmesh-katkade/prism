@@ -68,3 +68,12 @@ Sandbox, memory/RAG, web research, model registry, Foundry, AtlasBench, voice,
 Cortex rendering, and desktop packaging are separate incremental additions on
 these contracts. Their implementation must not weaken Phase 8/9 immutability,
 DatasetStore authority, freshness-at-read, or append-only history invariants.
+
+## Combined SFT and benchmark subject binding (2026-09-08)
+
+The physical SFT path is an immutable source-neutral corpus. Reviewed seeds
+retain `system_seed`; genuine Atlas history retains run/dataset lineage.
+Deterministic grouped splits plus AtlasBench and cross-split leakage guards fail
+closed. Soup receives only TRAIN Alpaca JSONL with a separate provenance
+sidecar. Candidate benchmarks are server-owned and bind candidate, verification,
+runtime model and digest; promotion rejects substituted runs.

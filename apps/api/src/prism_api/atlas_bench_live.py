@@ -19,7 +19,7 @@ import hashlib
 import json
 import os
 from collections.abc import Sequence
-from typing import Any
+from typing import Any, Optional
 
 import httpx
 from fastapi import APIRouter, HTTPException, Query, status
@@ -28,7 +28,12 @@ from prism_api_contracts import AtlasBenchSuiteRun, AtlasModelProviderName
 from .atlas_bench_corpus import CORPUS_VERSION, all_tasks, corpus_hash
 from .atlas_bench_runner import AtlasBenchSubject, run_suite
 from .atlas_bench_store import DurableAtlasBenchStore
-from .atlas_candidate_runtime import ensure_configured_production_baseline
+from .atlas_candidate_runtime import (
+    DurableAtlasCandidateRuntimeStore,
+    ensure_configured_production_baseline,
+)
+from .atlas_candidate_trust import DurableAtlasCandidateVerificationStore
+from .atlas_foundry_orchestration import DurableAtlasCandidateRegistry
 from .atlas_runtime import OllamaAtlasProvider
 
 router = APIRouter(prefix="/api/v1/atlas/bench", tags=["atlas-bench"])
@@ -49,7 +54,7 @@ class AtlasProviderBenchSubject:
     result.
     """
 
-    def __init__(self, provider: AtlasModelProviderName) -> None:
+    def __init__(self, provider: AtlasModelProviderName, *, model_override: Optional[str] = None) -> None:
         if provider is AtlasModelProviderName.DETERMINISTIC:
             raise AtlasBenchSubjectUnavailable(
                 "The deterministic Atlas provider does not implement general multiple-choice inference; "
@@ -69,7 +74,7 @@ class AtlasProviderBenchSubject:
         self.base_url = os.environ.get(
             "PRISM_ATLAS_OLLAMA_URL", f"{configured_base_url.rstrip('/')}/api/generate"
         )
-        self.model = os.environ.get(
+        self.model = model_override or os.environ.get(
             "PRISM_ATLAS_OLLAMA_MODEL", os.environ.get("PRISM_OLLAMA_MODEL", "llama3.2:3b")
         )
         self.model_digest = self._probe_model_digest()
@@ -138,6 +143,35 @@ def make_live_subject(provider: AtlasModelProviderName) -> AtlasBenchSubject:
     return AtlasProviderBenchSubject(provider)
 
 
+def run_candidate_benchmark(candidate_id: str) -> AtlasBenchSuiteRun:
+    """Server-owned candidate evaluation with an exact verified runtime binding.
+
+    This intentionally has no client-supplied model/digest inputs: callers can
+    name a candidate, but cannot redirect the evaluator to another model.
+    """
+    candidate = DurableAtlasCandidateRegistry().get(candidate_id)
+    if candidate is None:
+        raise AtlasBenchSubjectUnavailable("Candidate artifact was not found.")
+    verification = DurableAtlasCandidateVerificationStore().latest(candidate_id)
+    if verification is None or verification.verification_state.value != "verified":
+        raise AtlasBenchSubjectUnavailable("Candidate has no current VERIFIED artifact-trust record.")
+    binding = DurableAtlasCandidateRuntimeStore().latest(candidate_id)
+    if binding is None or not binding.runtime_model_digest or binding.runtime_model_digest == "digest-unavailable":
+        raise AtlasBenchSubjectUnavailable("Candidate has no digest-verified Ollama runtime binding.")
+    subject = AtlasProviderBenchSubject(AtlasModelProviderName.OLLAMA, model_override=binding.runtime_model)
+    if subject.model_digest != binding.runtime_model_digest:
+        raise AtlasBenchSubjectUnavailable("Candidate runtime digest changed since durable binding; re-deploy and re-bind.")
+    suite, results = run_suite(subject, all_tasks(), corpus_version=CORPUS_VERSION, corpus_hash_value=corpus_hash())
+    suite = suite.model_copy(update={
+        "subject_kind": "candidate", "candidate_id": candidate_id,
+        "candidate_fingerprint": verification.aggregate_candidate_fingerprint,
+        "trust_verification_id": verification.verification_id,
+        "runtime_model": binding.runtime_model, "runtime_model_digest": binding.runtime_model_digest,
+        "provider": "ollama",
+    })
+    return _bench_store.save(suite, results)
+
+
 @router.post("/runs", response_model=AtlasBenchSuiteRun, status_code=status.HTTP_201_CREATED)
 def run_live_benchmark(
     provider: AtlasModelProviderName = _provider_query_default,
@@ -164,4 +198,19 @@ def run_live_benchmark(
         corpus_version=CORPUS_VERSION,
         corpus_hash_value=corpus_hash(),
     )
-    return _bench_store.save(suite_run, results)
+    if not isinstance(subject, AtlasProviderBenchSubject):
+        # Test/reference subjects are not production evidence and cannot be
+        # reused by the promotion route, which requires typed provenance.
+        return _bench_store.save(suite_run, results)
+    from .atlas_promotion import DurableAtlasPromotionStore
+
+    production = DurableAtlasPromotionStore().current_production()
+    return _bench_store.save(suite_run.model_copy(update={"subject_kind": "production", "candidate_id": production.candidate_id if production else None, "runtime_model": subject.model, "runtime_model_digest": subject.model_digest, "provider": "ollama"}), results)
+
+
+@router.post("/candidates/{candidate_id}/runs", response_model=AtlasBenchSuiteRun, status_code=status.HTTP_201_CREATED)
+def run_candidate_live_benchmark(candidate_id: str) -> AtlasBenchSuiteRun:
+    try:
+        return run_candidate_benchmark(candidate_id)
+    except AtlasBenchSubjectUnavailable as error:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error

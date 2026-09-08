@@ -5,6 +5,13 @@ Date: 2026-09-05
 `PHASE_10_COMPLETE = NO`
 `PHASE_10_IN_PROGRESS = YES`
 `PHASE_11_UNLOCKED = NO`
+
+## Superseding 2026-09-08 status
+
+The source-run-only Soup blocker is closed in software. The combined corpus has
+deterministic TRAIN-only Alpaca export and separate provenance; candidate
+benchmarks require VERIFIED trust and matching runtime digest. Physical evidence
+is still required before Phase 10 completion.
 `CONTINUATION_SAFE = YES`
 
 ## Canonical status

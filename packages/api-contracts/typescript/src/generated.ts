@@ -116,6 +116,13 @@ export interface AtlasBenchSuiteRun {
   category_scores?: AtlasBenchCategoryScore[];
   started_at: string;
   completed_at: string;
+  subject_kind?: "generic" | "production" | "candidate";
+  candidate_id?: string;
+  candidate_fingerprint?: string;
+  trust_verification_id?: string;
+  runtime_model?: string;
+  runtime_model_digest?: string;
+  provider?: string;
 }
 
 export interface AtlasBenchTaskResult {
@@ -177,6 +184,22 @@ export interface AtlasCleanResponse {
   uncertainty: string;
   evidence: AtlasEvidence[];
   proposed_operation?: CleanTransformationRequest;
+}
+
+export interface AtlasCombinedSftDatasetVersion {
+  version_id: string;
+  seed_version: string;
+  history_dataset_version?: string;
+  history_dataset_hash?: string;
+  system_seed_count: number;
+  atlas_history_count: number;
+  total_sft_count: number;
+  train_count: number;
+  validation_count: number;
+  test_count: number;
+  aggregate_content_hash: string;
+  source_manifests?: Record<string, string>;
+  created_at: string;
 }
 
 export interface AtlasCombinedTrainingSourceSummary {
@@ -576,6 +599,23 @@ export interface AtlasSandboxWorkerHealth {
   memory_quota_enforced: boolean;
   container_available: boolean;
   detail: string;
+}
+
+export interface AtlasSftTrainingRecord {
+  record_id: string;
+  source_kind: "system_seed" | "atlas_run";
+  source_ref: string;
+  source_version: string;
+  project_id?: string;
+  dataset_id?: string;
+  instruction: string;
+  input?: string;
+  output: string;
+  uncertainty?: string;
+  split: AtlasTrainingSplit;
+  content_hash: string;
+  provenance?: Record<string, unknown>;
+  created_at: string;
 }
 
 export type AtlasSpecialistId = "atlas" | "scout" | "curator" | "query" | "stat" | "forge" | "oracle" | "lens" | "researcher" | "librarian" | "auditor";

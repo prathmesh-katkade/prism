@@ -185,7 +185,11 @@ def verify_candidate(
                 reason=f"adapter workspace contains an unexpected file type {suffix!r}: {entry.relative_to(workspace)}",
                 adapter_files=adapter_files,
             )
-        if os.access(entry, os.X_OK):
+        # Windows reports X_OK for ordinary readable files, so it cannot
+        # distinguish an executable adapter payload from JSON metadata.  The
+        # allowlist still rejects executable extensions on every platform;
+        # POSIX execute bits add the stricter check where they are meaningful.
+        if os.name != "nt" and os.access(entry, os.X_OK):
             return _rejected(
                 candidate=candidate, recipe=recipe,
                 reason=f"adapter workspace contains an executable file: {entry.relative_to(workspace)}",

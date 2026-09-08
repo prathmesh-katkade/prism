@@ -176,3 +176,9 @@ PHASE_9_UNLOCKED = YES
 - Phase 9 work
 
 See `PHASE9_HANDOFF.md` for candidate Phase 9 directions (unscoped).
+
+## Phase 10 superseding status (2026-09-08)
+
+Combined SFT training and trust-bound candidate AtlasBench provenance are
+implemented, but the actual Soup/GPU experiment remains unevidenced.
+`PHASE_10_COMPLETE = NO`; `PHASE_11_UNLOCKED = NO`; `CONTINUATION_SAFE = YES`.

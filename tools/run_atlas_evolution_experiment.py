@@ -52,17 +52,12 @@ for relative in (
         sys.path.insert(0, path)
 
 import httpx  # noqa: E402
-from prism_api_contracts import (  # noqa: E402
-    AtlasModelProviderName,
-    AtlasPromotionVerdict,
-    AtlasTrainingJobState,
-    AtlasTrainingRecipe,
-    AtlasTrainingRecipeMethod,
-    AtlasTrainingSplit,
-)
-
 from prism_api.atlas_bench_corpus import CORPUS_VERSION, all_tasks, corpus_hash  # noqa: E402
-from prism_api.atlas_bench_live import AtlasBenchSubjectUnavailable, AtlasProviderBenchSubject  # noqa: E402
+from prism_api.atlas_bench_live import (  # noqa: E402
+    AtlasBenchSubjectUnavailable,
+    AtlasProviderBenchSubject,
+    run_candidate_benchmark,  # noqa: E402
+)
 from prism_api.atlas_bench_runner import run_suite  # noqa: E402
 from prism_api.atlas_bench_store import DurableAtlasBenchStore  # noqa: E402
 from prism_api.atlas_candidate_runtime import (  # noqa: E402
@@ -70,11 +65,19 @@ from prism_api.atlas_candidate_runtime import (  # noqa: E402
     activate_current_ollama_model,
     ensure_configured_production_baseline,
 )
+from prism_api.atlas_candidate_trust import (  # noqa: E402
+    DurableAtlasCandidateVerificationStore,
+    verify_candidate,
+)
+from prism_api.atlas_combined_sft_dataset import (  # noqa: E402
+    DurableAtlasCombinedSftStore,
+    build_combined_records,
+    export_alpaca_jsonl,
+)
 from prism_api.atlas_foundry_backend import SoupFoundryBackend  # noqa: E402
 from prism_api.atlas_foundry_dataset import (  # noqa: E402
     AtlasTrainingDatasetBuilder,
     DurableAtlasTrainingDatasetStore,
-    export_jsonl,
 )
 from prism_api.atlas_foundry_orchestration import (  # noqa: E402
     DurableAtlasCandidateRegistry,
@@ -85,7 +88,20 @@ from prism_api.atlas_foundry_orchestration import (  # noqa: E402
 from prism_api.atlas_promotion import DurableAtlasPromotionStore, decide_promotion  # noqa: E402
 from prism_api.atlas_promotion_decisions import DurableAtlasPromotionDecisionStore  # noqa: E402
 from prism_api.atlas_resources import governor  # noqa: E402
+from prism_api.atlas_system_seed import (  # noqa: E402
+    DurableAtlasSystemSeedStore,
+    build_manifest,
+    build_verified_system_seed_corpus,
+)
 from prism_api.durable_atlas_store import DurableAtlasRunStore  # noqa: E402
+from prism_api_contracts import (  # noqa: E402
+    AtlasModelProviderName,
+    AtlasPromotionVerdict,
+    AtlasTrainingJobState,
+    AtlasTrainingRecipe,
+    AtlasTrainingRecipeMethod,
+    AtlasTrainingSplit,
+)
 
 PINNED_SOUP_VERSION = "0.74.0"
 DEFAULT_BASE_MODEL = "Qwen/Qwen2.5-0.5B-Instruct"
@@ -182,18 +198,19 @@ def run_live_suite(*, candidate_model: Optional[str] = None):  # type: ignore[no
 
 
 def build_training_dataset() -> tuple[object, Path, int]:
-    store = DurableAtlasTrainingDatasetStore()
-    examples, exclusions = AtlasTrainingDatasetBuilder(DurableAtlasRunStore()).build()
-    version = store.save(examples, exclusions)
-    train_examples = store.preview(version.version_id, split=AtlasTrainingSplit.TRAIN, limit=100_000)
-    if not train_examples:
-        raise ExperimentBlocked(
-            "The verified Atlas history produced zero TRAIN examples. Generate at least one successful grounded Atlas run; "
-            "the experiment refuses to fabricate training data or contaminate AtlasBench with benchmark answers."
-        )
+    history_store = DurableAtlasTrainingDatasetStore()
+    history, exclusions = AtlasTrainingDatasetBuilder(DurableAtlasRunStore()).build()
+    history_version = history_store.save(history, exclusions)
+    seeds = build_verified_system_seed_corpus()
+    seed_manifest = DurableAtlasSystemSeedStore().release(seeds, build_manifest(seeds, leakage_guard_passed=True))
+    records = build_combined_records(seeds, history, history_version=history_version.version_id)
+    version = DurableAtlasCombinedSftStore().save(records, seed_version=seed_manifest.seed_version, seed_hash=seed_manifest.aggregate_content_hash, history_version=history_version.version_id, history_hash=history_version.content_hash)
+    train_records = [record for record in records if record.split is AtlasTrainingSplit.TRAIN]
+    if not train_records:
+        raise ExperimentBlocked("Combined SFT corpus contains zero TRAIN records; refusing Soup execution.")
     export_path = EXPERIMENT_ROOT / version.version_id / "train.jsonl"
-    export_jsonl(train_examples, export_path)
-    return version, export_path, len(train_examples)
+    _export_hash, _provenance_hash = export_alpaca_jsonl(train_records, export_path)
+    return version, export_path, len(train_records)
 
 
 def make_recipe(version_id: str, base_model: str, method: AtlasTrainingRecipeMethod) -> AtlasTrainingRecipe:
@@ -387,6 +404,11 @@ def main() -> int:
         report["training_checkpoints"] = [item.model_dump(mode="json") for item in checkpoints]
         report["candidate"] = candidate.model_dump(mode="json")
 
+        verification = DurableAtlasCandidateVerificationStore().save(verify_candidate(candidate, recipe))
+        report["candidate_verification"] = verification.model_dump(mode="json")
+        if verification.verification_state.value != "verified":
+            raise ExperimentBlocked("Candidate artifact verification failed; refusing deploy and benchmark.")
+
         runtime_name, digest, gguf = deploy_candidate_to_ollama(
             soup,
             candidate,
@@ -399,7 +421,7 @@ def main() -> int:
             "gguf": gguf,
         }
 
-        candidate_run, _candidate_subject = run_live_suite(candidate_model=runtime_name)
+        candidate_run = run_candidate_benchmark(candidate.candidate_id)
         report["candidate_benchmark"] = candidate_run.model_dump(mode="json")
 
         if (
