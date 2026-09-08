@@ -142,7 +142,10 @@ def export_alpaca_jsonl(records: Sequence[AtlasSftTrainingRecord], path: Path) -
         for record in train:
             handle.write(json.dumps({"instruction": record.instruction, "input": record.input, "output": record.output}, sort_keys=True, separators=(",", ":")) + "\n")
     provenance = [{"record_id": r.record_id, "source_kind": r.source_kind, "source_ref": r.source_ref, "source_version": r.source_version, "content_hash": r.content_hash} for r in train]
-    provenance_path.write_text(json.dumps(provenance, sort_keys=True, separators=(",", ":")) + "\n", encoding="utf-8", newline="\n")
+    # ``Path.write_text`` did not accept ``newline`` on the Python 3.9 floor.
+    # Keep the sidecar byte-stable by explicitly controlling newline translation.
+    with provenance_path.open("w", encoding="utf-8", newline="\n") as handle:
+        handle.write(json.dumps(provenance, sort_keys=True, separators=(",", ":")) + "\n")
     return hashlib.sha256(path.read_bytes()).hexdigest(), hashlib.sha256(provenance_path.read_bytes()).hexdigest()
 
 
