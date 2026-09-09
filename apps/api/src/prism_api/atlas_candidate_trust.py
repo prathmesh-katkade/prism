@@ -23,6 +23,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import time
 import uuid
 from datetime import datetime, timezone
@@ -59,6 +60,12 @@ from .durable_registry import history_database_url
 _ALLOWED_SUFFIXES = frozenset(
     {".safetensors", ".json", ".bin", ".txt", ".md", ".model", ".vocab", ".yaml", ".yml"}
 )
+# PEFT exports produced by the pinned Soup/Transformers stack include this
+# tokenizer metadata file.  It is retained and hashed as data; verification
+# never renders or executes it.  Keep this deliberately filename-specific so
+# a generic template/script extension cannot enter an adapter workspace.
+_ALLOWED_METADATA_FILENAMES = frozenset({"chat_template.jinja"})
+_SOUP_CHECKPOINT_DIRECTORY = re.compile(r"checkpoint-\d+\Z")
 _MAX_FILES = 10_000
 _HASH_CHUNK_BYTES = 1024 * 1024
 
@@ -133,17 +140,20 @@ def verify_candidate(
     """
     if recipe.recipe_id != candidate.recipe_id:
         return _rejected(
-            candidate=candidate, recipe=recipe,
+            candidate=candidate,
+            recipe=recipe,
             reason=f"recipe mismatch: candidate.recipe_id={candidate.recipe_id!r} != recipe.recipe_id={recipe.recipe_id!r}",
         )
     if recipe.base_model != candidate.base_model:
         return _rejected(
-            candidate=candidate, recipe=recipe,
+            candidate=candidate,
+            recipe=recipe,
             reason=f"base-model mismatch: candidate.base_model={candidate.base_model!r} != recipe.base_model={recipe.base_model!r}",
         )
     if recipe.dataset_version_id != candidate.dataset_version_id:
         return _rejected(
-            candidate=candidate, recipe=recipe,
+            candidate=candidate,
+            recipe=recipe,
             reason=(
                 f"dataset mismatch: candidate.dataset_version_id={candidate.dataset_version_id!r} "
                 f"!= recipe.dataset_version_id={recipe.dataset_version_id!r}"
@@ -153,47 +163,79 @@ def verify_candidate(
     try:
         workspace = Path(candidate.adapter_path).resolve(strict=True)
     except (OSError, RuntimeError):
-        return _rejected(candidate=candidate, recipe=recipe, reason=f"adapter path does not exist: {candidate.adapter_path!r}")
+        return _rejected(
+            candidate=candidate,
+            recipe=recipe,
+            reason=f"adapter path does not exist: {candidate.adapter_path!r}",
+        )
     if not workspace.is_dir():
-        return _rejected(candidate=candidate, recipe=recipe, reason=f"adapter path is not a directory: {candidate.adapter_path!r}")
+        return _rejected(
+            candidate=candidate,
+            recipe=recipe,
+            reason=f"adapter path is not a directory: {candidate.adapter_path!r}",
+        )
 
     try:
-        entries = sorted(workspace.rglob("*"))
+        entries = sorted(workspace.iterdir())
     except OSError as error:
-        return _rejected(candidate=candidate, recipe=recipe, reason=f"could not list adapter workspace: {error}")
+        return _rejected(
+            candidate=candidate, recipe=recipe, reason=f"could not list adapter workspace: {error}"
+        )
 
     adapter_files: list[AtlasCandidateArtifactFile] = []
     saw_any_weight_file = False
     for entry in entries:
+        if entry.is_symlink():
+            return _rejected(
+                candidate=candidate,
+                recipe=recipe,
+                reason=f"adapter workspace contains a symlink, which is never trusted: {entry}",
+                adapter_files=adapter_files,
+            )
         if entry.is_dir():
-            continue
+            # Soup persists optimizer and scheduler state below this
+            # predictable directory. It is neither part of the final adapter
+            # fingerprint nor supplied to export/deploy; admitting any other
+            # directory would make that boundary ambiguous.
+            if _SOUP_CHECKPOINT_DIRECTORY.fullmatch(entry.name):
+                continue
+            return _rejected(
+                candidate=candidate,
+                recipe=recipe,
+                reason=f"adapter workspace contains an unexpected directory: {entry.relative_to(workspace)}",
+                adapter_files=adapter_files,
+            )
         if len(adapter_files) >= _MAX_FILES:
             return _rejected(
-                candidate=candidate, recipe=recipe, reason=f"adapter workspace has more than {_MAX_FILES} files",
+                candidate=candidate,
+                recipe=recipe,
+                reason=f"adapter workspace has more than {_MAX_FILES} files",
                 adapter_files=adapter_files,
             )
         try:
             resolved = entry.resolve(strict=True)
         except (OSError, RuntimeError):
-            return _rejected(candidate=candidate, recipe=recipe, reason=f"unreadable adapter file: {entry}", adapter_files=adapter_files)
+            return _rejected(
+                candidate=candidate,
+                recipe=recipe,
+                reason=f"unreadable adapter file: {entry}",
+                adapter_files=adapter_files,
+            )
         # A path-traversal / symlink-escape guard: every real file must stay
         # inside the candidate's own resolved workspace, never anywhere else
         # on disk regardless of what a symlink or ".." component claims.
         if not str(resolved).startswith(str(workspace) + os.sep):
             return _rejected(
-                candidate=candidate, recipe=recipe,
+                candidate=candidate,
+                recipe=recipe,
                 reason=f"adapter file escapes its candidate workspace: {entry}",
                 adapter_files=adapter_files,
             )
-        if entry.is_symlink():
-            return _rejected(
-                candidate=candidate, recipe=recipe, reason=f"adapter workspace contains a symlink, which is never trusted: {entry}",
-                adapter_files=adapter_files,
-            )
         suffix = entry.suffix.lower()
-        if suffix not in _ALLOWED_SUFFIXES:
+        if suffix not in _ALLOWED_SUFFIXES and entry.name not in _ALLOWED_METADATA_FILENAMES:
             return _rejected(
-                candidate=candidate, recipe=recipe,
+                candidate=candidate,
+                recipe=recipe,
                 reason=f"adapter workspace contains an unexpected file type {suffix!r}: {entry.relative_to(workspace)}",
                 adapter_files=adapter_files,
             )
@@ -203,7 +245,8 @@ def verify_candidate(
         # POSIX execute bits add the stricter check where they are meaningful.
         if os.name != "nt" and os.access(entry, os.X_OK):
             return _rejected(
-                candidate=candidate, recipe=recipe,
+                candidate=candidate,
+                recipe=recipe,
                 reason=f"adapter workspace contains an executable file: {entry.relative_to(workspace)}",
                 adapter_files=adapter_files,
             )
@@ -220,10 +263,13 @@ def verify_candidate(
         )
 
     if not adapter_files:
-        return _rejected(candidate=candidate, recipe=recipe, reason="adapter workspace contains no files")
+        return _rejected(
+            candidate=candidate, recipe=recipe, reason="adapter workspace contains no files"
+        )
     if not saw_any_weight_file:
         return _rejected(
-            candidate=candidate, recipe=recipe,
+            candidate=candidate,
+            recipe=recipe,
             reason="adapter workspace contains no .safetensors/.bin weight file -- metadata alone is not a trained candidate",
             adapter_files=adapter_files,
         )
@@ -289,7 +335,9 @@ class DurableAtlasCandidateVerificationStore:
             row = connection.execute(
                 select(_verifications.c.payload)
                 .where(_verifications.c.candidate_id == candidate_id)
-                .order_by(_verifications.c.created_at.desc(), _verifications.c.verification_id.desc())
+                .order_by(
+                    _verifications.c.created_at.desc(), _verifications.c.verification_id.desc()
+                )
                 .limit(1)
             ).scalar_one_or_none()
         return None if row is None else AtlasCandidateVerification.model_validate(json.loads(row))
@@ -314,4 +362,6 @@ def is_verified(store: DurableAtlasCandidateVerificationStore, candidate_id: str
     that itself passes and becomes the new latest record.
     """
     latest = store.latest(candidate_id)
-    return latest is not None and latest.verification_state is AtlasCandidateVerificationState.VERIFIED
+    return (
+        latest is not None and latest.verification_state is AtlasCandidateVerificationState.VERIFIED
+    )

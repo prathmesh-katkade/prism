@@ -136,7 +136,9 @@ class DurableAtlasFoundryJobStore:
 
     def get_recipe(self, recipe_id: str) -> Optional[AtlasTrainingRecipe]:
         with self.engine.connect() as connection:
-            row = connection.execute(select(_recipes.c.payload).where(_recipes.c.recipe_id == recipe_id)).scalar_one_or_none()
+            row = connection.execute(
+                select(_recipes.c.payload).where(_recipes.c.recipe_id == recipe_id)
+            ).scalar_one_or_none()
         return None if row is None else AtlasTrainingRecipe.model_validate(json.loads(row))
 
     def save(
@@ -160,7 +162,9 @@ class DurableAtlasFoundryJobStore:
                 if pending_recipe is not None
                 else None
             ),
-            "pending_dataset_path": str(pending_dataset_path) if pending_dataset_path is not None else None,
+            "pending_dataset_path": str(pending_dataset_path)
+            if pending_dataset_path is not None
+            else None,
             "started_at": job.started_at,
             "completed_at": job.completed_at,
             "created_at": job.created_at,
@@ -173,7 +177,9 @@ class DurableAtlasFoundryJobStore:
             if existing is None:
                 connection.execute(insert(_jobs).values(**values))
             else:
-                connection.execute(update(_jobs).where(_jobs.c.job_id == job.job_id).values(**values))
+                connection.execute(
+                    update(_jobs).where(_jobs.c.job_id == job.job_id).values(**values)
+                )
         return job
 
     @staticmethod
@@ -197,12 +203,22 @@ class DurableAtlasFoundryJobStore:
 
     def get(self, job_id: str) -> Optional[AtlasTrainingJob]:
         with self.engine.connect() as connection:
-            row = connection.execute(select(_jobs).where(_jobs.c.job_id == job_id)).mappings().first()
+            row = (
+                connection.execute(select(_jobs).where(_jobs.c.job_id == job_id)).mappings().first()
+            )
         return None if row is None else self._record(row)
 
     def pending_start(self, job_id: str) -> tuple[Optional[AtlasTrainingRecipe], Optional[Path]]:
         with self.engine.connect() as connection:
-            row = connection.execute(select(_jobs.c.pending_recipe_payload, _jobs.c.pending_dataset_path).where(_jobs.c.job_id == job_id)).mappings().first()
+            row = (
+                connection.execute(
+                    select(_jobs.c.pending_recipe_payload, _jobs.c.pending_dataset_path).where(
+                        _jobs.c.job_id == job_id
+                    )
+                )
+                .mappings()
+                .first()
+            )
         if row is None or row["pending_recipe_payload"] is None:
             return None, None
         recipe = AtlasTrainingRecipe.model_validate(json.loads(row["pending_recipe_payload"]))
@@ -212,7 +228,11 @@ class DurableAtlasFoundryJobStore:
     def list_active(self, *, limit: int = 200) -> list[AtlasTrainingJob]:
         statement = (
             select(_jobs)
-            .where(_jobs.c.state.in_([AtlasTrainingJobState.QUEUED.value, AtlasTrainingJobState.RUNNING.value]))
+            .where(
+                _jobs.c.state.in_(
+                    [AtlasTrainingJobState.QUEUED.value, AtlasTrainingJobState.RUNNING.value]
+                )
+            )
             .order_by(_jobs.c.created_at)
             .limit(limit)
         )
@@ -220,8 +240,15 @@ class DurableAtlasFoundryJobStore:
             rows = connection.execute(statement).mappings().all()
         return [self._record(row) for row in rows]
 
-    def list_by_state(self, state: AtlasTrainingJobState, *, limit: int = 200) -> list[AtlasTrainingJob]:
-        statement = select(_jobs).where(_jobs.c.state == state.value).order_by(_jobs.c.created_at.desc()).limit(limit)
+    def list_by_state(
+        self, state: AtlasTrainingJobState, *, limit: int = 200
+    ) -> list[AtlasTrainingJob]:
+        statement = (
+            select(_jobs)
+            .where(_jobs.c.state == state.value)
+            .order_by(_jobs.c.created_at.desc())
+            .limit(limit)
+        )
         with self.engine.connect() as connection:
             rows = connection.execute(statement).mappings().all()
         return [self._record(row) for row in rows]
@@ -259,7 +286,13 @@ class DurableAtlasCandidateRegistry:
 
     def get(self, candidate_id: str) -> Optional[AtlasCandidateArtifact]:
         with self.engine.connect() as connection:
-            row = connection.execute(select(_candidates).where(_candidates.c.candidate_id == candidate_id)).mappings().first()
+            row = (
+                connection.execute(
+                    select(_candidates).where(_candidates.c.candidate_id == candidate_id)
+                )
+                .mappings()
+                .first()
+            )
         return None if row is None else AtlasCandidateArtifact.model_validate(dict(row))
 
     def list(self, *, limit: int = 100) -> list[AtlasCandidateArtifact]:
@@ -310,7 +343,9 @@ def start_training_job(
             updated_at=now,
         )
         return job_store.save(job, pending_recipe=recipe, pending_dataset_path=dataset_path)
-    job = backend.start(recipe, dataset_path=dataset_path).model_copy(update={"resource_lease_id": lease.lease_id})
+    job = backend.start(recipe, dataset_path=dataset_path).model_copy(
+        update={"resource_lease_id": lease.lease_id}
+    )
     return job_store.save(job)
 
 
@@ -319,6 +354,8 @@ def reconcile_foundry_jobs(
     job_store: DurableAtlasFoundryJobStore,
     backend: FoundryBackend,
     candidate_registry: DurableAtlasCandidateRegistry,
+    *,
+    job_ids: Optional[set[str]] = None,
 ) -> list[AtlasTrainingJob]:
     """Advance every non-terminal job by one step. Call this periodically
     (a REST poll, a scheduled Routine -- there is no background daemon in
@@ -331,10 +368,23 @@ def reconcile_foundry_jobs(
     leases_by_id = {lease.lease_id: lease for lease in governor.snapshot().active_leases}
     updated: list[AtlasTrainingJob] = []
     for job in job_store.list_active():
+        # A routine/API reconciliation deliberately advances every active
+        # job.  A single experiment runner must only advance its own durable
+        # job, otherwise an unrelated queued job can be admitted and trained
+        # merely because the experiment is polling its candidate.
+        if job_ids is not None and job.job_id not in job_ids:
+            continue
         lease = leases_by_id.get(job.resource_lease_id) if job.resource_lease_id else None
         if lease is not None and lease.state == "preempted":
-            cancelled = backend.cancel(job) if job.state is AtlasTrainingJobState.RUNNING else job.model_copy(
-                update={"state": AtlasTrainingJobState.CANCELLED, "updated_at": datetime.now(timezone.utc)}
+            cancelled = (
+                backend.cancel(job)
+                if job.state is AtlasTrainingJobState.RUNNING
+                else job.model_copy(
+                    update={
+                        "state": AtlasTrainingJobState.CANCELLED,
+                        "updated_at": datetime.now(timezone.utc),
+                    }
+                )
             )
             updated.append(job_store.save(cancelled))
             continue
@@ -368,7 +418,9 @@ def reconcile_foundry_jobs(
 
 
 def _register_candidate_if_present(
-    registry: DurableAtlasCandidateRegistry, job_store: DurableAtlasFoundryJobStore, job: AtlasTrainingJob
+    registry: DurableAtlasCandidateRegistry,
+    job_store: DurableAtlasFoundryJobStore,
+    job: AtlasTrainingJob,
 ) -> None:
     """A completed job becomes a registered candidate artifact -- a durable
     fact, not a promotion decision. Requires the job's original recipe (for

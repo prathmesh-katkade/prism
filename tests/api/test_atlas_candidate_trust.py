@@ -21,7 +21,12 @@ from prism_api_contracts import (
 )
 
 
-def _recipe(recipe_id: str, *, base_model: str = "Qwen/Qwen2.5-0.5B-Instruct", dataset_version_id: str = "trainset_1") -> AtlasTrainingRecipe:
+def _recipe(
+    recipe_id: str,
+    *,
+    base_model: str = "Qwen/Qwen2.5-0.5B-Instruct",
+    dataset_version_id: str = "trainset_1",
+) -> AtlasTrainingRecipe:
     return AtlasTrainingRecipe(
         recipe_id=recipe_id,
         base_model=base_model,
@@ -32,7 +37,9 @@ def _recipe(recipe_id: str, *, base_model: str = "Qwen/Qwen2.5-0.5B-Instruct", d
     )
 
 
-def _candidate(candidate_id: str, recipe: AtlasTrainingRecipe, adapter_path: Path) -> AtlasCandidateArtifact:
+def _candidate(
+    candidate_id: str, recipe: AtlasTrainingRecipe, adapter_path: Path
+) -> AtlasCandidateArtifact:
     return AtlasCandidateArtifact(
         candidate_id=candidate_id,
         job_id=f"foundryjob_{uuid.uuid4().hex}",
@@ -78,6 +85,67 @@ def test_verify_rejects_an_invalid_file_type(tmp_path) -> None:  # type: ignore[
     result = verify_candidate(candidate, recipe)
     assert result.verification_state is AtlasCandidateVerificationState.REJECTED
     assert "unexpected file type" in (result.verification_failure_reason or "")
+
+
+def test_verify_accepts_the_pinned_soup_chat_template_metadata(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    recipe = _recipe("recipe_soup_template_1")
+    workspace = tmp_path / "soup-template"
+    _write_real_adapter(workspace)
+    (workspace / "chat_template.jinja").write_text(
+        "{% for message in messages %}{{ message }}{% endfor %}", encoding="utf-8"
+    )
+
+    result = verify_candidate(_candidate("candidate_soup_template_1", recipe, workspace), recipe)
+
+    assert result.verification_state is AtlasCandidateVerificationState.VERIFIED
+    assert {item.relative_path for item in result.adapter_files} == {
+        "adapter_config.json",
+        "adapter_model.safetensors",
+        "chat_template.jinja",
+    }
+
+
+def test_verify_rejects_noncanonical_jinja_template(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    recipe = _recipe("recipe_other_template_1")
+    workspace = tmp_path / "other-template"
+    _write_real_adapter(workspace)
+    (workspace / "payload.jinja").write_text("unexpected", encoding="utf-8")
+
+    result = verify_candidate(_candidate("candidate_other_template_1", recipe, workspace), recipe)
+
+    assert result.verification_state is AtlasCandidateVerificationState.REJECTED
+    assert "unexpected file type" in (result.verification_failure_reason or "")
+
+
+def test_verify_excludes_canonical_soup_checkpoint_intermediates(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    recipe = _recipe("recipe_checkpoint_1")
+    workspace = tmp_path / "checkpoint"
+    _write_real_adapter(workspace)
+    checkpoint = workspace / "checkpoint-23"
+    checkpoint.mkdir()
+    (checkpoint / "optimizer.pt").write_bytes(b"training-only-state")
+
+    result = verify_candidate(_candidate("candidate_checkpoint_1", recipe, workspace), recipe)
+
+    assert result.verification_state is AtlasCandidateVerificationState.VERIFIED
+    assert {item.relative_path for item in result.adapter_files} == {
+        "adapter_config.json",
+        "adapter_model.safetensors",
+    }
+
+
+def test_verify_rejects_an_unrecognized_adapter_subdirectory(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    recipe = _recipe("recipe_unknown_directory_1")
+    workspace = tmp_path / "unknown-directory"
+    _write_real_adapter(workspace)
+    (workspace / "payloads").mkdir()
+
+    result = verify_candidate(
+        _candidate("candidate_unknown_directory_1", recipe, workspace), recipe
+    )
+
+    assert result.verification_state is AtlasCandidateVerificationState.REJECTED
+    assert "unexpected directory" in (result.verification_failure_reason or "")
 
 
 def test_verify_rejects_an_executable_file_masquerading_as_an_allowed_type(tmp_path) -> None:  # type: ignore[no-untyped-def]
@@ -236,11 +304,15 @@ def test_verified_candidate_passes_the_trust_gate_in_promotion_decision(tmp_path
     atlas_foundry_routes._candidate_registry.register(candidate)
 
     client = TestClient(create_app())
-    verify_response = client.post(f"/api/v1/atlas/foundry/candidates/{candidate.candidate_id}/verify")
+    verify_response = client.post(
+        f"/api/v1/atlas/foundry/candidates/{candidate.candidate_id}/verify"
+    )
     assert verify_response.status_code == 201
     assert verify_response.json()["verification_state"] == "verified"
 
-    history_response = client.get(f"/api/v1/atlas/foundry/candidates/{candidate.candidate_id}/verification")
+    history_response = client.get(
+        f"/api/v1/atlas/foundry/candidates/{candidate.candidate_id}/verification"
+    )
     assert history_response.status_code == 200
     assert len(history_response.json()) == 1
 

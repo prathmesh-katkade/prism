@@ -196,7 +196,9 @@ def run_live_suite(*, candidate_model: Optional[str] = None):  # type: ignore[no
             or suite.runtime_model_digest != subject.model_digest
             or suite.provider != "ollama"
         ):
-            raise ExperimentBlocked("Production AtlasBench run lacks the required durable Ollama runtime binding.")
+            raise ExperimentBlocked(
+                "Production AtlasBench run lacks the required durable Ollama runtime binding."
+            )
         return suite, subject
 
 
@@ -205,18 +207,30 @@ def build_training_dataset() -> tuple[object, Path, int, str, str]:
     history, exclusions = AtlasTrainingDatasetBuilder(DurableAtlasRunStore()).build()
     history_version = history_store.save(history, exclusions)
     seeds = build_verified_system_seed_corpus()
-    seed_manifest = DurableAtlasSystemSeedStore().release(seeds, build_manifest(seeds, leakage_guard_passed=True))
+    seed_manifest = DurableAtlasSystemSeedStore().release(
+        seeds, build_manifest(seeds, leakage_guard_passed=True)
+    )
     records = build_combined_records(seeds, history, history_version=history_version.version_id)
-    version = DurableAtlasCombinedSftStore().save(records, seed_version=seed_manifest.seed_version, seed_hash=seed_manifest.aggregate_content_hash, history_version=history_version.version_id, history_hash=history_version.content_hash)
+    version = DurableAtlasCombinedSftStore().save(
+        records,
+        seed_version=seed_manifest.seed_version,
+        seed_hash=seed_manifest.aggregate_content_hash,
+        history_version=history_version.version_id,
+        history_hash=history_version.content_hash,
+    )
     train_records = [record for record in records if record.split is AtlasTrainingSplit.TRAIN]
     if not train_records:
-        raise ExperimentBlocked("Combined SFT corpus contains zero TRAIN records; refusing Soup execution.")
+        raise ExperimentBlocked(
+            "Combined SFT corpus contains zero TRAIN records; refusing Soup execution."
+        )
     export_path = EXPERIMENT_ROOT / version.version_id / "train.jsonl"
     train_sha256, provenance_sha256 = export_alpaca_jsonl(train_records, export_path)
     return version, export_path, len(train_records), train_sha256, provenance_sha256
 
 
-def make_recipe(version_id: str, base_model: str, method: AtlasTrainingRecipeMethod) -> AtlasTrainingRecipe:
+def make_recipe(
+    version_id: str, base_model: str, method: AtlasTrainingRecipeMethod
+) -> AtlasTrainingRecipe:
     method_quant = "4bit" if method is AtlasTrainingRecipeMethod.QLORA else "none"
     return AtlasTrainingRecipe(
         recipe_id=f"evolution_{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}",
@@ -257,16 +271,18 @@ def wait_for_training(
             backend.cancel(job)
             raise ExperimentBlocked(f"Training exceeded {timeout_seconds}s and was cancelled.")
         time.sleep(poll_seconds)
-        reconcile_foundry_jobs(governor, job_store, backend, candidates)
+        reconcile_foundry_jobs(governor, job_store, backend, candidates, job_ids={job.job_id})
         stored = job_store.get(job.job_id)
         if stored is None:
             raise ExperimentBlocked("Foundry job disappeared from durable storage.")
         job = stored
     if job.state is not AtlasTrainingJobState.COMPLETED:
-        raise ExperimentBlocked(f"Soup training ended in {job.state.value}: {job.error or 'no error detail'}")
+        raise ExperimentBlocked(
+            f"Soup training ended in {job.state.value}: {job.error or 'no error detail'}"
+        )
     candidate = candidates.get(f"candidate_{job.job_id}")
     if candidate is None:
-        reconcile_foundry_jobs(governor, job_store, backend, candidates)
+        reconcile_foundry_jobs(governor, job_store, backend, candidates, job_ids={job.job_id})
         candidate = candidates.get(f"candidate_{job.job_id}")
     if candidate is None:
         raise ExperimentBlocked("Training completed but no real adapter candidate was registered.")
@@ -282,7 +298,9 @@ def deploy_candidate_to_ollama(
     adapter_path = Path(candidate.adapter_path)
     if not adapter_path.exists():
         raise ExperimentBlocked(f"Candidate adapter path does not exist: {adapter_path}")
-    runtime_name = f"atlas-candidate-{hashlib.sha256(candidate.candidate_id.encode()).hexdigest()[:16]}"
+    runtime_name = (
+        f"atlas-candidate-{hashlib.sha256(candidate.candidate_id.encode()).hexdigest()[:16]}"
+    )
     gguf_path = adapter_path.parent / f"{runtime_name}.q4_k_m.gguf"
     command = [
         soup,
@@ -302,7 +320,9 @@ def deploy_candidate_to_ollama(
         "--deploy-name",
         runtime_name,
     ]
-    result = subprocess.run(command, capture_output=True, text=True, timeout=timeout_seconds, check=False)
+    result = subprocess.run(
+        command, capture_output=True, text=True, timeout=timeout_seconds, check=False
+    )
     if result.returncode != 0:
         detail = (result.stderr or result.stdout).strip()[-2_000:]
         raise ExperimentBlocked(f"Soup export/deploy failed ({result.returncode}): {detail}")
@@ -313,11 +333,16 @@ def deploy_candidate_to_ollama(
     models = response.json().get("models", [])
     digest = "digest-unavailable"
     for item in models:
-        if isinstance(item, dict) and runtime_name in {str(item.get("name", "")), str(item.get("model", ""))}:
+        if isinstance(item, dict) and runtime_name in {
+            str(item.get("name", "")),
+            str(item.get("model", "")),
+        }:
             digest = str(item.get("digest", "")) or digest
             break
     else:
-        raise ExperimentBlocked("Soup reported successful Ollama deployment but the candidate is absent from /api/tags.")
+        raise ExperimentBlocked(
+            "Soup reported successful Ollama deployment but the candidate is absent from /api/tags."
+        )
 
     DurableAtlasCandidateRuntimeStore().bind_ollama(
         candidate.candidate_id,
@@ -328,7 +353,9 @@ def deploy_candidate_to_ollama(
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Run the first real local Atlas evolution experiment.")
+    parser = argparse.ArgumentParser(
+        description="Run the first real local Atlas evolution experiment."
+    )
     parser.add_argument("--base-model", default=DEFAULT_BASE_MODEL)
     parser.add_argument("--method", choices=("lora", "qlora"), default="qlora")
     parser.add_argument("--install-soup", action=argparse.BooleanOptionalAction, default=True)
@@ -368,7 +395,9 @@ def main() -> int:
             )
         baseline_pointer = promotion_store.current_production()
         if baseline_pointer is None:
-            raise ExperimentBlocked("A durable production rollback anchor could not be established.")
+            raise ExperimentBlocked(
+                "A durable production rollback anchor could not be established."
+            )
         active_baseline_model = activate_current_ollama_model()
         if active_baseline_model != baseline_subject.model:
             raise ExperimentBlocked(
@@ -376,7 +405,9 @@ def main() -> int:
             )
         report["production_pointer_before"] = baseline_pointer.model_dump(mode="json")
 
-        version, dataset_path, train_count, train_sha256, provenance_sha256 = build_training_dataset()
+        version, dataset_path, train_count, train_sha256, provenance_sha256 = (
+            build_training_dataset()
+        )
         report["training_dataset"] = version.model_dump(mode="json")
         report["training_examples_used"] = train_count
         report["training_export"] = str(dataset_path)
@@ -409,10 +440,14 @@ def main() -> int:
         report["training_checkpoints"] = [item.model_dump(mode="json") for item in checkpoints]
         report["candidate"] = candidate.model_dump(mode="json")
 
-        verification = DurableAtlasCandidateVerificationStore().save(verify_candidate(candidate, recipe))
+        verification = DurableAtlasCandidateVerificationStore().save(
+            verify_candidate(candidate, recipe)
+        )
         report["candidate_verification"] = verification.model_dump(mode="json")
         if verification.verification_state.value != "verified":
-            raise ExperimentBlocked("Candidate artifact verification failed; refusing deploy and benchmark.")
+            raise ExperimentBlocked(
+                "Candidate artifact verification failed; refusing deploy and benchmark."
+            )
 
         runtime_name, digest, gguf = deploy_candidate_to_ollama(
             soup,
@@ -433,7 +468,9 @@ def main() -> int:
             baseline.corpus_version != candidate_run.corpus_version
             or baseline.corpus_hash != candidate_run.corpus_hash
         ):
-            raise ExperimentBlocked("Production and candidate AtlasBench runs did not use the identical frozen corpus.")
+            raise ExperimentBlocked(
+                "Production and candidate AtlasBench runs did not use the identical frozen corpus."
+            )
 
         decision = compute_promotion_decision(
             candidate.candidate_id, baseline.run_id, candidate_run.run_id
@@ -483,7 +520,12 @@ def main() -> int:
         report["production_model_after"] = activate_current_ollama_model()
         report["status"] = "complete"
         exit_code = 0
-    except (ExperimentBlocked, AtlasBenchSubjectUnavailable, httpx.HTTPError, subprocess.SubprocessError) as error:
+    except (
+        ExperimentBlocked,
+        AtlasBenchSubjectUnavailable,
+        httpx.HTTPError,
+        subprocess.SubprocessError,
+    ) as error:
         report["status"] = "blocked"
         report["blocker"] = str(error)
         exit_code = 2

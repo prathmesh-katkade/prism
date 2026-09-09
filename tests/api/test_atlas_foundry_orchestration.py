@@ -49,7 +49,11 @@ class _StubRunningBackend(FoundryBackend):
 
     def capability(self) -> AtlasFoundryCapability:
         return AtlasFoundryCapability(
-            backend=AtlasFoundryBackendName.SOUP, soup_available=True, can_train=True, can_cancel=True, detail="stub"
+            backend=AtlasFoundryBackendName.SOUP,
+            soup_available=True,
+            can_train=True,
+            can_cancel=True,
+            detail="stub",
         )
 
     def preflight(self, recipe: AtlasTrainingRecipe) -> AtlasFoundryPreflight:
@@ -75,12 +79,23 @@ class _StubRunningBackend(FoundryBackend):
         output.mkdir(parents=True, exist_ok=True)
         (output / "adapter_config.json").write_text("{}", encoding="utf-8")
         now = datetime.now(timezone.utc)
-        return job.model_copy(update={"state": AtlasTrainingJobState.COMPLETED, "completed_at": now, "updated_at": now})
+        return job.model_copy(
+            update={
+                "state": AtlasTrainingJobState.COMPLETED,
+                "completed_at": now,
+                "updated_at": now,
+            }
+        )
 
     def cancel(self, job: AtlasTrainingJob) -> AtlasTrainingJob:
         if job.state not in (AtlasTrainingJobState.RUNNING, AtlasTrainingJobState.QUEUED):
             return job
-        return job.model_copy(update={"state": AtlasTrainingJobState.CANCELLED, "updated_at": datetime.now(timezone.utc)})
+        return job.model_copy(
+            update={
+                "state": AtlasTrainingJobState.CANCELLED,
+                "updated_at": datetime.now(timezone.utc),
+            }
+        )
 
     def metrics(self, job: AtlasTrainingJob) -> list:  # type: ignore[type-arg]
         return []
@@ -114,9 +129,13 @@ def test_start_training_job_admits_through_the_resource_governor(tmp_path) -> No
     job_store, _ = _stores(tmp_path)
     governor = AtlasResourceGovernor(max_active=4)
     backend = MockFoundryBackend()
-    job = start_training_job(governor, job_store, backend, _recipe(), dataset_path=_dataset(tmp_path))
+    job = start_training_job(
+        governor, job_store, backend, _recipe(), dataset_path=_dataset(tmp_path)
+    )
     assert job.resource_lease_id is not None
-    assert any(lease.lease_id == job.resource_lease_id for lease in governor.snapshot().active_leases)
+    assert any(
+        lease.lease_id == job.resource_lease_id for lease in governor.snapshot().active_leases
+    )
     stored = job_store.get(job.job_id)
     assert stored is not None and stored.state is job.state
 
@@ -129,19 +148,25 @@ def test_queued_job_starts_once_capacity_frees_up(tmp_path) -> None:  # type: ig
     blocker = governor.acquire(
         AtlasResourceLeaseRequest(
             workload=AtlasResourceWorkload(
-                workload_id="blocker", priority=AtlasResourcePriority.FOUNDRY_TRAINING, cancellable=False, description="blocker"
+                workload_id="blocker",
+                priority=AtlasResourcePriority.FOUNDRY_TRAINING,
+                cancellable=False,
+                description="blocker",
             )
         )
     )
     assert blocker.state == "active"
 
-    queued = start_training_job(governor, job_store, backend, _recipe(recipe_id="r2"), dataset_path=_dataset(tmp_path))
+    queued = start_training_job(
+        governor, job_store, backend, _recipe(recipe_id="r2"), dataset_path=_dataset(tmp_path)
+    )
     assert queued.state is AtlasTrainingJobState.QUEUED
 
     governor.release(blocker.lease_id)  # governor auto-promotes the queued lease to active
     updated = reconcile_foundry_jobs(governor, job_store, backend, candidates)
     assert any(
-        item.job_id == queued.job_id and item.state is AtlasTrainingJobState.COMPLETED for item in updated
+        item.job_id == queued.job_id and item.state is AtlasTrainingJobState.COMPLETED
+        for item in updated
     )
 
 
@@ -150,20 +175,27 @@ def test_preempted_lease_causes_the_running_job_to_be_cancelled(tmp_path) -> Non
     governor = AtlasResourceGovernor(max_active=1)
     backend = _StubRunningBackend(tmp_path / "job-workspace")
 
-    job = start_training_job(governor, job_store, backend, _recipe(), dataset_path=_dataset(tmp_path))
+    job = start_training_job(
+        governor, job_store, backend, _recipe(), dataset_path=_dataset(tmp_path)
+    )
     assert job.state is AtlasTrainingJobState.RUNNING
 
     interactive = governor.acquire(
         AtlasResourceLeaseRequest(
             workload=AtlasResourceWorkload(
-                workload_id="chat", priority=AtlasResourcePriority.USER_INTERACTION, description="chat"
+                workload_id="chat",
+                priority=AtlasResourcePriority.USER_INTERACTION,
+                description="chat",
             )
         )
     )
     assert interactive.state == "active"  # preempted the lower-priority, cancellable Foundry lease
 
     updated = reconcile_foundry_jobs(governor, job_store, backend, candidates)
-    assert any(item.job_id == job.job_id and item.state is AtlasTrainingJobState.CANCELLED for item in updated)
+    assert any(
+        item.job_id == job.job_id and item.state is AtlasTrainingJobState.CANCELLED
+        for item in updated
+    )
 
 
 def test_completed_job_registers_exactly_one_candidate(tmp_path) -> None:  # type: ignore[no-untyped-def]
@@ -171,17 +203,45 @@ def test_completed_job_registers_exactly_one_candidate(tmp_path) -> None:  # typ
     governor = AtlasResourceGovernor(max_active=4)
     backend = _StubRunningBackend(tmp_path / "job-workspace-2")
 
-    job = start_training_job(governor, job_store, backend, _recipe(recipe_id="r3"), dataset_path=_dataset(tmp_path))
+    job = start_training_job(
+        governor, job_store, backend, _recipe(recipe_id="r3"), dataset_path=_dataset(tmp_path)
+    )
     assert job.state is AtlasTrainingJobState.RUNNING
 
-    reconcile_foundry_jobs(governor, job_store, backend, candidates)  # -> COMPLETED, registers a candidate
-    reconcile_foundry_jobs(governor, job_store, backend, candidates)  # job is now terminal; no double-registration
+    reconcile_foundry_jobs(
+        governor, job_store, backend, candidates
+    )  # -> COMPLETED, registers a candidate
+    reconcile_foundry_jobs(
+        governor, job_store, backend, candidates
+    )  # job is now terminal; no double-registration
 
     registered = candidates.list()
     assert len(registered) == 1
     assert registered[0].job_id == job.job_id
     assert registered[0].base_model == "base/model"
     assert registered[0].dataset_version_id == "trainset_1"
+
+
+def test_scoped_reconciliation_does_not_advance_an_unowned_job(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    job_store, candidates = _stores(tmp_path)
+    governor = AtlasResourceGovernor(max_active=2)
+    backend = _StubRunningBackend(tmp_path / "scoped-workspace")
+
+    owned = start_training_job(
+        governor, job_store, backend, _recipe(recipe_id="owned"), dataset_path=_dataset(tmp_path)
+    )
+    unowned = start_training_job(
+        governor, job_store, backend, _recipe(recipe_id="unowned"), dataset_path=_dataset(tmp_path)
+    )
+    assert owned.state is AtlasTrainingJobState.RUNNING
+    assert unowned.state is AtlasTrainingJobState.RUNNING
+
+    updated = reconcile_foundry_jobs(
+        governor, job_store, backend, candidates, job_ids={owned.job_id}
+    )
+
+    assert [item.job_id for item in updated] == [owned.job_id]
+    assert job_store.get(unowned.job_id).state is AtlasTrainingJobState.RUNNING  # type: ignore[union-attr]
 
 
 def test_candidate_registry_register_is_idempotent(tmp_path) -> None:  # type: ignore[no-untyped-def]
