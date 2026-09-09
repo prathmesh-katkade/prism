@@ -30,6 +30,7 @@ from .models import (
     AtlasCombinedTrainingSourceSummary,
     AtlasCouncilConclusion,
     AtlasCriticalRegression,
+    AtlasEmbeddingCapability,
     AtlasEvidence,
     AtlasEvidenceReference,
     AtlasForecastAction,
@@ -75,6 +76,10 @@ from .models import (
     AtlasResourcePriority,
     AtlasResourceSnapshot,
     AtlasResourceWorkload,
+    AtlasRetrievalChunk,
+    AtlasRetrievalChunkUpsertRequest,
+    AtlasRetrievalQueryRequest,
+    AtlasRetrievalResult,
     AtlasRunEvent,
     AtlasRunEventType,
     AtlasRunRequest,
@@ -204,7 +209,7 @@ from .models import (
 
 __all__ = [
     "ApiError", "AiAnalystOutcome", "AiAnalystRequest", "AiAnalystResponse", "AiContextPacket", "AiEvidence", "AiProviderStatus", "AtlasEvidence", "AtlasOverviewAction", "AtlasOverviewRequest", "AtlasOverviewResponse",
-    "AtlasBenchmarkResult", "AtlasBenchmarkVerdict", "AtlasCouncilConclusion", "AtlasEvidenceReference", "AtlasMemoryClass", "AtlasMemoryQuery", "AtlasMemoryRecord", "AtlasMemoryScope", "AtlasMemoryWriteRequest", "AtlasModelProviderCapabilities", "AtlasModelProviderName", "AtlasProviderCapability", "AtlasModelTrust", "AtlasPlanState", "AtlasPlanStep", "AtlasResourcePriority", "AtlasResourceLease", "AtlasResourceLeaseRequest", "AtlasResourceSnapshot", "AtlasResourceWorkload", "AtlasKnowledgeChunk", "AtlasKnowledgeSearchRequest", "AtlasKnowledgeSourceRequest", "AtlasResearchRequest", "AtlasResearchResult", "AtlasRunEvent", "AtlasRunEventType", "AtlasRunRequest", "AtlasRunResponse", "AtlasSandboxArtifact", "AtlasSandboxErrorKind", "AtlasSandboxExecutionRequest", "AtlasSandboxExecutionResult", "AtlasSandboxWorkerHealth", "AtlasSpecialistId", "AtlasSpecialistIdentity", "AtlasStepKind", "AtlasStepState", "AtlasStructuredPlan",
+    "AtlasBenchmarkResult", "AtlasBenchmarkVerdict", "AtlasCouncilConclusion", "AtlasEvidenceReference", "AtlasMemoryClass", "AtlasMemoryQuery", "AtlasMemoryRecord", "AtlasMemoryScope", "AtlasMemoryWriteRequest", "AtlasModelProviderCapabilities", "AtlasModelProviderName", "AtlasProviderCapability", "AtlasModelTrust", "AtlasPlanState", "AtlasPlanStep", "AtlasResourcePriority", "AtlasResourceLease", "AtlasResourceLeaseRequest", "AtlasResourceSnapshot", "AtlasResourceWorkload", "AtlasKnowledgeChunk", "AtlasKnowledgeSearchRequest", "AtlasKnowledgeSourceRequest", "AtlasEmbeddingCapability", "AtlasRetrievalChunk", "AtlasRetrievalChunkUpsertRequest", "AtlasRetrievalQueryRequest", "AtlasRetrievalResult", "AtlasResearchRequest", "AtlasResearchResult", "AtlasRunEvent", "AtlasRunEventType", "AtlasRunRequest", "AtlasRunResponse", "AtlasSandboxArtifact", "AtlasSandboxErrorKind", "AtlasSandboxExecutionRequest", "AtlasSandboxExecutionResult", "AtlasSandboxWorkerHealth", "AtlasSpecialistId", "AtlasSpecialistIdentity", "AtlasStepKind", "AtlasStepState", "AtlasStructuredPlan",
     "AtlasSystemSeedDomain", "AtlasSystemSeedDomainCount", "AtlasSystemSeedExample", "AtlasSystemSeedManifest", "AtlasSystemSeedReviewStatus",
     "AtlasCombinedTrainingSourceSummary",
     "AtlasCombinedSftDatasetVersion", "AtlasSftTrainingRecord",

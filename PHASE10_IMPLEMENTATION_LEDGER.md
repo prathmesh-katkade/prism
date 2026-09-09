@@ -6,6 +6,35 @@
 `PHASE_10_IN_PROGRESS = YES`
 `PHASE_11_UNLOCKED = NO`
 
+## Superseding 2026-09-10 physical evidence and Memory/RAG V2
+
+The canonical runner completed on the actual Windows host. Soup 0.74.0 used
+QLoRA over `Qwen/Qwen2.5-0.5B-Instruct`; job
+`foundryjob_b077ca27d02446679e3c2e3a4b93db59` completed 23 steps with recorded
+loss 3.490427 -> 3.304634. The 131-record corpus had 125 system-seed and six
+eligible history records (99/16/16 TRAIN/validation/test), aggregate hash
+`25e5f88d447b3dce18543070731deb62c931146c51e1311ac41f5dbe17d43b9b`, TRAIN
+SHA-256 `4976c11c5f97bf4f655a6a93501096b1ea6042defec5e60fcd88264d6eacaa1e`,
+and provenance SHA-256
+`a0f119c486dbaf4b3c5f9f9a6ccea31d195d705a278ac616d6ec406199f84d31`.
+
+Verified candidate `candidate_foundryjob_b077ca27d02446679e3c2e3a4b93db59`
+(fingerprint `84f64a8f1ce1b21e93520441db5e2903c5760bce0145faf8c66d4b579f357cd6`)
+was bound to `atlas-candidate-92c971286e836cc2:latest`, digest
+`91bd27c7fac143fbfcd62aeff930a0c969757c3a77da4b4e3138278ed823c7ba`.
+Its trusted AtlasBench run was 12/90 against fresh production 72/90 on the
+identical `atlasbench-v1` corpus/hash; server-owned decision
+`promodecision_a75ea63e04bb448382c433c7b676b616` is `REJECT`. Production was
+therefore not switched and rollback was not applicable. This is a valid
+scientific outcome, not a Phase 10 completion.
+
+10E is now **ADVANCED** with durable Memory/RAG V2 hybrid retrieval: local-only
+embedding capability abstraction, lexical fallback, typed classes, safe source
+allowlist, project isolation, provenance/injection safety, deterministic hybrid
+ranking, no-op/reindex/supersession/tombstone lifecycle, and retrieval inspector
+APIs. Feedback, AtlasBench V2, Model Arena, and a real candidate that passes the
+locked gate remain future Phase 10 work.
+
 ## Superseding 2026-09-08 status
 
 Combined SFT dataset/export and trust-bound candidate benchmark provenance are

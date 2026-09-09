@@ -294,7 +294,7 @@ def deploy_candidate_to_ollama(
     candidate,  # type: ignore[no-untyped-def]
     *,
     timeout_seconds: int,
-) -> tuple[str, str, str]:
+) -> tuple[str, str, str, str]:
     adapter_path = Path(candidate.adapter_path)
     if not adapter_path.exists():
         raise ExperimentBlocked(f"Candidate adapter path does not exist: {adapter_path}")
@@ -302,6 +302,7 @@ def deploy_candidate_to_ollama(
         f"atlas-candidate-{hashlib.sha256(candidate.candidate_id.encode()).hexdigest()[:16]}"
     )
     gguf_path = adapter_path.parent / f"{runtime_name}.q4_k_m.gguf"
+    export_log = adapter_path.parent / f"{runtime_name}.export.log"
     command = [
         soup,
         "export",
@@ -320,11 +321,22 @@ def deploy_candidate_to_ollama(
         "--deploy-name",
         runtime_name,
     ]
-    result = subprocess.run(
-        command, capture_output=True, text=True, timeout=timeout_seconds, check=False
-    )
+    with export_log.open("wb") as output:
+        result = subprocess.run(
+            # Soup's Rich progress renderer succeeds with a real stream on
+            # Windows but can terminate early when its merge is captured through
+            # a pipe. Preserve the full exporter output as local evidence.
+            command,
+            stdout=output,
+            stderr=subprocess.STDOUT,
+            # The GGUF exporter starts Python helpers, which must retain UTF-8
+            # mode on Windows even when the parent console uses CP-1252.
+            env={**os.environ, "PYTHONUTF8": "1"},
+            timeout=timeout_seconds,
+            check=False,
+        )
     if result.returncode != 0:
-        detail = (result.stderr or result.stdout).strip()[-2_000:]
+        detail = export_log.read_text(encoding="utf-8", errors="replace").strip()[-2_000:]
         raise ExperimentBlocked(f"Soup export/deploy failed ({result.returncode}): {detail}")
 
     base_url = os.environ.get("PRISM_OLLAMA_BASE_URL", "http://127.0.0.1:11434").rstrip("/")
@@ -332,12 +344,21 @@ def deploy_candidate_to_ollama(
     response.raise_for_status()
     models = response.json().get("models", [])
     digest = "digest-unavailable"
+    runtime_model = runtime_name
+    runtime_aliases = {runtime_name, f"{runtime_name}:latest"}
     for item in models:
-        if isinstance(item, dict) and runtime_name in {
+        if isinstance(item, dict) and runtime_aliases.intersection({
             str(item.get("name", "")),
             str(item.get("model", "")),
-        }:
+        }):
             digest = str(item.get("digest", "")) or digest
+            # Persist the daemon's canonical tag.  Ollama returns a deployed
+            # nameless model as ``name:latest``; storing the pre-deploy alias
+            # makes the later, independently constructed benchmark subject
+            # fail its exact /api/tags trust probe.
+            runtime_model = str(item.get("name", "")).strip() or str(
+                item.get("model", "")
+            ).strip()
             break
     else:
         raise ExperimentBlocked(
@@ -346,10 +367,10 @@ def deploy_candidate_to_ollama(
 
     DurableAtlasCandidateRuntimeStore().bind_ollama(
         candidate.candidate_id,
-        runtime_name,
+        runtime_model,
         runtime_model_digest=digest,
     )
-    return runtime_name, digest, str(gguf_path)
+    return runtime_model, digest, str(gguf_path), str(export_log)
 
 
 def main() -> int:
@@ -449,7 +470,7 @@ def main() -> int:
                 "Candidate artifact verification failed; refusing deploy and benchmark."
             )
 
-        runtime_name, digest, gguf = deploy_candidate_to_ollama(
+        runtime_name, digest, gguf, export_log = deploy_candidate_to_ollama(
             soup,
             candidate,
             timeout_seconds=args.export_timeout,
@@ -459,6 +480,7 @@ def main() -> int:
             "model": runtime_name,
             "digest": digest,
             "gguf": gguf,
+            "export_log": export_log,
         }
 
         candidate_run = run_candidate_benchmark(candidate.candidate_id)

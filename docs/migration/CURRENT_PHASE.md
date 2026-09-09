@@ -2,6 +2,22 @@
 
 **Phase:** 10 — IN PROGRESS (Atlas Local Intelligence Foundry)
 
+## Superseding 2026-09-10 status
+
+The first actual local physical Evolution experiment is complete with a valid
+negative result: verified QLoRA candidate training, artifact trust, GGUF/Ollama
+deployment, digest binding, and identical-corpus AtlasBench all ran. The fresh
+production score was 72/90; candidate score was 12/90, so the server-owned
+verdict is `REJECT` and production remains unchanged. This closes the physical
+host-access blocker but does **not** complete Phase 10 or unlock Phase 11.
+
+Memory/RAG V2 core now supplies local-first hybrid retrieval with strict
+knowledge classes, durable chunk provenance, lexical fallback, optional local
+embeddings, project isolation, retrieval-injection metadata, deterministic
+ranking diagnostics, and reindex/supersession/tombstone lifecycle. Durable
+feedback, AtlasBench V2, Model Arena, and an eligible candidate experiment are
+still Phase 10 gates.
+
 **Phase 10 integration branch:** `phase-10-atlas-local-intelligence`, based on
 `phase-6.5-integration-staging` at `ab75b5a08f03a553fe4d6229c100d0be4c1dc158`.
 

@@ -7,6 +7,18 @@ Date: 2026-09-04
 `PHASE_11_UNLOCKED = NO`
 `CONTINUATION_SAFE = YES`
 
+## Superseding physical execution record (2026-09-10)
+
+The physical activation has run successfully as an experiment, with a valid
+negative result. On Windows 10 build 26200 / i5-9300H / 16 GiB RAM / GTX 1650
+Max-Q 4 GiB, isolated Soup 0.74.0 and CUDA-visible Torch 2.14.0+cu126 completed
+the canonical QLoRA sequence. Candidate artifact verification and live Ollama
+digest binding both succeeded. Fresh production AtlasBench was 72/90; candidate
+AtlasBench was 12/90 on the frozen same corpus, so the server-owned verdict was
+`REJECT`. No temporary promotion or rollback drill was authorized, and the
+production runtime remains exactly `qwen3:4b-q4_K_M` with its original verified
+digest. Phase 10 remains incomplete; Phase 11 remains locked.
+
 This checkpoint supersedes the earlier Evolution-activation checkpoint text.
 The software path required for PRISM's **first real Atlas evolution experiment**
 is now implemented and CI-certified. It must still not be misread as evidence

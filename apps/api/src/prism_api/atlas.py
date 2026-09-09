@@ -6,6 +6,7 @@ import threading
 
 from fastapi import APIRouter, HTTPException, Query, status
 from prism_api_contracts import (
+    AtlasEmbeddingCapability,
     AtlasKnowledgeChunk,
     AtlasKnowledgeSearchRequest,
     AtlasKnowledgeSourceRequest,
@@ -20,6 +21,10 @@ from prism_api_contracts import (
     AtlasResourceLease,
     AtlasResourceLeaseRequest,
     AtlasResourceSnapshot,
+    AtlasRetrievalChunk,
+    AtlasRetrievalChunkUpsertRequest,
+    AtlasRetrievalQueryRequest,
+    AtlasRetrievalResult,
     AtlasRunRequest,
     AtlasRunResponse,
     AtlasSandboxExecutionRequest,
@@ -33,6 +38,7 @@ from .atlas_event_stream import durable_stream_events
 from .atlas_memory import DurableAtlasMemoryStore
 from .atlas_research import researcher
 from .atlas_resources import governor
+from .atlas_retrieval import DurableAtlasRetrievalStore
 from .atlas_runtime import SPECIALISTS, cortex_graph, execute, providers, runs
 from .atlas_sandbox import AtlasPythonSandbox
 from .transport import sse_response
@@ -40,6 +46,7 @@ from .transport import sse_response
 router = APIRouter(prefix="/api/v1/atlas", tags=["atlas"])
 sandbox = AtlasPythonSandbox()
 memory = DurableAtlasMemoryStore()
+retrieval = DurableAtlasRetrievalStore()
 
 
 @router.get("/providers", response_model=list[AtlasModelProviderCapabilities])
@@ -122,6 +129,41 @@ def search_project_knowledge(request: AtlasKnowledgeSearchRequest) -> list[Atlas
 @router.delete("/knowledge/sources", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 def delete_project_knowledge(project_id: str, source_ref: str) -> None:
     memory.delete_source(project_id, source_ref)
+
+
+@router.get("/retrieval/capability", response_model=AtlasEmbeddingCapability)
+def retrieval_capability() -> AtlasEmbeddingCapability:
+    return retrieval.capability()
+
+
+@router.post("/retrieval/chunks", response_model=AtlasRetrievalChunk, status_code=status.HTTP_201_CREATED)
+def index_retrieval_chunk(request: AtlasRetrievalChunkUpsertRequest) -> AtlasRetrievalChunk:
+    """Index safe project material; DATA_EVIDENCE remains server-owned."""
+    return retrieval.index(request)
+
+
+@router.post("/retrieval/query", response_model=list[AtlasRetrievalResult])
+def query_retrieval(request: AtlasRetrievalQueryRequest) -> list[AtlasRetrievalResult]:
+    return retrieval.query(request)
+
+
+@router.get("/retrieval/chunks", response_model=list[AtlasRetrievalChunk])
+def list_retrieval_chunks(
+    project_id: str,
+    include_stale: bool = False,
+    limit: int = Query(default=100, ge=1, le=500),
+) -> list[AtlasRetrievalChunk]:
+    return retrieval.list_chunks(project_id, include_stale=include_stale, limit=limit)
+
+
+@router.delete("/retrieval/sources", response_model=dict[str, int])
+def delete_retrieval_source(project_id: str, source_type: str, source_id: str) -> dict[str, int]:
+    return {"tombstoned": retrieval.delete_source(project_id, source_type, source_id)}
+
+
+@router.post("/retrieval/reembed", response_model=dict[str, int])
+def reembed_retrieval_chunks() -> dict[str, int]:
+    return {"reembedded": retrieval.reembed_active()}
 
 
 @router.post("/research", response_model=AtlasResearchResult)

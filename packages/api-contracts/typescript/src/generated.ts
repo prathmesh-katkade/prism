@@ -225,6 +225,15 @@ export interface AtlasCriticalRegression {
   candidate_pass_rate: number;
 }
 
+export interface AtlasEmbeddingCapability {
+  provider: string;
+  model: string;
+  revision: string;
+  dimension?: number;
+  available: boolean;
+  detail: string;
+}
+
 export interface AtlasEvidence {
   label: string;
   value: string;
@@ -528,6 +537,76 @@ export interface AtlasResourceWorkload {
   requires_gpu?: boolean;
   cpu_slots?: number;
   memory_mb?: number;
+}
+
+export interface AtlasRetrievalChunk {
+  chunk_id: string;
+  project_id: string;
+  knowledge_class: AtlasMemoryClass;
+  source_type: string;
+  source_id: string;
+  source_version: string;
+  locator: string;
+  content_hash: string;
+  normalized_text: string;
+  embedding_provider: string;
+  embedding_model: string;
+  embedding_revision: string;
+  embedding_dimension?: number;
+  indexed_at: string;
+  freshness: "active" | "stale" | "deleted" | "superseded";
+  confidence: "low" | "medium" | "high";
+  prompt_injection_flag: boolean;
+  safety_metadata?: Record<string, unknown>;
+  superseded_by?: string;
+}
+
+export interface AtlasRetrievalChunkUpsertRequest {
+  project_id: string;
+  knowledge_class: AtlasMemoryClass;
+  source_type: "atlas_memory" | "markdown" | "text" | "python" | "sql" | "notebook_metadata" | "analytical_evidence" | "foundry_metadata" | "training_metadata" | "candidate_metadata" | "atlasbench_metadata" | "web_research";
+  source_id: string;
+  source_version: string;
+  locator: string;
+  content: string;
+  confidence?: "low" | "medium" | "high";
+}
+
+export interface AtlasRetrievalQueryRequest {
+  project_id: string;
+  query: string;
+  knowledge_classes?: AtlasMemoryClass[];
+  limit?: number;
+  include_stale?: boolean;
+}
+
+export interface AtlasRetrievalResult {
+  chunk_id: string;
+  project_id: string;
+  knowledge_class: AtlasMemoryClass;
+  source_type: string;
+  source_id: string;
+  source_version: string;
+  locator: string;
+  content_hash: string;
+  normalized_text: string;
+  embedding_provider: string;
+  embedding_model: string;
+  embedding_revision: string;
+  embedding_dimension?: number;
+  indexed_at: string;
+  freshness: "active" | "stale" | "deleted" | "superseded";
+  confidence: "low" | "medium" | "high";
+  prompt_injection_flag: boolean;
+  safety_metadata?: Record<string, unknown>;
+  superseded_by?: string;
+  lexical_score?: number;
+  vector_score?: number;
+  recency_score?: number;
+  confidence_score?: number;
+  scope_score?: number;
+  class_weight?: number;
+  hybrid_score?: number;
 }
 
 export interface AtlasRunEvent {

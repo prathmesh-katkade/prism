@@ -1218,6 +1218,72 @@ class AtlasKnowledgeSearchRequest(ContractModel):
     limit: int = Field(default=8, ge=1, le=25)
 
 
+# --- 10S: local-first hybrid retrieval ---------------------------------------
+
+class AtlasEmbeddingCapability(ContractModel):
+    provider: str = Field(min_length=1, max_length=80)
+    model: str = Field(min_length=1, max_length=300)
+    revision: str = Field(min_length=1, max_length=200)
+    dimension: Optional[int] = Field(default=None, ge=1, le=16_384)
+    available: bool
+    detail: str = Field(min_length=1, max_length=1_000)
+
+
+class AtlasRetrievalChunkUpsertRequest(ContractModel):
+    project_id: str = Field(min_length=1, max_length=200)
+    knowledge_class: AtlasMemoryClass
+    source_type: Literal[
+        "atlas_memory", "markdown", "text", "python", "sql", "notebook_metadata",
+        "analytical_evidence", "foundry_metadata", "training_metadata", "candidate_metadata",
+        "atlasbench_metadata", "web_research",
+    ]
+    source_id: str = Field(min_length=1, max_length=500)
+    source_version: str = Field(min_length=1, max_length=200)
+    locator: str = Field(min_length=1, max_length=2_000)
+    content: str = Field(min_length=1, max_length=200_000)
+    confidence: Literal["low", "medium", "high"] = "medium"
+
+
+class AtlasRetrievalQueryRequest(ContractModel):
+    project_id: str = Field(min_length=1, max_length=200)
+    query: str = Field(min_length=1, max_length=2_000)
+    knowledge_classes: Optional[list[AtlasMemoryClass]] = None
+    limit: int = Field(default=8, ge=1, le=50)
+    include_stale: bool = False
+
+
+class AtlasRetrievalChunk(ContractModel):
+    chunk_id: str = Field(min_length=1)
+    project_id: str = Field(min_length=1)
+    knowledge_class: AtlasMemoryClass
+    source_type: str = Field(min_length=1)
+    source_id: str = Field(min_length=1)
+    source_version: str = Field(min_length=1)
+    locator: str = Field(min_length=1)
+    content_hash: str = Field(min_length=64, max_length=64)
+    normalized_text: str = Field(min_length=1)
+    embedding_provider: str = Field(min_length=1)
+    embedding_model: str = Field(min_length=1)
+    embedding_revision: str = Field(min_length=1)
+    embedding_dimension: Optional[int] = None
+    indexed_at: datetime
+    freshness: Literal["active", "stale", "deleted", "superseded"]
+    confidence: Literal["low", "medium", "high"]
+    prompt_injection_flag: bool
+    safety_metadata: dict[str, Any] = Field(default_factory=dict)
+    superseded_by: Optional[str] = None
+
+
+class AtlasRetrievalResult(AtlasRetrievalChunk):
+    lexical_score: float = 0
+    vector_score: float = 0
+    recency_score: float = 0
+    confidence_score: float = 0
+    scope_score: float = 0
+    class_weight: float = 0
+    hybrid_score: float = 0
+
+
 class AtlasResearchRequest(ContractModel):
     query: str = Field(min_length=1, max_length=2_000)
     url: Optional[str] = Field(default=None, max_length=2_000)

@@ -14,6 +14,23 @@ benchmarks require VERIFIED trust and matching runtime digest. Physical evidence
 is still required before Phase 10 completion.
 `CONTINUATION_SAFE = YES`
 
+## Superseding 2026-09-10 continuation state
+
+Physical Evolution is no longer blocked: the canonical local runner completed
+the full trusted sequence through candidate benchmark and server-owned verdict.
+Fresh production (`qwen3:4b-q4_K_M`, exact digest retained) scored 72/90;
+verified QLoRA candidate `candidate_foundryjob_b077ca27d02446679e3c2e3a4b93db59`
+scored 12/90 on the same `atlasbench-v1` corpus hash and was `REJECT` due to
+critical regressions. No promotion occurred; production remains restored by
+non-mutation. The local report is retained only under `.prism/runtime/` and is
+not a Git artifact.
+
+Memory/RAG V2 core is implemented and tested alongside the existing memory API:
+durable provenance-rich chunks, strict knowledge classes, local-only embedding
+abstraction, lexical fallback, optional Ollama backend, hybrid score inspector,
+project isolation, injection metadata, supersession/tombstones, and content-hash
+no-op behavior. It does not authorize Phase 11.
+
 ## Canonical status
 
 Phase 10 has advanced through the Atlas runtime, agents/specialists, secure

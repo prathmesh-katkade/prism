@@ -9,6 +9,23 @@ infer current capability.
 
 ### Repository truth
 
+### Superseding continuation state (2026-09-10)
+
+- Physical Evolution report: completed with an honest `REJECT`, not a blocked
+  runtime. Fresh production scored 72/90 and verified candidate
+  `candidate_foundryjob_b077ca27d02446679e3c2e3a4b93db59` scored 12/90 against
+  the same frozen corpus; production was not promoted or changed.
+- The real adapter, GGUF, export logs, and report stay under `.prism/runtime/`
+  and must never be committed.
+- The current working tree includes an uncommitted fix which persists Ollama's
+  canonical `:latest` candidate tag (rather than a non-probeable alias), plus
+  Memory/RAG V2 core and tests. Preserve and finish this work on PR #15 only.
+- Memory/RAG V2 provides durable hybrid retrieval with lexical fallback by
+  default, deterministic test embeddings, optional local Ollama embeddings,
+  provenance/injection safety, project isolation, and lifecycle APIs. It is not
+  a cloud embedding integration and raw private dataset rows remain excluded.
+- Do not create another PR, merge PR #15, or start Phase 11.
+
 - Repository: `prathmesh-katkade/prism`
 - Active branch: `phase-10-atlas-local-intelligence`
 - PR: #15 → `phase-6.5-integration-staging`

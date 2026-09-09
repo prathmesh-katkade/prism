@@ -5,6 +5,26 @@
 Phase 10 is in progress. This document defines its contracts; it does not certify
 the phase or authorize Phase 11 work.
 
+## Superseding physical-evolution and retrieval status (2026-09-10)
+
+The first complete trusted physical Evolution loop has now run on the PRISM
+Windows host. It produced a real QLoRA adapter from the immutable combined SFT
+corpus, verified the adapter artifact, exported/deployed a candidate to Ollama,
+bound the daemon's canonical `:latest` name and exact digest, and ran the frozen
+AtlasBench corpus through the server-owned evaluator. The candidate was
+**REJECTED**, not promoted: 12/90 versus a fresh production 72/90, with critical
+regressions. The production pointer and resolved model remain
+`qwen3:4b-q4_K_M` at digest
+`2bfd38a7daaf4b1037efe517ccb73d1a3bbd4822cf89f1a82be1569050a114e0`.
+
+Memory/RAG V2 now adds a separate durable hybrid-retrieval store. It retains
+project/source/version/locator/content-hash provenance, strict knowledge
+classes, injection-as-data metadata, tombstones/supersession, content-hash
+no-ops, deterministic score breakdowns, lexical fallback, test-only
+deterministic embeddings, and an opt-in local Ollama embedding boundary. It
+does not globally index raw dataset rows and it refuses client-forged
+`DATA_EVIDENCE` records.
+
 ## Product boundary
 
 Atlas is PRISM's persistent, local-first analytical orchestrator. It plans and
