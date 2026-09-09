@@ -73,8 +73,16 @@ It contributed real desk research and one new server-owned subsystem instead:
   kinds are the future KTO substrate. No DPO/KTO training starts here — only
   durable, queryable signal capture. Full quality gates pass.
 
-Corpus V2 curation, any actual Arena run, any new training experiment, and
-AtlasBench V2 remain not started.
+Corpus V2 curation, any actual Arena run, and any new training experiment
+remain not started. **AtlasBench V2 wave 1 is started**: `atlas_bench_corpus_v2.py`
+is a genuinely separate 30-task holdout (never imported by dataset-building
+code) covering confounding, reverse causation, selection bias, every leakage
+type, imbalance, hallucinated schema, evidence freshness/provenance, prompt
+injection/tool hijack, Python pitfalls, uncertainty/refusal, and business
+reasoning — a real first increment toward 150+, not the finished suite, and
+not yet wired into promotion/Arena. A standing leakage-guard test checks
+every V2 prompt against v1 by token overlap and already caught one
+accidental near-duplicate before it landed.
 
 ## Product boundary
 

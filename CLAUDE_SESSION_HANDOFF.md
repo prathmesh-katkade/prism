@@ -41,9 +41,17 @@ throughout and no lost local work. This session added:
   tests/migration tests/overview tests/sql_lab` — 364 passed, 4 skipped)
   all pass from a clean checkout.
 
-Corpus V2 curation, any actual zero-shot Arena run, any new training
-experiment, and AtlasBench V2 remain not started — none of this session's
-work required or claimed physical hardware access.
+Corpus V2 curation, any actual zero-shot Arena run, and any new training
+experiment remain not started. **AtlasBench V2 wave 1 is now started**:
+`atlas_bench_corpus_v2.py` adds 30 hand-authored holdout tasks (causal
+confounding/reverse-causation/selection-bias, every leakage type, imbalance,
+hallucinated schema, evidence freshness/provenance, prompt injection/tool
+hijack, Python pitfalls, uncertainty/refusal, business reasoning) — a real
+first increment toward 150+, not the finished suite, not yet wired into
+promotion/Arena. A new leakage-guard test checks V2 against v1 by token
+overlap and already caught one accidental near-duplicate before it landed.
+9 new tests, full quality gates green. None of this required or claimed
+physical hardware access.
 
 ### Superseding continuation state (2026-09-10)
 

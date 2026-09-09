@@ -67,15 +67,44 @@ tests/sql_lab` — 364 passed, 4 skipped (expected MySQL-live skips).
 
 **Explicitly not done this session** (recorded so nothing is implied
 complete): Corpus V2 curation or any synthetic-teacher data generation, any
-actual zero-shot Ollama Model Arena run against a shortlisted model, any new
-QLoRA training experiment, and AtlasBench V2. Category-level gap analysis
-against the real 71/90 → 72/90 / 12/90 runs was not possible from this
-session — those runs' per-category breakdowns exist only in the local
-SQLite history on the physical machine, which is correctly not part of this
-repository. What *was* inspected directly and is a reproducible fact, not a
-run result: the frozen `atlasbench-v1` corpus itself is 90 tasks — SQL,
+actual zero-shot Ollama Model Arena run against a shortlisted model, and any
+new QLoRA training experiment. Category-level gap analysis against the real
+71/90 → 72/90 / 12/90 runs was not possible from this session — those runs'
+per-category breakdowns exist only in the local SQLite history on the
+physical machine, which is correctly not part of this repository. What *was*
+inspected directly and is a reproducible fact, not a run result: the frozen
+`atlasbench-v1` corpus itself is 90 tasks — SQL,
 statistics, machine_learning, agentic, general at 10 each; forecasting,
 causal_safety, evidence, python_sandbox, personality at 8 each.
+
+## AtlasBench V2 holdout, wave 1 (2026-09-10, cloud-session continuation)
+
+`atlas_bench_corpus_v2.py` adds a genuinely separate holdout corpus (never
+imported by any dataset-building code path) covering exactly the trap
+categories the mission named: causal confounding (a fresh case-mix hospital
+example, not v1's ice-cream/drowning one — the first draft accidentally
+reused that exact example and a new leakage-guard test caught it before
+merge), reverse causation, survivorship/selection bias, target/feature/
+temporal leakage, class-imbalance metric selection, hallucinated-schema
+handling, evidence freshness/provenance/conflict, prompt injection/tool
+hijack, Python correctness pitfalls (mutable defaults, silent exception
+swallowing, SQL injection), uncertainty/refusal, and business-reasoning
+traps (seasonality, vanity metrics, statistical-vs-practical significance).
+
+This is **Wave 1: 30 hand-authored tasks** (machine_learning: 4; sql,
+statistics, forecasting, causal_safety, agentic, evidence, python_sandbox,
+general: 3 each; personality: 2) — a real starting increment toward the
+mission's 150+-task target, not the finished V2 suite, and it is not yet
+wired into the promotion/Arena runtime. A new automated leakage guard
+(`test_v2_holdout_is_not_a_near_duplicate_of_v1`) checks every V2 prompt's
+normalized token overlap against every v1 prompt and fails the build above a
+0.6 Jaccard threshold — this is a standing regression test, not a one-time
+manual check, and it already caught and forced a fix to one duplicate before
+this landed. Self-consistency is verified the same way v1 is: a perfect
+reference subject scores 30/30, a worst-case subject scores 0/30, and an
+always-pick-first-choice baseline is provably not perfect. 9 new tests, full
+quality gates green (`ruff`, `mypy`, boundaries, secrets, TS freshness,
+373 passed / 4 skipped across the full backend suite).
 
 ## Superseding 2026-09-10 physical evidence and Memory/RAG V2
 

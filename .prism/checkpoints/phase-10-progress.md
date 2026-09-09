@@ -20,8 +20,15 @@ the Arena/promotion/live-bench modules (no forged claims found); and a new
 **Feedback Foundation** (`atlas_feedback.py`) — append-only
 helpful/not_helpful/accepted/rejected/corrected events bound to
 run_id/project_id/evidence, `corrected` carrying the future DPO correction,
-7 new tests, full quality gates green. Corpus V2, any Arena run, any new
-training experiment, and AtlasBench V2 remain not started.
+7 new tests, full quality gates green. Corpus V2, any Arena run, and any new
+training experiment remain not started. **AtlasBench V2 wave 1 started**:
+`atlas_bench_corpus_v2.py`, 30 hand-authored holdout tasks (confounding,
+reverse causation, selection bias, every leakage type, imbalance,
+hallucinated schema, evidence freshness/provenance, prompt injection,
+Python pitfalls, uncertainty/refusal, business reasoning), a standing
+leakage-guard test against v1 (already caught one near-duplicate before it
+landed), 9 new tests, quality gates green — a real first increment toward
+150+, not the finished suite.
 `CONTINUATION_SAFE = YES`
 
 ## Superseding 2026-09-08 status

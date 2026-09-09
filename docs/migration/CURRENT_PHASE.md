@@ -219,6 +219,13 @@ Arena/promotion/live-bench trust boundary (no forged claims found), and a
 new append-only Feedback Foundation (`atlas_feedback.py`) recording
 helpful/not_helpful/accepted/rejected/corrected signal bound to
 run_id/project_id/evidence — the future KTO/DPO substrate, not training
-itself. Corpus V2, any actual Arena run, any new training experiment, and
-AtlasBench V2 remain not started.
+itself. It also started **AtlasBench V2**: `atlas_bench_corpus_v2.py` is a
+genuinely separate 30-task holdout (confounding, reverse causation,
+selection bias, every leakage type, imbalance, hallucinated schema, evidence
+freshness/provenance, prompt injection, Python pitfalls, uncertainty/
+refusal, business reasoning) with a standing leakage-guard test against v1
+that already caught one accidental near-duplicate before it landed — a real
+first increment toward the mission's 150+-task target, not the finished
+suite, and not yet wired into promotion/Arena. Corpus V2 curation, any
+actual Arena run, and any new training experiment remain not started.
 `PHASE_10_COMPLETE = NO`; `PHASE_11_UNLOCKED = NO`; `CONTINUATION_SAFE = YES`.
