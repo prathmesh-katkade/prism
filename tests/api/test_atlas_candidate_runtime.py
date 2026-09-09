@@ -14,6 +14,8 @@ from prism_api.atlas_candidate_runtime import (
 )
 from prism_api.atlas_promotion import DurableAtlasPromotionStore
 from prism_api_contracts import (
+    AtlasBenchCategory,
+    AtlasBenchCategoryScore,
     AtlasBenchSuiteRun,
     AtlasPromotionDecision,
     AtlasPromotionVerdict,
@@ -113,6 +115,18 @@ def test_promotion_decision_rejects_a_corpus_mismatch_after_trust_binding(monkey
     _configure_promotion_decision_dependencies(monkeypatch, candidate, production)
 
     with pytest.raises(HTTPException, match="identical AtlasBench corpus"):
+        atlas_foundry_routes.compute_promotion_decision("candidate_a", "production-run", "candidate-run")
+
+
+def test_promotion_decision_rejects_incomplete_category_coverage(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    candidate = _bound_bench_run(run_id="candidate-run", candidate_id="candidate_a", subject_kind="candidate")
+    production = _bound_bench_run(run_id="production-run", candidate_id="production", subject_kind="production").model_copy(
+        update={"category_scores": [AtlasBenchCategoryScore(category=AtlasBenchCategory.SQL, total=1, passed=1)]}
+    )
+    candidate = candidate.model_copy(update={"category_scores": []})
+    _configure_promotion_decision_dependencies(monkeypatch, candidate, production)
+
+    with pytest.raises(HTTPException, match="identical complete AtlasBench category coverage"):
         atlas_foundry_routes.compute_promotion_decision("candidate_a", "production-run", "candidate-run")
 
 

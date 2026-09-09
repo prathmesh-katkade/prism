@@ -35,6 +35,24 @@ ranking, no-op/reindex/supersession/tombstone lifecycle, and retrieval inspector
 APIs. Feedback, AtlasBench V2, Model Arena, and a real candidate that passes the
 locked gate remain future Phase 10 work.
 
+## Legitimate candidate search / Model Arena activation (2026-09-10)
+
+Model Arena is now **ADVANCED**: off-the-shelf local Ollama models can be
+evaluated through an immutable, digest-bound, server-owned AtlasBench path
+without becoming Foundry candidates or changing production. The arena summary
+compares only identical corpus version/hash evidence, reports category and
+overall deltas plus locked critical-regression flags, and excludes generic or
+identity-incomplete runs. Promotion comparison additionally rejects any run
+pair with missing/mismatched category coverage or task totals before policy
+calculation.
+
+Research/profiling admission: Granite 3.3 2B is SAFE for a conservative
+4-bit QLoRA control; SmolLM3 3B is BORDERLINE pending a real Soup profile and
+dry-run; Qwen3 4B/Phi-4-mini are zero-shot evaluation candidates first; Gemma
+3 4B is not a default training choice on this host. A trained V2 corpus,
+feedback events, AtlasBench V2, and a candidate meeting the locked policy are
+still pending. No score is claimed until the new server-owned run completes.
+
 ## Superseding 2026-09-08 status
 
 Combined SFT dataset/export and trust-bound candidate benchmark provenance are

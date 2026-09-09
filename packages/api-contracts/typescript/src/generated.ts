@@ -116,7 +116,7 @@ export interface AtlasBenchSuiteRun {
   category_scores?: AtlasBenchCategoryScore[];
   started_at: string;
   completed_at: string;
-  subject_kind?: "generic" | "production" | "candidate";
+  subject_kind?: "generic" | "production" | "candidate" | "arena";
   candidate_id?: string;
   candidate_fingerprint?: string;
   trust_verification_id?: string;
@@ -379,6 +379,30 @@ export interface AtlasMlResponse {
   summary: string;
   uncertainty: string;
   evidence: AtlasEvidence[];
+}
+
+export interface AtlasModelArenaEntry {
+  run_id: string;
+  subject_kind: "production" | "candidate" | "arena";
+  runtime_model: string;
+  runtime_model_digest: string;
+  total_passed: number;
+  total_tasks: number;
+  production_delta: number;
+  category_scores?: AtlasBenchCategoryScore[];
+  critical_regression_categories?: AtlasBenchCategory[];
+  elapsed_ms: number;
+  candidate_id?: string;
+  candidate_fingerprint?: string;
+}
+
+export interface AtlasModelArenaSummary {
+  corpus_version: string;
+  corpus_hash: string;
+  production_run_id: string;
+  production_runtime_model: string;
+  production_runtime_model_digest: string;
+  entries?: AtlasModelArenaEntry[];
 }
 
 export interface AtlasModelProviderCapabilities {

@@ -24,6 +24,12 @@ infer current capability.
   default, deterministic test embeddings, optional local Ollama embeddings,
   provenance/injection safety, project isolation, and lifecycle APIs. It is not
   a cloud embedding integration and raw private dataset rows remain excluded.
+- Model Arena is now a server-owned, digest-bound, non-mutating evaluation
+  surface. It is separate from candidate trust and promotion, excludes generic
+  or identity-incomplete evidence, and promotion fails closed on incomplete
+  category coverage. Start candidate research with Granite 3.3 2B, admit
+  SmolLM3 3B only after real Soup profile/dry-run, and treat 4B training as
+  evaluation-first on this 4 GiB host.
 - Do not create another PR, merge PR #15, or start Phase 11.
 
 - Repository: `prathmesh-katkade/prism`
@@ -34,10 +40,8 @@ infer current capability.
   `5ee368e8df911c65c1121be346b0f8c9ccef504f`
 - PR #15 CI run #166 (`33904258400`) at that code head: all five jobs PASS,
   including the real MySQL 8.0 + browser-to-API flow.
-- Current head: `07d549a` (Atlas System Seed Corpus V1); CI green through the
-  Trusted Evolution wave (Candidate Artifact Trust Registry, System Seed
-  Corpus V1, and three real CI-discovered bugs fixed -- see
-  `.prism/checkpoints/phase-10-progress.md` for the full list).
+- Starting head for the candidate-search increment: `26d0c1d`; PR #15 CI #192
+  is green. Preserve its historical physical REJECT evidence.
 - Do not merge PR #15 yet.
 
 ```text

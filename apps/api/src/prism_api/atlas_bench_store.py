@@ -191,6 +191,18 @@ class DurableAtlasBenchStore:
             rows = connection.execute(statement).mappings().all()
         return [self._run_record(row) for row in rows]
 
+    def list_runs_for_corpus(self, corpus_version: str, corpus_hash: str, *, limit: int = 200) -> list[AtlasBenchSuiteRun]:
+        """Return immutable run evidence for one exact frozen corpus only."""
+        statement = (
+            select(_runs)
+            .where(_runs.c.corpus_version == corpus_version, _runs.c.corpus_hash == corpus_hash)
+            .order_by(_runs.c.completed_at.desc(), _runs.c.run_id.desc())
+            .limit(limit)
+        )
+        with self.engine.connect() as connection:
+            rows = connection.execute(statement).mappings().all()
+        return [self._run_record(row) for row in rows]
+
     def task_results(self, run_id: str, *, limit: int = 500) -> list[AtlasBenchTaskResult]:
         statement = select(_task_results).where(_task_results.c.run_id == run_id).order_by(_task_results.c.task_id).limit(limit)
         with self.engine.connect() as connection:

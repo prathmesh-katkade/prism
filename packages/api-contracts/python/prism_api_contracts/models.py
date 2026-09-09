@@ -1493,13 +1493,46 @@ class AtlasBenchSuiteRun(ContractModel):
     completed_at: datetime
     # Server-owned subject provenance.  Legacy generic runs retain the
     # defaults, while candidate science must populate every binding field.
-    subject_kind: Literal["generic", "production", "candidate"] = "generic"
+    subject_kind: Literal["generic", "production", "candidate", "arena"] = "generic"
     candidate_id: Optional[str] = Field(default=None, max_length=120)
     candidate_fingerprint: Optional[str] = Field(default=None, max_length=64)
     trust_verification_id: Optional[str] = Field(default=None, max_length=120)
     runtime_model: Optional[str] = Field(default=None, max_length=300)
     runtime_model_digest: Optional[str] = Field(default=None, max_length=200)
     provider: Optional[str] = Field(default=None, max_length=32)
+
+
+class AtlasModelArenaEntry(ContractModel):
+    """One immutable, digest-bound AtlasBench run as ranked by the server.
+
+    An arena entry is evidence, not a promotion decision.  In particular,
+    ``arena`` subjects are off-the-shelf evaluation baselines and cannot be
+    passed to the promotion route in place of a verified Foundry candidate.
+    """
+
+    run_id: str = Field(min_length=1, max_length=120)
+    subject_kind: Literal["production", "candidate", "arena"]
+    runtime_model: str = Field(min_length=1, max_length=300)
+    runtime_model_digest: str = Field(min_length=1, max_length=200)
+    total_passed: int = Field(ge=0)
+    total_tasks: int = Field(ge=0)
+    production_delta: int
+    category_scores: list[AtlasBenchCategoryScore] = Field(default_factory=list)
+    critical_regression_categories: list[AtlasBenchCategory] = Field(default_factory=list)
+    elapsed_ms: int = Field(ge=0)
+    candidate_id: Optional[str] = Field(default=None, max_length=120)
+    candidate_fingerprint: Optional[str] = Field(default=None, max_length=64)
+
+
+class AtlasModelArenaSummary(ContractModel):
+    """Server-calculated comparison of immutable runs on one frozen corpus."""
+
+    corpus_version: str = Field(min_length=1, max_length=64)
+    corpus_hash: str = Field(min_length=32, max_length=64)
+    production_run_id: str = Field(min_length=1, max_length=120)
+    production_runtime_model: str = Field(min_length=1, max_length=300)
+    production_runtime_model_digest: str = Field(min_length=1, max_length=200)
+    entries: list[AtlasModelArenaEntry] = Field(default_factory=list)
 
 
 # --- 10Q: Shadow Brain, promotion policy, and rollback ------------------

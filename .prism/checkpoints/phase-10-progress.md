@@ -31,6 +31,17 @@ abstraction, lexical fallback, optional Ollama backend, hybrid score inspector,
 project isolation, injection metadata, supersession/tombstones, and content-hash
 no-op behavior. It does not authorize Phase 11.
 
+## Candidate Search / Model Arena continuation (2026-09-10)
+
+The next experiment is governed by an immutable Model Arena, not subjective
+model selection: local models are evaluated with a server-probed Ollama digest
+and frozen corpus without becoming candidates or mutating production. Arena
+views exclude generic/reference and identity-incomplete runs, calculate
+score/category deltas and critical regressions server-side, and promotion now
+fails closed on incomplete category coverage. The admission order is Granite
+3.3 2B control, conditional SmolLM3 3B, then only justified 4B experiments
+after profile/dry-run. AtlasBench remains isolated from all data.
+
 ## Canonical status
 
 Phase 10 has advanced through the Atlas runtime, agents/specialists, secure

@@ -25,6 +25,23 @@ deterministic embeddings, and an opt-in local Ollama embedding boundary. It
 does not globally index raw dataset rows and it refuses client-forged
 `DATA_EVIDENCE` records.
 
+## Legitimate candidate search and Model Arena (2026-09-10)
+
+Model selection now begins with an immutable, non-mutating Arena evaluation,
+not training. `POST /api/v1/atlas/arena/runs` takes only a locally installed
+Ollama model name; the server probes and records its exact daemon digest, then
+passes only frozen-benchmark prompts and choices to that model. It cannot
+create a Foundry candidate, a verification record, a promotion decision, or a
+production-pointer mutation. `GET /api/v1/atlas/arena` derives score deltas,
+category deltas, critical-regression flags, and elapsed time from immutable
+same-corpus runs only; generic/reference runs and digest-less runs are excluded.
+
+The actual host is a GTX 1650 Max-Q (4 GiB), i5-9300H, and 16 GiB RAM, with
+Soup 0.74.0 / Torch 2.14.0+cu126. Granite 3.3 2B is the conservative QLoRA
+control. SmolLM3 3B requires a model-specific Soup profile and dry-run; 4B
+training is evaluation-first and must retain at least 0.5 GiB VRAM reserve.
+No benchmark material is used as training data.
+
 ## Product boundary
 
 Atlas is PRISM's persistent, local-first analytical orchestrator. It plans and

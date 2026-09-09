@@ -18,6 +18,14 @@ ranking diagnostics, and reindex/supersession/tombstone lifecycle. Durable
 feedback, AtlasBench V2, Model Arena, and an eligible candidate experiment are
 still Phase 10 gates.
 
+Candidate search has now activated a digest-bound, server-owned Model Arena
+for non-mutating off-the-shelf evaluations. It is not a promotion surface;
+generic/reference or identity-incomplete evidence is excluded, and promotion
+comparisons fail closed on incomplete category coverage. The 4 GiB host admits
+Granite 3.3 2B as a conservative training control, keeps SmolLM3 3B conditional
+on real preflight, and treats 4B bases as evaluation-first. No new candidate
+score is claimed before an immutable run exists.
+
 **Phase 10 integration branch:** `phase-10-atlas-local-intelligence`, based on
 `phase-6.5-integration-staging` at `ab75b5a08f03a553fe4d6229c100d0be4c1dc158`.
 

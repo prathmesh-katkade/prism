@@ -22,6 +22,7 @@ from .atlas_foundry_routes import adapter_router as atlas_adapter_router
 from .atlas_foundry_routes import bench_router as atlas_bench_router
 from .atlas_foundry_routes import promotion_router as atlas_promotion_router
 from .atlas_foundry_routes import router as atlas_foundry_router
+from .atlas_model_arena import router as atlas_model_arena_router
 from .atlas_runtime import runs as atlas_runs
 from .clean import router as clean_router
 from .durable_registry import DurableAnalyticalObjectRegistry
@@ -77,6 +78,7 @@ def create_app() -> FastAPI:
     app.include_router(atlas_foundry_router)
     app.include_router(atlas_bench_router)
     app.include_router(atlas_bench_live_router)
+    app.include_router(atlas_model_arena_router)
     app.include_router(atlas_promotion_router)
     app.include_router(atlas_adapter_router)
     app.include_router(clean_router)

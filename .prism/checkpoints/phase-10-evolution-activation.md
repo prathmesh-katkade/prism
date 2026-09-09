@@ -19,6 +19,15 @@ AtlasBench was 12/90 on the frozen same corpus, so the server-owned verdict was
 production runtime remains exactly `qwen3:4b-q4_K_M` with its original verified
 digest. Phase 10 remains incomplete; Phase 11 remains locked.
 
+## Legitimate candidate search activation (2026-09-10)
+
+The Model Arena extends evaluation without changing the trusted candidate or
+promotion boundary. It performs local off-the-shelf Ollama benchmarks only
+after server-side digest probing; its immutable same-corpus summary is not a
+promotion input. Training admission is hardware-gated: Granite 3.3 2B is the
+control; SmolLM3 3B requires profile/dry-run; 4B bases remain evaluation-first.
+No AtlasBench material may enter any V2 corpus.
+
 This checkpoint supersedes the earlier Evolution-activation checkpoint text.
 The software path required for PRISM's **first real Atlas evolution experiment**
 is now implemented and CI-certified. It must still not be misread as evidence

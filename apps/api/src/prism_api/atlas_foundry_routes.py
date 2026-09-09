@@ -428,6 +428,16 @@ def compute_promotion_decision(
             status_code=status.HTTP_409_CONFLICT,
             detail="Production and candidate must be evaluated against the identical AtlasBench corpus.",
         )
+    production_categories = {score.category: score.total for score in production_run.category_scores}
+    candidate_categories = {score.category: score.total for score in candidate_run.category_scores}
+    if production_categories != candidate_categories or production_run.total_tasks != candidate_run.total_tasks:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Production and candidate must have identical complete AtlasBench category coverage "
+                "and task totals; refusing an incomplete comparison."
+            ),
+        )
     decision = decide_promotion(candidate_id, production_run, candidate_run)
     return _promotion_decision_store.save(decision)
 
