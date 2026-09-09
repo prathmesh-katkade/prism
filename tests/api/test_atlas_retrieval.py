@@ -10,6 +10,7 @@ from prism_api_contracts import (
     AtlasRetrievalChunkUpsertRequest,
     AtlasRetrievalQueryRequest,
 )
+from sqlalchemy import inspect as sa_inspect
 
 
 def _request(
@@ -92,3 +93,13 @@ def test_content_hash_noop_supersession_tombstone_and_reembed(tmp_path) -> None:
 
     fresh = _store(tmp_path, RevisionTwo())
     assert fresh.reembed_active() == 0  # tombstoned chunks are intentionally excluded
+
+
+def test_source_lookup_index_uses_a_mysql_safe_hash_not_full_source_id(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    store = _store(tmp_path)
+    index = next(
+        row
+        for row in sa_inspect(store.engine).get_indexes("prism_atlas_retrieval_chunks")
+        if row["name"] == "ix_prism_atlas_retrieval_source_hash"
+    )
+    assert index["column_names"] == ["project_id", "source_type", "source_id_hash", "freshness"]

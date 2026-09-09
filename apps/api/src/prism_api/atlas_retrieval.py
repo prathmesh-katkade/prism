@@ -36,8 +36,12 @@ from sqlalchemy import (
     Text,
     create_engine,
     insert,
+    inspect,
     select,
     update,
+)
+from sqlalchemy import (
+    text as sa_text,
 )
 from sqlalchemy.engine import Engine
 
@@ -65,6 +69,11 @@ def _normalize(text: str) -> str:
 
 def _terms(text: str) -> set[str]:
     return set(_WORDS.findall(text.lower()))
+
+
+def _source_id_hash(source_id: str) -> str:
+    """Keep an indexable MySQL-safe surrogate without weakening exact lookup."""
+    return hashlib.sha256(source_id.encode()).hexdigest()
 
 
 def _cosine(left: Sequence[float], right: Sequence[float]) -> float:
@@ -142,7 +151,7 @@ _chunks = Table(
     "prism_atlas_retrieval_chunks", _metadata,
     Column("chunk_id", String(120), primary_key=True), Column("project_id", String(200), nullable=False, index=True),
     Column("knowledge_class", String(32), nullable=False, index=True), Column("source_type", String(64), nullable=False),
-    Column("source_id", String(500), nullable=False), Column("source_version", String(200), nullable=False),
+    Column("source_id", String(500), nullable=False), Column("source_id_hash", String(64), nullable=False, index=True), Column("source_version", String(200), nullable=False),
     Column("locator", String(2000), nullable=False), Column("content_hash", String(64), nullable=False),
     Column("normalized_text", Text, nullable=False), Column("embedding_provider", String(80), nullable=False),
     Column("embedding_model", String(300), nullable=False), Column("embedding_revision", String(200), nullable=False),
@@ -159,7 +168,33 @@ class DurableAtlasRetrievalStore:
         self.backend = embedding_backend or configured_embedding_backend()
         _metadata.create_all(self.engine)
         with self.engine.begin() as connection:
-            ensure_index(connection, "prism_atlas_retrieval_chunks", "ix_prism_atlas_retrieval_source", "CREATE INDEX ix_prism_atlas_retrieval_source ON prism_atlas_retrieval_chunks (project_id, source_type, source_id, freshness)")
+            # Preserve exact source_id equality, but use a fixed hash in the
+            # compound lookup index: MySQL utf8mb4 cannot index 500 characters
+            # alongside the other source dimensions within its 3072-byte cap.
+            columns = {
+                item["name"]
+                for item in inspect(connection).get_columns("prism_atlas_retrieval_chunks")
+            }
+            if "source_id_hash" not in columns:
+                connection.execute(
+                    sa_text("ALTER TABLE prism_atlas_retrieval_chunks ADD COLUMN source_id_hash VARCHAR(64)")
+                )
+                rows = connection.execute(
+                    select(_chunks.c.chunk_id, _chunks.c.source_id)
+                ).mappings().all()
+                for row in rows:
+                    connection.execute(
+                        update(_chunks)
+                        .where(_chunks.c.chunk_id == row["chunk_id"])
+                        .values(source_id_hash=_source_id_hash(str(row["source_id"])))
+                    )
+            ensure_index(
+                connection,
+                "prism_atlas_retrieval_chunks",
+                "ix_prism_atlas_retrieval_source_hash",
+                "CREATE INDEX ix_prism_atlas_retrieval_source_hash ON "
+                "prism_atlas_retrieval_chunks (project_id, source_type, source_id_hash, freshness)",
+            )
 
     def capability(self) -> AtlasEmbeddingCapability:
         return self.backend.capability()
@@ -182,14 +217,14 @@ class DurableAtlasRetrievalStore:
         vector = vectors[0] if vectors else None
         now = _now()
         with self.engine.begin() as connection:
-            existing = connection.execute(select(_chunks).where(_chunks.c.project_id == request.project_id, _chunks.c.source_type == request.source_type, _chunks.c.source_id == request.source_id, _chunks.c.locator == request.locator, _chunks.c.freshness == "active").order_by(_chunks.c.indexed_at.desc()).limit(1)).mappings().first()
+            existing = connection.execute(select(_chunks).where(_chunks.c.project_id == request.project_id, _chunks.c.source_type == request.source_type, _chunks.c.source_id_hash == _source_id_hash(request.source_id), _chunks.c.source_id == request.source_id, _chunks.c.locator == request.locator, _chunks.c.freshness == "active").order_by(_chunks.c.indexed_at.desc()).limit(1)).mappings().first()
             if existing and existing["content_hash"] == content_hash and existing["embedding_provider"] == capability.provider and existing["embedding_model"] == capability.model and existing["embedding_revision"] == capability.revision:
                 return self._record(existing)
             chunk_id = f"ragchunk_{uuid.uuid4().hex}"
             if existing:
                 connection.execute(update(_chunks).where(_chunks.c.chunk_id == existing["chunk_id"]).values(freshness="superseded", superseded_by=chunk_id))
             safety = {"retrieved_content_is_data": True, "prompt_injection_detected": bool(_INJECTION.search(normalized)), "raw_dataset_rows_indexed": False}
-            connection.execute(insert(_chunks).values(chunk_id=chunk_id, project_id=request.project_id, knowledge_class=request.knowledge_class.value, source_type=request.source_type, source_id=request.source_id, source_version=request.source_version, locator=request.locator, content_hash=content_hash, normalized_text=normalized, embedding_provider=capability.provider, embedding_model=capability.model, embedding_revision=capability.revision, embedding_dimension=str(len(vector)) if vector else None, embedding=json.dumps(vector) if vector else None, indexed_at=now, freshness="active", confidence=request.confidence, prompt_injection_flag=safety["prompt_injection_detected"], safety_metadata=json.dumps(safety, sort_keys=True), superseded_by=None))
+            connection.execute(insert(_chunks).values(chunk_id=chunk_id, project_id=request.project_id, knowledge_class=request.knowledge_class.value, source_type=request.source_type, source_id=request.source_id, source_id_hash=_source_id_hash(request.source_id), source_version=request.source_version, locator=request.locator, content_hash=content_hash, normalized_text=normalized, embedding_provider=capability.provider, embedding_model=capability.model, embedding_revision=capability.revision, embedding_dimension=str(len(vector)) if vector else None, embedding=json.dumps(vector) if vector else None, indexed_at=now, freshness="active", confidence=request.confidence, prompt_injection_flag=safety["prompt_injection_detected"], safety_metadata=json.dumps(safety, sort_keys=True), superseded_by=None))
             row = connection.execute(select(_chunks).where(_chunks.c.chunk_id == chunk_id)).mappings().one()
         return self._record(row)
 
@@ -232,7 +267,7 @@ class DurableAtlasRetrievalStore:
 
     def delete_source(self, project_id: str, source_type: str, source_id: str) -> int:
         with self.engine.begin() as connection:
-            result = connection.execute(update(_chunks).where(_chunks.c.project_id == project_id, _chunks.c.source_type == source_type, _chunks.c.source_id == source_id, _chunks.c.freshness == "active").values(freshness="deleted"))
+            result = connection.execute(update(_chunks).where(_chunks.c.project_id == project_id, _chunks.c.source_type == source_type, _chunks.c.source_id_hash == _source_id_hash(source_id), _chunks.c.source_id == source_id, _chunks.c.freshness == "active").values(freshness="deleted"))
         return int(result.rowcount or 0)
 
     def reembed_active(self) -> int:
