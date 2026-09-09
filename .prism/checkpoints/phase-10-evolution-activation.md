@@ -7,6 +7,18 @@ Date: 2026-09-04
 `PHASE_11_UNLOCKED = NO`
 `CONTINUATION_SAFE = YES`
 
+## Superseding cloud-session continuation (2026-09-10)
+
+A follow-on session had no access to the physical Windows/GTX 1650 machine,
+no local Ollama, and no Soup/GPU runtime — recorded so nothing below is
+mistaken for a new physical run. It recovered a clean tree at `ec80a7b` (PR
+#15 green), delivered a cited Model Scout shortlist (see
+`PHASE10_IMPLEMENTATION_LEDGER.md`), audited the Arena/promotion/live-bench
+trust boundary (no forged claims found), and added an append-only Feedback
+Foundation (`atlas_feedback.py`, 7 new tests, full quality gates green).
+Corpus V2, a real Arena run, a new training experiment, and AtlasBench V2 all
+remain not started.
+
 ## Superseding physical execution record (2026-09-10)
 
 The physical activation has run successfully as an experiment, with a valid

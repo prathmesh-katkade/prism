@@ -248,6 +248,30 @@ export interface AtlasEvidenceReference {
   source_fingerprint?: string;
 }
 
+export interface AtlasFeedbackEvent {
+  feedback_id: string;
+  run_id: string;
+  project_id?: string;
+  kind: AtlasFeedbackKind;
+  answer: string;
+  evidence?: AtlasEvidenceReference[];
+  correction?: string;
+  note?: string;
+  created_at: string;
+}
+
+export type AtlasFeedbackKind = "helpful" | "not_helpful" | "accepted" | "rejected" | "corrected";
+
+export interface AtlasFeedbackWriteRequest {
+  run_id: string;
+  project_id?: string;
+  kind: AtlasFeedbackKind;
+  answer: string;
+  evidence?: AtlasEvidenceReference[];
+  correction?: string;
+  note?: string;
+}
+
 export type AtlasForecastAction = "explain_method" | "explain_trend" | "explain_seasonality" | "explain_changepoints" | "explain_intervals";
 
 export interface AtlasForecastRequest {

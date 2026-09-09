@@ -2054,3 +2054,75 @@ class AtlasCandidateVerification(ContractModel):
     verification_failure_reason: Optional[str] = Field(default=None, max_length=1_000)
     created_at: datetime
     verified_at: Optional[datetime] = None
+
+
+class AtlasFeedbackKind(str, Enum):
+    """The only feedback shapes Atlas records.
+
+    ``helpful``/``not_helpful``/``accepted``/``rejected`` are binary signal --
+    the future KTO training substrate. ``corrected`` carries a human-supplied
+    replacement answer -- the future DPO substrate. Nothing else is a valid
+    feedback kind; an unrecognized string is rejected, not coerced.
+    """
+
+    HELPFUL = "helpful"
+    NOT_HELPFUL = "not_helpful"
+    ACCEPTED = "accepted"
+    REJECTED = "rejected"
+    CORRECTED = "corrected"
+
+
+class AtlasFeedbackEvent(ContractModel):
+    """One durable, append-only human feedback signal on one Atlas answer.
+
+    A feedback event is bound to the exact answer, its evidence, the run
+    that produced it, and (when applicable) a project -- so a later training
+    pipeline can trace every signal back to its original context rather than
+    trusting a bare rating. A changed mind is a new event, never an edit or
+    deletion of a prior one, matching promotion/verification history
+    elsewhere in Foundry. This is a recorded human judgment, not training
+    data on its own: AtlasBench tasks/choices/rationales must never appear
+    here as ``answer`` or ``correction``.
+    """
+
+    feedback_id: str = Field(min_length=1, max_length=140)
+    run_id: str = Field(min_length=1, max_length=140)
+    project_id: Optional[str] = Field(default=None, max_length=200)
+    kind: AtlasFeedbackKind
+    answer: str = Field(min_length=1, max_length=20_000)
+    evidence: list[AtlasEvidenceReference] = Field(default_factory=list, max_length=200)
+    correction: Optional[str] = Field(default=None, max_length=20_000)
+    note: Optional[str] = Field(default=None, max_length=2_000)
+    created_at: datetime
+
+    @model_validator(mode="after")
+    def _correction_matches_kind(self) -> "AtlasFeedbackEvent":
+        if self.kind is AtlasFeedbackKind.CORRECTED and not (self.correction and self.correction.strip()):
+            raise ValueError("kind=corrected requires a non-empty correction.")
+        if self.kind is not AtlasFeedbackKind.CORRECTED and self.correction is not None:
+            raise ValueError(f"correction is only valid when kind=corrected, not kind={self.kind.value!r}.")
+        return self
+
+
+class AtlasFeedbackWriteRequest(ContractModel):
+    """Client-supplied fields for recording one feedback event.
+
+    ``feedback_id`` and ``created_at`` are server-owned -- a client cannot
+    forge either, matching every other append-only Atlas record.
+    """
+
+    run_id: str = Field(min_length=1, max_length=140)
+    project_id: Optional[str] = Field(default=None, max_length=200)
+    kind: AtlasFeedbackKind
+    answer: str = Field(min_length=1, max_length=20_000)
+    evidence: list[AtlasEvidenceReference] = Field(default_factory=list, max_length=200)
+    correction: Optional[str] = Field(default=None, max_length=20_000)
+    note: Optional[str] = Field(default=None, max_length=2_000)
+
+    @model_validator(mode="after")
+    def _correction_matches_kind(self) -> "AtlasFeedbackWriteRequest":
+        if self.kind is AtlasFeedbackKind.CORRECTED and not (self.correction and self.correction.strip()):
+            raise ValueError("kind=corrected requires a non-empty correction.")
+        if self.kind is not AtlasFeedbackKind.CORRECTED and self.correction is not None:
+            raise ValueError(f"correction is only valid when kind=corrected, not kind={self.kind.value!r}.")
+        return self

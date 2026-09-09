@@ -206,3 +206,19 @@ See `PHASE9_HANDOFF.md` for candidate Phase 9 directions (unscoped).
 Combined SFT training and trust-bound candidate AtlasBench provenance are
 implemented, but the actual Soup/GPU experiment remains unevidenced.
 `PHASE_10_COMPLETE = NO`; `PHASE_11_UNLOCKED = NO`; `CONTINUATION_SAFE = YES`.
+
+## Phase 10 cloud-session continuation (2026-09-10)
+
+The physical Soup/GPU experiment referenced above has since run on the real
+Windows host (see `PHASE10_IMPLEMENTATION_LEDGER.md`: 72/90 production,
+12/90 rejected candidate). A later continuation session had no access to
+that physical machine, no local Ollama, and no Soup/GPU runtime, and
+contributed only what does not require it: a cited Model Scout shortlist for
+the next training/evaluation candidates, a Trust/Red Team audit of the
+Arena/promotion/live-bench trust boundary (no forged claims found), and a
+new append-only Feedback Foundation (`atlas_feedback.py`) recording
+helpful/not_helpful/accepted/rejected/corrected signal bound to
+run_id/project_id/evidence — the future KTO/DPO substrate, not training
+itself. Corpus V2, any actual Arena run, any new training experiment, and
+AtlasBench V2 remain not started.
+`PHASE_10_COMPLETE = NO`; `PHASE_11_UNLOCKED = NO`; `CONTINUATION_SAFE = YES`.

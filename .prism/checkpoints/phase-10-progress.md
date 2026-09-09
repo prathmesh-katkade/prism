@@ -6,6 +6,24 @@ Date: 2026-09-05
 `PHASE_10_IN_PROGRESS = YES`
 `PHASE_11_UNLOCKED = NO`
 
+## Superseding 2026-09-10 cloud-session continuation
+
+Ran with no access to the physical Windows/GTX 1650 machine, no local Ollama,
+no Soup/GPU runtime — recorded explicitly so this is never mistaken for a
+benchmark or training result. Recovered a clean tree at `ec80a7b`, PR #15
+green throughout. Contributed: a cited Model Scout shortlist (zero-shot-first:
+Qwen3-4B-Instruct-2507, Phi-4-mini-instruct, Granite 3.3 8B, Ministral-3-8B;
+QLoRA candidates: Granite 3.3 2B, SmolLM3 3B [blocked on upstream
+`transformers#41129`], Qwen2.5-1.5B-Instruct; excluded: Qwen2.5-3B-Instruct
+[non-commercial license], Gemma 3 4B, StableLM 2); a Trust/Red Team audit of
+the Arena/promotion/live-bench modules (no forged claims found); and a new
+**Feedback Foundation** (`atlas_feedback.py`) — append-only
+helpful/not_helpful/accepted/rejected/corrected events bound to
+run_id/project_id/evidence, `corrected` carrying the future DPO correction,
+7 new tests, full quality gates green. Corpus V2, any Arena run, any new
+training experiment, and AtlasBench V2 remain not started.
+`CONTINUATION_SAFE = YES`
+
 ## Superseding 2026-09-08 status
 
 The source-run-only Soup blocker is closed in software. The combined corpus has

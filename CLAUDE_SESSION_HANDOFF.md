@@ -9,6 +9,42 @@ infer current capability.
 
 ### Repository truth
 
+### Superseding cloud-session continuation (2026-09-10)
+
+This continuation session had **no access to the physical Windows/GTX 1650
+machine, no local Ollama daemon, and no Soup/GPU runtime** — record this
+explicitly before trusting anything below as a hardware-verified result.
+Recovery confirmed a clean tree at `ec80a7b` (Model Arena) with PR #15 green
+throughout and no lost local work. This session added:
+
+- A cited Model Scout shortlist (not a benchmark run): zero-shot-Arena-first
+  candidates Qwen3-4B-Instruct-2507, Phi-4-mini-instruct (MIT,
+  function-calling), Granite 3.3 8B, Ministral-3-8B-Instruct-2512
+  (license/build maturity unverified); QLoRA-training candidates Granite 3.3
+  2B (confirms SAFE), SmolLM3 3B (BORDERLINE — root cause identified:
+  `huggingface/transformers#41129` tokenizer mismatch), Qwen2.5-1.5B-Instruct
+  (same family as the proven 0.5B pipeline). Excluded: Qwen2.5-3B-Instruct
+  (non-commercial "qwen-research" license), Gemma 3 4B (active Transformers
+  v5.1.0 4-bit-quant-ignored regression for its architecture, plus
+  multimodal/embedding overhead), StableLM 2 (non-commercial license).
+- A Trust/Red Team audit of `atlas_model_arena.py`, `atlas_promotion.py`,
+  `atlas_bench_live.py`, and the `/promotion-decisions` route: no forged
+  claims found; clarified that the category-coverage/task-totals guard lives
+  in the route handler, not `decide_promotion()` itself.
+- **Feedback Foundation** (new): `atlas_feedback.py` — append-only
+  `AtlasFeedbackEvent`s (`helpful`/`not_helpful`/`accepted`/`rejected`/
+  `corrected`), bound to `run_id`/`project_id`/`evidence`/server
+  `created_at`; `corrected` requires a non-empty `correction` and is the
+  future DPO substrate, the four binary kinds are the future KTO substrate.
+  7 new tests; full quality gates (`ruff`, `mypy`, dependency boundaries,
+  secret scan, OpenAPI/TS freshness, `pytest tests/api tests/contracts
+  tests/migration tests/overview tests/sql_lab` — 364 passed, 4 skipped)
+  all pass from a clean checkout.
+
+Corpus V2 curation, any actual zero-shot Arena run, any new training
+experiment, and AtlasBench V2 remain not started — none of this session's
+work required or claimed physical hardware access.
+
 ### Superseding continuation state (2026-09-10)
 
 - Physical Evolution report: completed with an honest `REJECT`, not a blocked

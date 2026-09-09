@@ -6,6 +6,77 @@
 `PHASE_10_IN_PROGRESS = YES`
 `PHASE_11_UNLOCKED = NO`
 
+## Superseding 2026-09-10 — cloud-session continuation, Feedback Foundation
+
+This continuation ran in a cloud sandbox with **no access to the physical
+Windows/GTX 1650 machine, no local Ollama daemon, and no Soup/GPU runtime**.
+Recorded explicitly so a future session does not assume otherwise: nothing
+below claims a training run, a zero-shot benchmark, or a hardware profile
+that did not actually execute.
+
+Recovery confirmed a clean tree at `ec80a7b` (Model Arena) with PR #15 green
+(`mergeable_state: clean`, all 5 checks passing) and no lost local work.
+
+**Model Scout (candidate search input).** Real, cited research (not a
+benchmark run) shortlisted bases against this exact hardware:
+- Zero-shot Arena candidates first (no training risk): Qwen3-4B-Instruct-2507
+  (current production family, Apache 2.0), Phi-4-mini-instruct (MIT, supports
+  function calling), Granite 3.3 8B (Apache 2.0, inference-only on 4 GiB
+  VRAM), Ministral-3-8B-Instruct-2512 (promising; license and Ollama-build
+  maturity unverified — confirm before use).
+- QLoRA training candidates: Granite 3.3 2B (Apache 2.0, ~1.3 GiB 4-bit
+  weights, confirms the existing SAFE flag), SmolLM3 3B (still BORDERLINE;
+  root cause now identified — a tokenizer BOS/PAD/EOS mismatch tracked
+  upstream at `huggingface/transformers#41129` must be worked around before a
+  dry run), Qwen2.5-1.5B-Instruct (Apache 2.0, same tokenizer/family as the
+  already-proven 0.5B pipeline, lowest integration risk of the three).
+- Excluded: Qwen2.5-3B-Instruct (ships under the non-commercial "qwen-research"
+  license, not Apache 2.0 — fails the license constraint as a shipped base),
+  Gemma 3 4B (confirms the existing flag: multimodal + oversized embedding
+  table, and an active Transformers v5.1.0 regression silently ignores 4-bit
+  quantization for `Gemma3ForConditionalGeneration`), StableLM 2 (non-commercial
+  license).
+
+**Trust/Red Team audit.** Reviewed `atlas_model_arena.py`, `atlas_promotion.py`,
+`atlas_bench_live.py`, and the `/promotion-decisions` route handler in
+`atlas_foundry_routes.py`. No forged claims or safety gaps found. One thing
+clarified for future auditors: the "identical category coverage and task
+totals" guard this ledger already claims lives in the promotion-decision
+*route handler* (it compares `production_categories`/`candidate_categories`
+dicts and `total_tasks` before calling `decide_promotion`), not inside
+`decide_promotion()` itself — both the route guard and the arena's
+same-corpus-hash query are real and tested, just at different layers.
+
+**Feedback Foundation (new, implemented and tested).** `atlas_feedback.py`
+adds server-owned, append-only feedback: `AtlasFeedbackKind`
+(`helpful`/`not_helpful`/`accepted`/`rejected`/`corrected`), bound to
+`run_id`, optional `project_id`, `answer`, `evidence` (typed
+`AtlasEvidenceReference` list), and a server-set `created_at`. A `corrected`
+event requires a non-empty `correction`; every other kind rejects one
+(enforced by a `model_validator`, not just a route check). Credential/secret
+redaction reuses the existing Atlas safety boundary
+(`durable_atlas_store.redact_atlas_payload`). `corrected` events are the
+future DPO substrate (`answer` as rejected, `correction` as preferred); the
+four binary kinds are the future KTO substrate — `DurableAtlasFeedbackStore`
+makes both queryable by kind, but no DPO/KTO training starts here. 7 new
+tests (round-trip, append-only, correction validation both directions,
+secret rejection, per-project listing). Full quality gates pass from a clean
+checkout: `ruff`/`mypy`/dependency-boundaries/secret-scan/OpenAPI-TS-freshness
+clean, and `pytest tests/api tests/contracts tests/migration tests/overview
+tests/sql_lab` — 364 passed, 4 skipped (expected MySQL-live skips).
+
+**Explicitly not done this session** (recorded so nothing is implied
+complete): Corpus V2 curation or any synthetic-teacher data generation, any
+actual zero-shot Ollama Model Arena run against a shortlisted model, any new
+QLoRA training experiment, and AtlasBench V2. Category-level gap analysis
+against the real 71/90 → 72/90 / 12/90 runs was not possible from this
+session — those runs' per-category breakdowns exist only in the local
+SQLite history on the physical machine, which is correctly not part of this
+repository. What *was* inspected directly and is a reproducible fact, not a
+run result: the frozen `atlasbench-v1` corpus itself is 90 tasks — SQL,
+statistics, machine_learning, agentic, general at 10 each; forecasting,
+causal_safety, evidence, python_sandbox, personality at 8 each.
+
 ## Superseding 2026-09-10 physical evidence and Memory/RAG V2
 
 The canonical runner completed on the actual Windows host. Soup 0.74.0 used

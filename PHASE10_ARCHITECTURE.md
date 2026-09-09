@@ -42,6 +42,40 @@ control. SmolLM3 3B requires a model-specific Soup profile and dry-run; 4B
 training is evaluation-first and must retain at least 0.5 GiB VRAM reserve.
 No benchmark material is used as training data.
 
+## Candidate Search / Model Arena continuation (2026-09-10, cloud session)
+
+A follow-on session ran with no access to the physical Windows/GTX 1650
+machine, no local Ollama daemon, and no Soup/GPU runtime — recorded so a
+future reader does not assume a benchmark or training step ran that did not.
+It contributed real desk research and one new server-owned subsystem instead:
+
+- **Model Scout shortlist** (cited research, not a run): zero-shot-first
+  Arena candidates — Qwen3-4B-Instruct-2507, Phi-4-mini-instruct (MIT,
+  function-calling), Granite 3.3 8B (inference-only here), Ministral-3-8B
+  (license/build maturity unverified); QLoRA-worth-attempting — Granite 3.3
+  2B (confirms SAFE), SmolLM3 3B (BORDERLINE; blocked on
+  `huggingface/transformers#41129`, a tokenizer BOS/PAD/EOS mismatch),
+  Qwen2.5-1.5B-Instruct (same family as the proven 0.5B pipeline). Excluded:
+  Qwen2.5-3B-Instruct (non-commercial "qwen-research" license), Gemma 3 4B
+  (multimodal + embedding overhead, plus an active Transformers v5.1.0
+  4-bit-quant-ignored regression for its architecture), StableLM 2
+  (non-commercial license).
+- **Trust/Red Team audit**: reviewed the Arena, promotion, and live-bench
+  modules; no forged claims found. Clarified that the identical
+  category-coverage/task-totals guard lives in the `/promotion-decisions`
+  route handler, not inside `decide_promotion()` itself — both layers are
+  real and tested.
+- **Feedback Foundation** (new): `atlas_feedback.py` — append-only
+  `AtlasFeedbackEvent`s typed by `AtlasFeedbackKind`
+  (`helpful`/`not_helpful`/`accepted`/`rejected`/`corrected`), bound to
+  `run_id`/`project_id`/`evidence`/server `created_at`. `corrected` requires
+  a non-empty `correction` and is the future DPO substrate; the four binary
+  kinds are the future KTO substrate. No DPO/KTO training starts here — only
+  durable, queryable signal capture. Full quality gates pass.
+
+Corpus V2 curation, any actual Arena run, any new training experiment, and
+AtlasBench V2 remain not started.
+
 ## Product boundary
 
 Atlas is PRISM's persistent, local-first analytical orchestrator. It plans and
