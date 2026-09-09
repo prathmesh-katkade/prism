@@ -121,17 +121,13 @@ class DurableAtlasCandidateRuntimeStore:
         return record
 
     def latest(self, candidate_id: str, *, provider: str = "ollama") -> Optional[AtlasCandidateRuntimeBinding]:
-        row = (
-            self.engine.connect()
-            .execute(
+        with self.engine.connect() as connection:
+            row = connection.execute(
                 select(_bindings)
                 .where(_bindings.c.candidate_id == candidate_id, _bindings.c.provider == provider)
                 .order_by(_bindings.c.created_at.desc(), _bindings.c.binding_id.desc())
                 .limit(1)
-            )
-            .mappings()
-            .first()
-        )
+            ).mappings().first()
         return None if row is None else self._record(row)
 
 

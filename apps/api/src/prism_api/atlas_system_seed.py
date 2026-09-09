@@ -288,12 +288,8 @@ class DurableAtlasSystemSeedStore:
         return manifest
 
     def get_manifest(self, seed_version: str) -> Optional[AtlasSystemSeedManifest]:
-        row = (
-            self.engine.connect()
-            .execute(select(_manifests).where(_manifests.c.seed_version == seed_version))
-            .mappings()
-            .first()
-        )
+        with self.engine.connect() as connection:
+            row = connection.execute(select(_manifests).where(_manifests.c.seed_version == seed_version)).mappings().first()
         if row is None:
             return None
         domain_counts = [
@@ -310,7 +306,8 @@ class DurableAtlasSystemSeedStore:
 
     def list_manifests(self, *, limit: int = 50) -> list[AtlasSystemSeedManifest]:
         statement = select(_manifests.c.seed_version).order_by(_manifests.c.created_at.desc()).limit(limit)
-        versions = self.engine.connect().execute(statement).scalars().all()
+        with self.engine.connect() as connection:
+            versions = connection.execute(statement).scalars().all()
         manifests = [self.get_manifest(version) for version in versions]
         return [manifest for manifest in manifests if manifest is not None]
 
@@ -321,5 +318,6 @@ class DurableAtlasSystemSeedStore:
             .order_by(_examples_table.c.seed_example_id)
             .limit(limit)
         )
-        rows = self.engine.connect().execute(statement).scalars().all()
+        with self.engine.connect() as connection:
+            rows = connection.execute(statement).scalars().all()
         return [AtlasSystemSeedExample.model_validate(json.loads(row)) for row in rows]

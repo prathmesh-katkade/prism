@@ -188,16 +188,19 @@ class DurableAtlasCombinedSftStore:
         return manifest
 
     def get_version(self, version_id: str) -> Optional[AtlasCombinedSftDatasetVersion]:
-        row = self.engine.connect().execute(select(_versions.c.payload).where(_versions.c.version_id == version_id)).scalar_one_or_none()
+        with self.engine.connect() as connection:
+            row = connection.execute(select(_versions.c.payload).where(_versions.c.version_id == version_id)).scalar_one_or_none()
         return None if row is None else AtlasCombinedSftDatasetVersion.model_validate_json(row)
 
     def list_versions(self, limit: int = 50) -> list[AtlasCombinedSftDatasetVersion]:
-        rows = self.engine.connect().execute(select(_versions.c.payload).order_by(_versions.c.created_at.desc()).limit(limit)).scalars().all()
+        with self.engine.connect() as connection:
+            rows = connection.execute(select(_versions.c.payload).order_by(_versions.c.created_at.desc()).limit(limit)).scalars().all()
         return [AtlasCombinedSftDatasetVersion.model_validate_json(row) for row in rows]
 
     def records(self, version_id: str, split: Optional[AtlasTrainingSplit] = None, limit: int = 100_000) -> list[AtlasSftTrainingRecord]:
         stmt = select(_records.c.payload).where(_records.c.version_id == version_id)
         if split is not None:
             stmt = stmt.where(_records.c.split == split.value)
-        rows = self.engine.connect().execute(stmt.order_by(_records.c.record_id).limit(limit)).scalars().all()
+        with self.engine.connect() as connection:
+            rows = connection.execute(stmt.order_by(_records.c.record_id).limit(limit)).scalars().all()
         return [AtlasSftTrainingRecord.model_validate_json(row) for row in rows]

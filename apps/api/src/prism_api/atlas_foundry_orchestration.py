@@ -135,11 +135,8 @@ class DurableAtlasFoundryJobStore:
         return recipe
 
     def get_recipe(self, recipe_id: str) -> Optional[AtlasTrainingRecipe]:
-        row = (
-            self.engine.connect()
-            .execute(select(_recipes.c.payload).where(_recipes.c.recipe_id == recipe_id))
-            .scalar_one_or_none()
-        )
+        with self.engine.connect() as connection:
+            row = connection.execute(select(_recipes.c.payload).where(_recipes.c.recipe_id == recipe_id)).scalar_one_or_none()
         return None if row is None else AtlasTrainingRecipe.model_validate(json.loads(row))
 
     def save(
@@ -199,16 +196,13 @@ class DurableAtlasFoundryJobStore:
         )
 
     def get(self, job_id: str) -> Optional[AtlasTrainingJob]:
-        row = self.engine.connect().execute(select(_jobs).where(_jobs.c.job_id == job_id)).mappings().first()
+        with self.engine.connect() as connection:
+            row = connection.execute(select(_jobs).where(_jobs.c.job_id == job_id)).mappings().first()
         return None if row is None else self._record(row)
 
     def pending_start(self, job_id: str) -> tuple[Optional[AtlasTrainingRecipe], Optional[Path]]:
-        row = (
-            self.engine.connect()
-            .execute(select(_jobs.c.pending_recipe_payload, _jobs.c.pending_dataset_path).where(_jobs.c.job_id == job_id))
-            .mappings()
-            .first()
-        )
+        with self.engine.connect() as connection:
+            row = connection.execute(select(_jobs.c.pending_recipe_payload, _jobs.c.pending_dataset_path).where(_jobs.c.job_id == job_id)).mappings().first()
         if row is None or row["pending_recipe_payload"] is None:
             return None, None
         recipe = AtlasTrainingRecipe.model_validate(json.loads(row["pending_recipe_payload"]))
@@ -222,11 +216,15 @@ class DurableAtlasFoundryJobStore:
             .order_by(_jobs.c.created_at)
             .limit(limit)
         )
-        return [self._record(row) for row in self.engine.connect().execute(statement).mappings().all()]
+        with self.engine.connect() as connection:
+            rows = connection.execute(statement).mappings().all()
+        return [self._record(row) for row in rows]
 
     def list_by_state(self, state: AtlasTrainingJobState, *, limit: int = 200) -> list[AtlasTrainingJob]:
         statement = select(_jobs).where(_jobs.c.state == state.value).order_by(_jobs.c.created_at.desc()).limit(limit)
-        return [self._record(row) for row in self.engine.connect().execute(statement).mappings().all()]
+        with self.engine.connect() as connection:
+            rows = connection.execute(statement).mappings().all()
+        return [self._record(row) for row in rows]
 
 
 class DurableAtlasCandidateRegistry:
@@ -260,17 +258,14 @@ class DurableAtlasCandidateRegistry:
         return candidate
 
     def get(self, candidate_id: str) -> Optional[AtlasCandidateArtifact]:
-        row = (
-            self.engine.connect()
-            .execute(select(_candidates).where(_candidates.c.candidate_id == candidate_id))
-            .mappings()
-            .first()
-        )
+        with self.engine.connect() as connection:
+            row = connection.execute(select(_candidates).where(_candidates.c.candidate_id == candidate_id)).mappings().first()
         return None if row is None else AtlasCandidateArtifact.model_validate(dict(row))
 
     def list(self, *, limit: int = 100) -> list[AtlasCandidateArtifact]:
         statement = select(_candidates).order_by(_candidates.c.created_at.desc()).limit(limit)
-        rows = self.engine.connect().execute(statement).mappings().all()
+        with self.engine.connect() as connection:
+            rows = connection.execute(statement).mappings().all()
         return [AtlasCandidateArtifact.model_validate(dict(row)) for row in rows]
 
 

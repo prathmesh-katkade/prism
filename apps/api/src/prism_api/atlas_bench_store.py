@@ -151,7 +151,8 @@ class DurableAtlasBenchStore:
         return suite_run
 
     def get_run(self, run_id: str) -> Optional[AtlasBenchSuiteRun]:
-        row = self.engine.connect().execute(select(_runs).where(_runs.c.run_id == run_id)).mappings().first()
+        with self.engine.connect() as connection:
+            row = connection.execute(select(_runs).where(_runs.c.run_id == run_id)).mappings().first()
         return None if row is None else self._run_record(row)
 
     @staticmethod
@@ -186,11 +187,14 @@ class DurableAtlasBenchStore:
             .order_by(_runs.c.completed_at.desc())
             .limit(limit)
         )
-        return [self._run_record(row) for row in self.engine.connect().execute(statement).mappings().all()]
+        with self.engine.connect() as connection:
+            rows = connection.execute(statement).mappings().all()
+        return [self._run_record(row) for row in rows]
 
     def task_results(self, run_id: str, *, limit: int = 500) -> list[AtlasBenchTaskResult]:
         statement = select(_task_results).where(_task_results.c.run_id == run_id).order_by(_task_results.c.task_id).limit(limit)
-        rows = self.engine.connect().execute(statement).mappings().all()
+        with self.engine.connect() as connection:
+            rows = connection.execute(statement).mappings().all()
         return [
             AtlasBenchTaskResult(
                 task_id=row["task_id"],

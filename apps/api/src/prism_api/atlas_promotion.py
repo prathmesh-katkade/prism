@@ -261,14 +261,12 @@ class DurableAtlasPromotionStore:
         )
 
     def current_production(self) -> Optional[AtlasProductionPointer]:
-        row = (
-            self.engine.connect()
-            .execute(select(_events).order_by(_events.c.promoted_at.desc()).limit(1))
-            .mappings()
-            .first()
-        )
+        with self.engine.connect() as connection:
+            row = connection.execute(select(_events).order_by(_events.c.promoted_at.desc()).limit(1)).mappings().first()
         return None if row is None else self._record(row)
 
     def history(self, *, limit: int = 100) -> list[AtlasProductionPointer]:
         statement = select(_events).order_by(_events.c.promoted_at.desc()).limit(limit)
-        return [self._record(row) for row in self.engine.connect().execute(statement).mappings().all()]
+        with self.engine.connect() as connection:
+            rows = connection.execute(statement).mappings().all()
+        return [self._record(row) for row in rows]

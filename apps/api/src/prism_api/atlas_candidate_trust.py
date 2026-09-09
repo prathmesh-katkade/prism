@@ -285,16 +285,13 @@ class DurableAtlasCandidateVerificationStore:
         return verification
 
     def latest(self, candidate_id: str) -> Optional[AtlasCandidateVerification]:
-        row = (
-            self.engine.connect()
-            .execute(
+        with self.engine.connect() as connection:
+            row = connection.execute(
                 select(_verifications.c.payload)
                 .where(_verifications.c.candidate_id == candidate_id)
                 .order_by(_verifications.c.created_at.desc(), _verifications.c.verification_id.desc())
                 .limit(1)
-            )
-            .scalar_one_or_none()
-        )
+            ).scalar_one_or_none()
         return None if row is None else AtlasCandidateVerification.model_validate(json.loads(row))
 
     def history(self, candidate_id: str, *, limit: int = 50) -> list[AtlasCandidateVerification]:
@@ -304,7 +301,8 @@ class DurableAtlasCandidateVerificationStore:
             .order_by(_verifications.c.created_at.desc(), _verifications.c.verification_id.desc())
             .limit(limit)
         )
-        rows = self.engine.connect().execute(statement).scalars().all()
+        with self.engine.connect() as connection:
+            rows = connection.execute(statement).scalars().all()
         return [AtlasCandidateVerification.model_validate(json.loads(row)) for row in rows]
 
 
