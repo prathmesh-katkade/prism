@@ -78,6 +78,7 @@ def test_candidate_runtime_binding_is_durable_and_append_only(tmp_path) -> None:
     assert latest.runtime_model == "atlas-candidate-cafebabe"
     assert latest.runtime_model_digest == "digest-2"
     assert first.binding_id != second.binding_id
+    assert second.binding_id > first.binding_id
 
 
 def test_candidate_runtime_binding_rejects_command_shaped_model_names(tmp_path) -> None:  # type: ignore[no-untyped-def]

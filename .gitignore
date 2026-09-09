@@ -6,6 +6,7 @@ __pycache__/
 *.pyc
 *.egg-info/
 .venv/
+.venv311/
 node_modules/
 .next/
 .turbo/

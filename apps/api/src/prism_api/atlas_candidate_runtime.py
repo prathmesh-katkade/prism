@@ -12,6 +12,7 @@ from __future__ import annotations
 import hashlib
 import os
 import re
+import time
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -23,6 +24,18 @@ from sqlalchemy.engine import Engine
 from .durable_registry import history_database_url
 
 _MODEL_NAME = re.compile(r"^[A-Za-z0-9._:/-]{1,300}$")
+
+
+def _binding_id() -> str:
+    """Return a lexically time-ordered append-only identity.
+
+    SQLite can store two rapid ``DateTime`` inserts at the same resolution.
+    ``latest`` must therefore have a deterministic insertion-order tie-breaker:
+    selecting an older runtime binding would sever the candidate-to-runtime
+    provenance chain. ``time_ns`` keeps newly written records ordered even
+    when the database timestamp ties; the UUID preserves collision safety.
+    """
+    return f"runtimebind_{time.time_ns():020d}_{uuid.uuid4().hex}"
 
 _metadata = MetaData()
 _bindings = Table(
@@ -87,7 +100,7 @@ class DurableAtlasCandidateRuntimeStore:
         if runtime_model_digest is not None and len(runtime_model_digest) > 200:
             raise ValueError("runtime_model_digest exceeds 200 characters.")
         record = AtlasCandidateRuntimeBinding(
-            binding_id=f"runtimebind_{uuid.uuid4().hex}",
+            binding_id=_binding_id(),
             candidate_id=candidate_id,
             provider="ollama",
             runtime_model=runtime_model,
@@ -113,7 +126,7 @@ class DurableAtlasCandidateRuntimeStore:
             .execute(
                 select(_bindings)
                 .where(_bindings.c.candidate_id == candidate_id, _bindings.c.provider == provider)
-                .order_by(_bindings.c.created_at.desc())
+                .order_by(_bindings.c.created_at.desc(), _bindings.c.binding_id.desc())
                 .limit(1)
             )
             .mappings()

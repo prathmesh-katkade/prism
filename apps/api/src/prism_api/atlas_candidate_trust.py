@@ -23,6 +23,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -62,6 +63,17 @@ _MAX_FILES = 10_000
 _HASH_CHUNK_BYTES = 1024 * 1024
 
 
+def _verification_id() -> str:
+    """Return a lexically time-ordered append-only verification identity.
+
+    Verification state is fail-closed based on the latest record. Database
+    timestamps can tie under rapid SQLite writes, so its immutable identifier
+    carries a nanosecond ordering tie-breaker rather than letting a stale
+    VERIFIED result win nondeterministically.
+    """
+    return f"candverify_{time.time_ns():020d}_{uuid.uuid4().hex}"
+
+
 def _recipe_hash(recipe: AtlasTrainingRecipe) -> str:
     canonical = json.dumps(recipe.model_dump(mode="json"), sort_keys=True)
     return hashlib.sha256(canonical.encode()).hexdigest()
@@ -92,7 +104,7 @@ def _rejected(
     now = datetime.now(timezone.utc)
     files = adapter_files or []
     return AtlasCandidateVerification(
-        verification_id=f"candverify_{uuid.uuid4().hex}",
+        verification_id=_verification_id(),
         candidate_id=candidate.candidate_id,
         training_job_id=candidate.job_id,
         recipe_id=candidate.recipe_id,
@@ -218,7 +230,7 @@ def verify_candidate(
 
     now = datetime.now(timezone.utc)
     return AtlasCandidateVerification(
-        verification_id=f"candverify_{uuid.uuid4().hex}",
+        verification_id=_verification_id(),
         candidate_id=candidate.candidate_id,
         training_job_id=candidate.job_id,
         recipe_id=candidate.recipe_id,
@@ -278,7 +290,7 @@ class DurableAtlasCandidateVerificationStore:
             .execute(
                 select(_verifications.c.payload)
                 .where(_verifications.c.candidate_id == candidate_id)
-                .order_by(_verifications.c.created_at.desc())
+                .order_by(_verifications.c.created_at.desc(), _verifications.c.verification_id.desc())
                 .limit(1)
             )
             .scalar_one_or_none()
@@ -289,7 +301,7 @@ class DurableAtlasCandidateVerificationStore:
         statement = (
             select(_verifications.c.payload)
             .where(_verifications.c.candidate_id == candidate_id)
-            .order_by(_verifications.c.created_at.desc())
+            .order_by(_verifications.c.created_at.desc(), _verifications.c.verification_id.desc())
             .limit(limit)
         )
         rows = self.engine.connect().execute(statement).scalars().all()

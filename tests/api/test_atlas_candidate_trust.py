@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 from prism_api import atlas_foundry_routes
 from prism_api.atlas_candidate_trust import (
     AtlasCandidateVerificationState,
+    DurableAtlasCandidateVerificationStore,
     verify_candidate,
 )
 from prism_api.main import create_app
@@ -148,6 +149,29 @@ def test_verify_accepts_a_genuine_adapter_workspace(tmp_path) -> None:  # type: 
     # yields the identical fingerprint.
     again = verify_candidate(candidate, recipe)
     assert again.aggregate_candidate_fingerprint == result.aggregate_candidate_fingerprint
+
+
+def test_latest_verification_is_deterministic_when_writes_share_a_timestamp(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    recipe = _recipe("recipe_latest_1")
+    workspace = tmp_path / "latest"
+    _write_real_adapter(workspace)
+    candidate = _candidate("candidate_latest_1", recipe, workspace)
+    store = DurableAtlasCandidateVerificationStore(
+        database_url=f"sqlite:///{tmp_path / 'candidate-trust.db'}"
+    )
+    verified = store.save(verify_candidate(candidate, recipe))
+    rejected = store.save(
+        verify_candidate(candidate.model_copy(update={"base_model": "tampered-base"}), recipe)
+    )
+
+    latest = DurableAtlasCandidateVerificationStore(
+        database_url=f"sqlite:///{tmp_path / 'candidate-trust.db'}"
+    ).latest(candidate.candidate_id)
+
+    assert latest is not None
+    assert latest.verification_id == rejected.verification_id
+    assert latest.verification_state is AtlasCandidateVerificationState.REJECTED
+    assert rejected.verification_id > verified.verification_id
 
 
 def test_unverified_candidate_is_refused_promotion_evaluation_and_promotion(tmp_path) -> None:  # type: ignore[no-untyped-def]
