@@ -36,6 +36,8 @@ from prism_api_contracts import (
     AtlasProductionPointer,
     AtlasPromotionDecision,
     AtlasSftTrainingRecord,
+    AtlasSyntheticTeacherExample,
+    AtlasSyntheticTeacherManifest,
     AtlasSystemSeedExample,
     AtlasSystemSeedManifest,
     AtlasTrainingDatasetVersion,
@@ -63,6 +65,11 @@ from .atlas_combined_sft_dataset import (
     build_combined_records,
     export_alpaca_jsonl,
 )
+from .atlas_corpus_v2_synthetic import (
+    DurableAtlasSyntheticTeacherStore,
+    build_verified_synthetic_teacher_corpus,
+)
+from .atlas_corpus_v2_synthetic import build_manifest as build_synthetic_teacher_manifest
 from .atlas_foundry_backend import SoupFoundryBackend
 from .atlas_foundry_dataset import (
     AtlasTrainingDatasetBuilder,
@@ -106,6 +113,7 @@ _candidate_verification_store = DurableAtlasCandidateVerificationStore()
 _promotion_store = DurableAtlasPromotionStore()
 _promotion_decision_store = DurableAtlasPromotionDecisionStore()
 _system_seed_store = DurableAtlasSystemSeedStore()
+_synthetic_teacher_store = DurableAtlasSyntheticTeacherStore()
 _combined_sft_store = DurableAtlasCombinedSftStore()
 _backend = SoupFoundryBackend()
 
@@ -149,8 +157,26 @@ def build_combined_sft_dataset() -> AtlasCombinedSftDatasetVersion:
     seed_manifest = _system_seed_store.release(seeds, build_manifest(seeds, leakage_guard_passed=True))
     history, exclusions = AtlasTrainingDatasetBuilder(_run_store).build()
     history_manifest = _training_dataset_store.save(history, exclusions)
-    records = build_combined_records(seeds, history, history_version=history_manifest.version_id)
-    return _combined_sft_store.save(records, seed_version=seed_manifest.seed_version, seed_hash=seed_manifest.aggregate_content_hash, history_version=history_manifest.version_id, history_hash=history_manifest.content_hash)
+    synthetic_teacher = build_verified_synthetic_teacher_corpus()
+    synthetic_teacher_manifest = _synthetic_teacher_store.release(
+        synthetic_teacher,
+        build_synthetic_teacher_manifest(
+            synthetic_teacher, v1_leakage_guard_passed=True, v2_leakage_guard_passed=True, duplicate_guard_passed=True,
+            license_validation_passed=True, secret_scan_passed=True
+        ),
+    )
+    records = build_combined_records(
+        seeds, history, history_version=history_manifest.version_id, synthetic_teacher=synthetic_teacher
+    )
+    return _combined_sft_store.save(
+        records,
+        seed_version=seed_manifest.seed_version,
+        seed_hash=seed_manifest.aggregate_content_hash,
+        history_version=history_manifest.version_id,
+        history_hash=history_manifest.content_hash,
+        synthetic_teacher_version=synthetic_teacher_manifest.generation_policy_version,
+        synthetic_teacher_hash=synthetic_teacher_manifest.aggregate_content_hash,
+    )
 
 
 @router.get("/combined-sft-datasets", response_model=list[AtlasCombinedSftDatasetVersion])
@@ -187,21 +213,49 @@ def preview_system_seed_version(
     return _system_seed_store.examples(seed_version, limit=limit)
 
 
+@router.post("/synthetic-teacher/release", response_model=AtlasSyntheticTeacherManifest, status_code=status.HTTP_201_CREATED)
+def release_synthetic_teacher_corpus() -> AtlasSyntheticTeacherManifest:
+    """Build, leakage-check (against both AtlasBench V1 and V2), and durably
+    release the current synthetic-teacher version. Idempotent: releasing an
+    already-released version returns the existing immutable manifest rather
+    than creating a second copy."""
+    examples = build_verified_synthetic_teacher_corpus()  # raises on any AtlasBench V1/V2 leakage or near-duplicate
+    manifest = build_synthetic_teacher_manifest(
+        examples, v1_leakage_guard_passed=True, v2_leakage_guard_passed=True, duplicate_guard_passed=True,
+        license_validation_passed=True, secret_scan_passed=True,
+    )
+    return _synthetic_teacher_store.release(examples, manifest)
+
+
+@router.get("/synthetic-teacher", response_model=list[AtlasSyntheticTeacherManifest])
+def list_synthetic_teacher_versions(limit: int = Query(default=50, ge=1, le=200)) -> list[AtlasSyntheticTeacherManifest]:
+    return _synthetic_teacher_store.list_manifests(limit=limit)
+
+
+@router.get("/synthetic-teacher/{generation_policy_version}/preview", response_model=list[AtlasSyntheticTeacherExample])
+def preview_synthetic_teacher_version(
+    generation_policy_version: str, limit: int = Query(default=10, ge=1, le=200)
+) -> list[AtlasSyntheticTeacherExample]:
+    return _synthetic_teacher_store.examples(generation_policy_version, limit=limit)
+
+
 @router.get("/training-datasets:combined-summary", response_model=AtlasCombinedTrainingSourceSummary)
 def combined_training_source_summary() -> AtlasCombinedTrainingSourceSummary:
     """Real counts per SFT source class, kept separate rather than blended:
-    system-seed examples, verified real Atlas-run history, and real user
-    corrections (DPO pairs). Never mixed into one indistinguishable pool --
-    see ``AtlasCombinedTrainingSourceSummary``."""
+    system-seed examples, verified real Atlas-run history, real user
+    corrections (DPO pairs), and synthetic-teacher examples. Never mixed
+    into one indistinguishable pool -- see ``AtlasCombinedTrainingSourceSummary``."""
     system_seed_examples = len(build_system_seed_corpus())
     history_examples, _ = AtlasTrainingDatasetBuilder(_run_store).eligible_runs()
     correction_pairs, _ = AtlasPreferenceDatasetBuilder(_memory_store).eligible_pairs()
+    synthetic_teacher_examples = len(build_verified_synthetic_teacher_corpus())
     return AtlasCombinedTrainingSourceSummary(
         seed_version=SEED_VERSION,
         system_seed_examples=system_seed_examples,
         verified_history_examples=len(history_examples),
         user_correction_examples=len(correction_pairs),
-        total_eligible=system_seed_examples + len(history_examples) + len(correction_pairs),
+        synthetic_teacher_examples=synthetic_teacher_examples,
+        total_eligible=system_seed_examples + len(history_examples) + len(correction_pairs) + synthetic_teacher_examples,
         computed_at=datetime.now(timezone.utc),
     )
 

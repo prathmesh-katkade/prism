@@ -73,16 +73,24 @@ It contributed real desk research and one new server-owned subsystem instead:
   kinds are the future KTO substrate. No DPO/KTO training starts here — only
   durable, queryable signal capture. Full quality gates pass.
 
-Corpus V2 curation, any actual Arena run, and any new training experiment
-remain not started. **AtlasBench V2 wave 1 is started**: `atlas_bench_corpus_v2.py`
-is a genuinely separate 30-task holdout (never imported by dataset-building
-code) covering confounding, reverse causation, selection bias, every leakage
-type, imbalance, hallucinated schema, evidence freshness/provenance, prompt
+Any actual Arena run and any new training experiment remain not started --
+both need the physical machine this session cannot reach. **AtlasBench V2
+wave 1 is started**: `atlas_bench_corpus_v2.py` is a genuinely separate
+30-task holdout (never imported by dataset-building code) covering
+confounding, reverse causation, selection bias, every leakage type,
+imbalance, hallucinated schema, evidence freshness/provenance, prompt
 injection/tool hijack, Python pitfalls, uncertainty/refusal, and business
 reasoning — a real first increment toward 150+, not the finished suite, and
 not yet wired into promotion/Arena. A standing leakage-guard test checks
 every V2 prompt against v1 by token overlap and already caught one
-accidental near-duplicate before it landed.
+accidental near-duplicate before it landed. **Corpus V2 wave 1 is also
+started**: `atlas_corpus_v2_synthetic.py` adds 45 `synthetic_teacher`
+examples across 9 skill areas (SQL, statistics, causal reasoning, ML,
+forecasting, evidence, agentic safety, Python, senior-DS communication),
+generated only from skill specifications, never from AtlasBench, and gated
+by five checks (V1/V2 leakage, intra-corpus duplicates, license allowlist,
+secret scan) before joining the real combined-SFT pipeline as a distinct,
+separately-counted source class alongside `system_seed` and `atlas_run`.
 
 ## Product boundary
 

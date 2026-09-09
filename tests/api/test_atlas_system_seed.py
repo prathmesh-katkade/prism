@@ -155,6 +155,10 @@ def test_combined_training_source_summary_keeps_source_classes_separate() -> Non
     assert body["system_seed_examples"] >= 120
     assert body["verified_history_examples"] >= 0
     assert body["user_correction_examples"] >= 0
+    assert body["synthetic_teacher_examples"] >= 40
     assert body["total_eligible"] == (
-        body["system_seed_examples"] + body["verified_history_examples"] + body["user_correction_examples"]
+        body["system_seed_examples"]
+        + body["verified_history_examples"]
+        + body["user_correction_examples"]
+        + body["synthetic_teacher_examples"]
     )

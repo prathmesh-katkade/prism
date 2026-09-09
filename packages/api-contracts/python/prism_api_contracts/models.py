@@ -1793,6 +1793,7 @@ class AtlasCombinedTrainingSourceSummary(ContractModel):
     system_seed_examples: int = Field(ge=0)
     verified_history_examples: int = Field(ge=0)
     user_correction_examples: int = Field(ge=0)
+    synthetic_teacher_examples: int = Field(default=0, ge=0)
     total_eligible: int = Field(ge=0)
     computed_at: datetime
 
@@ -1802,7 +1803,7 @@ class AtlasSftTrainingRecord(ContractModel):
     ``source_run_id``: a system seed must never impersonate Atlas history."""
 
     record_id: str = Field(min_length=1, max_length=120)
-    source_kind: Literal["system_seed", "atlas_run"]
+    source_kind: Literal["system_seed", "atlas_run", "synthetic_teacher"]
     source_ref: str = Field(min_length=1, max_length=255)
     source_version: str = Field(min_length=1, max_length=120)
     project_id: Optional[str] = Field(default=None, max_length=200)
@@ -1822,8 +1823,10 @@ class AtlasCombinedSftDatasetVersion(ContractModel):
     seed_version: str = Field(min_length=1, max_length=40)
     history_dataset_version: Optional[str] = Field(default=None, max_length=120)
     history_dataset_hash: Optional[str] = Field(default=None, max_length=64)
+    synthetic_teacher_version: Optional[str] = Field(default=None, max_length=40)
     system_seed_count: int = Field(ge=0)
     atlas_history_count: int = Field(ge=0)
+    synthetic_teacher_count: int = Field(default=0, ge=0)
     total_sft_count: int = Field(ge=0)
     train_count: int = Field(ge=0)
     validation_count: int = Field(ge=0)
@@ -1831,6 +1834,87 @@ class AtlasCombinedSftDatasetVersion(ContractModel):
     aggregate_content_hash: str = Field(min_length=32, max_length=64)
     source_manifests: dict[str, str] = Field(default_factory=dict)
     created_at: datetime
+
+
+class AtlasSyntheticTeacherSkillArea(str, Enum):
+    """The skill taxonomy Corpus V2's teacher-generated wave is written
+    against. Distinct from ``AtlasSystemSeedDomain`` (the V1 seed corpus) --
+    a new, deliberately separate taxonomy for a new, deliberately separate
+    source class."""
+
+    SQL = "sql"
+    STATISTICS = "statistics"
+    CAUSAL_REASONING = "causal_reasoning"
+    MACHINE_LEARNING = "machine_learning"
+    FORECASTING = "forecasting"
+    EVIDENCE = "evidence"
+    AGENTIC_SAFETY = "agentic_safety"
+    PYTHON = "python"
+    SENIOR_DS_COMMUNICATION = "senior_ds_communication"
+
+
+class AtlasSyntheticTeacherValidationStatus(str, Enum):
+    """How an example's correctness was actually checked before release --
+    never just asserted by the teacher that generated it."""
+
+    EXECUTED = "executed"
+    """A SQL/Python snippet in the example was actually run and its stated
+    output verified against the real result."""
+    CALCULATED = "calculated"
+    """A numeric/statistical claim was independently recomputed and matches."""
+    REVIEWED = "reviewed"
+    """No executable claim to check; manually reviewed for correctness."""
+
+
+class AtlasSyntheticTeacherExample(ContractModel):
+    """One LLM-generated ("teacher") SFT example -- never presented as a
+    real Atlas run, real user interaction, or real user correction.
+    Generated strictly from ``AtlasSyntheticTeacherSkillArea`` specifications,
+    never from AtlasBench questions, choices, or rationales -- ``skill_area``
+    plus ``topic`` is the only generation input, structurally incapable of
+    encoding a specific benchmark item. ``source_kind`` is always the
+    literal ``"synthetic_teacher"``, matching the same source-class-separation
+    rule ``AtlasSystemSeedExample`` and ``AtlasTrainingExampleSource`` use."""
+
+    teacher_example_id: str = Field(min_length=1, max_length=120)
+    generation_policy_version: str = Field(min_length=1, max_length=40)
+    teacher_model: str = Field(min_length=1, max_length=200)
+    teacher_revision: str = Field(min_length=1, max_length=200)
+    skill_area: AtlasSyntheticTeacherSkillArea
+    topic: str = Field(min_length=1, max_length=120)
+    source_kind: Literal["synthetic_teacher"] = "synthetic_teacher"
+    license: str = Field(min_length=1, max_length=120)
+    instruction: str = Field(min_length=1, max_length=2_000)
+    input: str = Field(default="", max_length=2_000)
+    output: str = Field(min_length=1, max_length=4_000)
+    uncertainty: Optional[str] = Field(default=None, max_length=1_000)
+    validation_status: AtlasSyntheticTeacherValidationStatus
+    validation_note: str = Field(min_length=1, max_length=1_000)
+    content_hash: str = Field(min_length=32, max_length=64)
+    created_at: datetime
+
+
+class AtlasSyntheticTeacherSkillAreaCount(ContractModel):
+    skill_area: AtlasSyntheticTeacherSkillArea
+    example_count: int = Field(ge=0)
+
+
+class AtlasSyntheticTeacherManifest(ContractModel):
+    """Durable, immutable manifest for one released synthetic-teacher
+    corpus version -- never mutated after release, exactly like
+    ``AtlasSystemSeedManifest``: a content change is a new
+    ``generation_policy_version`` and a new manifest."""
+
+    generation_policy_version: str = Field(min_length=1, max_length=40)
+    created_at: datetime
+    example_count: int = Field(ge=0)
+    skill_area_counts: list[AtlasSyntheticTeacherSkillAreaCount] = Field(default_factory=list)
+    aggregate_content_hash: str = Field(min_length=32, max_length=64)
+    atlasbench_v1_leakage_guard_passed: bool
+    atlasbench_v2_leakage_guard_passed: bool
+    intra_corpus_duplicate_guard_passed: bool
+    license_validation_passed: bool
+    secret_scan_passed: bool
 
 
 class AtlasPreferencePairSource(str, Enum):

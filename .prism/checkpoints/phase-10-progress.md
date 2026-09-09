@@ -20,15 +20,21 @@ the Arena/promotion/live-bench modules (no forged claims found); and a new
 **Feedback Foundation** (`atlas_feedback.py`) — append-only
 helpful/not_helpful/accepted/rejected/corrected events bound to
 run_id/project_id/evidence, `corrected` carrying the future DPO correction,
-7 new tests, full quality gates green. Corpus V2, any Arena run, and any new
-training experiment remain not started. **AtlasBench V2 wave 1 started**:
-`atlas_bench_corpus_v2.py`, 30 hand-authored holdout tasks (confounding,
-reverse causation, selection bias, every leakage type, imbalance,
-hallucinated schema, evidence freshness/provenance, prompt injection,
-Python pitfalls, uncertainty/refusal, business reasoning), a standing
-leakage-guard test against v1 (already caught one near-duplicate before it
-landed), 9 new tests, quality gates green — a real first increment toward
-150+, not the finished suite.
+7 new tests, full quality gates green. Any Arena run and any new training
+experiment remain not started -- both need physical hardware. **AtlasBench
+V2 wave 1 started**: `atlas_bench_corpus_v2.py`, 30 hand-authored holdout
+tasks (confounding, reverse causation, selection bias, every leakage type,
+imbalance, hallucinated schema, evidence freshness/provenance, prompt
+injection, Python pitfalls, uncertainty/refusal, business reasoning), a
+standing leakage-guard test against v1 (already caught one near-duplicate
+before it landed), 9 new tests, quality gates green — a real first
+increment toward 150+, not the finished suite. **Corpus V2 wave 1 started**:
+`atlas_corpus_v2_synthetic.py`, 45 `synthetic_teacher` examples across all 9
+skill areas, wired into the real combined-SFT route as a distinct source
+class, five quality gates (V1/V2 leakage, intra-corpus duplicates, license
+allowlist, secret scan) that caught and forced fixes to two real bugs
+before landing, 14 new tests, quality gates green — a real first increment
+toward the 500-1,500 target, not the finished corpus.
 `CONTINUATION_SAFE = YES`
 
 ## Superseding 2026-09-08 status

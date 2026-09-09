@@ -18,9 +18,14 @@ trust boundary (no forged claims found), and added an append-only Feedback
 Foundation (`atlas_feedback.py`, 7 new tests, full quality gates green), and
 started AtlasBench V2 (`atlas_bench_corpus_v2.py`, wave 1 of 30 hand-authored
 holdout tasks with a standing leakage-guard test against v1, 9 new tests,
-full quality gates green — a real first increment, not the finished suite).
-Corpus V2 and a real Arena run/new training experiment all remain not
-started.
+full quality gates green — a real first increment, not the finished suite),
+and started Corpus V2's synthetic-teacher source (`atlas_corpus_v2_synthetic.py`,
+wave 1 of 45 examples across 9 skill areas, wired into the real combined-SFT
+route, gated by five checks that caught and forced fixes to two real bugs
+before landing, 14 new tests, full quality gates green — a real first
+increment toward 500-1,500, not the finished corpus). A real Arena run and
+any new training experiment remain not started -- both need physical
+hardware.
 
 ## Superseding physical execution record (2026-09-10)
 

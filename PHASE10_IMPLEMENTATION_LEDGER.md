@@ -77,6 +77,65 @@ inspected directly and is a reproducible fact, not a run result: the frozen
 statistics, machine_learning, agentic, general at 10 each; forecasting,
 causal_safety, evidence, python_sandbox, personality at 8 each.
 
+## Training Corpus V2, synthetic-teacher wave 1 (2026-09-10, cloud-session continuation)
+
+Same hardware boundary as every other entry in this section: no physical
+GPU/Ollama access this session, so nothing here is a training run or a
+benchmark result -- this is corpus-construction infrastructure and content.
+
+`atlas_corpus_v2_synthetic.py` + `atlas_corpus_v2_synthetic_content.py` add a
+new, clearly-labelled `synthetic_teacher` SFT source class, fully wired into
+the canonical `build_combined_sft_dataset` route alongside `system_seed` and
+`atlas_run` (never a parallel pipeline). Every example is generated directly
+against an `AtlasSyntheticTeacherSkillArea` specification (SQL, statistics,
+causal reasoning, machine learning, forecasting, evidence, agentic safety,
+Python, senior-DS communication) -- never against an AtlasBench question,
+choice, or rationale, which is structurally impossible here since skill area
+plus topic is the only generation input. Real provenance is recorded per
+example: teacher model/revision, generation-policy version, license,
+validation status (`executed` for SQL genuinely run against SQLite,
+`calculated` for statistics independently recomputed, `reviewed` for
+conceptual content), and a note describing exactly how it was checked.
+
+**Wave 1 is 45 examples, 5 per skill area** -- a real first increment
+toward the mission's 500-1,500-example target, not the finished corpus.
+Five quality gates run before release and fail closed: AtlasBench V1
+leakage (word-shingle overlap, the same technique `atlas_system_seed.py`
+already uses), AtlasBench V2 leakage (same technique against the holdout),
+intra-corpus near-duplicate detection, license-allowlist validation, and a
+secret/credential scan reusing the existing Atlas redaction boundary. These
+guards are not decorative: building this wave caught and forced fixes to
+two real issues before anything landed --
+
+- a `class-imbalance` example's rationale phrased itself almost identically
+  to this session's own AtlasBench V2 `v2_ml_003` task (an 8-word shingle
+  match), reworded to remove the overlap while keeping the lesson intact;
+- the durable store's `get_manifest` raised `OperationalError: no such
+  column` against an already-existing local database, because two new
+  manifest fields (`license_validation_passed`, `secret_scan_passed`) were
+  added to the Pydantic contract without the matching `ALTER TABLE`
+  backfill `atlas_bench_store.py` already established for exactly this
+  situation -- fixed by adding that migration.
+
+`AtlasCombinedSftDatasetVersion` and `AtlasCombinedTrainingSourceSummary`
+now report `synthetic_teacher_count`/`synthetic_teacher_examples` as a
+distinct, separately-counted source class, never blended into system-seed
+or history counts. New routes: `POST/GET /synthetic-teacher`,
+`GET /synthetic-teacher/{version}/preview`. 14 new tests (unit-level guard
+tests plus one real HTTP round trip through the actual route wiring, not
+just the library functions). Full quality gates green from a clean
+checkout: `ruff`, `mypy`, dependency boundaries, secret scan, OpenAPI/TS
+freshness, and the full backend suite -- 388 passed, 4 skipped.
+
+Real user corrections (the Feedback Foundation's `corrected` events) are
+not yet part of this corpus: the durable feedback store is genuinely empty
+in this environment (no real user has used the product yet), so that
+source class is correctly absent rather than fabricated. Hand-authored
+human examples and properly licensed public examples are also not yet
+added -- everything in this wave is honestly labelled `synthetic_teacher`
+(LLM-generated), not `system_seed` (human-authored) or a licensed-public
+source, because that is what it actually is.
+
 ## AtlasBench V2 holdout, wave 1 (2026-09-10, cloud-session continuation)
 
 `atlas_bench_corpus_v2.py` adds a genuinely separate holdout corpus (never

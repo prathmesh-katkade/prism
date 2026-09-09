@@ -16,6 +16,7 @@ from typing import Optional, Sequence
 from prism_api_contracts import (
     AtlasCombinedSftDatasetVersion,
     AtlasSftTrainingRecord,
+    AtlasSyntheticTeacherExample,
     AtlasSystemSeedExample,
     AtlasTrainingExample,
     AtlasTrainingSplit,
@@ -33,6 +34,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.engine import Engine
 
+from .atlas_corpus_v2_synthetic import check_atlasbench_v1_leakage, check_atlasbench_v2_leakage
 from .atlas_system_seed import _shingles, check_atlasbench_leakage
 from .durable_registry import history_database_url
 
@@ -61,6 +63,19 @@ def _seed_split(seed: AtlasSystemSeedExample) -> AtlasTrainingSplit:
     # Topic/domain family is the stable grouping key.  It stops variations of
     # one teaching family leaking across train/eval while retaining ~80/10/10.
     group = f"{seed.seed_version}:{seed.domain.value}:{seed.topic.lower().strip()}"
+    bucket = int(hashlib.sha256(group.encode()).hexdigest(), 16) % 100
+    if bucket < 80:
+        return AtlasTrainingSplit.TRAIN
+    if bucket < 90:
+        return AtlasTrainingSplit.VALIDATION
+    return AtlasTrainingSplit.TEST
+
+
+def _synthetic_teacher_split(example: AtlasSyntheticTeacherExample) -> AtlasTrainingSplit:
+    # Same stable-grouping-key approach as _seed_split: group by skill area
+    # and topic family so near-variants of one taught concept stay together
+    # on one side of the split, never leaking a paraphrase across TRAIN/eval.
+    group = f"{example.generation_policy_version}:{example.skill_area.value}:{example.topic.lower().strip()}"
     bucket = int(hashlib.sha256(group.encode()).hexdigest(), 16) % 100
     if bucket < 80:
         return AtlasTrainingSplit.TRAIN
@@ -116,6 +131,25 @@ def _history_record(example: AtlasTrainingExample, history_version: str) -> Atla
     )
 
 
+def _synthetic_teacher_record(example: AtlasSyntheticTeacherExample) -> AtlasSftTrainingRecord:
+    return AtlasSftTrainingRecord(
+        record_id=f"sft_{example.content_hash[:32]}", source_kind="synthetic_teacher",
+        source_ref=example.teacher_example_id, source_version=example.generation_policy_version,
+        instruction=example.instruction, input=example.input, output=example.output,
+        uncertainty=example.uncertainty, split=_synthetic_teacher_split(example), content_hash=example.content_hash,
+        provenance={
+            "generation_policy_version": example.generation_policy_version,
+            "teacher_model": example.teacher_model,
+            "teacher_revision": example.teacher_revision,
+            "skill_area": example.skill_area.value,
+            "topic": example.topic,
+            "license": example.license,
+            "validation_status": example.validation_status.value,
+        },
+        created_at=example.created_at,
+    )
+
+
 def check_cross_split_leakage(records: Sequence[AtlasSftTrainingRecord]) -> list[str]:
     """Fail closed on exact or meaningful phrase overlap across partitions."""
     findings: list[str] = []
@@ -136,13 +170,29 @@ def check_cross_split_leakage(records: Sequence[AtlasSftTrainingRecord]) -> list
 
 
 def build_combined_records(
-    seeds: Sequence[AtlasSystemSeedExample], history: Sequence[AtlasTrainingExample], *, history_version: str = "history-empty"
+    seeds: Sequence[AtlasSystemSeedExample],
+    history: Sequence[AtlasTrainingExample],
+    *,
+    history_version: str = "history-empty",
+    synthetic_teacher: Sequence[AtlasSyntheticTeacherExample] = (),
 ) -> list[AtlasSftTrainingRecord]:
     # The seed guard is retained at the precise physical training boundary.
     seed_findings = check_atlasbench_leakage(list(seeds))
     if seed_findings:
         raise AtlasCombinedSftLeakageError("AtlasBench leakage: " + "; ".join(seed_findings[:10]))
-    records = [_seed_record(seed) for seed in seeds] + [_history_record(item, history_version) for item in history]
+    # Synthetic-teacher content gets both guards here too, at the same
+    # precise boundary -- never trusting that a caller already ran them.
+    teacher_v1_findings = check_atlasbench_v1_leakage(list(synthetic_teacher))
+    if teacher_v1_findings:
+        raise AtlasCombinedSftLeakageError("AtlasBench V1 leakage: " + "; ".join(teacher_v1_findings[:10]))
+    teacher_v2_findings = check_atlasbench_v2_leakage(list(synthetic_teacher))
+    if teacher_v2_findings:
+        raise AtlasCombinedSftLeakageError("AtlasBench V2 leakage: " + "; ".join(teacher_v2_findings[:10]))
+    records = (
+        [_seed_record(seed) for seed in seeds]
+        + [_history_record(item, history_version) for item in history]
+        + [_synthetic_teacher_record(example) for example in synthetic_teacher]
+    )
     ids = [record.record_id for record in records]
     if len(ids) != len(set(ids)):
         raise AtlasCombinedSftLeakageError("Duplicate combined SFT record identity.")
@@ -174,13 +224,16 @@ class DurableAtlasCombinedSftStore:
         self.engine: Engine = create_engine(database_url or history_database_url(), future=True, pool_pre_ping=True, connect_args={"check_same_thread": False} if (database_url or history_database_url()).startswith("sqlite") else {})
         _metadata.create_all(self.engine)
 
-    def save(self, records: Sequence[AtlasSftTrainingRecord], *, seed_version: str, seed_hash: str, history_version: str | None, history_hash: str | None) -> AtlasCombinedSftDatasetVersion:
+    def save(self, records: Sequence[AtlasSftTrainingRecord], *, seed_version: str, seed_hash: str, history_version: str | None, history_hash: str | None, synthetic_teacher_version: str | None = None, synthetic_teacher_hash: str | None = None) -> AtlasCombinedSftDatasetVersion:
         aggregate = _hash([_record_identity(record) for record in sorted(records, key=lambda item: item.record_id)])
         version_id = f"combinedsft_{aggregate[:24]}"
         existing = self.get_version(version_id)
         if existing is not None:
             return existing
-        manifest = AtlasCombinedSftDatasetVersion(version_id=version_id, seed_version=seed_version, history_dataset_version=history_version, history_dataset_hash=history_hash, system_seed_count=sum(r.source_kind == "system_seed" for r in records), atlas_history_count=sum(r.source_kind == "atlas_run" for r in records), total_sft_count=len(records), train_count=sum(r.split is AtlasTrainingSplit.TRAIN for r in records), validation_count=sum(r.split is AtlasTrainingSplit.VALIDATION for r in records), test_count=sum(r.split is AtlasTrainingSplit.TEST for r in records), aggregate_content_hash=aggregate, source_manifests={"system_seed": seed_hash, "atlas_history": history_hash or ""}, created_at=datetime.now(timezone.utc))
+        source_manifests = {"system_seed": seed_hash, "atlas_history": history_hash or ""}
+        if synthetic_teacher_hash is not None:
+            source_manifests["synthetic_teacher"] = synthetic_teacher_hash
+        manifest = AtlasCombinedSftDatasetVersion(version_id=version_id, seed_version=seed_version, history_dataset_version=history_version, history_dataset_hash=history_hash, synthetic_teacher_version=synthetic_teacher_version, system_seed_count=sum(r.source_kind == "system_seed" for r in records), atlas_history_count=sum(r.source_kind == "atlas_run" for r in records), synthetic_teacher_count=sum(r.source_kind == "synthetic_teacher" for r in records), total_sft_count=len(records), train_count=sum(r.split is AtlasTrainingSplit.TRAIN for r in records), validation_count=sum(r.split is AtlasTrainingSplit.VALIDATION for r in records), test_count=sum(r.split is AtlasTrainingSplit.TEST for r in records), aggregate_content_hash=aggregate, source_manifests=source_manifests, created_at=datetime.now(timezone.utc))
         with self.engine.begin() as c:
             c.execute(insert(_versions).values(version_id=version_id, payload=manifest.model_dump_json(), created_at=manifest.created_at))
             for r in records:

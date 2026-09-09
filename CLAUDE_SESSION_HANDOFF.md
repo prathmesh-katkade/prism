@@ -41,17 +41,24 @@ throughout and no lost local work. This session added:
   tests/migration tests/overview tests/sql_lab` — 364 passed, 4 skipped)
   all pass from a clean checkout.
 
-Corpus V2 curation, any actual zero-shot Arena run, and any new training
-experiment remain not started. **AtlasBench V2 wave 1 is now started**:
-`atlas_bench_corpus_v2.py` adds 30 hand-authored holdout tasks (causal
-confounding/reverse-causation/selection-bias, every leakage type, imbalance,
-hallucinated schema, evidence freshness/provenance, prompt injection/tool
-hijack, Python pitfalls, uncertainty/refusal, business reasoning) — a real
-first increment toward 150+, not the finished suite, not yet wired into
-promotion/Arena. A new leakage-guard test checks V2 against v1 by token
-overlap and already caught one accidental near-duplicate before it landed.
-9 new tests, full quality gates green. None of this required or claimed
-physical hardware access.
+Any actual zero-shot Arena run and any new training experiment remain not
+started -- both need the physical machine this session cannot reach.
+**AtlasBench V2 wave 1 is started**: `atlas_bench_corpus_v2.py` adds 30
+hand-authored holdout tasks (causal confounding/reverse-causation/
+selection-bias, every leakage type, imbalance, hallucinated schema, evidence
+freshness/provenance, prompt injection/tool hijack, Python pitfalls,
+uncertainty/refusal, business reasoning) — a real first increment toward
+150+, not the finished suite, not yet wired into promotion/Arena. A new
+leakage-guard test checks V2 against v1 by token overlap and already caught
+one accidental near-duplicate before it landed. **Corpus V2 wave 1 is also
+started**: `atlas_corpus_v2_synthetic.py` adds 45 `synthetic_teacher`
+examples across all 9 skill areas, fully wired into the real combined-SFT
+route (not a side pipeline), gated by five checks (V1 leakage, V2 leakage,
+intra-corpus duplicates, license allowlist, secret scan) that caught and
+forced fixes to two real bugs before landing — see
+`PHASE10_IMPLEMENTATION_LEDGER.md` for both. 23 new tests total this
+increment, full quality gates green (388 passed, 4 skipped). None of this
+required or claimed physical hardware access.
 
 ### Superseding continuation state (2026-09-10)
 

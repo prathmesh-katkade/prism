@@ -191,8 +191,10 @@ export interface AtlasCombinedSftDatasetVersion {
   seed_version: string;
   history_dataset_version?: string;
   history_dataset_hash?: string;
+  synthetic_teacher_version?: string;
   system_seed_count: number;
   atlas_history_count: number;
+  synthetic_teacher_count?: number;
   total_sft_count: number;
   train_count: number;
   validation_count: number;
@@ -207,6 +209,7 @@ export interface AtlasCombinedTrainingSourceSummary {
   system_seed_examples: number;
   verified_history_examples: number;
   user_correction_examples: number;
+  synthetic_teacher_examples?: number;
   total_eligible: number;
   computed_at: string;
 }
@@ -730,7 +733,7 @@ export interface AtlasSandboxWorkerHealth {
 
 export interface AtlasSftTrainingRecord {
   record_id: string;
-  source_kind: "system_seed" | "atlas_run";
+  source_kind: "system_seed" | "atlas_run" | "synthetic_teacher";
   source_ref: string;
   source_version: string;
   project_id?: string;
@@ -803,6 +806,47 @@ export interface AtlasStructuredPlan {
   steps: AtlasPlanStep[];
   created_at: string;
 }
+
+export interface AtlasSyntheticTeacherExample {
+  teacher_example_id: string;
+  generation_policy_version: string;
+  teacher_model: string;
+  teacher_revision: string;
+  skill_area: AtlasSyntheticTeacherSkillArea;
+  topic: string;
+  source_kind?: string;
+  license: string;
+  instruction: string;
+  input?: string;
+  output: string;
+  uncertainty?: string;
+  validation_status: AtlasSyntheticTeacherValidationStatus;
+  validation_note: string;
+  content_hash: string;
+  created_at: string;
+}
+
+export interface AtlasSyntheticTeacherManifest {
+  generation_policy_version: string;
+  created_at: string;
+  example_count: number;
+  skill_area_counts?: AtlasSyntheticTeacherSkillAreaCount[];
+  aggregate_content_hash: string;
+  atlasbench_v1_leakage_guard_passed: boolean;
+  atlasbench_v2_leakage_guard_passed: boolean;
+  intra_corpus_duplicate_guard_passed: boolean;
+  license_validation_passed: boolean;
+  secret_scan_passed: boolean;
+}
+
+export type AtlasSyntheticTeacherSkillArea = "sql" | "statistics" | "causal_reasoning" | "machine_learning" | "forecasting" | "evidence" | "agentic_safety" | "python" | "senior_ds_communication";
+
+export interface AtlasSyntheticTeacherSkillAreaCount {
+  skill_area: AtlasSyntheticTeacherSkillArea;
+  example_count: number;
+}
+
+export type AtlasSyntheticTeacherValidationStatus = "executed" | "calculated" | "reviewed";
 
 export type AtlasSystemSeedDomain = "causal_safety" | "evidence" | "sql" | "statistics" | "forecasting" | "senior_ds_behavior" | "security_agentic";
 

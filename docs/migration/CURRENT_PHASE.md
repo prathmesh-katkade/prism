@@ -226,6 +226,15 @@ freshness/provenance, prompt injection, Python pitfalls, uncertainty/
 refusal, business reasoning) with a standing leakage-guard test against v1
 that already caught one accidental near-duplicate before it landed — a real
 first increment toward the mission's 150+-task target, not the finished
-suite, and not yet wired into promotion/Arena. Corpus V2 curation, any
-actual Arena run, and any new training experiment remain not started.
+suite, and not yet wired into promotion/Arena. It also started **Corpus
+V2's synthetic-teacher source**: `atlas_corpus_v2_synthetic.py` adds 45
+examples across 9 skill areas (SQL, statistics, causal reasoning, ML,
+forecasting, evidence, agentic safety, Python, senior-DS communication),
+generated only from skill specifications and never from AtlasBench, gated
+by five checks (V1/V2 leakage, intra-corpus duplicates, license allowlist,
+secret scan) before joining the real combined-SFT pipeline as a distinct,
+separately-counted source class — a real first increment toward the
+500-1,500-example target, not the finished corpus. Any actual Arena run and
+any new training experiment remain not started -- both need physical
+hardware.
 `PHASE_10_COMPLETE = NO`; `PHASE_11_UNLOCKED = NO`; `CONTINUATION_SAFE = YES`.
