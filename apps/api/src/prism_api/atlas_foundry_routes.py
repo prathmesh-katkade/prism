@@ -36,6 +36,7 @@ from prism_api_contracts import (
     AtlasPreferenceDatasetVersion,
     AtlasPreferencePair,
     AtlasProductionPointer,
+    AtlasProductionTrustStatus,
     AtlasPromotionDecision,
     AtlasSftTrainingRecord,
     AtlasSyntheticTeacherExample,
@@ -555,6 +556,62 @@ def current_production() -> Optional[AtlasProductionPointer]:
 @promotion_router.get("/history", response_model=list[AtlasProductionPointer])
 def promotion_history(limit: int = Query(default=100, ge=1, le=500)) -> list[AtlasProductionPointer]:
     return _promotion_store.history(limit=limit)
+
+
+@promotion_router.get("/current-status", response_model=AtlasProductionTrustStatus)
+def current_production_trust_status() -> AtlasProductionTrustStatus:
+    """Read-only aggregation for the GUI's model/trust panel.
+
+    Decides nothing and verifies nothing new -- it only reads back whatever
+    the promotion, trust, runtime-binding, AtlasBench, and Operational
+    Certification stores already durably recorded, so the panel can never
+    show a status this server did not already establish elsewhere.
+    """
+    production = _promotion_store.current_production()
+    if production is None:
+        return AtlasProductionTrustStatus()
+
+    candidate_id = production.candidate_id
+    candidate_kind: Optional[AtlasCandidateKind] = None
+    trust_state = None
+    if _candidate_registry.get(candidate_id) is not None:
+        candidate_kind = AtlasCandidateKind.TRAINED_ADAPTER
+        verification = _candidate_verification_store.latest(candidate_id)
+        trust_state = verification.verification_state if verification else None
+    elif _base_model_registry.get(candidate_id) is not None:
+        candidate_kind = AtlasCandidateKind.VERIFIED_BASE_MODEL
+        base_verification = _base_model_verification_store.latest(candidate_id)
+        trust_state = base_verification.verification_state if base_verification else None
+
+    binding = _candidate_runtime_store.latest(candidate_id)
+
+    latest_v1_run_id = latest_v1_total_passed = latest_v1_total_tasks = None
+    for run in _bench_store.list_runs_for_corpus(CORPUS_VERSION, corpus_hash()):
+        if run.candidate_id == candidate_id and run.subject_kind in {"production", "candidate"}:
+            latest_v1_run_id, latest_v1_total_passed, latest_v1_total_tasks = (
+                run.run_id, run.total_passed, run.total_tasks,
+            )
+            break  # already ordered newest-first
+
+    from .atlas_operational_cert import DurableAtlasOperationalCertStore
+
+    opcert_runs = DurableAtlasOperationalCertStore().list_for_candidate(candidate_id, limit=1)
+    opcert = opcert_runs[0] if opcert_runs else None
+
+    return AtlasProductionTrustStatus(
+        production=production,
+        candidate_kind=candidate_kind,
+        runtime_model=binding.runtime_model if binding else None,
+        runtime_model_digest=binding.runtime_model_digest if binding else None,
+        trust_verification_state=trust_state,
+        latest_v1_run_id=latest_v1_run_id,
+        latest_v1_total_passed=latest_v1_total_passed,
+        latest_v1_total_tasks=latest_v1_total_tasks,
+        latest_operational_cert_run_id=opcert.run_id if opcert else None,
+        latest_operational_cert_total_passed=opcert.total_passed if opcert else None,
+        latest_operational_cert_total_scenarios=opcert.total_scenarios if opcert else None,
+        latest_operational_cert_critical_failures=opcert.critical_failure_count if opcert else None,
+    )
 
 
 @promotion_router.post("/decisions", response_model=AtlasPromotionDecision, status_code=status.HTTP_201_CREATED)

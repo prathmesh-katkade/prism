@@ -2434,3 +2434,27 @@ class AtlasOperationalSuiteRun(ContractModel):
     critical_failure_count: int = Field(ge=0)
     started_at: datetime
     completed_at: datetime
+
+
+class AtlasProductionTrustStatus(ContractModel):
+    """A read-only aggregation of what is already true in production, for
+    display (the GUI's model/trust panel). This computes/decides nothing --
+    it is a convenience view over the promotion pointer, trust, runtime
+    binding, AtlasBench, and Operational Certification records that already
+    exist. A ``candidate_kind`` of ``None`` means production is a legacy/
+    bootstrap pointer that predates the trust registries -- never guessed or
+    fabricated as one kind or the other.
+    """
+
+    production: Optional[AtlasProductionPointer] = None
+    candidate_kind: Optional[AtlasCandidateKind] = None
+    runtime_model: Optional[str] = Field(default=None, max_length=300)
+    runtime_model_digest: Optional[str] = Field(default=None, max_length=200)
+    trust_verification_state: Optional[AtlasCandidateVerificationState] = None
+    latest_v1_run_id: Optional[str] = Field(default=None, max_length=120)
+    latest_v1_total_passed: Optional[int] = Field(default=None, ge=0)
+    latest_v1_total_tasks: Optional[int] = Field(default=None, ge=0)
+    latest_operational_cert_run_id: Optional[str] = Field(default=None, max_length=120)
+    latest_operational_cert_total_passed: Optional[int] = Field(default=None, ge=0)
+    latest_operational_cert_total_scenarios: Optional[int] = Field(default=None, ge=0)
+    latest_operational_cert_critical_failures: Optional[int] = Field(default=None, ge=0)

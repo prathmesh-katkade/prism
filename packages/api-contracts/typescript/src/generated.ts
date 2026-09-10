@@ -172,6 +172,8 @@ export interface AtlasCandidateArtifactFile {
   file_type: string;
 }
 
+export type AtlasCandidateKind = "trained_adapter" | "verified_base_model";
+
 export interface AtlasCandidateVerification {
   verification_id: string;
   candidate_id: string;
@@ -565,6 +567,21 @@ export interface AtlasProductionPointer {
   is_rollback?: boolean;
   reason: string;
   promoted_at: string;
+}
+
+export interface AtlasProductionTrustStatus {
+  production?: AtlasProductionPointer;
+  candidate_kind?: AtlasCandidateKind;
+  runtime_model?: string;
+  runtime_model_digest?: string;
+  trust_verification_state?: AtlasCandidateVerificationState;
+  latest_v1_run_id?: string;
+  latest_v1_total_passed?: number;
+  latest_v1_total_tasks?: number;
+  latest_operational_cert_run_id?: string;
+  latest_operational_cert_total_passed?: number;
+  latest_operational_cert_total_scenarios?: number;
+  latest_operational_cert_critical_failures?: number;
 }
 
 export interface AtlasPromotionDecision {
