@@ -92,7 +92,9 @@ Each is a *new* promotion-eligible run through the candidate path -- not a
 relabeling of the existing Arena evidence. Set
 `PRISM_ATLAS_BENCH_OLLAMA_CONTEXT_TOKENS=4096` in the server's environment
 first so this run's `evaluation_policy_id` matches the production run's.
-The V2 holdout is now 80 tasks (waves 1-3); still short of the ~150 target.
+The V2 holdout is now 80 tasks (waves 1-3) -- inside the deadline-sprint
+80-100 task target for a serious independent holdout; the original ~150+
+stretch goal is deferred as a future-wave improvement, not a blocker.
 
 ## 6. Run a fresh production AtlasBench pass under the same policy and corpus
 
@@ -116,22 +118,7 @@ This will fail closed with a clear 409 if the corpus, category coverage, or
 evaluation-policy identity do not match exactly between the two runs -- that
 is the new gate working as designed, not a bug to route around.
 
-## 8. Only if verdict is `promote_eligible`: promote, smoke-test, then decide on rollback
-
-```powershell
-curl -X POST "http://127.0.0.1:8000/api/v1/atlas/promotion/promote?decision_id=<decision_id>&reason=<reason>"
-# verify: GET /api/v1/atlas/promotion/current, and `ollama ps` / a direct
-# generate call against the new runtime model
-curl -X POST "http://127.0.0.1:8000/api/v1/atlas/promotion/rollback?reason=<reason>"
-# verify: GET /api/v1/atlas/promotion/current is back to the prior candidate_id
-```
-
-Never skip the rollback drill before a final, intentional promotion --
-proving the rollback path actually restores the exact prior digest is the
-whole point of doing this on a real daemon rather than trusting the code by
-inspection alone.
-
-## 9. Run the Operational Certification Suite (wave 1, reference subjects only)
+## 8. Run the Operational Certification Suite (reference subjects only)
 
 ```powershell
 curl -X POST "http://127.0.0.1:8000/api/v1/atlas/operational-cert/reference-runs?kind=perfect"
@@ -144,18 +131,59 @@ This exists to prove the harness's own scoring logic is correct (mirroring
 Certification subject yet; wiring one that drives real SQL/Python/RAG tool
 execution against Qwen 2507 is separate, substantial future work (it needs
 the physical tool-orchestration stack: `ai_analyst.py`, `atlas_research.py`,
-`sql_lab.py`). Until that exists, the suite is real and tested but not part
-of any promotion decision for this candidate.
+`sql_lab.py`). Until that exists, the suite (23 scenarios as of this update)
+is real and tested but not part of any promotion decision for this candidate.
+
+## 9. Only if verdict is `promote_eligible`: the full promote / rollback / final-promote drill
+
+Record the exact current production identity first (do not trust the
+historical digest below without re-reading it live):
+
+```powershell
+curl http://127.0.0.1:8000/api/v1/atlas/promotion/current
+ollama list  # cross-check the live digest for qwen3:4b-q4_K_M matches
+```
+
+Then, in order, never skipping a step:
+
+```powershell
+# 1. Promote
+curl -X POST "http://127.0.0.1:8000/api/v1/atlas/promotion/promote?decision_id=<decision_id>&reason=<reason>"
+curl http://127.0.0.1:8000/api/v1/atlas/promotion/current   # verify pointer now names the Qwen candidate_id
+ollama list                                                  # verify the live digest matches the candidate's
+
+# 2. Smoke-test the new production model directly (a real generate call)
+curl -X POST http://127.0.0.1:11434/api/generate -d '{"model": "qwen3:4b-instruct-2507-q4_K_M", "prompt": "2+2=", "stream": false}'
+
+# 3. Mandatory rollback -- prove the rollback path actually works before trusting this promotion
+curl -X POST "http://127.0.0.1:8000/api/v1/atlas/promotion/rollback?reason=<reason>"
+curl http://127.0.0.1:8000/api/v1/atlas/promotion/current   # verify pointer is back to the prior candidate_id
+ollama list                                                  # verify the live digest is back to the historical one
+
+# 4. Final promotion -- only after the rollback above is verified exact
+curl -X POST "http://127.0.0.1:8000/api/v1/atlas/promotion/promote?decision_id=<decision_id>&reason=<final promotion after verified rollback drill>"
+curl http://127.0.0.1:8000/api/v1/atlas/promotion/current   # verify final production identity
+```
+
+Never delete the old production model (`qwen3:4b-q4_K_M`) -- keep it
+available as the rollback target. Do not skip step 3: proving the rollback
+path actually restores the exact prior digest is the whole point of doing
+this on a real daemon rather than trusting the code by inspection alone.
 
 ## What this runbook does not cover
 
-- The Operational Certification Suite has a real, tested harness (15
-  scenarios, wave 1 of the mission's 25-40 target) as of this update, but
-  no live-provider subject -- see step 9. Running it against the actual
+- The Operational Certification Suite has a real, tested harness (23
+  scenarios, within the deadline-sprint 20-25 target) as of this update, but
+  no live-provider subject -- see step 8. Running it against the actual
   candidate is still future work, not something this runbook can complete.
 - AtlasBench V2 is now selectable through the same candidate/production
-  routes (step 5/6) and has grown to 80 tasks (waves 1-3); it has still
-  never been run against any live model, and 80 is still short of the
-  ~150-task target.
+  routes (step 5/6) and has grown to 80 tasks (waves 1-3) -- within the
+  deadline-sprint 80-100 task target for a serious independent holdout. It
+  has still never been run against any live model. The original ~150+
+  stretch goal remains a future-wave improvement, not a blocker.
 - Fine-tuning Qwen3-4B-Instruct-2507 remains explicitly out of scope unless
   a genuine capability gap is found later; nothing here trains anything.
+- **ATLAS First Light GUI work has not started.** Per the mission's own
+  sequencing, GUI work begins only once Qwen is safely in production --
+  i.e. after this entire runbook (steps 1-9) has actually been run and the
+  final promotion verified. Do not start GUI work before that.

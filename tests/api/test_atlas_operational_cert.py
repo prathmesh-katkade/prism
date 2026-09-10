@@ -14,7 +14,7 @@ from prism_api_contracts import AtlasOperationalCriticalFailureKind, AtlasOperat
 
 def test_suite_has_a_real_batch_of_scenarios_covering_every_declared_id() -> None:
     scenarios = all_scenarios()
-    assert len(scenarios) >= 15, "Operational Certification wave 1 should be a real batch, not a handful of placeholders"
+    assert len(scenarios) >= 20, "Operational Certification wave 1+2 should meet the deadline-sprint 20-25 scenario target"
     ids = [scenario.scenario_id for scenario in scenarios]
     assert len(set(ids)) == len(ids), "every scenario_id must be unique"
     assert set(ids) == set(AtlasOperationalScenarioId), "every declared scenario id must have a real scenario"
@@ -76,6 +76,30 @@ def test_prompt_injection_obedience_is_critical() -> None:
     result = next(item for item in run.scenario_results if item.scenario_id is AtlasOperationalScenarioId.PROMPT_INJECTION_IN_DATASET)
     assert result.passed is False
     assert result.critical_failure is AtlasOperationalCriticalFailureKind.PROMPT_INJECTION_OBEDIENCE
+
+
+def test_rag_prompt_injection_obedience_is_critical() -> None:
+    subject = UnsafeOperationalSubject()
+    run = run_operational_suite(subject)
+    result = next(item for item in run.scenario_results if item.scenario_id is AtlasOperationalScenarioId.RAG_PROMPT_INJECTION)
+    assert result.passed is False
+    assert result.critical_failure is AtlasOperationalCriticalFailureKind.PROMPT_INJECTION_OBEDIENCE
+
+
+def test_python_sandbox_task_fabrication_is_critical_without_a_real_tool_call() -> None:
+    subject = UnsafeOperationalSubject()
+    run = run_operational_suite(subject)
+    result = next(item for item in run.scenario_results if item.scenario_id is AtlasOperationalScenarioId.PYTHON_SANDBOX_ANALYSIS_TASK)
+    assert result.passed is False
+    assert result.critical_failure is AtlasOperationalCriticalFailureKind.FABRICATED_TOOL_COMPLETION
+
+
+def test_evidence_freshness_blending_is_critical() -> None:
+    subject = UnsafeOperationalSubject()
+    run = run_operational_suite(subject)
+    result = next(item for item in run.scenario_results if item.scenario_id is AtlasOperationalScenarioId.EVIDENCE_FRESHNESS_CONFLICT)
+    assert result.passed is False
+    assert result.critical_failure is AtlasOperationalCriticalFailureKind.INVENTED_EVIDENCE
 
 
 def test_no_scenario_exposes_hidden_reasoning_in_its_result() -> None:

@@ -2325,10 +2325,11 @@ class AtlasFeedbackWriteRequest(ContractModel):
 
 
 class AtlasOperationalScenarioId(str, Enum):
-    """Wave 1 of the Operational Certification Suite -- a real subset of the
-    mission's 25-40-scenario target, not the finished suite. Multiple-choice
-    AtlasBench proves reasoning; these scenarios probe observable tool-use
-    and safety behavior instead, which a multiple-choice item cannot."""
+    """Wave 1+2 of the Operational Certification Suite (23 scenarios) -- a
+    real subset of the mission's 25-40-scenario target, not the finished
+    suite. Multiple-choice AtlasBench proves reasoning; these scenarios
+    probe observable tool-use and safety behavior instead, which a
+    multiple-choice item cannot."""
 
     DATASET_PROFILING = "dataset_profiling"
     DATA_QUALITY_DIAGNOSIS = "data_quality_diagnosis"
@@ -2345,6 +2346,14 @@ class AtlasOperationalScenarioId(str, Enum):
     INSUFFICIENT_EVIDENCE_REFUSAL = "insufficient_evidence_refusal"
     PROMPT_INJECTION_IN_DATASET = "prompt_injection_in_dataset"
     UNAUTHORIZED_DESTRUCTIVE_ACTION_REFUSAL = "unauthorized_destructive_action_refusal"
+    PREPROCESSING_LEAKAGE_DETECTION = "preprocessing_leakage_detection"
+    TIME_SERIES_FEATURE_LEAKAGE = "time_series_feature_leakage"
+    PYTHON_SANDBOX_ANALYSIS_TASK = "python_sandbox_analysis_task"
+    EVIDENCE_FRESHNESS_CONFLICT = "evidence_freshness_conflict"
+    RAG_PROMPT_INJECTION = "rag_prompt_injection"
+    BUSINESS_RECOMMENDATION_WITH_TRADEOFF = "business_recommendation_with_tradeoff"
+    UNCERTAINTY_COMMUNICATION = "uncertainty_communication"
+    CONCISE_SENIOR_DS_EXPLANATION = "concise_senior_ds_explanation"
 
 
 class AtlasOperationalCriticalFailureKind(str, Enum):

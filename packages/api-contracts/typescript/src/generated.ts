@@ -463,7 +463,7 @@ export type AtlasModelProviderName = "deterministic" | "ollama";
 
 export type AtlasOperationalCriticalFailureKind = "invented_evidence" | "destructive_unauthorized_tool_call" | "secret_exposure" | "private_data_transmission" | "unsupported_causal_claim" | "prompt_injection_obedience" | "benchmark_manipulation" | "fabricated_tool_completion";
 
-export type AtlasOperationalScenarioId = "dataset_profiling" | "data_quality_diagnosis" | "sql_analytical_execution" | "hallucinated_schema_refusal" | "sql_join_grain_correctness" | "statistical_test_selection" | "correlation_vs_causation" | "target_leakage_detection" | "class_imbalance_metric_choice" | "forecast_chronological_split" | "python_unsafe_operation_rejection" | "evidence_provenance_grounding" | "insufficient_evidence_refusal" | "prompt_injection_in_dataset" | "unauthorized_destructive_action_refusal";
+export type AtlasOperationalScenarioId = "dataset_profiling" | "data_quality_diagnosis" | "sql_analytical_execution" | "hallucinated_schema_refusal" | "sql_join_grain_correctness" | "statistical_test_selection" | "correlation_vs_causation" | "target_leakage_detection" | "class_imbalance_metric_choice" | "forecast_chronological_split" | "python_unsafe_operation_rejection" | "evidence_provenance_grounding" | "insufficient_evidence_refusal" | "prompt_injection_in_dataset" | "unauthorized_destructive_action_refusal" | "preprocessing_leakage_detection" | "time_series_feature_leakage" | "python_sandbox_analysis_task" | "evidence_freshness_conflict" | "rag_prompt_injection" | "business_recommendation_with_tradeoff" | "uncertainty_communication" | "concise_senior_ds_explanation";
 
 export interface AtlasOperationalScenarioResult {
   scenario_id: AtlasOperationalScenarioId;

@@ -1,5 +1,23 @@
 # Phase 10 Progress Checkpoint
 
+## Superseding: deadline-sprint pass — Operational Certification wave 2 (23 scenarios) — 2026-09-10 (cloud continuation, third pass)
+
+Third cloud-safe pass on the same PHYSICAL_ACCESS = NO session (re-confirmed again: no `nvidia-smi`, no `ollama` binary, `127.0.0.1:11434` connection refused). Responding to an explicit deadline-sprint framing: get Phase 10 to the closest legitimate production-ready state, without repeating already-completed work or weakening any gate.
+
+Recovered state first: HEAD was already at `cb6a735` (V2 candidate-path selector, AtlasBench V2 wave 3 at 80 tasks, Operational Certification wave 1 at 15 scenarios) — all of Software Waves A/B and most of C from the prior pass were already done and were **not** rebuilt. The deadline brief's own target reframed the V2 corpus goal from ~150 tasks down to a "80-100 strong tasks minimum" independent holdout; 80 tasks (waves 1-3) already meets that, so no further corpus authoring was done this pass.
+
+The one genuine gap against the deadline brief was the Operational Certification Suite's scenario count (15 built vs. a 20-25 target). Extended `atlas_operational_cert.py` with 8 more scenarios (23 total, `atlas-operational-cert-wave2`): preprocessing-leakage detection, time-series feature leakage, a genuine Python-sandbox analysis task (distinct from the existing unsafe-rejection scenario), evidence-freshness-conflict handling, RAG-specific prompt injection, business recommendation under risk/variance tradeoff, uncertainty communication, and concise senior-DS explanation. Same deterministic, non-self-graded judging discipline as wave 1: structured claims and tool-call evidence checked against ground truth, never "did you do X correctly?" asked of a model. 3 new critical-failure-path tests added (RAG injection obedience, sandbox-result fabrication, evidence-blending-as-fabrication) on top of the existing ones — `PerfectOperationalSubject` passes all 23, `UnsafeOperationalSubject` still trips real critical failures across all 23.
+
+New/modified: `atlas_operational_cert.py`, `AtlasOperationalScenarioId` (8 new enum members), regenerated TypeScript contracts. Full gate green: ruff, mypy (strict, whole tree), dependency boundaries, secret scan, contracts freshness, and the full pytest suite (439 passed, 5 skipped).
+
+The physical runbook (`docs/migration/PHASE10_VERIFIED_BASE_MODEL_RUNBOOK_20260910.md`) was updated to reflect: the 23-scenario suite, the 80-task V2 holdout now framed as meeting (not falling short of) the deadline-sprint target, and an explicit, fully-sequenced promote → smoke → mandatory-rollback → verify-exact-restoration → final-promote drill (steps 1-9) that must run in full on the real machine before Qwen 2507 can honestly be called production.
+
+**Not done here** (needs the physical machine, unchanged from prior passes): registering/verifying Qwen3-4B-Instruct-2507 as a real `VERIFIED_BASE_MODEL` candidate, any fresh trusted candidate V1/V2 run, running the Operational Certification Suite against the real candidate, and the promotion/rollback drill. No candidate was registered, verified, benchmarked, or promoted from this session; production is unchanged; PR #15 remains open and unmerged.
+
+**ATLAS First Light GUI has not started.** Per the mission's own sequencing, GUI work begins only once Qwen is safely in production -- which requires the physical runbook above to actually run to completion. Starting GUI work before that would violate the stated P0-before-P1 priority order, so this pass did not touch the frontend.
+
+**PHASE_10_COMPLETE = NO; PHASE_11_UNLOCKED = NO; CONTINUATION_SAFE = YES.**
+
 ## Superseding: V2 candidate-evaluation path, blind V2 wave 3, and Operational Certification wave 1 — 2026-09-10 (cloud continuation, second pass)
 
 Continuing on the same PHYSICAL_ACCESS = NO cloud session (confirmed again this pass: `nvidia-smi`, `ollama`, and `curl 127.0.0.1:11434` all fail here) after the VERIFIED_BASE_MODEL / evaluation-policy landing above. This pass built the three cloud-safe pieces the mission's next stage asked for; it does not touch, re-verify, or re-run anything physical.
