@@ -81,6 +81,39 @@ def test_live_bench_uses_the_configured_atlas_ollama_model(monkeypatch) -> None:
     assert subject.base_url == "http://ollama.test:11434/api/generate"
 
 
+@pytest.mark.parametrize("context", [None, "4096"])
+def test_live_bench_context_policy_is_uniform_without_changing_prompt_or_score(monkeypatch, context) -> None:  # type: ignore[no-untyped-def]
+    monkeypatch.setenv("PRISM_AI_PROVIDER", "ollama")
+    if context is None:
+        monkeypatch.delenv("PRISM_ATLAS_BENCH_OLLAMA_CONTEXT_TOKENS", raising=False)
+    else:
+        monkeypatch.setenv("PRISM_ATLAS_BENCH_OLLAMA_CONTEXT_TOKENS", context)
+    monkeypatch.setattr(AtlasProviderBenchSubject, "_probe_model_digest", lambda self: "verified-digest")
+    requests = []
+
+    def generate(url, *, json, timeout):  # type: ignore[no-untyped-def]
+        requests.append(json)
+        return httpx.Response(200, json={"response": '{"choice_index": 1}'}, request=httpx.Request("POST", url))
+
+    monkeypatch.setattr("prism_api.atlas_bench_live.httpx.post", generate)
+    for model in ("production", "challenger"):
+        subject = AtlasProviderBenchSubject(AtlasModelProviderName.OLLAMA, model_override=model)
+        assert subject.answer("Independent test question", ["one", "two"]) == 1
+    expected = {"temperature": 0, "num_predict": 64}
+    if context is not None:
+        expected["num_ctx"] = 4096
+    assert requests[0]["options"] == requests[1]["options"] == expected
+    assert requests[0]["prompt"] == requests[1]["prompt"]
+
+
+@pytest.mark.parametrize("context", ["0", "-1", "broken"])
+def test_live_bench_refuses_invalid_context_policy(monkeypatch, context) -> None:  # type: ignore[no-untyped-def]
+    monkeypatch.setenv("PRISM_AI_PROVIDER", "ollama")
+    monkeypatch.setenv("PRISM_ATLAS_BENCH_OLLAMA_CONTEXT_TOKENS", context)
+    with pytest.raises(AtlasBenchSubjectUnavailable, match="positive integer"):
+        AtlasProviderBenchSubject(AtlasModelProviderName.OLLAMA)
+
+
 def test_decision_route_rejects_unknown_candidate_before_evaluation() -> None:
     client = TestClient(create_app())
     response = client.post(

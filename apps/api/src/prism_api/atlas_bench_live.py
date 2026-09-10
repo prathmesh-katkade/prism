@@ -70,6 +70,17 @@ class AtlasProviderBenchSubject:
             )
 
         self.provider = provider
+        # Explicit tournament resource policy; never inherit a model's huge
+        # default context when the operator has specified a bounded one.
+        context = os.environ.get("PRISM_ATLAS_BENCH_OLLAMA_CONTEXT_TOKENS")
+        self.context_tokens: Optional[int] = None
+        if context is not None:
+            try:
+                self.context_tokens = int(context)
+            except ValueError as error:
+                raise AtlasBenchSubjectUnavailable("AtlasBench context must be a positive integer.") from error
+            if self.context_tokens <= 0:
+                raise AtlasBenchSubjectUnavailable("AtlasBench context must be a positive integer.")
         configured_base_url = os.environ.get("PRISM_OLLAMA_BASE_URL", "http://127.0.0.1:11434")
         self.base_url = os.environ.get(
             "PRISM_ATLAS_OLLAMA_URL", f"{configured_base_url.rstrip('/')}/api/generate"
@@ -117,11 +128,14 @@ class AtlasProviderBenchSubject:
             "choices": safe_choices,
             "prompt_schema_version": "atlasbench-choice-v1",
         }
+        options = {"temperature": 0, "num_predict": 64}
+        if self.context_tokens is not None:
+            options["num_ctx"] = self.context_tokens
         payload = {
             "model": self.model,
             "stream": False,
             "format": "json",
-            "options": {"temperature": 0, "num_predict": 64},
+            "options": options,
             "prompt": json.dumps(model_prompt, separators=(",", ":")),
         }
 
