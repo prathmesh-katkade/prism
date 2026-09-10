@@ -12,8 +12,6 @@ from __future__ import annotations
 import hashlib
 import os
 import re
-import time
-import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Optional
@@ -21,6 +19,7 @@ from typing import Optional
 from sqlalchemy import Column, DateTime, MetaData, String, Table, create_engine, insert, select
 from sqlalchemy.engine import Engine
 
+from .atlas_event_identity import ordered_event_id
 from .durable_registry import history_database_url
 
 _MODEL_NAME = re.compile(r"^[A-Za-z0-9._:/-]{1,300}$")
@@ -35,7 +34,7 @@ def _binding_id() -> str:
     provenance chain. ``time_ns`` keeps newly written records ordered even
     when the database timestamp ties; the UUID preserves collision safety.
     """
-    return f"runtimebind_{time.time_ns():020d}_{uuid.uuid4().hex}"
+    return ordered_event_id("runtimebind")
 
 _metadata = MetaData()
 _bindings = Table(

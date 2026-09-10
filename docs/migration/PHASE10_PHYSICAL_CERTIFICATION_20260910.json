@@ -1,0 +1,445 @@
+{
+  "candidate": {
+    "candidate_id": "basemodel_585b7e79e9f195024a57dc9a",
+    "candidate_kind": "verified_base_model",
+    "upstream_model_id": "Qwen/Qwen3-4B-Instruct-2507",
+    "upstream_revision": "cdbee75f17c01a7cc42f958dc650907174af0554",
+    "license": "Apache-2.0",
+    "official_source": "https://huggingface.co/Qwen/Qwen3-4B-Instruct-2507",
+    "runtime_model": "qwen3:4b-instruct-2507-q4_K_M",
+    "declared_runtime_digest": "0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0",
+    "quantization": "Q4_K_M",
+    "declared_manifest_digest": null,
+    "declared_blob_digests": [],
+    "parameter_count": 4022468096,
+    "created_at": "2026-09-10T13:03:55.942013Z"
+  },
+  "verification": {
+    "verification_id": "basemodelverify_01789045436959639800_309c2afdeb0d4010969d307a25dfb373",
+    "candidate_id": "basemodel_585b7e79e9f195024a57dc9a",
+    "upstream_model_id": "Qwen/Qwen3-4B-Instruct-2507",
+    "upstream_revision": "cdbee75f17c01a7cc42f958dc650907174af0554",
+    "license": "Apache-2.0",
+    "runtime_model": "qwen3:4b-instruct-2507-q4_K_M",
+    "live_runtime_digest": "0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0",
+    "live_manifest_digest": "d6f2a22ac09fbcc8960fa1065c07b4cb05bd517b5b00daab60055dd2e5bac9ec",
+    "aggregate_candidate_fingerprint": "751a7e3691c77af1c49a5dab83624be35a0f92a02e4c2c24f04aa37b89717796",
+    "verification_state": "verified",
+    "verification_failure_reason": null,
+    "created_at": "2026-09-10T13:03:56.959639Z",
+    "verified_at": "2026-09-10T13:03:56.959639Z"
+  },
+  "binding": {
+    "binding_id": "runtimebind_01789045454554534000_8c5a131da117428db4940ba3d4b67569",
+    "candidate_id": "basemodel_585b7e79e9f195024a57dc9a",
+    "provider": "ollama",
+    "runtime_model": "qwen3:4b-instruct-2507-q4_K_M",
+    "runtime_model_digest": "0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0",
+    "created_at": "2026-09-10 13:04:14.554534"
+  },
+  "old-production": {
+    "production": {
+      "event_id": "promo_19bfa15e3fee4cd295bdb1519650f4b9",
+      "candidate_id": "production_env_24b0e61eb95e6ceb08abc50c",
+      "previous_candidate_id": null,
+      "decision_id": null,
+      "is_rollback": false,
+      "reason": "Bootstrap the verified configured Ollama production model as Atlas's rollback anchor.",
+      "promoted_at": "2026-09-08T00:55:58.700146"
+    },
+    "candidate_kind": null,
+    "runtime_model": "qwen3:4b-q4_K_M",
+    "runtime_model_digest": "2bfd38a7daaf4b1037efe517ccb73d1a3bbd4822cf89f1a82be1569050a114e0",
+    "trust_verification_state": null,
+    "latest_v1_run_id": "benchrun_b2aad4c6c5e541d7946d8004cbd481de",
+    "latest_v1_total_passed": 74,
+    "latest_v1_total_tasks": 90,
+    "latest_operational_cert_run_id": null,
+    "latest_operational_cert_total_passed": null,
+    "latest_operational_cert_total_scenarios": null,
+    "latest_operational_cert_critical_failures": null
+  },
+  "final-production": {
+    "production": {
+      "event_id": "promo_19bfa15e3fee4cd295bdb1519650f4b9",
+      "candidate_id": "production_env_24b0e61eb95e6ceb08abc50c",
+      "previous_candidate_id": null,
+      "decision_id": null,
+      "is_rollback": false,
+      "reason": "Bootstrap the verified configured Ollama production model as Atlas's rollback anchor.",
+      "promoted_at": "2026-09-08T00:55:58.700146"
+    },
+    "candidate_kind": null,
+    "runtime_model": "qwen3:4b-q4_K_M",
+    "runtime_model_digest": "2bfd38a7daaf4b1037efe517ccb73d1a3bbd4822cf89f1a82be1569050a114e0",
+    "trust_verification_state": null,
+    "latest_v1_run_id": "benchrun_7a0e6ac7c5114702bc12f1d2629fe470",
+    "latest_v1_total_passed": 74,
+    "latest_v1_total_tasks": 90,
+    "latest_operational_cert_run_id": null,
+    "latest_operational_cert_total_passed": null,
+    "latest_operational_cert_total_scenarios": null,
+    "latest_operational_cert_critical_failures": null
+  },
+  "production-atlasbench-v1": {
+    "run_id": "benchrun_7a0e6ac7c5114702bc12f1d2629fe470",
+    "subject_id": "atlas_ollama_24b0e61eb95e",
+    "corpus_version": "atlasbench-v1",
+    "corpus_hash": "f0af1e39a778755a925f70570c19a4e5754e2dcccbb57d44e8673627a7f4f10f",
+    "total_tasks": 90,
+    "total_passed": 74,
+    "category_scores": [
+      {
+        "category": "agentic",
+        "total": 10,
+        "passed": 9
+      },
+      {
+        "category": "causal_safety",
+        "total": 8,
+        "passed": 5
+      },
+      {
+        "category": "evidence",
+        "total": 8,
+        "passed": 6
+      },
+      {
+        "category": "forecasting",
+        "total": 8,
+        "passed": 7
+      },
+      {
+        "category": "general",
+        "total": 10,
+        "passed": 10
+      },
+      {
+        "category": "machine_learning",
+        "total": 10,
+        "passed": 9
+      },
+      {
+        "category": "personality",
+        "total": 8,
+        "passed": 7
+      },
+      {
+        "category": "python_sandbox",
+        "total": 8,
+        "passed": 7
+      },
+      {
+        "category": "sql",
+        "total": 10,
+        "passed": 7
+      },
+      {
+        "category": "statistics",
+        "total": 10,
+        "passed": 7
+      }
+    ],
+    "started_at": "2026-09-10T13:04:35.977927Z",
+    "completed_at": "2026-09-10T13:07:49.766076Z",
+    "subject_kind": "production",
+    "candidate_id": "production_env_24b0e61eb95e6ceb08abc50c",
+    "candidate_fingerprint": null,
+    "trust_verification_id": null,
+    "runtime_model": "qwen3:4b-q4_K_M",
+    "runtime_model_digest": "2bfd38a7daaf4b1037efe517ccb73d1a3bbd4822cf89f1a82be1569050a114e0",
+    "provider": "ollama",
+    "evaluation_policy_id": "75886a208c87534da2f2605d6ac1358d449bbe8d413f86903e8c8736cca02443"
+  },
+  "candidate-atlasbench-v1": {
+    "run_id": "benchrun_f4638ff45ac24edba56411bcbc6feadd",
+    "subject_id": "atlas_ollama_13c477b939cb",
+    "corpus_version": "atlasbench-v1",
+    "corpus_hash": "f0af1e39a778755a925f70570c19a4e5754e2dcccbb57d44e8673627a7f4f10f",
+    "total_tasks": 90,
+    "total_passed": 90,
+    "category_scores": [
+      {
+        "category": "agentic",
+        "total": 10,
+        "passed": 10
+      },
+      {
+        "category": "causal_safety",
+        "total": 8,
+        "passed": 8
+      },
+      {
+        "category": "evidence",
+        "total": 8,
+        "passed": 8
+      },
+      {
+        "category": "forecasting",
+        "total": 8,
+        "passed": 8
+      },
+      {
+        "category": "general",
+        "total": 10,
+        "passed": 10
+      },
+      {
+        "category": "machine_learning",
+        "total": 10,
+        "passed": 10
+      },
+      {
+        "category": "personality",
+        "total": 8,
+        "passed": 8
+      },
+      {
+        "category": "python_sandbox",
+        "total": 8,
+        "passed": 8
+      },
+      {
+        "category": "sql",
+        "total": 10,
+        "passed": 10
+      },
+      {
+        "category": "statistics",
+        "total": 10,
+        "passed": 10
+      }
+    ],
+    "started_at": "2026-09-10T13:07:50.663479Z",
+    "completed_at": "2026-09-10T13:10:37.218358Z",
+    "subject_kind": "candidate",
+    "candidate_id": "basemodel_585b7e79e9f195024a57dc9a",
+    "candidate_fingerprint": "751a7e3691c77af1c49a5dab83624be35a0f92a02e4c2c24f04aa37b89717796",
+    "trust_verification_id": "basemodelverify_01789045436959639800_309c2afdeb0d4010969d307a25dfb373",
+    "runtime_model": "qwen3:4b-instruct-2507-q4_K_M",
+    "runtime_model_digest": "0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0",
+    "provider": "ollama",
+    "evaluation_policy_id": "75886a208c87534da2f2605d6ac1358d449bbe8d413f86903e8c8736cca02443"
+  },
+  "production-atlasbench-v2-holdout": {
+    "run_id": "benchrun_5ee370e70b8c486fa9e24ebfee3675c4",
+    "subject_id": "atlas_ollama_24b0e61eb95e",
+    "corpus_version": "atlasbench-v2-holdout-wave3",
+    "corpus_hash": "e3cd54b5ff58b7170d08672bee1cd7984f5a1c27dfa5eccbd48cbb10118771db",
+    "total_tasks": 80,
+    "total_passed": 58,
+    "category_scores": [
+      {
+        "category": "agentic",
+        "total": 8,
+        "passed": 7
+      },
+      {
+        "category": "causal_safety",
+        "total": 8,
+        "passed": 6
+      },
+      {
+        "category": "evidence",
+        "total": 8,
+        "passed": 6
+      },
+      {
+        "category": "forecasting",
+        "total": 8,
+        "passed": 6
+      },
+      {
+        "category": "general",
+        "total": 8,
+        "passed": 6
+      },
+      {
+        "category": "machine_learning",
+        "total": 9,
+        "passed": 7
+      },
+      {
+        "category": "personality",
+        "total": 7,
+        "passed": 3
+      },
+      {
+        "category": "python_sandbox",
+        "total": 8,
+        "passed": 6
+      },
+      {
+        "category": "sql",
+        "total": 8,
+        "passed": 5
+      },
+      {
+        "category": "statistics",
+        "total": 8,
+        "passed": 6
+      }
+    ],
+    "started_at": "2026-09-10T13:10:37.767173Z",
+    "completed_at": "2026-09-10T13:13:49.928606Z",
+    "subject_kind": "production",
+    "candidate_id": "production_env_24b0e61eb95e6ceb08abc50c",
+    "candidate_fingerprint": null,
+    "trust_verification_id": null,
+    "runtime_model": "qwen3:4b-q4_K_M",
+    "runtime_model_digest": "2bfd38a7daaf4b1037efe517ccb73d1a3bbd4822cf89f1a82be1569050a114e0",
+    "provider": "ollama",
+    "evaluation_policy_id": "33209015d9217262406ddd228ba9295a5714869479b642e2e0d78c5dcc5aca52"
+  },
+  "candidate-atlasbench-v2-holdout": {
+    "run_id": "benchrun_9ca690c306574e368e04fc761b720e8b",
+    "subject_id": "atlas_ollama_13c477b939cb",
+    "corpus_version": "atlasbench-v2-holdout-wave3",
+    "corpus_hash": "e3cd54b5ff58b7170d08672bee1cd7984f5a1c27dfa5eccbd48cbb10118771db",
+    "total_tasks": 80,
+    "total_passed": 78,
+    "category_scores": [
+      {
+        "category": "agentic",
+        "total": 8,
+        "passed": 8
+      },
+      {
+        "category": "causal_safety",
+        "total": 8,
+        "passed": 8
+      },
+      {
+        "category": "evidence",
+        "total": 8,
+        "passed": 8
+      },
+      {
+        "category": "forecasting",
+        "total": 8,
+        "passed": 8
+      },
+      {
+        "category": "general",
+        "total": 8,
+        "passed": 7
+      },
+      {
+        "category": "machine_learning",
+        "total": 9,
+        "passed": 9
+      },
+      {
+        "category": "personality",
+        "total": 7,
+        "passed": 7
+      },
+      {
+        "category": "python_sandbox",
+        "total": 8,
+        "passed": 8
+      },
+      {
+        "category": "sql",
+        "total": 8,
+        "passed": 7
+      },
+      {
+        "category": "statistics",
+        "total": 8,
+        "passed": 8
+      }
+    ],
+    "started_at": "2026-09-10T13:13:50.556175Z",
+    "completed_at": "2026-09-10T13:16:33.639987Z",
+    "subject_kind": "candidate",
+    "candidate_id": "basemodel_585b7e79e9f195024a57dc9a",
+    "candidate_fingerprint": "751a7e3691c77af1c49a5dab83624be35a0f92a02e4c2c24f04aa37b89717796",
+    "trust_verification_id": "basemodelverify_01789045436959639800_309c2afdeb0d4010969d307a25dfb373",
+    "runtime_model": "qwen3:4b-instruct-2507-q4_K_M",
+    "runtime_model_digest": "0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0",
+    "provider": "ollama",
+    "evaluation_policy_id": "33209015d9217262406ddd228ba9295a5714869479b642e2e0d78c5dcc5aca52"
+  },
+  "v1-decision": {
+    "decision_id": "promodecision_aa2fd8cbc5684a91aa709bd43c064330",
+    "candidate_id": "basemodel_585b7e79e9f195024a57dc9a",
+    "production_run_id": "benchrun_7a0e6ac7c5114702bc12f1d2629fe470",
+    "candidate_run_id": "benchrun_f4638ff45ac24edba56411bcbc6feadd",
+    "verdict": "promote_eligible",
+    "overall_production_pass_rate": 0.8222222222222222,
+    "overall_candidate_pass_rate": 1.0,
+    "critical_regressions": [],
+    "decided_at": "2026-09-10T13:13:43.39673Z"
+  },
+  "v2-decision": {
+    "decision_id": "promodecision_1c642784422043628bc4ecb33745efe6",
+    "candidate_id": "basemodel_585b7e79e9f195024a57dc9a",
+    "production_run_id": "benchrun_5ee370e70b8c486fa9e24ebfee3675c4",
+    "candidate_run_id": "benchrun_9ca690c306574e368e04fc761b720e8b",
+    "verdict": "promote_eligible",
+    "overall_production_pass_rate": 0.725,
+    "overall_candidate_pass_rate": 0.975,
+    "critical_regressions": [],
+    "decided_at": "2026-09-10T13:17:16.780491Z"
+  },
+  "operational-preflight": {
+    "routes": [
+      {
+        "path": "/api/v1/atlas/operational-cert/scenarios",
+        "methods": [
+          "get"
+        ]
+      },
+      {
+        "path": "/api/v1/atlas/operational-cert/reference-runs",
+        "methods": [
+          "post"
+        ]
+      },
+      {
+        "path": "/api/v1/atlas/operational-cert/runs/{run_id}",
+        "methods": [
+          "get"
+        ]
+      },
+      {
+        "path": "/api/v1/atlas/operational-cert/candidates/{candidate_id}/runs",
+        "methods": [
+          "get"
+        ]
+      }
+    ],
+    "live_candidate_post_supported": false,
+    "suite_version": "atlas-operational-cert-wave2",
+    "suite_hash": "b5b2646896fc6f6486e82cd537c5e95b8a3e1bcb35964b09958abf674a39be69",
+    "total_scenarios": 23,
+    "status": "BLOCKED_LIVE_OPERATIONAL_SUBJECT_NOT_IMPLEMENTED",
+    "total_passed": null,
+    "critical_failure_count": null,
+    "run_id": null
+  },
+  "starting_local_head": "a325b84f6ac473489930a6095f480ae3087f05b9",
+  "evaluated_api_head": "93304868cce631be4fc874280ef4643416ea3997",
+  "physical_access": true,
+  "hardware": "NVIDIA GeForce GTX 1650, 4096 MiB VRAM; driver 560.94; Ollama 0.33.3",
+  "policy": {
+    "provider": "ollama",
+    "context_tokens": 4096,
+    "temperature": 0,
+    "num_predict": 64,
+    "timeout_seconds": 20
+  },
+  "promotion_drill": {
+    "first_promotion": "NOT_RUN_OPERATIONAL_CERTIFICATION_BLOCKED",
+    "post_promotion_smoke": "NOT_RUN_OPERATIONAL_CERTIFICATION_BLOCKED",
+    "rollback": "NOT_RUN_OPERATIONAL_CERTIFICATION_BLOCKED",
+    "exact_restoration": "NOT_RUN_OPERATIONAL_CERTIFICATION_BLOCKED",
+    "final_promotion": "NOT_RUN_OPERATIONAL_CERTIFICATION_BLOCKED",
+    "final_smoke": "NOT_RUN_OPERATIONAL_CERTIFICATION_BLOCKED"
+  },
+  "PHASE_10_COMPLETE": false,
+  "PHASE_11_UNLOCKED": false,
+  "ATLAS_FIRST_LIGHT": "Existing topbar badge only; extension held until safe production promotion",
+  "blocker": "Live operational-certification subject is not implemented; candidate suite route has GET only and no POST invoking the real orchestration/tool stack."
+}

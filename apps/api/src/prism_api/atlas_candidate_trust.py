@@ -24,8 +24,6 @@ import hashlib
 import json
 import os
 import re
-import time
-import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -50,6 +48,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.engine import Engine
 
+from .atlas_event_identity import ordered_event_id
 from .durable_registry import history_database_url
 
 # Adapter output is LoRA/QLoRA weights and their small companion metadata --
@@ -78,7 +77,7 @@ def _verification_id() -> str:
     carries a nanosecond ordering tie-breaker rather than letting a stale
     VERIFIED result win nondeterministically.
     """
-    return f"candverify_{time.time_ns():020d}_{uuid.uuid4().hex}"
+    return ordered_event_id("candverify")
 
 
 def _recipe_hash(recipe: AtlasTrainingRecipe) -> str:

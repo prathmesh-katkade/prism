@@ -388,3 +388,29 @@ has coherent evidence.
 
 `PHASE_10_COMPLETE = NO`
 `PHASE_11_UNLOCKED = NO`
+
+## Superseding physical certification checkpoint — 2026-09-10
+
+Real Windows/Ollama certification reached server-verified Qwen candidate
+`basemodel_585b7e79e9f195024a57dc9a`, fresh V1 **90/90 vs 74/90** and frozen
+80-task V2 **78/80 vs 58/80**, with identical policies/corpora and zero
+critical category regressions. Both existing server benchmark decisions
+returned `promote_eligible`.
+
+**Promotion was not executed.** The required live 23-scenario operational
+certification subject is absent: only reference execution and candidate
+history reads exist. Benchmark eligibility does not satisfy that missing
+gate. Production remains `qwen3:4b-q4_K_M` at its exact original pointer and
+digest; old model, stash and historical runtime evidence remain preserved.
+
+A reproduced Windows clock-tie trust-ordering bug and temporary SQLite test
+cleanup failures were repaired without changing trust criteria or corpora.
+Local gates: 440 backend tests passed / 6 skipped, 44 frontend tests passed,
+6 live browser tests passed, lint/typecheck/contracts/boundaries/secret scan
+and web build passed. The existing First Light topbar remains truthful;
+command-center expansion is held until safe production promotion.
+
+Full report and immutable run identities:
+`docs/migration/PHASE10_PHYSICAL_CERTIFICATION_20260910.md` and companion JSON.
+
+`PHASE_10_COMPLETE = NO`; `PHASE_11_UNLOCKED = NO`.

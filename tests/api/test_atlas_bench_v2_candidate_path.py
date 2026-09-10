@@ -4,6 +4,7 @@ import uuid
 from datetime import datetime, timezone
 
 import httpx
+import pytest
 from fastapi.testclient import TestClient
 from prism_api.atlas_base_model_trust import (
     DurableAtlasBaseModelVerificationStore,
@@ -19,6 +20,27 @@ from prism_api_contracts import (
     AtlasCandidateVerificationState,
     AtlasVerifiedBaseModelCandidate,
 )
+from sqlalchemy import create_engine
+from sqlalchemy.pool import NullPool
+
+
+@pytest.fixture(autouse=True)
+def release_temporary_database_connections(monkeypatch):  # type: ignore[no-untyped-def]
+    """Close connections before TemporaryDirectory removes SQLite files on Windows.
+
+    This fixture only changes these tests' short-lived stores; the production
+    connection pool and every corpus/trust assertion remain unchanged.
+    """
+    def temporary_engine(*args, **kwargs):  # type: ignore[no-untyped-def]
+        return create_engine(*args, **kwargs, poolclass=NullPool)
+
+    for module in (
+        "atlas_base_model_trust",
+        "atlas_candidate_runtime",
+        "atlas_candidate_trust",
+        "atlas_foundry_orchestration",
+    ):
+        monkeypatch.setattr(f"prism_api.{module}.create_engine", temporary_engine)
 
 
 def _candidate(unique: str) -> AtlasVerifiedBaseModelCandidate:

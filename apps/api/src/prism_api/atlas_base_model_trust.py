@@ -29,8 +29,6 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import time
-import uuid
 from datetime import datetime, timezone
 from typing import Any, Callable, Optional
 
@@ -55,6 +53,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.engine import Engine
 
+from .atlas_event_identity import ordered_event_id
 from .durable_registry import history_database_url
 
 # Conservative allowlist of permissive open-weight licenses this project has
@@ -75,7 +74,7 @@ def _verification_id() -> str:
     nanosecond ordering tie-breaker rather than letting ``latest`` resolve
     nondeterministically.
     """
-    return f"basemodelverify_{time.time_ns():020d}_{uuid.uuid4().hex}"
+    return ordered_event_id("basemodelverify")
 
 
 def compute_base_model_candidate_id(

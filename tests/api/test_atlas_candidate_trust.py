@@ -219,7 +219,13 @@ def test_verify_accepts_a_genuine_adapter_workspace(tmp_path) -> None:  # type: 
     assert again.aggregate_candidate_fingerprint == result.aggregate_candidate_fingerprint
 
 
-def test_latest_verification_is_deterministic_when_writes_share_a_timestamp(tmp_path) -> None:  # type: ignore[no-untyped-def]
+def test_latest_verification_is_deterministic_when_writes_share_a_timestamp(tmp_path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    # Windows can return the same time_ns value for successive calls. Freeze
+    # it so this safety regression cannot pass merely because the clock moved.
+    from prism_api import atlas_event_identity
+
+    monkeypatch.setattr(atlas_event_identity.time, "time_ns", lambda: 1_800_000_000_000_000_000)
+    monkeypatch.setattr(atlas_event_identity.uuid, "uuid4", lambda: uuid.UUID(int=0))
     recipe = _recipe("recipe_latest_1")
     workspace = tmp_path / "latest"
     _write_real_adapter(workspace)
@@ -229,7 +235,9 @@ def test_latest_verification_is_deterministic_when_writes_share_a_timestamp(tmp_
     )
     verified = store.save(verify_candidate(candidate, recipe))
     rejected = store.save(
-        verify_candidate(candidate.model_copy(update={"base_model": "tampered-base"}), recipe)
+        verify_candidate(candidate.model_copy(update={"base_model": "tampered-base"}), recipe).model_copy(
+            update={"created_at": verified.created_at}
+        )
     )
 
     latest = DurableAtlasCandidateVerificationStore(
