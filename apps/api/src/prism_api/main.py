@@ -20,6 +20,7 @@ from .atlas import router as atlas_router
 from .atlas_bench_live import router as atlas_bench_live_router
 from .atlas_feedback import router as atlas_feedback_router
 from .atlas_foundry_routes import adapter_router as atlas_adapter_router
+from .atlas_foundry_routes import base_model_router as atlas_base_model_router
 from .atlas_foundry_routes import bench_router as atlas_bench_router
 from .atlas_foundry_routes import promotion_router as atlas_promotion_router
 from .atlas_foundry_routes import router as atlas_foundry_router
@@ -77,6 +78,7 @@ def create_app() -> FastAPI:
     app.include_router(ai_analyst_router)
     app.include_router(atlas_router)
     app.include_router(atlas_foundry_router)
+    app.include_router(atlas_base_model_router)
     app.include_router(atlas_bench_router)
     app.include_router(atlas_bench_live_router)
     app.include_router(atlas_model_arena_router)

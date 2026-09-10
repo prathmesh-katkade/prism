@@ -58,6 +58,7 @@ _runs = Table(
     Column("runtime_model", String(300), nullable=True),
     Column("runtime_model_digest", String(200), nullable=True),
     Column("provider", String(32), nullable=True),
+    Column("evaluation_policy_id", String(64), nullable=True),
 )
 _task_results = Table(
     "prism_atlas_bench_task_results",
@@ -91,6 +92,7 @@ class DurableAtlasBenchStore:
                 "candidate_id": "VARCHAR(120)", "candidate_fingerprint": "VARCHAR(64)",
                 "trust_verification_id": "VARCHAR(120)", "runtime_model": "VARCHAR(300)",
                 "runtime_model_digest": "VARCHAR(200)", "provider": "VARCHAR(32)",
+                "evaluation_policy_id": "VARCHAR(64)",
             }
             for name, definition in additions.items():
                 if name not in existing:
@@ -132,6 +134,7 @@ class DurableAtlasBenchStore:
                     runtime_model=suite_run.runtime_model,
                     runtime_model_digest=suite_run.runtime_model_digest,
                     provider=suite_run.provider,
+                    evaluation_policy_id=suite_run.evaluation_policy_id,
                 )
             )
             for result in results:
@@ -178,6 +181,7 @@ class DurableAtlasBenchStore:
             runtime_model=row["runtime_model"],  # type: ignore[index]
             runtime_model_digest=row["runtime_model_digest"],  # type: ignore[index]
             provider=row["provider"],  # type: ignore[index]
+            evaluation_policy_id=row["evaluation_policy_id"],  # type: ignore[index]
         )
 
     def list_runs_for_subject(self, subject_id: str, *, limit: int = 50) -> list[AtlasBenchSuiteRun]:

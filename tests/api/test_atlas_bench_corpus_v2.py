@@ -21,7 +21,7 @@ def _normalized_tokens(text: str) -> set[str]:
 
 def test_v2_corpus_has_unique_ids_and_valid_answers() -> None:
     tasks = all_tasks()
-    assert len(tasks) >= 20, "AtlasBench V2 wave 1 should be a real batch, not a handful of placeholders"
+    assert len(tasks) >= 45, "AtlasBench V2 waves 1+2 should be a real batch, not a handful of placeholders"
     ids = [task.task_id for task in tasks]
     assert len(set(ids)) == len(ids), "every V2 task_id must be unique"
     assert all(task_id.startswith("v2_") for task_id in ids), "V2 task ids must be clearly distinguishable from v1"
@@ -92,3 +92,20 @@ def test_v2_task_ids_do_not_collide_with_v1() -> None:
     v1_ids = {task.task_id for task in all_v1_tasks()}
     v2_ids = {task.task_id for task in all_tasks()}
     assert v1_ids.isdisjoint(v2_ids)
+
+
+def test_v2_corpus_has_no_internal_near_duplicates() -> None:
+    """Wave 2 was authored from the same predeclared taxonomy as wave 1, not
+    by rewording wave 1 (or any other V2 task) for volume. Guard that
+    structurally rather than just by policy."""
+    tasks = all_tasks()
+    tokenized = [(task.task_id, _normalized_tokens(task.prompt)) for task in tasks]
+    near_duplicates: list[tuple[str, str, float]] = []
+    for i, (task_id_a, tokens_a) in enumerate(tokenized):
+        for task_id_b, tokens_b in tokenized[i + 1 :]:
+            if not tokens_a or not tokens_b:
+                continue
+            overlap = len(tokens_a & tokens_b) / len(tokens_a | tokens_b)
+            if overlap >= 0.6:
+                near_duplicates.append((task_id_a, task_id_b, overlap))
+    assert not near_duplicates, f"V2 tasks too textually similar to each other: {near_duplicates}"

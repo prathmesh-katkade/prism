@@ -25,7 +25,12 @@ import httpx
 from fastapi import APIRouter, HTTPException, Query, status
 from prism_api_contracts import AtlasBenchSuiteRun, AtlasModelProviderName
 
+from .atlas_base_model_trust import (
+    DurableAtlasBaseModelVerificationStore,
+    DurableAtlasVerifiedBaseModelRegistry,
+)
 from .atlas_bench_corpus import CORPUS_VERSION, all_tasks, corpus_hash
+from .atlas_bench_policy import compute_evaluation_policy_id
 from .atlas_bench_runner import AtlasBenchSubject, run_suite
 from .atlas_bench_store import DurableAtlasBenchStore
 from .atlas_candidate_runtime import (
@@ -53,6 +58,14 @@ class AtlasProviderBenchSubject:
     rationale, category score, promotion threshold, or another subject's
     result.
     """
+
+    # Single source of truth for the exact inference policy this subject
+    # uses -- both the real request payload in ``answer`` and the
+    # evaluation-policy identity in ``evaluation_policy_id`` read from these,
+    # so the two can never silently drift apart.
+    TEMPERATURE: float = 0
+    NUM_PREDICT: int = 64
+    PROMPT_SCHEMA_VERSION: str = "atlasbench-choice-v1"
 
     def __init__(self, provider: AtlasModelProviderName, *, model_override: Optional[str] = None) -> None:
         if provider is AtlasModelProviderName.DETERMINISTIC:
@@ -126,9 +139,9 @@ class AtlasProviderBenchSubject:
             ),
             "prompt": prompt[:2_000],
             "choices": safe_choices,
-            "prompt_schema_version": "atlasbench-choice-v1",
+            "prompt_schema_version": self.PROMPT_SCHEMA_VERSION,
         }
-        options = {"temperature": 0, "num_predict": 64}
+        options = {"temperature": self.TEMPERATURE, "num_predict": self.NUM_PREDICT}
         if self.context_tokens is not None:
             options["num_ctx"] = self.context_tokens
         payload = {
@@ -151,6 +164,28 @@ class AtlasProviderBenchSubject:
         except (httpx.HTTPError, ValueError, TypeError, json.JSONDecodeError):
             return -1
 
+    def evaluation_policy_id(self, *, corpus_version: str, corpus_hash_value: str) -> Optional[str]:
+        """Deterministic identity for this subject's exact inference policy.
+
+        Returns ``None`` when ``context_tokens`` is unset -- an ambiguous
+        (model-default) context window is exactly the historical failure
+        mode this exists to catch, so it must never collide with a genuine
+        pinned-context policy nor with another ambiguous run.
+        """
+        if self.context_tokens is None:
+            return None
+        timeout_seconds = float(os.environ.get("PRISM_ATLAS_BENCH_OLLAMA_TIMEOUT_SECONDS", "20"))
+        return compute_evaluation_policy_id(
+            prompt_schema_version=self.PROMPT_SCHEMA_VERSION,
+            temperature=self.TEMPERATURE,
+            num_predict=self.NUM_PREDICT,
+            context_tokens=self.context_tokens,
+            timeout_seconds=timeout_seconds,
+            provider="ollama",
+            corpus_version=corpus_version,
+            corpus_hash_value=corpus_hash_value,
+        )
+
 
 def make_live_subject(provider: AtlasModelProviderName) -> AtlasBenchSubject:
     """Factory separated so tests can substitute a non-model subject safely."""
@@ -162,13 +197,31 @@ def run_candidate_benchmark(candidate_id: str) -> AtlasBenchSuiteRun:
 
     This intentionally has no client-supplied model/digest inputs: callers can
     name a candidate, but cannot redirect the evaluator to another model.
+
+    Source-neutral: ``candidate_id`` may name either a trained Foundry
+    candidate (``atlas_candidate_trust``) or a verified off-the-shelf base
+    model (``atlas_base_model_trust``) -- both converge on this exact same
+    evaluation path, the same ``subject_kind="candidate"`` run shape, and the
+    same downstream promotion route. Neither kind gets a second, different
+    benchmark path.
     """
-    candidate = DurableAtlasCandidateRegistry().get(candidate_id)
-    if candidate is None:
-        raise AtlasBenchSubjectUnavailable("Candidate artifact was not found.")
-    verification = DurableAtlasCandidateVerificationStore().latest(candidate_id)
-    if verification is None or verification.verification_state.value != "verified":
-        raise AtlasBenchSubjectUnavailable("Candidate has no current VERIFIED artifact-trust record.")
+    trained = DurableAtlasCandidateRegistry().get(candidate_id)
+    if trained is not None:
+        verification = DurableAtlasCandidateVerificationStore().latest(candidate_id)
+        if verification is None or verification.verification_state.value != "verified":
+            raise AtlasBenchSubjectUnavailable("Candidate has no current VERIFIED artifact-trust record.")
+        candidate_fingerprint = verification.aggregate_candidate_fingerprint
+        trust_verification_id = verification.verification_id
+    else:
+        base_model = DurableAtlasVerifiedBaseModelRegistry().get(candidate_id)
+        if base_model is None:
+            raise AtlasBenchSubjectUnavailable("Candidate artifact was not found.")
+        base_verification = DurableAtlasBaseModelVerificationStore().latest(candidate_id)
+        if base_verification is None or base_verification.verification_state.value != "verified":
+            raise AtlasBenchSubjectUnavailable("Candidate has no current VERIFIED base-model trust record.")
+        candidate_fingerprint = base_verification.aggregate_candidate_fingerprint
+        trust_verification_id = base_verification.verification_id
+
     binding = DurableAtlasCandidateRuntimeStore().latest(candidate_id)
     if binding is None or not binding.runtime_model_digest or binding.runtime_model_digest == "digest-unavailable":
         raise AtlasBenchSubjectUnavailable("Candidate has no digest-verified Ollama runtime binding.")
@@ -178,10 +231,13 @@ def run_candidate_benchmark(candidate_id: str) -> AtlasBenchSuiteRun:
     suite, results = run_suite(subject, all_tasks(), corpus_version=CORPUS_VERSION, corpus_hash_value=corpus_hash())
     suite = suite.model_copy(update={
         "subject_kind": "candidate", "candidate_id": candidate_id,
-        "candidate_fingerprint": verification.aggregate_candidate_fingerprint,
-        "trust_verification_id": verification.verification_id,
+        "candidate_fingerprint": candidate_fingerprint,
+        "trust_verification_id": trust_verification_id,
         "runtime_model": binding.runtime_model, "runtime_model_digest": binding.runtime_model_digest,
         "provider": "ollama",
+        "evaluation_policy_id": subject.evaluation_policy_id(
+            corpus_version=CORPUS_VERSION, corpus_hash_value=corpus_hash()
+        ),
     })
     return _bench_store.save(suite, results)
 
@@ -219,7 +275,21 @@ def run_live_benchmark(
     from .atlas_promotion import DurableAtlasPromotionStore
 
     production = DurableAtlasPromotionStore().current_production()
-    return _bench_store.save(suite_run.model_copy(update={"subject_kind": "production", "candidate_id": production.candidate_id if production else None, "runtime_model": subject.model, "runtime_model_digest": subject.model_digest, "provider": "ollama"}), results)
+    return _bench_store.save(
+        suite_run.model_copy(
+            update={
+                "subject_kind": "production",
+                "candidate_id": production.candidate_id if production else None,
+                "runtime_model": subject.model,
+                "runtime_model_digest": subject.model_digest,
+                "provider": "ollama",
+                "evaluation_policy_id": subject.evaluation_policy_id(
+                    corpus_version=CORPUS_VERSION, corpus_hash_value=corpus_hash()
+                ),
+            }
+        ),
+        results,
+    )
 
 
 @router.post("/candidates/{candidate_id}/runs", response_model=AtlasBenchSuiteRun, status_code=status.HTTP_201_CREATED)

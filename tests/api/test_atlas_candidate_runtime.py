@@ -130,6 +130,50 @@ def test_promotion_decision_rejects_incomplete_category_coverage(monkeypatch) ->
         atlas_foundry_routes.compute_promotion_decision("candidate_a", "production-run", "candidate-run")
 
 
+def test_promotion_decision_rejects_a_run_missing_an_explicit_evaluation_policy(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """Neither run declared an explicit (e.g. pinned-context) evaluation
+    policy -- this is exactly the historical failure mode (an unset,
+    ~40,960-token default context) that must never be silently treated as
+    comparable evidence."""
+    candidate = _bound_bench_run(run_id="candidate-run", candidate_id="candidate_a", subject_kind="candidate")
+    production = _bound_bench_run(run_id="production-run", candidate_id="production", subject_kind="production")
+    assert candidate.evaluation_policy_id is None and production.evaluation_policy_id is None
+    _configure_promotion_decision_dependencies(monkeypatch, candidate, production)
+
+    with pytest.raises(HTTPException, match="explicit evaluation-policy identity"):
+        atlas_foundry_routes.compute_promotion_decision("candidate_a", "production-run", "candidate-run")
+
+
+def test_promotion_decision_rejects_mismatched_evaluation_policies(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    candidate = _bound_bench_run(run_id="candidate-run", candidate_id="candidate_a", subject_kind="candidate").model_copy(
+        update={"evaluation_policy_id": "a" * 64}
+    )
+    production = _bound_bench_run(run_id="production-run", candidate_id="production", subject_kind="production").model_copy(
+        update={"evaluation_policy_id": "b" * 64}
+    )
+    _configure_promotion_decision_dependencies(monkeypatch, candidate, production)
+
+    with pytest.raises(HTTPException, match="different evaluation policies"):
+        atlas_foundry_routes.compute_promotion_decision("candidate_a", "production-run", "candidate-run")
+
+
+def test_promotion_decision_succeeds_with_a_matching_explicit_evaluation_policy(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """The positive case: once corpus, category coverage, and evaluation
+    policy all agree, a decision is actually computed -- the new gate adds a
+    real check, not an unconditional refusal."""
+    same_policy = "c" * 64
+    candidate = _bound_bench_run(run_id="candidate-run", candidate_id="candidate_a", subject_kind="candidate").model_copy(
+        update={"evaluation_policy_id": same_policy}
+    )
+    production = _bound_bench_run(run_id="production-run", candidate_id="production", subject_kind="production").model_copy(
+        update={"evaluation_policy_id": same_policy}
+    )
+    _configure_promotion_decision_dependencies(monkeypatch, candidate, production)
+
+    decision = atlas_foundry_routes.compute_promotion_decision("candidate_a", "production-run", "candidate-run")
+    assert decision.candidate_id == "candidate_a"
+
+
 def test_unverified_ollama_configuration_does_not_create_production_pointer(
     tmp_path, monkeypatch
 ) -> None:  # type: ignore[no-untyped-def]

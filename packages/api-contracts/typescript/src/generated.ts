@@ -86,6 +86,22 @@ export interface AtlasAdapterCapability {
 
 export type AtlasAdapterId = "atlas-core" | "atlas-sql" | "atlas-statistics" | "atlas-ml" | "atlas-forecast" | "atlas-research";
 
+export interface AtlasBaseModelVerification {
+  verification_id: string;
+  candidate_id: string;
+  upstream_model_id: string;
+  upstream_revision: string;
+  license: string;
+  runtime_model: string;
+  live_runtime_digest?: string;
+  live_manifest_digest?: string;
+  aggregate_candidate_fingerprint?: string;
+  verification_state: AtlasCandidateVerificationState;
+  verification_failure_reason?: string;
+  created_at: string;
+  verified_at?: string;
+}
+
 export type AtlasBenchCategory = "sql" | "statistics" | "machine_learning" | "forecasting" | "causal_safety" | "agentic" | "evidence" | "python_sandbox" | "personality" | "general";
 
 export interface AtlasBenchCategoryCount {
@@ -123,6 +139,7 @@ export interface AtlasBenchSuiteRun {
   runtime_model?: string;
   runtime_model_digest?: string;
   provider?: string;
+  evaluation_policy_id?: string;
 }
 
 export interface AtlasBenchTaskResult {
@@ -953,6 +970,35 @@ export interface AtlasTrainingRecipe {
 export type AtlasTrainingRecipeMethod = "lora" | "qlora";
 
 export type AtlasTrainingSplit = "train" | "validation" | "test";
+
+export interface AtlasVerifiedBaseModelCandidate {
+  candidate_id: string;
+  candidate_kind?: string;
+  upstream_model_id: string;
+  upstream_revision: string;
+  license: string;
+  official_source: string;
+  runtime_model: string;
+  declared_runtime_digest: string;
+  quantization?: string;
+  declared_manifest_digest?: string;
+  declared_blob_digests?: string[];
+  parameter_count?: number;
+  created_at: string;
+}
+
+export interface AtlasVerifiedBaseModelRegistrationRequest {
+  upstream_model_id: string;
+  upstream_revision: string;
+  license: string;
+  official_source: string;
+  runtime_model: string;
+  declared_runtime_digest: string;
+  quantization?: string;
+  declared_manifest_digest?: string;
+  declared_blob_digests?: string[];
+  parameter_count?: number;
+}
 
 export type AtlasVisualizeAction = "explain_chart" | "identify_anomaly" | "propose_alternative";
 

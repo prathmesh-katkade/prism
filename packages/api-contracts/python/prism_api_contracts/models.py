@@ -1500,6 +1500,14 @@ class AtlasBenchSuiteRun(ContractModel):
     runtime_model: Optional[str] = Field(default=None, max_length=300)
     runtime_model_digest: Optional[str] = Field(default=None, max_length=200)
     provider: Optional[str] = Field(default=None, max_length=32)
+    # Deterministic identity over the exact live-provider inference policy
+    # (context window, temperature, output tokens, timeout, prompt schema,
+    # corpus) this run used. None for non-provider (reference/test) subjects
+    # and for any run that predates this field or used an ambiguous/default
+    # policy (e.g. an unset context window) -- such a run is legacy evidence
+    # and two of them are never treated as comparable just because both are
+    # None. See ``atlas_bench_policy.compute_evaluation_policy_id``.
+    evaluation_policy_id: Optional[str] = Field(default=None, min_length=64, max_length=64)
 
 
 class AtlasModelArenaEntry(ContractModel):
@@ -2133,6 +2141,94 @@ class AtlasCandidateVerification(ContractModel):
     dataset_version_id: str = Field(min_length=1, max_length=120)
     recipe_hash: str = Field(min_length=1, max_length=64)
     adapter_files: list[AtlasCandidateArtifactFile] = Field(default_factory=list, max_length=10_000)
+    aggregate_candidate_fingerprint: Optional[str] = Field(default=None, min_length=64, max_length=64)
+    verification_state: AtlasCandidateVerificationState
+    verification_failure_reason: Optional[str] = Field(default=None, max_length=1_000)
+    created_at: datetime
+    verified_at: Optional[datetime] = None
+
+
+class AtlasCandidateKind(str, Enum):
+    """The two legitimate ways an Atlas release candidate can exist.
+
+    ``TRAINED_ADAPTER`` is Foundry-trained output (``AtlasCandidateArtifact``,
+    verified by ``atlas_candidate_trust``). ``VERIFIED_BASE_MODEL`` is an
+    untouched off-the-shelf model (``AtlasVerifiedBaseModelCandidate``,
+    verified by ``atlas_base_model_trust``) admitted without any fabricated
+    training provenance. Both converge on the exact same AtlasBench candidate
+    evaluation, promotion decision, production pointer, rollback, and audit
+    history -- there is no second promotion system for either kind.
+    """
+
+    TRAINED_ADAPTER = "trained_adapter"
+    VERIFIED_BASE_MODEL = "verified_base_model"
+
+
+class AtlasVerifiedBaseModelCandidate(ContractModel):
+    """A durably registered off-the-shelf model, admitted as a legitimate
+    release candidate on its own declared identity -- never by inventing a
+    Foundry job, recipe, dataset, or adapter path for a model nothing here
+    trained. Registration alone proves nothing: only a fresh, real
+    ``AtlasBaseModelVerification`` with ``verification_state=VERIFIED`` may
+    let this candidate enter AtlasBench candidate evaluation or promotion,
+    exactly like a trained candidate's own verification gate.
+    """
+
+    candidate_id: str = Field(min_length=1, max_length=120)
+    candidate_kind: Literal[AtlasCandidateKind.VERIFIED_BASE_MODEL] = (
+        AtlasCandidateKind.VERIFIED_BASE_MODEL
+    )
+    upstream_model_id: str = Field(min_length=1, max_length=300)
+    upstream_revision: str = Field(min_length=1, max_length=200)
+    license: str = Field(min_length=1, max_length=100)
+    official_source: str = Field(min_length=1, max_length=2_000)
+    runtime_model: str = Field(min_length=1, max_length=300)
+    declared_runtime_digest: str = Field(min_length=1, max_length=200)
+    quantization: Optional[str] = Field(default=None, max_length=64)
+    declared_manifest_digest: Optional[str] = Field(default=None, max_length=200)
+    declared_blob_digests: list[str] = Field(default_factory=list, max_length=64)
+    parameter_count: Optional[int] = Field(default=None, ge=1)
+    created_at: datetime
+
+
+class AtlasVerifiedBaseModelRegistrationRequest(ContractModel):
+    """Client-supplied fields for declaring one base-model candidate.
+
+    ``candidate_id``, ``candidate_kind``, and ``created_at`` are server-owned
+    -- a client cannot forge any of them, matching every other append-only
+    Atlas record. The server derives ``candidate_id`` deterministically from
+    ``upstream_model_id``/``upstream_revision``/``runtime_model`` so
+    re-declaring the same real identity is idempotent.
+    """
+
+    upstream_model_id: str = Field(min_length=1, max_length=300)
+    upstream_revision: str = Field(min_length=1, max_length=200)
+    license: str = Field(min_length=1, max_length=100)
+    official_source: str = Field(min_length=1, max_length=2_000)
+    runtime_model: str = Field(min_length=1, max_length=300)
+    declared_runtime_digest: str = Field(min_length=1, max_length=200)
+    quantization: Optional[str] = Field(default=None, max_length=64)
+    declared_manifest_digest: Optional[str] = Field(default=None, max_length=200)
+    declared_blob_digests: list[str] = Field(default_factory=list, max_length=64)
+    parameter_count: Optional[int] = Field(default=None, ge=1)
+
+
+class AtlasBaseModelVerification(ContractModel):
+    """One durable, append-only verification pass over a verified-base-model
+    candidate's declared identity against the *live* local Ollama daemon --
+    never a client-supplied ``VERIFIED`` flag. A later re-verification of the
+    same ``candidate_id`` is a new row, never an edit of a prior one, matching
+    ``AtlasCandidateVerification``'s append-only discipline exactly.
+    """
+
+    verification_id: str = Field(min_length=1, max_length=120)
+    candidate_id: str = Field(min_length=1, max_length=120)
+    upstream_model_id: str = Field(min_length=1, max_length=300)
+    upstream_revision: str = Field(min_length=1, max_length=200)
+    license: str = Field(min_length=1, max_length=100)
+    runtime_model: str = Field(min_length=1, max_length=300)
+    live_runtime_digest: Optional[str] = Field(default=None, max_length=200)
+    live_manifest_digest: Optional[str] = Field(default=None, max_length=200)
     aggregate_candidate_fingerprint: Optional[str] = Field(default=None, min_length=64, max_length=64)
     verification_state: AtlasCandidateVerificationState
     verification_failure_reason: Optional[str] = Field(default=None, max_length=1_000)

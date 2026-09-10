@@ -20,12 +20,14 @@ from fastapi import APIRouter, HTTPException, Query, status
 from prism_api_contracts import (
     AtlasAdapterCapability,
     AtlasAdapterId,
+    AtlasBaseModelVerification,
     AtlasBenchCategory,
     AtlasBenchCategoryCount,
     AtlasBenchCorpusSummary,
     AtlasBenchSuiteRun,
     AtlasBenchTaskResult,
     AtlasCandidateArtifact,
+    AtlasCandidateKind,
     AtlasCandidateVerification,
     AtlasCombinedSftDatasetVersion,
     AtlasCombinedTrainingSourceSummary,
@@ -45,9 +47,18 @@ from prism_api_contracts import (
     AtlasTrainingJob,
     AtlasTrainingRecipe,
     AtlasTrainingSplit,
+    AtlasVerifiedBaseModelCandidate,
+    AtlasVerifiedBaseModelRegistrationRequest,
 )
 
 from .atlas_adapter_foundation import report_adapter_capability, report_all_adapter_capabilities
+from .atlas_base_model_trust import (
+    DurableAtlasBaseModelVerificationStore,
+    DurableAtlasVerifiedBaseModelRegistry,
+    compute_base_model_candidate_id,
+    is_base_model_verified,
+    verify_base_model_candidate,
+)
 from .atlas_bench_corpus import CORPUS_VERSION, all_tasks, corpus_hash
 from .atlas_bench_store import DurableAtlasBenchStore
 from .atlas_candidate_runtime import (
@@ -110,6 +121,8 @@ _job_store = DurableAtlasFoundryJobStore()
 _candidate_registry = DurableAtlasCandidateRegistry()
 _candidate_runtime_store = DurableAtlasCandidateRuntimeStore()
 _candidate_verification_store = DurableAtlasCandidateVerificationStore()
+_base_model_registry = DurableAtlasVerifiedBaseModelRegistry()
+_base_model_verification_store = DurableAtlasBaseModelVerificationStore()
 _promotion_store = DurableAtlasPromotionStore()
 _promotion_decision_store = DurableAtlasPromotionDecisionStore()
 _system_seed_store = DurableAtlasSystemSeedStore()
@@ -379,6 +392,78 @@ def candidate_verification_history(
     return _candidate_verification_store.history(candidate_id, limit=limit)
 
 
+base_model_router = APIRouter(prefix="/api/v1/atlas/base-model-candidates", tags=["atlas-base-model-candidates"])
+
+
+@base_model_router.post("", response_model=AtlasVerifiedBaseModelCandidate, status_code=status.HTTP_201_CREATED)
+def register_base_model_candidate(
+    request: AtlasVerifiedBaseModelRegistrationRequest,
+) -> AtlasVerifiedBaseModelCandidate:
+    """Durably declare an off-the-shelf model's identity -- never a training
+    provenance fabrication. Registration alone is not trust: it must still
+    pass ``POST /base-model-candidates/{candidate_id}/verify`` against the
+    live Ollama daemon before entering AtlasBench candidate evaluation or
+    promotion. Idempotent: re-declaring the same real identity returns the
+    existing durable row rather than creating a duplicate.
+    """
+    candidate_id = compute_base_model_candidate_id(
+        upstream_model_id=request.upstream_model_id,
+        upstream_revision=request.upstream_revision,
+        runtime_model=request.runtime_model,
+    )
+    candidate = AtlasVerifiedBaseModelCandidate(
+        candidate_id=candidate_id,
+        upstream_model_id=request.upstream_model_id,
+        upstream_revision=request.upstream_revision,
+        license=request.license,
+        official_source=request.official_source,
+        runtime_model=request.runtime_model,
+        declared_runtime_digest=request.declared_runtime_digest,
+        quantization=request.quantization,
+        declared_manifest_digest=request.declared_manifest_digest,
+        declared_blob_digests=request.declared_blob_digests,
+        parameter_count=request.parameter_count,
+        created_at=datetime.now(timezone.utc),
+    )
+    return _base_model_registry.register(candidate)
+
+
+@base_model_router.get("", response_model=list[AtlasVerifiedBaseModelCandidate])
+def list_base_model_candidates(limit: int = Query(default=100, ge=1, le=500)) -> list[AtlasVerifiedBaseModelCandidate]:
+    return _base_model_registry.list(limit=limit)
+
+
+@base_model_router.get("/{candidate_id}", response_model=AtlasVerifiedBaseModelCandidate)
+def get_base_model_candidate(candidate_id: str) -> AtlasVerifiedBaseModelCandidate:
+    candidate = _base_model_registry.get(candidate_id)
+    if candidate is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Base-model candidate was not found.")
+    return candidate
+
+
+@base_model_router.post(
+    "/{candidate_id}/verify", response_model=AtlasBaseModelVerification, status_code=status.HTTP_201_CREATED
+)
+def verify_base_model_candidate_route(candidate_id: str) -> AtlasBaseModelVerification:
+    """Real, live inspection against the local Ollama daemon.
+
+    Never a rubber stamp: this appends a new VERIFIED or REJECTED record
+    every call, and a prior REJECTED record is never silently erased.
+    """
+    candidate = _base_model_registry.get(candidate_id)
+    if candidate is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Base-model candidate was not found.")
+    verification = verify_base_model_candidate(candidate)
+    return _base_model_verification_store.save(verification)
+
+
+@base_model_router.get("/{candidate_id}/verification", response_model=list[AtlasBaseModelVerification])
+def base_model_candidate_verification_history(
+    candidate_id: str, limit: int = Query(default=50, ge=1, le=200)
+) -> list[AtlasBaseModelVerification]:
+    return _base_model_verification_store.history(candidate_id, limit=limit)
+
+
 bench_router = APIRouter(prefix="/api/v1/atlas/bench", tags=["atlas-bench"])
 
 
@@ -420,6 +505,48 @@ def get_bench_run_failures(run_id: str, limit: int = Query(default=200, ge=1, le
 promotion_router = APIRouter(prefix="/api/v1/atlas/promotion", tags=["atlas-promotion"])
 
 
+def _require_verified_candidate(candidate_id: str) -> AtlasCandidateKind:
+    """Source-neutral trust gate: a trained Foundry candidate verified by
+    ``atlas_candidate_trust`` and a verified off-the-shelf base model
+    verified by ``atlas_base_model_trust`` earn exactly the same gate here --
+    neither kind is weaker than the other, and there is no third way in.
+    """
+    trained = _candidate_registry.get(candidate_id)
+    if trained is not None:
+        if not is_verified(_candidate_verification_store, candidate_id):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Candidate has no VERIFIED artifact-trust record; refusing to compute a promotion-eligibility decision. "
+                "Run POST /candidates/{candidate_id}/verify first.",
+            )
+        return AtlasCandidateKind.TRAINED_ADAPTER
+    base_model = _base_model_registry.get(candidate_id)
+    if base_model is not None:
+        if not is_base_model_verified(_base_model_verification_store, candidate_id):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Candidate has no VERIFIED base-model trust record; refusing to compute a promotion-eligibility decision. "
+                "Run POST /base-model-candidates/{candidate_id}/verify first.",
+            )
+        return AtlasCandidateKind.VERIFIED_BASE_MODEL
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Candidate artifact was not found.")
+
+
+def _latest_verification_identity(
+    candidate_id: str, kind: AtlasCandidateKind
+) -> tuple[Optional[str], Optional[str]]:
+    """Return (verification_id, aggregate_candidate_fingerprint) for
+    whichever trust store this candidate's kind actually verified through."""
+    verification = (
+        _candidate_verification_store.latest(candidate_id)
+        if kind is AtlasCandidateKind.TRAINED_ADAPTER
+        else _base_model_verification_store.latest(candidate_id)
+    )
+    if verification is None:
+        return None, None
+    return verification.verification_id, verification.aggregate_candidate_fingerprint
+
+
 @promotion_router.get("/current", response_model=Optional[AtlasProductionPointer])
 def current_production() -> Optional[AtlasProductionPointer]:
     return _promotion_store.current_production()
@@ -436,14 +563,7 @@ def compute_promotion_decision(
     production_run_id: str,
     candidate_run_id: str,
 ) -> AtlasPromotionDecision:
-    if _candidate_registry.get(candidate_id) is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Candidate artifact was not found.")
-    if not is_verified(_candidate_verification_store, candidate_id):
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Candidate has no VERIFIED artifact-trust record; refusing to compute a promotion-eligibility decision. "
-            "Run POST /candidates/{candidate_id}/verify first.",
-        )
+    candidate_kind = _require_verified_candidate(candidate_id)
     production_run = _bench_store.get_run(production_run_id)
     candidate_run = _bench_store.get_run(candidate_run_id)
     if production_run is None or candidate_run is None:
@@ -451,16 +571,16 @@ def compute_promotion_decision(
     if production_run.run_id == candidate_run.run_id:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Production and candidate AtlasBench runs must be distinct.")
     candidate_binding = _candidate_runtime_store.latest(candidate_id)
-    verification = _candidate_verification_store.latest(candidate_id)
-    if candidate_binding is None or verification is None:
+    verification_id, candidate_fingerprint = _latest_verification_identity(candidate_id, candidate_kind)
+    if candidate_binding is None or verification_id is None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Candidate has no current verified runtime binding.")
     if (
         candidate_run.subject_kind != "candidate"
         or candidate_run.candidate_id != candidate_id
         or candidate_run.runtime_model != candidate_binding.runtime_model
         or candidate_run.runtime_model_digest != candidate_binding.runtime_model_digest
-        or candidate_run.trust_verification_id != verification.verification_id
-        or candidate_run.candidate_fingerprint != verification.aggregate_candidate_fingerprint
+        or candidate_run.trust_verification_id != verification_id
+        or candidate_run.candidate_fingerprint != candidate_fingerprint
         or candidate_run.provider != candidate_binding.provider
     ):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Candidate AtlasBench run is not server-bound to this exact verified candidate runtime.")
@@ -492,6 +612,24 @@ def compute_promotion_decision(
                 "and task totals; refusing an incomplete comparison."
             ),
         )
+    if not production_run.evaluation_policy_id or not candidate_run.evaluation_policy_id:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Production and candidate AtlasBench runs must both carry an explicit evaluation-policy identity "
+                "(e.g. a pinned context-token window). A run predating this field, or one that used an "
+                "ambiguous/default inference policy, is legacy evidence and cannot be used for a promotion decision."
+            ),
+        )
+    if production_run.evaluation_policy_id != candidate_run.evaluation_policy_id:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Production and candidate AtlasBench runs were evaluated under different evaluation policies "
+                "(context window, temperature, output tokens, timeout, or prompt schema); refusing an "
+                "incomparable promotion decision."
+            ),
+        )
     decision = decide_promotion(candidate_id, production_run, candidate_run)
     return _promotion_decision_store.save(decision)
 
@@ -507,13 +645,22 @@ def promote_candidate(decision_id: str, reason: str) -> AtlasProductionPointer:
     decision = _promotion_decision_store.get(decision_id)
     if decision is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Promotion decision was not found.")
-    if _candidate_registry.get(decision.candidate_id) is None:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="The decision references a candidate artifact that is no longer available.")
-    if not is_verified(_candidate_verification_store, decision.candidate_id):
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Candidate has no VERIFIED artifact-trust record; refusing to promote.",
-        )
+    trained = _candidate_registry.get(decision.candidate_id)
+    if trained is not None:
+        if not is_verified(_candidate_verification_store, decision.candidate_id):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Candidate has no VERIFIED artifact-trust record; refusing to promote.",
+            )
+    else:
+        base_model = _base_model_registry.get(decision.candidate_id)
+        if base_model is None:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="The decision references a candidate artifact that is no longer available.")
+        if not is_base_model_verified(_base_model_verification_store, decision.candidate_id):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Candidate has no VERIFIED base-model trust record; refusing to promote.",
+            )
     if _candidate_runtime_store.latest(decision.candidate_id) is None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
