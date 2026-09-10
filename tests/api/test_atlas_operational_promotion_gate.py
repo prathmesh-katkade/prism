@@ -263,6 +263,46 @@ def test_live_candidate_run_route_requires_verification_and_runtime_binding(monk
     assert missing.status_code == 404
 
 
+def test_live_candidate_run_route_refuses_an_unverified_candidate(monkeypatch, tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """Registered (declared identity exists) but never verified -- the live
+    route must refuse exactly like every other candidate-trust gate in this
+    project, never falling back to running the suite against an unverified
+    identity."""
+    database_url = f"sqlite:///{tmp_path / 'live-route-unverified.db'}"
+    stores = _wire_shared_stores(monkeypatch, database_url)
+    unique = uuid.uuid4().hex
+    runtime_model = f"cand-{unique}:latest"
+    candidate = _base_model_candidate(unique, runtime_model=runtime_model, digest=f"sha256:cand-{unique}")
+    stores["base_model_registry"].register(candidate)  # type: ignore[attr-defined]
+    # Deliberately no verify_base_model_candidate()/save() call, and no
+    # runtime binding -- this candidate exists only as a bare declaration.
+
+    client = TestClient(create_app())
+    response = client.post(f"/api/v1/atlas/operational-cert/candidates/{candidate.candidate_id}/runs")
+    assert response.status_code == 409
+    assert "VERIFIED" in response.json()["detail"]
+
+
+def test_live_candidate_run_route_refuses_a_verified_candidate_with_no_runtime_binding(monkeypatch, tmp_path) -> None:  # type: ignore[no-untyped-def]
+    database_url = f"sqlite:///{tmp_path / 'live-route-unbound.db'}"
+    stores = _wire_shared_stores(monkeypatch, database_url)
+    unique = uuid.uuid4().hex
+    runtime_model = f"cand-{unique}:latest"
+    digest = f"sha256:cand-{unique}"
+    candidate = _base_model_candidate(unique, runtime_model=runtime_model, digest=digest)
+    stores["base_model_registry"].register(candidate)  # type: ignore[attr-defined]
+    verification = verify_base_model_candidate(
+        candidate, resolve_live_digest=lambda model: digest, resolve_manifest=lambda model: {"digest": "sha256:manifest-ok"}
+    )
+    stores["base_model_verification_store"].save(verification)  # type: ignore[attr-defined]
+    # Verified, but never bound to a durable Ollama runtime.
+
+    client = TestClient(create_app())
+    response = client.post(f"/api/v1/atlas/operational-cert/candidates/{candidate.candidate_id}/runs")
+    assert response.status_code == 409
+    assert "runtime binding" in response.json()["detail"]
+
+
 def test_live_candidate_run_route_refuses_on_live_digest_drift(monkeypatch, tmp_path) -> None:  # type: ignore[no-untyped-def]
     database_url = f"sqlite:///{tmp_path / 'live-route-drift.db'}"
     stores = _wire_shared_stores(monkeypatch, database_url)
@@ -275,6 +315,41 @@ def test_live_candidate_run_route_refuses_on_live_digest_drift(monkeypatch, tmp_
     response = client.post(f"/api/v1/atlas/operational-cert/candidates/{candidate.candidate_id}/runs")
     assert response.status_code == 409
     assert "drifted" in response.json()["detail"]
+
+
+def test_live_candidate_run_route_ignores_any_client_supplied_scenario_content(monkeypatch, tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """The route takes no scenario/answer/judging body -- a client attempting
+    to smuggle one in must have no effect: the real frozen 23-scenario suite
+    still runs, unchanged."""
+    database_url = f"sqlite:///{tmp_path / 'live-route-no-injection.db'}"
+    stores = _wire_shared_stores(monkeypatch, database_url)
+    unique = uuid.uuid4().hex
+    digest = f"sha256:cand-{unique}"
+    candidate, _verification = _register_verify_bind(stores, unique, runtime_model=f"cand-{unique}:latest", digest=digest)
+    monkeypatch.setattr("prism_api.atlas_operational_cert.probe_live_ollama_digest", lambda model: digest)
+    monkeypatch.setattr(
+        "prism_api.atlas_operational_live.httpx.post",
+        lambda *a, **k: (_ for _ in ()).throw(httpx.ConnectError("offline", request=httpx.Request("POST", "http://x"))),
+    )
+
+    client = TestClient(create_app())
+    malicious_body = {
+        "scenarios": [{"scenario_id": "dataset_profiling", "correct_choice": 0}],
+        "structured_answer": {"row_count": 12_000, "high_missing_columns": ["region"]},
+        "critical_failure_count": 0,
+        "total_passed": 23,
+        "suite_hash": "attacker-controlled",
+    }
+    response = client.post(f"/api/v1/atlas/operational-cert/candidates/{candidate.candidate_id}/runs", json=malicious_body)
+    assert response.status_code == 201, response.text
+    body = response.json()
+    # The real frozen suite ran regardless -- 23 real scenarios, the real
+    # suite hash, and the model being unreachable (not the attacker's
+    # claimed 23/0) is what actually got scored.
+    assert body["total_scenarios"] == 23
+    assert body["suite_hash"] == suite_hash()
+    assert body["total_passed"] == 0
+    assert body["critical_failure_count"] == 0
 
 
 def test_live_candidate_run_route_records_a_real_candidate_run_on_success(monkeypatch, tmp_path) -> None:  # type: ignore[no-untyped-def]
@@ -308,3 +383,98 @@ def test_live_candidate_run_route_records_a_real_candidate_run_on_success(monkey
     listed = client.get(f"/api/v1/atlas/operational-cert/candidates/{candidate.candidate_id}/runs").json()
     assert len(listed) == 1
     assert listed[0]["run_id"] == body["run_id"]
+
+
+def test_promote_route_refuses_a_run_recorded_under_a_stale_suite_hash(monkeypatch, tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """A run that predates a suite change (different suite_version/suite_hash
+    than the currently frozen suite) must never satisfy the gate, even with
+    zero critical failures and a perfect pass rate -- it certified different
+    scenarios."""
+    database_url = f"sqlite:///{tmp_path / 'gate-stale-suite.db'}"
+    stores = _wire_shared_stores(monkeypatch, database_url)
+    unique = uuid.uuid4().hex
+    candidate, production_run, candidate_run = _set_up_production_and_candidate_bench_runs(stores, unique)
+
+    stale_run = _good_operational_run(candidate=candidate, digest=f"sha256:cand-{unique}").model_copy(
+        update={"suite_version": "atlas-operational-cert-wave1", "suite_hash": "0" * 64}
+    )
+    stores["opcert_store"].save(stale_run)  # type: ignore[attr-defined]
+
+    client = TestClient(create_app())
+    decision = client.post(
+        "/api/v1/atlas/promotion/decisions",
+        params={"candidate_id": candidate.candidate_id, "production_run_id": production_run.run_id, "candidate_run_id": candidate_run.run_id},
+    ).json()
+
+    promote_response = client.post(
+        "/api/v1/atlas/promotion/promote", params={"decision_id": decision["decision_id"], "reason": "stale suite must not count"}
+    )
+    assert promote_response.status_code == 409
+    assert "suite" in promote_response.json()["detail"]
+
+
+def test_promote_route_refuses_operational_evidence_recorded_for_a_different_candidate(monkeypatch, tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """Even a real, clean, fresh-suite operational run cannot be borrowed to
+    promote a *different* candidate than the one it actually certified."""
+    database_url = f"sqlite:///{tmp_path / 'gate-substitution.db'}"
+    stores = _wire_shared_stores(monkeypatch, database_url)
+    unique = uuid.uuid4().hex
+    candidate, production_run, candidate_run = _set_up_production_and_candidate_bench_runs(stores, unique)
+
+    other_candidate, _other_verification = _register_verify_bind(
+        stores, f"other-{unique}", runtime_model=f"other-{unique}:latest", digest=f"sha256:other-{unique}"
+    )
+    run_for_someone_else = run_operational_suite(
+        PerfectOperationalSubject(),
+        subject_kind="candidate",
+        candidate_id=other_candidate.candidate_id,
+        runtime_model=other_candidate.runtime_model,
+        runtime_model_digest=f"sha256:other-{unique}",
+    )
+    stores["opcert_store"].save(run_for_someone_else)  # type: ignore[attr-defined]
+    # Nothing was ever saved for `candidate` itself.
+
+    client = TestClient(create_app())
+    decision = client.post(
+        "/api/v1/atlas/promotion/decisions",
+        params={"candidate_id": candidate.candidate_id, "production_run_id": production_run.run_id, "candidate_run_id": candidate_run.run_id},
+    ).json()
+
+    promote_response = client.post(
+        "/api/v1/atlas/promotion/promote", params={"decision_id": decision["decision_id"], "reason": "must not borrow another candidate's evidence"}
+    )
+    assert promote_response.status_code == 409
+    assert "No live Operational Certification run" in promote_response.json()["detail"]
+
+
+def test_operational_cert_run_history_is_append_only_and_lists_newest_first(monkeypatch, tmp_path) -> None:  # type: ignore[no-untyped-def]
+    database_url = f"sqlite:///{tmp_path / 'gate-append-only.db'}"
+    stores = _wire_shared_stores(monkeypatch, database_url)
+    unique = uuid.uuid4().hex
+    digest = f"sha256:cand-{unique}"
+    candidate, _verification = _register_verify_bind(stores, unique, runtime_model=f"cand-{unique}:latest", digest=digest)
+
+    first_run = run_operational_suite(
+        UnsafeOperationalSubject(), subject_kind="candidate", candidate_id=candidate.candidate_id, runtime_model=candidate.runtime_model, runtime_model_digest=digest
+    )
+    stores["opcert_store"].save(first_run)  # type: ignore[attr-defined]
+    second_run = run_operational_suite(
+        PerfectOperationalSubject(), subject_kind="candidate", candidate_id=candidate.candidate_id, runtime_model=candidate.runtime_model, runtime_model_digest=digest
+    )
+    stores["opcert_store"].save(second_run)  # type: ignore[attr-defined]
+
+    client = TestClient(create_app())
+    listed = client.get(f"/api/v1/atlas/operational-cert/candidates/{candidate.candidate_id}/runs").json()
+    assert len(listed) == 2, "saving a second run must never overwrite or replace the first"
+    assert {item["run_id"] for item in listed} == {first_run.run_id, second_run.run_id}
+    assert listed[0]["run_id"] == second_run.run_id, "newest run must be listed first"
+
+    # The promotion gate reads the *latest* run -- the earlier unsafe run
+    # must not still be able to block (or wrongly pass) a promotion once a
+    # newer, clean run supersedes it in the append-only history.
+    from prism_api.atlas_operational_cert import latest_candidate_operational_run
+
+    latest = latest_candidate_operational_run(candidate.candidate_id)
+    assert latest is not None
+    assert latest.run_id == second_run.run_id
+    assert latest.critical_failure_count == 0
