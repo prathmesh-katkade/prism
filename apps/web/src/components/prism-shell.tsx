@@ -16,6 +16,7 @@ import { EvidenceInspector } from "./evidence-inspector";
 import { HistoryWorkspace } from "./history-workspace";
 import { AtlasWorkspace } from "./atlas-workspace";
 import { AtlasStatusBadge } from "./atlas-status-badge";
+import { AtlasCommandCenter } from "./atlas-command-center";
 import { EvolutionWorkspace } from "./evolution-workspace";
 import { migrationPresentation, phaseTwoMigrations, type InspectorObjectState, type ShellStatus, type WorkspaceTab } from "../state/shell-model";
 import { useLayoutState } from "../state/use-layout-state";
@@ -203,7 +204,13 @@ function WorkspaceSurface({ tab, status, onStatusChange, onOpenCommand, onSelect
   if (tab.kind === "forecasting") return <ForecastingWorkspace datasetId={activeDatasetId} onSelectContext={onSelectContext} onOpenWorkflow={onOpenWorkflow} />;
   if (tab.kind === "ml") return <MlLabWorkspace datasetId={activeDatasetId} onSelectContext={onSelectContext} onOpenWorkflow={onOpenWorkflow} />;
   if (tab.kind === "history") return <HistoryWorkspace onSelectContext={onSelectContext} />;
-  if (tab.kind === "atlas") return <AtlasWorkspace datasetId={activeDatasetId} />;
+  if (tab.kind === "atlas")
+    return (
+      <>
+        <AtlasCommandCenter />
+        <AtlasWorkspace datasetId={activeDatasetId} />
+      </>
+    );
   if (tab.kind === "evolution") return <EvolutionWorkspace />;
   if (tab.kind === "bridge" && tab.workflow) {
     const migration = findMigration(tab.workflow);

@@ -1,0 +1,134 @@
+import React from "react";
+import { render, screen, waitFor } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { AtlasCommandCenter } from "./atlas-command-center";
+
+function json(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+}
+
+describe("Atlas command center", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("reports status unknown honestly when the endpoint cannot be reached", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("offline"); }));
+    render(<AtlasCommandCenter />);
+    await waitFor(() => expect(screen.getByText("STATUS UNKNOWN")).toBeInTheDocument());
+  });
+
+  it("shows no production model rather than fabricating one when none has ever been promoted", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: string | URL) => {
+      const path = String(input);
+      if (path.includes("/promotion/current-status")) return json({ production: null, candidate_kind: null, runtime_model: null });
+      return json([]);
+    }));
+    render(<AtlasCommandCenter />);
+    await waitFor(() => expect(screen.getByText("NO PRODUCTION MODEL")).toBeInTheDocument());
+  });
+
+  it("never labels a legacy production pointer as verified", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: string | URL) => {
+      const path = String(input);
+      if (path.includes("/promotion/current-status")) {
+        return json({
+          production: { event_id: "evt_1", candidate_id: "legacy", reason: "bootstrap", promoted_at: "2026-01-01T00:00:00Z" },
+          candidate_kind: null,
+          runtime_model: "legacy-model:latest",
+        });
+      }
+      return json([]);
+    }));
+    render(<AtlasCommandCenter />);
+    await waitFor(() => expect(screen.getByRole("heading", { name: "legacy-model:latest" })).toBeInTheDocument());
+    expect(screen.getByText("LEGACY")).toBeInTheDocument();
+  });
+
+  it("renders real verified-production evidence pulled from the existing backend routes, never fabricated", async () => {
+    const candidateId = "basemodel_test";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL) => {
+        const path = String(input);
+        if (path.includes("/promotion/current-status")) {
+          return json({
+            production: { event_id: "evt_2", candidate_id: candidateId, reason: "final promotion", promoted_at: "2026-01-01T00:00:00Z" },
+            candidate_kind: "verified_base_model",
+            runtime_model: "qwen3-test:latest",
+            trust_verification_state: "verified",
+            latest_v1_run_id: "benchrun_1",
+            latest_v1_total_passed: 90,
+            latest_v1_total_tasks: 90,
+            latest_operational_cert_run_id: "opcert_1",
+            latest_operational_cert_total_passed: 23,
+            latest_operational_cert_total_scenarios: 23,
+            latest_operational_cert_critical_failures: 0,
+          });
+        }
+        if (path.endsWith(`/base-model-candidates/${candidateId}`)) {
+          return json({
+            candidate_id: candidateId,
+            upstream_model_id: "Qwen/Qwen3-4B-Instruct-2507",
+            upstream_revision: "rev-1",
+            license: "Apache-2.0",
+            official_source: "https://huggingface.co/Qwen/Qwen3-4B-Instruct-2507",
+            runtime_model: "qwen3-test:latest",
+            declared_runtime_digest: "sha256:abc",
+            created_at: "2026-01-01T00:00:00Z",
+          });
+        }
+        if (path.endsWith(`/base-model-candidates/${candidateId}/verification`)) {
+          return json([
+            {
+              verification_id: "basemodelverify_1",
+              candidate_id: candidateId,
+              upstream_model_id: "Qwen/Qwen3-4B-Instruct-2507",
+              upstream_revision: "rev-1",
+              license: "Apache-2.0",
+              runtime_model: "qwen3-test:latest",
+              live_runtime_digest: "sha256:abc",
+              live_manifest_digest: "sha256:manifest",
+              aggregate_candidate_fingerprint: "fp-123",
+              verification_state: "verified",
+              created_at: "2026-01-01T00:00:00Z",
+            },
+          ]);
+        }
+        if (path.endsWith("/bench/runs/detail/benchrun_1")) {
+          return json({
+            run_id: "benchrun_1",
+            subject_id: "subject_1",
+            corpus_version: "atlasbench-v1",
+            corpus_hash: "a".repeat(64),
+            total_tasks: 90,
+            total_passed: 90,
+            category_scores: [{ category: "sql", total: 10, passed: 10 }],
+            started_at: "2026-01-01T00:00:00Z",
+            completed_at: "2026-01-01T00:00:00Z",
+          });
+        }
+        if (path.includes("/foundry/system-seed") && !path.includes("release")) {
+          return json([{ seed_version: "seed-v1", created_at: "2026-01-01T00:00:00Z", example_count: 125, domain_counts: [{ domain: "sql", example_count: 20 }], aggregate_content_hash: "b".repeat(64), leakage_guard_passed: true }]);
+        }
+        if (path.includes("/foundry/synthetic-teacher") && !path.includes("release")) {
+          return json([{ generation_policy_version: "teacher-v1", created_at: "2026-01-01T00:00:00Z", example_count: 80, aggregate_content_hash: "c".repeat(64), atlasbench_v1_leakage_guard_passed: true, atlasbench_v2_leakage_guard_passed: true, intra_corpus_duplicate_guard_passed: true, license_validation_passed: true, secret_scan_passed: true }]);
+        }
+        if (path.includes("/foundry/combined-sft-datasets")) {
+          return json([{ version_id: "combined-v1", seed_version: "seed-v1", system_seed_count: 125, atlas_history_count: 40, synthetic_teacher_count: 80, total_sft_count: 245, train_count: 200, validation_count: 25, test_count: 20, aggregate_content_hash: "d".repeat(64), created_at: "2026-01-01T00:00:00Z" }]);
+        }
+        if (path.includes("training-datasets:combined-summary")) {
+          return json({ seed_version: "seed-v1", system_seed_examples: 125, verified_history_examples: 40, user_correction_examples: 5, synthetic_teacher_examples: 80, total_eligible: 250, computed_at: "2026-01-01T00:00:00Z" });
+        }
+        return json([]);
+      })
+    );
+
+    render(<AtlasCommandCenter />);
+    await waitFor(() => expect(screen.getByRole("heading", { name: "qwen3-test:latest" })).toBeInTheDocument());
+    expect(screen.getByText("VERIFIED")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText("90 / 90")).toBeInTheDocument());
+    expect(screen.getByText("23 / 23")).toBeInTheDocument();
+    expect(screen.getByText("PASSED")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText(/125 reviewed examples/)).toBeInTheDocument());
+    expect(screen.getByText(/245 records/)).toBeInTheDocument();
+  });
+});
