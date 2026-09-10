@@ -95,6 +95,7 @@ def test_candidate_runtime_binding_rejects_command_shaped_model_names(tmp_path) 
     [
         {"candidate_id": "candidate_b"},
         {"subject_kind": "generic"},
+        {"subject_kind": "arena"},  # Arena is discovery evidence only, never promotion evidence
         {"candidate_fingerprint": "substituted-fingerprint"},
     ],
 )

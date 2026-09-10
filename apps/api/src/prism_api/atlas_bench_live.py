@@ -23,13 +23,20 @@ from typing import Any, Optional
 
 import httpx
 from fastapi import APIRouter, HTTPException, Query, status
-from prism_api_contracts import AtlasBenchSuiteRun, AtlasModelProviderName
+from prism_api_contracts import (
+    AtlasBenchCorpusId,
+    AtlasBenchSuiteRun,
+    AtlasBenchTask,
+    AtlasModelProviderName,
+)
 
 from .atlas_base_model_trust import (
     DurableAtlasBaseModelVerificationStore,
     DurableAtlasVerifiedBaseModelRegistry,
 )
 from .atlas_bench_corpus import CORPUS_VERSION, all_tasks, corpus_hash
+from .atlas_bench_corpus_v2 import CORPUS_V2_VERSION, corpus_v2_hash
+from .atlas_bench_corpus_v2 import all_tasks as all_v2_tasks
 from .atlas_bench_policy import compute_evaluation_policy_id
 from .atlas_bench_runner import AtlasBenchSubject, run_suite
 from .atlas_bench_store import DurableAtlasBenchStore
@@ -44,6 +51,7 @@ from .atlas_runtime import OllamaAtlasProvider
 router = APIRouter(prefix="/api/v1/atlas/bench", tags=["atlas-bench"])
 _bench_store = DurableAtlasBenchStore()
 _provider_query_default = Query(default=AtlasModelProviderName.OLLAMA)
+_corpus_query_default = Query(default=AtlasBenchCorpusId.ATLASBENCH_V1)
 
 
 class AtlasBenchSubjectUnavailable(RuntimeError):
@@ -192,7 +200,25 @@ def make_live_subject(provider: AtlasModelProviderName) -> AtlasBenchSubject:
     return AtlasProviderBenchSubject(provider)
 
 
-def run_candidate_benchmark(candidate_id: str) -> AtlasBenchSuiteRun:
+def _resolve_corpus(corpus: AtlasBenchCorpusId) -> tuple[list[AtlasBenchTask], str, str]:
+    """Resolve a server-owned corpus selector to real, frozen tasks.
+
+    This is the only thing a client selects -- never the tasks, answers, or
+    scoring themselves. Each branch returns whatever the *current* frozen
+    corpus module for that id actually contains; the resulting run's own
+    ``corpus_version``/``corpus_hash`` records exactly which frozen wave was
+    used, so this stays honest even as ``atlas_bench_corpus_v2`` grows.
+    """
+    if corpus is AtlasBenchCorpusId.ATLASBENCH_V1:
+        return all_tasks(), CORPUS_VERSION, corpus_hash()
+    if corpus is AtlasBenchCorpusId.ATLASBENCH_V2_HOLDOUT:
+        return all_v2_tasks(), CORPUS_V2_VERSION, corpus_v2_hash()
+    raise AssertionError(f"unreachable: unhandled AtlasBenchCorpusId member {corpus!r}")
+
+
+def run_candidate_benchmark(
+    candidate_id: str, *, corpus: AtlasBenchCorpusId = AtlasBenchCorpusId.ATLASBENCH_V1
+) -> AtlasBenchSuiteRun:
     """Server-owned candidate evaluation with an exact verified runtime binding.
 
     This intentionally has no client-supplied model/digest inputs: callers can
@@ -228,7 +254,8 @@ def run_candidate_benchmark(candidate_id: str) -> AtlasBenchSuiteRun:
     subject = AtlasProviderBenchSubject(AtlasModelProviderName.OLLAMA, model_override=binding.runtime_model)
     if subject.model_digest != binding.runtime_model_digest:
         raise AtlasBenchSubjectUnavailable("Candidate runtime digest changed since durable binding; re-deploy and re-bind.")
-    suite, results = run_suite(subject, all_tasks(), corpus_version=CORPUS_VERSION, corpus_hash_value=corpus_hash())
+    tasks, corpus_version, corpus_hash_value = _resolve_corpus(corpus)
+    suite, results = run_suite(subject, tasks, corpus_version=corpus_version, corpus_hash_value=corpus_hash_value)
     suite = suite.model_copy(update={
         "subject_kind": "candidate", "candidate_id": candidate_id,
         "candidate_fingerprint": candidate_fingerprint,
@@ -236,7 +263,7 @@ def run_candidate_benchmark(candidate_id: str) -> AtlasBenchSuiteRun:
         "runtime_model": binding.runtime_model, "runtime_model_digest": binding.runtime_model_digest,
         "provider": "ollama",
         "evaluation_policy_id": subject.evaluation_policy_id(
-            corpus_version=CORPUS_VERSION, corpus_hash_value=corpus_hash()
+            corpus_version=corpus_version, corpus_hash_value=corpus_hash_value
         ),
     })
     return _bench_store.save(suite, results)
@@ -245,13 +272,16 @@ def run_candidate_benchmark(candidate_id: str) -> AtlasBenchSuiteRun:
 @router.post("/runs", response_model=AtlasBenchSuiteRun, status_code=status.HTTP_201_CREATED)
 def run_live_benchmark(
     provider: AtlasModelProviderName = _provider_query_default,
+    corpus: AtlasBenchCorpusId = _corpus_query_default,
 ) -> AtlasBenchSuiteRun:
     """Run and durably record AtlasBench against a real configured provider.
 
     A real Ollama subject has already passed the live `/api/tags` model probe
     before this function persists anything. That verified model may therefore
     establish the initial durable production rollback anchor. Test/reference
-    subjects never create such an anchor.
+    subjects never create such an anchor. ``corpus`` is a bounded, server-owned
+    selector (default V1, unchanged from before this existed) -- never a
+    channel for a client to supply tasks, answers, or scoring.
     """
     try:
         subject = make_live_subject(provider)
@@ -261,12 +291,12 @@ def run_live_benchmark(
     if isinstance(subject, AtlasProviderBenchSubject):
         ensure_configured_production_baseline(runtime_model_digest=subject.model_digest)
 
-    tasks = all_tasks()
+    tasks, corpus_version, corpus_hash_value = _resolve_corpus(corpus)
     suite_run, results = run_suite(
         subject,
         tasks,
-        corpus_version=CORPUS_VERSION,
-        corpus_hash_value=corpus_hash(),
+        corpus_version=corpus_version,
+        corpus_hash_value=corpus_hash_value,
     )
     if not isinstance(subject, AtlasProviderBenchSubject):
         # Test/reference subjects are not production evidence and cannot be
@@ -284,7 +314,7 @@ def run_live_benchmark(
                 "runtime_model_digest": subject.model_digest,
                 "provider": "ollama",
                 "evaluation_policy_id": subject.evaluation_policy_id(
-                    corpus_version=CORPUS_VERSION, corpus_hash_value=corpus_hash()
+                    corpus_version=corpus_version, corpus_hash_value=corpus_hash_value
                 ),
             }
         ),
@@ -293,8 +323,11 @@ def run_live_benchmark(
 
 
 @router.post("/candidates/{candidate_id}/runs", response_model=AtlasBenchSuiteRun, status_code=status.HTTP_201_CREATED)
-def run_candidate_live_benchmark(candidate_id: str) -> AtlasBenchSuiteRun:
+def run_candidate_live_benchmark(
+    candidate_id: str,
+    corpus: AtlasBenchCorpusId = _corpus_query_default,
+) -> AtlasBenchSuiteRun:
     try:
-        return run_candidate_benchmark(candidate_id)
+        return run_candidate_benchmark(candidate_id, corpus=corpus)
     except AtlasBenchSubjectUnavailable as error:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error

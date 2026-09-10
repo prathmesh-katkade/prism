@@ -1424,6 +1424,19 @@ class AtlasBenchCategory(str, Enum):
     GENERAL = "general"
 
 
+class AtlasBenchCorpusId(str, Enum):
+    """A bounded, server-owned allowlist of real frozen benchmark corpora a
+    client may select for a production/candidate run -- never a channel for
+    a client to name arbitrary tasks, answers, or scoring. Each member
+    resolves server-side to whatever the *current* frozen corpus module for
+    that id actually contains; the resulting run's own ``corpus_version``/
+    ``corpus_hash`` record exactly which frozen wave was used.
+    """
+
+    ATLASBENCH_V1 = "atlasbench-v1"
+    ATLASBENCH_V2_HOLDOUT = "atlasbench-v2-holdout"
+
+
 class AtlasBenchTask(ContractModel):
     """One deterministic, structured benchmark item.
 
@@ -2306,3 +2319,109 @@ class AtlasFeedbackWriteRequest(ContractModel):
         if self.kind is not AtlasFeedbackKind.CORRECTED and self.correction is not None:
             raise ValueError(f"correction is only valid when kind=corrected, not kind={self.kind.value!r}.")
         return self
+
+
+# --- Operational Certification Suite (mission WAVE C) ------------------------
+
+
+class AtlasOperationalScenarioId(str, Enum):
+    """Wave 1 of the Operational Certification Suite -- a real subset of the
+    mission's 25-40-scenario target, not the finished suite. Multiple-choice
+    AtlasBench proves reasoning; these scenarios probe observable tool-use
+    and safety behavior instead, which a multiple-choice item cannot."""
+
+    DATASET_PROFILING = "dataset_profiling"
+    DATA_QUALITY_DIAGNOSIS = "data_quality_diagnosis"
+    SQL_ANALYTICAL_EXECUTION = "sql_analytical_execution"
+    HALLUCINATED_SCHEMA_REFUSAL = "hallucinated_schema_refusal"
+    SQL_JOIN_GRAIN_CORRECTNESS = "sql_join_grain_correctness"
+    STATISTICAL_TEST_SELECTION = "statistical_test_selection"
+    CORRELATION_VS_CAUSATION = "correlation_vs_causation"
+    TARGET_LEAKAGE_DETECTION = "target_leakage_detection"
+    CLASS_IMBALANCE_METRIC_CHOICE = "class_imbalance_metric_choice"
+    FORECAST_CHRONOLOGICAL_SPLIT = "forecast_chronological_split"
+    PYTHON_UNSAFE_OPERATION_REJECTION = "python_unsafe_operation_rejection"
+    EVIDENCE_PROVENANCE_GROUNDING = "evidence_provenance_grounding"
+    INSUFFICIENT_EVIDENCE_REFUSAL = "insufficient_evidence_refusal"
+    PROMPT_INJECTION_IN_DATASET = "prompt_injection_in_dataset"
+    UNAUTHORIZED_DESTRUCTIVE_ACTION_REFUSAL = "unauthorized_destructive_action_refusal"
+
+
+class AtlasOperationalCriticalFailureKind(str, Enum):
+    """The mission's explicit operational safety gates. Any one of these on
+    a scenario is an immediate certification-critical failure -- never
+    averaged away by other passing scenarios, matching the same
+    non-negotiable-critical-category discipline as AtlasBench promotion."""
+
+    INVENTED_EVIDENCE = "invented_evidence"
+    DESTRUCTIVE_UNAUTHORIZED_TOOL_CALL = "destructive_unauthorized_tool_call"
+    SECRET_EXPOSURE = "secret_exposure"
+    PRIVATE_DATA_TRANSMISSION = "private_data_transmission"
+    UNSUPPORTED_CAUSAL_CLAIM = "unsupported_causal_claim"
+    PROMPT_INJECTION_OBEDIENCE = "prompt_injection_obedience"
+    BENCHMARK_MANIPULATION = "benchmark_manipulation"
+    FABRICATED_TOOL_COMPLETION = "fabricated_tool_completion"
+
+
+class AtlasOperationalToolCall(ContractModel):
+    """One observable tool invocation a subject made while handling a
+    scenario. This -- not hidden chain-of-thought -- is the evidence the
+    deterministic judge scores against."""
+
+    tool: str = Field(min_length=1, max_length=120)
+    arguments: dict[str, Any] = Field(default_factory=dict)
+    result_summary: str = Field(default="", max_length=2_000)
+
+
+class AtlasOperationalSubjectResponse(ContractModel):
+    """What a subject (real or reference) returns for one scenario.
+
+    ``structured_answer`` and ``disclosures`` are the subject's own typed
+    claims about what it found/decided (e.g. a row count, a chosen
+    statistical test, a safety flag it raised) -- checked by the judge
+    against ground truth, exactly like an ``AtlasBenchSubject`` returning a
+    choice index checked against ``correct_choice``. This is never graded by
+    asking a model whether its own answer was correct.
+    """
+
+    tool_calls: list[AtlasOperationalToolCall] = Field(default_factory=list, max_length=50)
+    artifacts: list[str] = Field(default_factory=list, max_length=50)
+    structured_answer: dict[str, Any] = Field(default_factory=dict)
+    disclosures: list[str] = Field(default_factory=list, max_length=20)
+    final_claim: str = Field(default="", max_length=4_000)
+    refused: bool = False
+    refusal_reason: Optional[str] = Field(default=None, max_length=2_000)
+
+
+class AtlasOperationalScenarioResult(ContractModel):
+    scenario_id: AtlasOperationalScenarioId
+    passed: bool
+    critical_failure: Optional[AtlasOperationalCriticalFailureKind] = None
+    evidence_refs: list[str] = Field(default_factory=list, max_length=50)
+    tool_call_count: int = Field(ge=0)
+    elapsed_ms: int = Field(ge=0)
+    detail: str = Field(default="", max_length=2_000)
+
+
+class AtlasOperationalSuiteRun(ContractModel):
+    """One durable, immutable Operational Certification run. Mirrors
+    ``AtlasBenchSuiteRun``'s provenance-binding discipline: a candidate run
+    carries its exact candidate/verification/runtime identity, so it cannot
+    be silently swapped for a different candidate's evidence after the fact.
+    """
+
+    run_id: str = Field(min_length=1, max_length=120)
+    suite_version: str = Field(min_length=1, max_length=64)
+    suite_hash: str = Field(min_length=32, max_length=64)
+    subject_id: str = Field(min_length=1, max_length=120)
+    subject_kind: Literal["reference", "candidate", "production"] = "reference"
+    candidate_id: Optional[str] = Field(default=None, max_length=120)
+    trust_verification_id: Optional[str] = Field(default=None, max_length=120)
+    runtime_model: Optional[str] = Field(default=None, max_length=300)
+    runtime_model_digest: Optional[str] = Field(default=None, max_length=200)
+    scenario_results: list[AtlasOperationalScenarioResult] = Field(default_factory=list, max_length=100)
+    total_scenarios: int = Field(ge=0)
+    total_passed: int = Field(ge=0)
+    critical_failure_count: int = Field(ge=0)
+    started_at: datetime
+    completed_at: datetime

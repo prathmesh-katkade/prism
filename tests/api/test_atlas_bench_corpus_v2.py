@@ -21,7 +21,7 @@ def _normalized_tokens(text: str) -> set[str]:
 
 def test_v2_corpus_has_unique_ids_and_valid_answers() -> None:
     tasks = all_tasks()
-    assert len(tasks) >= 45, "AtlasBench V2 waves 1+2 should be a real batch, not a handful of placeholders"
+    assert len(tasks) >= 75, "AtlasBench V2 waves 1+2+3 should be a real batch, not a handful of placeholders"
     ids = [task.task_id for task in tasks]
     assert len(set(ids)) == len(ids), "every V2 task_id must be unique"
     assert all(task_id.startswith("v2_") for task_id in ids), "V2 task ids must be clearly distinguishable from v1"

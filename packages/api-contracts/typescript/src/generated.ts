@@ -115,6 +115,8 @@ export interface AtlasBenchCategoryScore {
   passed: number;
 }
 
+export type AtlasBenchCorpusId = "atlasbench-v1" | "atlasbench-v2-holdout";
+
 export interface AtlasBenchCorpusSummary {
   corpus_version: string;
   corpus_hash: string;
@@ -458,6 +460,38 @@ export interface AtlasModelProviderCapabilities {
 }
 
 export type AtlasModelProviderName = "deterministic" | "ollama";
+
+export type AtlasOperationalCriticalFailureKind = "invented_evidence" | "destructive_unauthorized_tool_call" | "secret_exposure" | "private_data_transmission" | "unsupported_causal_claim" | "prompt_injection_obedience" | "benchmark_manipulation" | "fabricated_tool_completion";
+
+export type AtlasOperationalScenarioId = "dataset_profiling" | "data_quality_diagnosis" | "sql_analytical_execution" | "hallucinated_schema_refusal" | "sql_join_grain_correctness" | "statistical_test_selection" | "correlation_vs_causation" | "target_leakage_detection" | "class_imbalance_metric_choice" | "forecast_chronological_split" | "python_unsafe_operation_rejection" | "evidence_provenance_grounding" | "insufficient_evidence_refusal" | "prompt_injection_in_dataset" | "unauthorized_destructive_action_refusal";
+
+export interface AtlasOperationalScenarioResult {
+  scenario_id: AtlasOperationalScenarioId;
+  passed: boolean;
+  critical_failure?: AtlasOperationalCriticalFailureKind;
+  evidence_refs?: string[];
+  tool_call_count: number;
+  elapsed_ms: number;
+  detail?: string;
+}
+
+export interface AtlasOperationalSuiteRun {
+  run_id: string;
+  suite_version: string;
+  suite_hash: string;
+  subject_id: string;
+  subject_kind?: "reference" | "candidate" | "production";
+  candidate_id?: string;
+  trust_verification_id?: string;
+  runtime_model?: string;
+  runtime_model_digest?: string;
+  scenario_results?: AtlasOperationalScenarioResult[];
+  total_scenarios: number;
+  total_passed: number;
+  critical_failure_count: number;
+  started_at: string;
+  completed_at: string;
+}
 
 export type AtlasOverviewAction = "explain_dataset" | "diagnose_quality" | "inspect_anomaly" | "suggest_next_analysis" | "trace_source" | "compare_columns" | "summarize_risks";
 

@@ -79,25 +79,31 @@ DurableAtlasCandidateRuntimeStore().bind_ollama(
 )
 ```
 
-## 5. Run a fresh trusted candidate AtlasBench V1 pass
+## 5. Run a fresh trusted candidate AtlasBench pass (V1, then V2 holdout)
 
 ```powershell
-curl -X POST http://127.0.0.1:8000/api/v1/atlas/bench/candidates/<candidate_id>/runs
+curl -X POST "http://127.0.0.1:8000/api/v1/atlas/bench/candidates/<candidate_id>/runs?corpus=atlasbench-v1"
+curl -X POST "http://127.0.0.1:8000/api/v1/atlas/bench/candidates/<candidate_id>/runs?corpus=atlasbench-v2-holdout"
 ```
 
-This is a *new* promotion-eligible run through the candidate path -- not a
+`corpus` is a bounded, server-owned selector added after this runbook was
+first written -- omitting it defaults to V1 (unchanged prior behavior).
+Each is a *new* promotion-eligible run through the candidate path -- not a
 relabeling of the existing Arena evidence. Set
 `PRISM_ATLAS_BENCH_OLLAMA_CONTEXT_TOKENS=4096` in the server's environment
 first so this run's `evaluation_policy_id` matches the production run's.
+The V2 holdout is now 80 tasks (waves 1-3); still short of the ~150 target.
 
-## 6. Run a fresh production AtlasBench V1 pass under the same policy
+## 6. Run a fresh production AtlasBench pass under the same policy and corpus
 
 If production has not already been benchmarked under the pinned-context
 policy (check `GET /api/v1/atlas/bench/runs/{production_subject_id}` for a
-run with a non-null `evaluation_policy_id`), run one:
+run with a non-null `evaluation_policy_id`), run one for each corpus you
+intend to compare against:
 
 ```powershell
-curl -X POST "http://127.0.0.1:8000/api/v1/atlas/bench/runs?provider=ollama"
+curl -X POST "http://127.0.0.1:8000/api/v1/atlas/bench/runs?provider=ollama&corpus=atlasbench-v1"
+curl -X POST "http://127.0.0.1:8000/api/v1/atlas/bench/runs?provider=ollama&corpus=atlasbench-v2-holdout"
 ```
 
 ## 7. Compute the promotion decision
@@ -125,15 +131,31 @@ proving the rollback path actually restores the exact prior digest is the
 whole point of doing this on a real daemon rather than trusting the code by
 inspection alone.
 
+## 9. Run the Operational Certification Suite (wave 1, reference subjects only)
+
+```powershell
+curl -X POST "http://127.0.0.1:8000/api/v1/atlas/operational-cert/reference-runs?kind=perfect"
+curl -X POST "http://127.0.0.1:8000/api/v1/atlas/operational-cert/reference-runs?kind=unsafe"
+```
+
+This exists to prove the harness's own scoring logic is correct (mirroring
+`PerfectReferenceSubject`/`WorstReferenceSubject` for AtlasBench) -- it does
+**not** run the actual candidate. There is no live-provider Operational
+Certification subject yet; wiring one that drives real SQL/Python/RAG tool
+execution against Qwen 2507 is separate, substantial future work (it needs
+the physical tool-orchestration stack: `ai_analyst.py`, `atlas_research.py`,
+`sql_lab.py`). Until that exists, the suite is real and tested but not part
+of any promotion decision for this candidate.
+
 ## What this runbook does not cover
 
-- The Operational Certification Suite (WAVE G of the mission) does not exist
-  in this repository yet. Building and running it is separate future work,
-  not a step this runbook can skip past.
-- AtlasBench V2 wave 2 (in this same commit) has not been run against any
-  model yet; step 5 above only covers V1. Run
-  `POST /api/v1/atlas/bench/candidates/<candidate_id>/runs` is V1-corpus-only
-  today -- extending it to V2 requires wiring the V2 corpus into the same
-  candidate route, which has not been done.
+- The Operational Certification Suite has a real, tested harness (15
+  scenarios, wave 1 of the mission's 25-40 target) as of this update, but
+  no live-provider subject -- see step 9. Running it against the actual
+  candidate is still future work, not something this runbook can complete.
+- AtlasBench V2 is now selectable through the same candidate/production
+  routes (step 5/6) and has grown to 80 tasks (waves 1-3); it has still
+  never been run against any live model, and 80 is still short of the
+  ~150-task target.
 - Fine-tuning Qwen3-4B-Instruct-2507 remains explicitly out of scope unless
   a genuine capability gap is found later; nothing here trains anything.
