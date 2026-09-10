@@ -1,5 +1,38 @@
 # Runbook: certify Qwen3-4B-Instruct-2507 as a VERIFIED_BASE_MODEL candidate
 
+## Superseding update (2026-09-10, cloud session, after the physical certification pass)
+
+**Steps 0-7 below are already done for real** -- see
+`docs/migration/PHASE10_PHYSICAL_CERTIFICATION_20260910.md` and its `.json`
+sibling for the exact candidate/verification/binding/run/decision IDs
+(candidate `basemodel_585b7e79e9f195024a57dc9a`, runtime
+`qwen3:4b-instruct-2507-q4_K_M` at digest
+`0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0`, fresh V1
+`90/90` vs production `74/90`, fresh V2 holdout `78/80` vs production
+`58/80`, both `promote_eligible`). **Do not re-register, re-verify, or
+re-bench unless the live digest has actually drifted** -- re-check with
+`ollama list` first; reuse the existing candidate_id and run_ids otherwise.
+
+Step 8 below is now out of date: a live-provider Operational Certification
+subject exists (`atlas_operational_live.AtlasProviderOperationalSubject`,
+exposed as `POST /api/v1/atlas/operational-cert/candidates/{candidate_id}/runs`),
+and promotion now fails closed without a fresh, clean run from it (see the
+replacement step 8 and the new step 8.5 below). This is genuinely new
+server-owned code -- registered, tested (`tests/api/test_atlas_operational_live.py`,
+`tests/api/test_atlas_operational_promotion_gate.py`), and gated on a live
+Ollama digest match -- but **it has never actually been run against Qwen**:
+this cloud session has no GPU/Ollama/Windows access to run it, exactly as
+before. Running the commands below against the real daemon, reading the
+real result, and completing the promotion drill (step 9) is still the next
+physical action, not something this update claims to have done.
+
+The rest of this file (steps 0-7, 9, and the original "what this runbook
+does not cover" section) is preserved below as the original execution plan
+that steps 0-7 were actually run against; only step 8 now has a dated
+replacement immediately after it.
+
+---
+
 This is an execution runbook for the physical Windows/GTX 1650 machine, not a
 report of anything already done. Nothing in this file has been run by any
 cloud session -- there is no GPU, no Ollama daemon, and no Soup runtime
@@ -118,21 +151,52 @@ This will fail closed with a clear 409 if the corpus, category coverage, or
 evaluation-policy identity do not match exactly between the two runs -- that
 is the new gate working as designed, not a bug to route around.
 
-## 8. Run the Operational Certification Suite (reference subjects only)
+## 8. Run the Operational Certification Suite (reference subjects only) -- superseded, see 8.5
 
 ```powershell
 curl -X POST "http://127.0.0.1:8000/api/v1/atlas/operational-cert/reference-runs?kind=perfect"
 curl -X POST "http://127.0.0.1:8000/api/v1/atlas/operational-cert/reference-runs?kind=unsafe"
 ```
 
-This exists to prove the harness's own scoring logic is correct (mirroring
-`PerfectReferenceSubject`/`WorstReferenceSubject` for AtlasBench) -- it does
-**not** run the actual candidate. There is no live-provider Operational
-Certification subject yet; wiring one that drives real SQL/Python/RAG tool
-execution against Qwen 2507 is separate, substantial future work (it needs
-the physical tool-orchestration stack: `ai_analyst.py`, `atlas_research.py`,
-`sql_lab.py`). Until that exists, the suite (23 scenarios as of this update)
-is real and tested but not part of any promotion decision for this candidate.
+This still exists and still only proves the harness's own scoring logic is
+correct (mirroring `PerfectReferenceSubject`/`WorstReferenceSubject` for
+AtlasBench) -- it never runs the actual candidate. Worth re-running once on
+the physical machine as a sanity check that the judges still discriminate
+correctly there, but it is not the certification step anymore -- see 8.5.
+
+## 8.5. Run the LIVE Operational Certification against the real Qwen candidate (2026-09-10 addition)
+
+A live-provider subject now exists
+(`atlas_operational_live.AtlasProviderOperationalSubject`). It drives the
+real local model over Ollama through all 23 frozen scenarios, lets the
+harness itself (not the model's self-report) own the two
+objectively-checkable results, and fails closed to an honest zero-pass run
+if the model or daemon is unreachable -- see that module's docstring for
+the exact discipline. Run it against the exact verified candidate:
+
+```powershell
+curl -X POST "http://127.0.0.1:8000/api/v1/atlas/operational-cert/candidates/<candidate_id>/runs"
+```
+
+This fails closed with a 409 unless the candidate is VERIFIED, has a durable
+Ollama runtime binding, and that binding's live digest matches right now
+(re-verify/re-bind first if `ollama list` shows drift). On success it
+returns and durably records a real `AtlasOperationalSuiteRun` with
+`subject_kind: "candidate"` -- read `critical_failure_count` and
+`total_passed`/`total_scenarios` from the real response; do not assume
+either.
+
+**Read the result before doing anything else.** If
+`critical_failure_count > 0`, stop -- this is a genuine safety finding
+about Qwen's real operational behavior, and the fix is a real product/safety
+investigation, never a suite change (`GET /api/v1/atlas/operational-cert/runs/{run_id}`
+shows exactly which scenario(s) and which critical-failure kind). If it
+passed cleanly (`critical_failure_count == 0` and
+`total_passed / total_scenarios >= 0.90`), continue to step 9 --
+`POST /api/v1/atlas/promotion/promote` will now itself refuse (409,
+"Operational Certification prerequisite not met: ...") unless this exact
+condition holds for the exact candidate/runtime-digest/suite-hash being
+promoted, so there is no way to promote around a bad or missing result.
 
 ## 9. Only if verdict is `promote_eligible`: the full promote / rollback / final-promote drill
 
@@ -172,18 +236,27 @@ this on a real daemon rather than trusting the code by inspection alone.
 
 ## What this runbook does not cover
 
-- The Operational Certification Suite has a real, tested harness (23
-  scenarios, within the deadline-sprint 20-25 target) as of this update, but
-  no live-provider subject -- see step 8. Running it against the actual
-  candidate is still future work, not something this runbook can complete.
+- ~~The Operational Certification Suite has... no live-provider subject~~ --
+  **superseded 2026-09-10**: a live-provider subject and its
+  `POST /candidates/{candidate_id}/runs` route now exist (step 8.5) and are
+  the actual promotion gate. What is still true: it has never been run
+  against the real Qwen candidate, because that requires the physical
+  daemon this cloud session does not have.
 - AtlasBench V2 is now selectable through the same candidate/production
   routes (step 5/6) and has grown to 80 tasks (waves 1-3) -- within the
   deadline-sprint 80-100 task target for a serious independent holdout. It
-  has still never been run against any live model. The original ~150+
+  has been run once against the real Qwen candidate (see the physical
+  certification report: 78/80 vs production 58/80). The original ~150+
   stretch goal remains a future-wave improvement, not a blocker.
 - Fine-tuning Qwen3-4B-Instruct-2507 remains explicitly out of scope unless
   a genuine capability gap is found later; nothing here trains anything.
-- **ATLAS First Light GUI work has not started.** Per the mission's own
-  sequencing, GUI work begins only once Qwen is safely in production --
-  i.e. after this entire runbook (steps 1-9) has actually been run and the
-  final promotion verified. Do not start GUI work before that.
+- **ATLAS First Light GUI work has started, deliberately ahead of full
+  production promotion** (superseded 2026-09-10): a read-only
+  `GET /api/v1/atlas/promotion/current-status` aggregation and an
+  always-visible topbar trust badge now exist and render real backend
+  state honestly (currently: legacy production, Qwen still only a verified
+  candidate) -- see `CLAUDE_SESSION_HANDOFF.md` for what exactly. This is
+  additive GUI plumbing that reads existing durable state; it does not
+  change, and was not gated behind, this runbook's own promotion sequence.
+  A fuller Command Center view is still sequenced after promotion actually
+  completes, per the original mission ordering.

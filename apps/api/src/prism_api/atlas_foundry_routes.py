@@ -718,10 +718,26 @@ def promote_candidate(decision_id: str, reason: str) -> AtlasProductionPointer:
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Candidate has no VERIFIED base-model trust record; refusing to promote.",
             )
-    if _candidate_runtime_store.latest(decision.candidate_id) is None:
+    binding = _candidate_runtime_store.latest(decision.candidate_id)
+    if binding is None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Candidate has no verified Ollama runtime binding; promotion cannot change Atlas safely.",
+        )
+    from .atlas_operational_cert import (
+        latest_candidate_operational_run,
+        operational_certification_failure_reason,
+    )
+
+    operational_failure = operational_certification_failure_reason(
+        latest_candidate_operational_run(decision.candidate_id),
+        candidate_id=decision.candidate_id,
+        runtime_model_digest=binding.runtime_model_digest,
+    )
+    if operational_failure is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Operational Certification prerequisite not met: {operational_failure}",
         )
     try:
         pointer = _promotion_store.promote(decision, reason=reason)
