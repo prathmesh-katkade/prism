@@ -1111,10 +1111,33 @@ class AtlasRunEvent(ContractModel):
     payload: dict[str, object] = Field(default_factory=dict)
 
 
+class AtlasFeatureDeclaration(ContractModel):
+    """Declared lineage, never proof that a feature is available in production."""
+
+    name: str = Field(min_length=1, max_length=120)
+    derived_from: list[str] = Field(default_factory=list, max_length=100)
+    outcome_proxy: bool = False
+    post_outcome: bool = False
+    available_at: Optional[datetime] = None
+    lag: Optional[int] = None
+    window_start_offset: Optional[int] = None
+    window_end_offset: Optional[int] = None
+    label_window_overlap: bool = False
+
+
+class AtlasGuardrailContext(ContractModel):
+    target: Optional[str] = Field(default=None, min_length=1, max_length=120)
+    prediction_cutoff: Optional[datetime] = None
+    features: list[AtlasFeatureDeclaration] = Field(default_factory=list, max_length=100)
+    evidence_object_ids: list[str] = Field(default_factory=list, max_length=20)
+    evidence_metric: Optional[str] = Field(default=None, min_length=1, max_length=120)
+
+
 class AtlasRunRequest(ContractModel):
     dataset_id: str = Field(min_length=1)
     objective: str = Field(min_length=3, max_length=2_000)
     idempotency_key: Optional[str] = Field(default=None, min_length=8, max_length=120)
+    guardrail_context: Optional[AtlasGuardrailContext] = None
 
 
 class AtlasRunResponse(ContractModel):
@@ -1372,6 +1395,7 @@ class AtlasSandboxExecutionResult(ContractModel):
     error: Optional[str] = Field(default=None, max_length=2_000)
     duration_ms: int = Field(ge=0)
     limits_enforced: list[str] = Field(default_factory=list)
+    guardrail_decision: dict[str, object] = Field(default_factory=dict)
 
 
 class AtlasSandboxWorkerHealth(ContractModel):
@@ -2400,6 +2424,9 @@ class AtlasOperationalSubjectResponse(ContractModel):
     final_claim: str = Field(default="", max_length=4_000)
     refused: bool = False
     refusal_reason: Optional[str] = Field(default=None, max_length=2_000)
+    guardrail_decision: dict[str, object] = Field(default_factory=dict)
+    action_audit: list[dict[str, object]] = Field(default_factory=list, max_length=50)
+    model_response_received: Optional[bool] = None
 
 
 class AtlasOperationalScenarioResult(ContractModel):

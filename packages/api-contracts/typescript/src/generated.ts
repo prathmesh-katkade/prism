@@ -272,6 +272,18 @@ export interface AtlasEvidenceReference {
   source_fingerprint?: string;
 }
 
+export interface AtlasFeatureDeclaration {
+  name: string;
+  derived_from?: string[];
+  outcome_proxy?: boolean;
+  post_outcome?: boolean;
+  available_at?: string;
+  lag?: number;
+  window_start_offset?: number;
+  window_end_offset?: number;
+  label_window_overlap?: boolean;
+}
+
 export interface AtlasFeedbackEvent {
   feedback_id: string;
   run_id: string;
@@ -329,6 +341,14 @@ export interface AtlasFoundryPreflight {
   estimated_tokens_per_sec?: number;
   recommended_batch_size?: number;
   detail: string;
+}
+
+export interface AtlasGuardrailContext {
+  target?: string;
+  prediction_cutoff?: string;
+  features?: AtlasFeatureDeclaration[];
+  evidence_object_ids?: string[];
+  evidence_metric?: string;
 }
 
 export interface AtlasKnowledgeChunk {
@@ -486,6 +506,9 @@ export interface AtlasOperationalSubjectResponse {
   final_claim?: string;
   refused?: boolean;
   refusal_reason?: string;
+  guardrail_decision?: Record<string, unknown>;
+  action_audit?: Record<string, unknown>[];
+  model_response_received?: boolean;
 }
 
 export interface AtlasOperationalSuiteRun {
@@ -762,6 +785,7 @@ export interface AtlasRunRequest {
   dataset_id: string;
   objective: string;
   idempotency_key?: string;
+  guardrail_context?: AtlasGuardrailContext;
 }
 
 export interface AtlasRunResponse {
@@ -803,6 +827,7 @@ export interface AtlasSandboxExecutionResult {
   error?: string;
   duration_ms: number;
   limits_enforced?: string[];
+  guardrail_decision?: Record<string, unknown>;
 }
 
 export interface AtlasSandboxWorkerHealth {

@@ -36,6 +36,7 @@ from .models import (
     AtlasEmbeddingCapability,
     AtlasEvidence,
     AtlasEvidenceReference,
+    AtlasFeatureDeclaration,
     AtlasFeedbackEvent,
     AtlasFeedbackKind,
     AtlasFeedbackWriteRequest,
@@ -45,6 +46,7 @@ from .models import (
     AtlasFoundryBackendName,
     AtlasFoundryCapability,
     AtlasFoundryPreflight,
+    AtlasGuardrailContext,
     AtlasKnowledgeChunk,
     AtlasKnowledgeSearchRequest,
     AtlasKnowledgeSourceRequest,
@@ -230,6 +232,7 @@ from .models import (
 )
 
 __all__ = [
+    "AtlasFeatureDeclaration", "AtlasGuardrailContext",
     "ApiError", "AiAnalystOutcome", "AiAnalystRequest", "AiAnalystResponse", "AiContextPacket", "AiEvidence", "AiProviderStatus", "AtlasEvidence", "AtlasOverviewAction", "AtlasOverviewRequest", "AtlasOverviewResponse",
     "AtlasBenchmarkResult", "AtlasBenchmarkVerdict", "AtlasCouncilConclusion", "AtlasEvidenceReference", "AtlasMemoryClass", "AtlasMemoryQuery", "AtlasMemoryRecord", "AtlasMemoryScope", "AtlasMemoryWriteRequest", "AtlasModelProviderCapabilities", "AtlasModelProviderName", "AtlasProviderCapability", "AtlasModelTrust", "AtlasPlanState", "AtlasPlanStep", "AtlasResourcePriority", "AtlasResourceLease", "AtlasResourceLeaseRequest", "AtlasResourceSnapshot", "AtlasResourceWorkload", "AtlasKnowledgeChunk", "AtlasKnowledgeSearchRequest", "AtlasKnowledgeSourceRequest", "AtlasEmbeddingCapability", "AtlasRetrievalChunk", "AtlasRetrievalChunkUpsertRequest", "AtlasRetrievalQueryRequest", "AtlasRetrievalResult", "AtlasResearchRequest", "AtlasResearchResult", "AtlasRunEvent", "AtlasRunEventType", "AtlasRunRequest", "AtlasRunResponse", "AtlasSandboxArtifact", "AtlasSandboxErrorKind", "AtlasSandboxExecutionRequest", "AtlasSandboxExecutionResult", "AtlasSandboxWorkerHealth", "AtlasSpecialistId", "AtlasSpecialistIdentity", "AtlasStepKind", "AtlasStepState", "AtlasStructuredPlan",
     "AtlasOperationalScenarioId", "AtlasOperationalCriticalFailureKind", "AtlasOperationalToolCall", "AtlasOperationalSubjectResponse", "AtlasOperationalScenarioResult", "AtlasOperationalSuiteRun",

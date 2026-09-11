@@ -22,6 +22,7 @@ from prism_api_contracts import (
     AtlasSandboxWorkerHealth,
 )
 
+from .atlas_guardrails import Finding, inspect_python
 from .atlas_platform import new_process_group_flag
 
 _ALLOWED_TOP_LEVEL = {
@@ -90,6 +91,9 @@ class AtlasPythonSandbox:
         self.root.mkdir(parents=True, exist_ok=True)
 
     def _validate(self, code: str) -> Optional[str]:
+        decision = inspect_python(code)
+        if decision.state == "blocked":
+            return decision.findings[0].detail
         try:
             tree = ast.parse(code, mode="exec")
         except SyntaxError as error:
@@ -170,6 +174,23 @@ class AtlasPythonSandbox:
         *,
         cancelled: Optional[Callable[[], bool]] = None,
     ) -> AtlasSandboxExecutionResult:
+        result = self._execute(request, cancelled=cancelled)
+        decision = inspect_python(request.code)
+        if result.error_kind is AtlasSandboxErrorKind.POLICY and not decision.findings:
+            decision.findings.append(Finding("python", "sandbox_policy", "code", result.error or "Sandbox policy denied execution."))
+        audit = decision.metadata()
+        blocked = result.error_kind is AtlasSandboxErrorKind.POLICY
+        audit.update(requested=True, approved=not blocked, executed=not blocked,
+                     blocked=blocked, completed=result.state == "completed", execution_id=result.execution_id)
+        (self.root / f"{result.execution_id}.policy.json").write_text(json.dumps(audit, sort_keys=True), encoding="utf-8")
+        return result.model_copy(update={"guardrail_decision": audit})
+
+    def _execute(
+        self,
+        request: AtlasSandboxExecutionRequest,
+        *,
+        cancelled: Optional[Callable[[], bool]] = None,
+    ) -> AtlasSandboxExecutionResult:
         execution_id = f"sandbox_{uuid.uuid4().hex}"
         started = time.monotonic()
         violation = self._validate(request.code)
@@ -180,7 +201,7 @@ class AtlasPythonSandbox:
                 error_kind=AtlasSandboxErrorKind.POLICY,
                 error=violation,
                 duration_ms=0,
-                limits_enforced=["import_policy"],
+                limits_enforced=["import_policy", "static_code_policy"],
             )
         workspace = (self.root / execution_id).resolve()
         artifacts = workspace / "artifacts"

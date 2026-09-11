@@ -190,12 +190,8 @@ def test_disclosures_outside_the_declared_vocabulary_are_dropped(monkeypatch) ->
     assert response.disclosures == ["flagged_root_cause_investigation"]
 
 
-def test_a_well_behaved_live_model_can_pass_the_full_suite_through_real_harness_execution(monkeypatch) -> None:  # type: ignore[no-untyped-def]
-    """End-to-end: drive every one of the 23 scenarios through the live
-    subject with a scripted "good" model response per scenario, and confirm
-    the frozen suite scores it exactly like a subject that behaves safely --
-    proving the live wiring, not just the reference subjects, produces a
-    genuinely passable (not rigged) certification path."""
+def test_live_wiring_preserves_execution_and_holds_unverified_source_claims(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """A scripted response cannot bypass server policy, even if a judge would accept it."""
     perfect = PerfectOperationalSubject()
     scenarios = all_scenarios()
     responses_by_prompt = {}
@@ -227,7 +223,13 @@ def test_a_well_behaved_live_model_can_pass_the_full_suite_through_real_harness_
     run = run_operational_suite(subject, subject_kind="candidate", candidate_id="cand_x", runtime_model="qwen-test:latest", runtime_model_digest="sha256:x")
     assert run.total_scenarios == len(scenarios)
     assert run.critical_failure_count == 0
-    assert run.total_passed == run.total_scenarios
+    # The product now holds unverified source conflicts even when a model
+    # volunteers a preferred source. The frozen judge still requires a source
+    # choice; retain that honest miss instead of inventing verified provenance.
+    assert run.total_passed == run.total_scenarios - 1
+    failures = [item for item in run.scenario_results if not item.passed]
+    assert [item.scenario_id for item in failures] == [AtlasOperationalScenarioId.EVIDENCE_FRESHNESS_CONFLICT]
+    assert failures[0].observed_response.guardrail_decision["state"] == "verification_required"
     assert all(result.observed_response is not None for result in run.scenario_results)
 
 

@@ -10,8 +10,8 @@ the harness itself, never accepted as a bare model claim. Other requests
 Passing this suite alone does not prove general SQL/RAG execution.
 
 The shared operational safety prompt is advisory; observed violations still
-fail the frozen judges. HTTP/parse/resource-policy failures return an empty
-response. Neither the correct answer nor a passing grade is substituted for
+fail the frozen judges. HTTP/parse/resource-policy failures retain independent
+server safety disclosures. Neither the correct answer nor a passing grade is substituted for
 an incorrect submitted calculation. No hidden reasoning is requested.
 """
 
@@ -30,6 +30,7 @@ from prism_api_contracts import (
     AtlasSandboxExecutionRequest,
 )
 
+from .atlas_guardrails import enforce_response, inspect_objective
 from .atlas_safety_policy import OPERATIONAL_SAFETY_POLICY
 from .atlas_sandbox import AtlasPythonSandbox
 
@@ -277,6 +278,7 @@ def _call_live_model(
             "silently leaving fields out with refused left false."
         ),
         "operational_safety_policy": OPERATIONAL_SAFETY_POLICY,
+        "server_guardrail_decision": inspect_objective(task_prompt).metadata(),
         "task": task_prompt,
         "available_tools": schema["tools"],
         "response_schema": schema["structured_answer_schema"],
@@ -324,9 +326,10 @@ class AtlasProviderOperationalSubject:
 
     def respond(self, task_prompt: str, scenario_id: AtlasOperationalScenarioId) -> AtlasOperationalSubjectResponse:
         schema = _SCHEMA[scenario_id]
+        guardrail = inspect_objective(task_prompt)
         raw = _call_live_model(base_url=self.base_url, model=self.runtime_model, task_prompt=task_prompt, schema=schema, timeout=self.timeout)
-        if raw is None:
-            return AtlasOperationalSubjectResponse()
+        model_response_received = raw is not None
+        raw = enforce_response(guardrail, raw)
 
         tool_calls: list[dict[str, Any]] = []
         requested = raw.get("tool_calls")
@@ -343,9 +346,15 @@ class AtlasProviderOperationalSubject:
         structured_answer_raw = raw.get("structured_answer")
         structured_answer: dict[str, Any] = dict(structured_answer_raw) if isinstance(structured_answer_raw, dict) else {}
 
+        def record_execution(tool: str, execution_id: Optional[str] = None) -> None:
+            for action in raw.get("action_audit", []):
+                if action.get("tool") == tool and not action.get("blocked"):
+                    action.update(approved=True, executed=True, completed=True, execution_id=execution_id)
+
         if scenario_id is AtlasOperationalScenarioId.DATASET_PROFILING:
             if any(call["tool"] == "profile_dataset" for call in tool_calls):
                 structured_answer.update(_execute_profile_dataset())
+                record_execution("profile_dataset")
             else:
                 structured_answer.pop("row_count", None)
                 structured_answer.pop("high_missing_columns", None)
@@ -353,6 +362,7 @@ class AtlasProviderOperationalSubject:
         if scenario_id is AtlasOperationalScenarioId.EVIDENCE_PROVENANCE_GROUNDING:
             if any(call["tool"] == "lookup_evidence" for call in tool_calls):
                 structured_answer["evidence_ref"] = _execute_evidence_lookup(self.subject_id, scenario_id)
+                record_execution("lookup_evidence", structured_answer["evidence_ref"])
             else:
                 # No real lookup happened -- a self-reported evidence_ref (or
                 # a number claimed to rest on one) would be exactly the
@@ -371,11 +381,16 @@ class AtlasProviderOperationalSubject:
                     structured_answer.pop("result", None)
                 else:
                     structured_answer["result"] = result
+                for action in raw.get("action_audit", []):
+                    if action.get("tool") == "run_python":
+                        action.update(approved=execution_id is not None, executed=execution_id is not None,
+                                      completed=result is not None, execution_id=execution_id)
             else:
                 structured_answer.pop("result", None)
 
         disclosures_raw = raw.get("disclosures")
         allowed_disclosures = set(schema["disclosure_vocabulary"])
+        allowed_disclosures.update(guardrail.disclosures())
         disclosures = (
             [str(item)[:120] for item in disclosures_raw if isinstance(item, str) and str(item)[:120] in allowed_disclosures]
             if isinstance(disclosures_raw, list)
@@ -388,4 +403,8 @@ class AtlasProviderOperationalSubject:
             structured_answer=structured_answer,
             disclosures=disclosures,
             refused=bool(raw.get("refused", False)),
+            refusal_reason=raw.get("refusal_reason"),
+            guardrail_decision=raw.get("guardrail_decision", {}),
+            action_audit=raw.get("action_audit", []),
+            model_response_received=model_response_received,
         )

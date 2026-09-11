@@ -34,6 +34,7 @@ from prism_api_contracts import (
     CortexNodeKind,
 )
 
+from .atlas_guardrail_context import evaluate_request
 from .atlas_safety_policy import OPERATIONAL_SAFETY_POLICY
 from .durable_atlas_store import DurableAtlasRunStore
 from .overview import get_profile
@@ -422,7 +423,10 @@ class AtlasRunStore:
             metadata.update({"rows": profile.quality.n_rows, "columns": profile.quality.n_cols, "health": profile.health.total, "column_names": [column.name[:120] for column in profile.columns][:100]})
         except HTTPException:
             pass
-        plan = self._planner.create(request, provider, providers.propose_plan(request.objective, metadata))
+        guardrail = evaluate_request(request)
+        metadata["guardrail_decision"] = guardrail.metadata()
+        proposal = providers.propose_plan(request.objective, metadata) if guardrail.state == "checked" else None
+        plan = self._planner.create(request, provider, proposal)
         run = self._store.create(request, provider, plan)
         if not run.events:
             self.append_event(
@@ -439,6 +443,7 @@ class AtlasRunStore:
                     "model": os.environ.get("PRISM_ATLAS_OLLAMA_MODEL") if provider is AtlasModelProviderName.OLLAMA else "deterministic-v1",
                     "prompt_schema_version": "atlas-plan-v1",
                     "raw_dataset_sent": False,
+                    "guardrail_decision": guardrail.metadata(),
                 },
             )
         return self.get(run.run_id)
@@ -603,6 +608,21 @@ def _blocked_reason(kind: AtlasStepKind) -> str:
 def execute(run_id: str) -> None:
     """Run only declared handlers. Unavailable context is visibly blocked, never guessed."""
     try:
+        initial = runs.get(run_id)
+        guard = next((event.payload.get("guardrail_decision") for event in initial.events
+                      if event.type is AtlasRunEventType.PLAN_CREATED), None)
+        if isinstance(guard, dict) and guard.get("state") in {"blocked", "verification_required"}:
+            details = guard.get("findings", [])
+            explanation = " ".join(str(item.get("detail", "")) for item in details if isinstance(item, dict)) if isinstance(details, list) else "Verification required."
+            runs.append_event(run_id, AtlasRunEventType.RUN_COMPLETED,
+                              payload={"state": guard["state"], "guardrail_decision": guard, "executed": False})
+            runs.update(initial.model_copy(update={
+                "plan": initial.plan.model_copy(update={"state": AtlasPlanState.COMPLETED,
+                    "steps": [step.model_copy(update={"state": AtlasStepState.BLOCKED, "error": explanation[:2000]}) for step in initial.plan.steps]}),
+                "answer": "Atlas held the requested work at the server safety boundary. " + explanation,
+                "uncertainty": "No requested analysis or code was executed. Verified input declarations are required.",
+            }))
+            return
         for step in runs.get(run_id).plan.steps:
             if runs.cancelled(run_id):
                 _cancel_run(run_id)
@@ -685,6 +705,8 @@ def execute(run_id: str) -> None:
         ]
         answer = f"Atlas completed a deterministic first-pass assessment of {profile.dataset.source_name}: {profile.quality.n_rows:,} rows × {profile.quality.n_cols} columns, health {profile.health.total}/100, and {profile.quality.total_missing_pct:.2f}% missing cells."
         uncertainty = "This is a profile and methodology review, not a causal conclusion, statistical result, or trained model."
+        if isinstance(guard, dict) and guard.get("evidence"):
+            answer += " Evidence arbitration: " + json.dumps(guard["evidence"], sort_keys=True)
         if blocked:
             answer += " Requested work was held at the declared safety boundary until required context is supplied."
             uncertainty = " ".join([uncertainty, *blocked])

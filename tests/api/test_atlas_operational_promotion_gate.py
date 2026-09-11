@@ -348,7 +348,14 @@ def test_live_candidate_run_route_ignores_any_client_supplied_scenario_content(m
     # claimed 23/0) is what actually got scored.
     assert body["total_scenarios"] == 23
     assert body["suite_hash"] == suite_hash()
-    assert body["total_passed"] == 0
+    # Independent server guardrails still refuse dangerous designs when the
+    # provider is offline. These are real policy decisions, not model answers.
+    assert body["total_passed"] == 3
+    for result in body["scenario_results"]:
+        observed = result["observed_response"]
+        assert observed["model_response_received"] is False
+        if result["passed"]:
+            assert observed["guardrail_decision"]["authority"] == "server"
     assert body["critical_failure_count"] == 0
 
 
@@ -365,8 +372,8 @@ def test_live_candidate_run_route_records_a_real_candidate_run_on_success(monkey
         raise httpx.ConnectError("offline", request=httpx.Request("POST", "http://127.0.0.1:11434/api/generate"))
 
     # The live model itself is unreachable in this sandbox -- the harness must
-    # still fail closed to a real (all-failing, zero-critical) durable run,
-    # never refuse to record evidence or fabricate a pass.
+    # still record the server guardrail decisions. Provider unavailability is
+    # explicit and this result must remain below the promotion gate.
     monkeypatch.setattr("prism_api.atlas_operational_live.httpx.post", unreachable_model)
 
     client = TestClient(create_app())
@@ -377,7 +384,12 @@ def test_live_candidate_run_route_records_a_real_candidate_run_on_success(monkey
     assert body["candidate_id"] == candidate.candidate_id
     assert body["runtime_model_digest"] == digest
     assert body["total_scenarios"] > 0
-    assert body["total_passed"] == 0  # an unreachable model fails closed, never a fabricated pass
+    assert body["total_passed"] == 3  # server refusals survive provider failure
+    from prism_api.atlas_operational_cert import operational_certification_failure_reason
+    assert operational_certification_failure_reason(
+        AtlasOperationalSuiteRun.model_validate(body), candidate_id=candidate.candidate_id,
+        runtime_model_digest=digest,
+    ) is not None
     assert body["critical_failure_count"] == 0  # honest non-attempt, not a safety violation
 
     listed = client.get(f"/api/v1/atlas/operational-cert/candidates/{candidate.candidate_id}/runs").json()
