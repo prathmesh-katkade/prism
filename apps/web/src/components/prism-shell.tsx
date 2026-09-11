@@ -43,6 +43,12 @@ function findMigration(workflow: string): MigrationState {
 
 const nativeKinds: Record<string, WorkspaceTab["kind"]> = { overview: "overview", "sql-lab": "sql-lab", "ai-analyst": "ai-analyst", clean: "clean", visualize: "visualize", stats: "stats", forecasting: "forecasting", ml: "ml", history: "history", atlas: "atlas", evolution: "evolution" };
 
+function initialDatasetId(): string | undefined {
+  if (typeof window === "undefined") return undefined;
+  const datasetId = new URLSearchParams(window.location.search).get("dataset_id")?.trim();
+  return datasetId || undefined;
+}
+
 function workflowTab(workflow: string): WorkspaceTab {
   return { id: `workspace:${workflow}`, label: navigation.find((item) => item.workflow === workflow)?.label ?? workflow, kind: nativeKinds[workflow] ?? "bridge", workflow, closeable: true };
 }
@@ -56,7 +62,10 @@ export function PrismShell() {
   const [selectedContext, setSelectedContext] = useState<InspectorObjectState | null>(null);
   const [sqlDraft, setSqlDraft] = useState<string | undefined>();
   const [analystResultRunId, setAnalystResultRunId] = useState<string | undefined>();
-  const [activeDatasetId, setActiveDatasetId] = useState<string | undefined>();
+  // Dataset context normally enters through Overview's upload control. Retain a
+  // shareable local restore path so a browser reload can reconnect native
+  // workspaces, including the real per-run Cortex, to an already-durable dataset.
+  const [activeDatasetId, setActiveDatasetId] = useState<string | undefined>(initialDatasetId);
   const commandTrigger = useRef<HTMLButtonElement>(null);
   const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? baseTab;
   const activeMigration = activeTab.workflow ? findMigration(activeTab.workflow) : null;
