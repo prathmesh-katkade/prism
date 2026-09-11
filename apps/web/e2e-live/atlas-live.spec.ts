@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 const CSV = "segment,revenue\nNorth,10\nSouth,12\nNorth,14\n";
+const externalStack = Boolean(process.env.PRISM_LIVE_E2E_BASE_URL);
 
 /**
  * First Light, verified against a real FastAPI backend and a real browser --
@@ -15,13 +16,18 @@ test("ATLAS First Light: honest system state, a real investigation, and the rece
   await page.goto("/");
   await page.getByRole("button", { name: /Atlas native/i }).click();
 
-  // Command Center renders and, since no candidate has ever been promoted in
-  // this live database, truthfully says so -- never a hardcoded
-  // "Qwen • VERIFIED • PRODUCTION" claim.
+  // The isolated suite database has no production pointer. An explicit
+  // external-stack run instead uses whatever the local backend actually
+  // reports; both paths verify rendered state rather than inventing model or
+  // certification facts in the browser.
   const commandCenter = page.getByLabel("Atlas command center");
-  await expect(commandCenter.getByText("NO PRODUCTION MODEL")).toBeVisible({ timeout: 10_000 });
-  await expect(commandCenter.getByText("VERIFIED", { exact: true })).not.toBeVisible();
-  await expect(commandCenter.getByText("Qwen", { exact: false })).not.toBeVisible();
+  if (externalStack) {
+    await expect(commandCenter.getByRole("heading", { level: 1 })).toBeVisible({ timeout: 10_000 });
+  } else {
+    await expect(commandCenter.getByText("NO PRODUCTION MODEL")).toBeVisible({ timeout: 10_000 });
+    await expect(commandCenter.getByText("VERIFIED", { exact: true })).not.toBeVisible();
+    await expect(commandCenter.getByText("Qwen", { exact: false })).not.toBeVisible();
+  }
 
   // Run activity: this live suite's specs share one backend and database,
   // so earlier spec files (or an earlier run of this one) may already have
@@ -47,12 +53,21 @@ test("ATLAS First Light: honest system state, a real investigation, and the rece
   const pipeline = page.getByLabel("Atlas request pipeline");
   await expect(pipeline.getByText("Result")).toHaveClass(/is-reached/);
 
+  // The new central journey is sourced from this run's declared plan steps.
+  // Selecting its real specialist keeps the plan and the Cortex projection
+  // connected; it never manufactures a second live activity stream.
+  const journey = page.getByLabel("Atlas active investigation journey");
+  const profileJourneyStep = journey.getByRole("button", { name: /Profile the active dataset/ });
+  await expect(profileJourneyStep).toHaveAttribute("aria-pressed", "true");
+
   // Specialists: only real roster identities, idle where this run never
   // assigned them a step -- never hidden, never animated as if working.
   const specialists = page.getByText("SPECIALISTS", { exact: true }).locator("..");
   await expect(specialists.getByText("Scout")).toBeVisible();
   await expect(specialists.getByText("completed").first()).toBeVisible();
   await expect(specialists.getByText("idle").first()).toBeVisible();
+  await specialists.getByRole("button", { name: /Scout/ }).click();
+  await expect(profileJourneyStep).toHaveAttribute("aria-pressed", "true");
 
   // Tool activity: the real profiling tool this run actually executed.
   const toolTimeline = page.getByLabel("Atlas tool execution timeline");
@@ -98,15 +113,14 @@ test("ATLAS First Light: honest system state, a real investigation, and the rece
   await expect(reloadedActivity.getByLabel("Atlas request pipeline")).toBeVisible();
   await expect(reloadedActivity.getByLabel("Atlas specialist activity")).toBeVisible();
 
-  // AtlasBench V2 and Operational Certification: no candidate has ever been
-  // verified or certified in this live database, so both stay honestly
-  // absent -- never a hardcoded run id, and never PASSED without evidence.
-  // This is the certification-pending truthfulness the whole panel exists to
-  // guarantee: "no certification yet" must never be rendered or read as "a
-  // certification attempt failed."
+  // In the isolated database, no candidate has been certified. With a local
+  // external stack, the same panels must surface its server-owned records;
+  // this smoke deliberately makes no model/certification claim of its own.
   const commandCenterAfterReload = page.getByLabel("Atlas command center");
-  await expect(commandCenterAfterReload.getByText("Operational Certification", { exact: true })).toBeVisible();
-  await expect(commandCenterAfterReload.getByText("PASSED", { exact: true })).not.toBeVisible();
-  await expect(commandCenterAfterReload.getByText(/No AtlasBench run recorded/)).toBeVisible();
-  await expect(commandCenterAfterReload.getByText(/No live Operational Certification run recorded/)).toBeVisible();
+  await expect(commandCenterAfterReload.getByRole("heading", { name: "Operational Certification", exact: true })).toBeVisible();
+  if (!externalStack) {
+    await expect(commandCenterAfterReload.getByText("PASSED", { exact: true })).not.toBeVisible();
+    await expect(commandCenterAfterReload.getByText(/No AtlasBench run recorded/)).toBeVisible();
+    await expect(commandCenterAfterReload.getByText(/No live Operational Certification run recorded/)).toBeVisible();
+  }
 });
