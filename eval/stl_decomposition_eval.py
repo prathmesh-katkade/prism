@@ -5,20 +5,20 @@ Runs without an API key (pure statsmodels computation, no Gemini).
 Usage:  python eval/stl_decomposition_eval.py
 """
 
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import numpy as np
 import pandas as pd
+
 from modules.forecasting import (
-    prepare_series,
+    build_decomposition_chart,
     can_decompose,
     decompose_series,
     decomposition_verdict,
-    build_decomposition_chart,
-    MIN_CYCLES_FOR_STL,
+    prepare_series,
 )
 
 passed, failed = 0, 0

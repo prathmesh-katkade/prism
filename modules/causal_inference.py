@@ -375,7 +375,7 @@ def estimate_cate_by_subgroup(
     if skipped:
         warnings.append(
             f"{len(skipped)} subgroup(s) couldn't support their own estimate (too few units or no "
-            f"match found): {', '.join(str(l) for l in skipped)}."
+            f"match found): {', '.join(str(label) for label in skipped)}."
         )
 
     if len(usable) < 2:

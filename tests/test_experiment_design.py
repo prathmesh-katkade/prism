@@ -24,7 +24,6 @@ from modules.experiment_design import (
     sample_size_two_proportions,
 )
 
-
 # --- sample_size_two_proportions -------------------------------------------
 
 def test_sample_size_two_proportions_basic_is_sane():

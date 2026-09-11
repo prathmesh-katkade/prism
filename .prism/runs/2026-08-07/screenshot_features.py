@@ -1,6 +1,5 @@
 """Playwright screenshot script — captures the 3 new features across
 desktop/mobile x dark/light."""
-import sys
 from playwright.sync_api import sync_playwright
 
 BASE_URL = "http://localhost:8501"

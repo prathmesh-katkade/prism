@@ -13,7 +13,6 @@ from __future__ import annotations
 
 from modules.ui import build_insight_cards_html, build_verification_caption
 
-
 # ─────────────────────────────────────────────────────────────────────────
 # build_insight_cards_html — no verification (backward-compatible path)
 # ─────────────────────────────────────────────────────────────────────────

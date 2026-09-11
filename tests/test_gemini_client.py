@@ -11,8 +11,6 @@ conversational `parts` shape the new SDK actually accepts, and
 """
 from __future__ import annotations
 
-import pytest
-
 from modules import ai_analyst
 
 

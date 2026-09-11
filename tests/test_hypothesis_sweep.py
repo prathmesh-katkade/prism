@@ -89,7 +89,6 @@ def test_sweep_counts_are_internally_consistent():
 def test_fdr_correction_matches_statsmodels_directly():
     df = _correlated_df()
     result = sweep_hypotheses(df, _column_types(df), alpha=0.05)
-    raw_p = [r["p_value"] for r in sorted(result["tested"], key=lambda r: (r["col_a"], r["col_b"]))]
     # order-independent check: adjusted p-values from the module should be a
     # valid Benjamini-Hochberg correction of the module's own raw p-values
     reject, expected_adj, _, _ = multipletests(

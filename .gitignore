@@ -4,7 +4,18 @@
 # Python
 __pycache__/
 *.pyc
+*.egg-info/
 .venv/
+.venv311/
+node_modules/
+.next/
+.turbo/
+.prism/work/
+.prism/runtime/
+**/.prism/work/
+**/.prism/runtime/
+test-results/
+playwright-report/
 venv/
 
 # Streamlit
@@ -19,3 +30,4 @@ corpus_cache/
 .idea/
 .DS_Store
 Thumbs.db
+*.tsbuildinfo

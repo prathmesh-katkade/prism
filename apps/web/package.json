@@ -1,0 +1,21 @@
+{
+  "name": "@prism/web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "@monaco-editor/react": "^4.7.0",
+    "@tanstack/react-virtual": "3.14.10",
+    "@prism/api-contracts": "0.1.0",
+    "@prism/design-system": "0.1.0",
+    "monaco-editor": "^0.52.0",
+    "next": "16.3.3",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  }
+}

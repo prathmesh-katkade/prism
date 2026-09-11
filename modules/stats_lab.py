@@ -166,9 +166,12 @@ def run_anova(df: pd.DataFrame, numeric_col: str, cat_col: str) -> dict:
 
     stat, p_value = stats.f_oneway(*groups.values())
 
-    grand_mean = clean[numeric_col].mean()
+    # The F statistic deliberately excludes singleton groups. Eta squared
+    # must use that exact same effective population, not every row in clean.
+    effective_values = np.concatenate(list(groups.values()))
+    grand_mean = effective_values.mean()
     ss_between = sum(len(g) * (g.mean() - grand_mean) ** 2 for g in groups.values())
-    ss_total = ((clean[numeric_col] - grand_mean) ** 2).sum()
+    ss_total = ((effective_values - grand_mean) ** 2).sum()
     eta_sq = ss_between / ss_total if ss_total > 0 else 0.0
 
     return {
@@ -215,6 +218,11 @@ def run_pearson(df: pd.DataFrame, col_a: str, col_b: str) -> dict:
     clean = df[[col_a, col_b]].dropna()
     if len(clean) < 3:
         return {"error": "Need at least 3 paired values to test correlation significance."}
+
+    constant_columns = [column for column in (col_a, col_b) if clean[column].nunique(dropna=True) < 2]
+    if constant_columns:
+        names = ", ".join(repr(column) for column in constant_columns)
+        return {"error": f"Pearson correlation is undefined because {names} is constant after excluding missing paired values."}
 
     r, p_value = stats.pearsonr(clean[col_a], clean[col_b])
 

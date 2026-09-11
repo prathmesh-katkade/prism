@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Callable
 
 import streamlit as st
 import streamlit.components.v1 as components

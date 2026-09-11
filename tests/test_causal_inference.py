@@ -13,8 +13,8 @@ import pytest
 from modules.causal_inference import (
     estimate_cate_by_subgroup,
     estimate_causal_effect,
-    narrate_causal_effect,
     narrate_cate_heterogeneity,
+    narrate_causal_effect,
     nearest_neighbor_match,
     standardized_mean_diff,
 )

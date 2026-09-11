@@ -12,8 +12,8 @@ import numpy as np
 import pandas as pd
 
 try:
-    from sklearn.ensemble import IsolationForest
     from sklearn.cluster import DBSCAN
+    from sklearn.ensemble import IsolationForest
     from sklearn.neighbors import LocalOutlierFactor
     from sklearn.preprocessing import StandardScaler
 except ImportError:  # the app should still load even if the package isn't installed yet

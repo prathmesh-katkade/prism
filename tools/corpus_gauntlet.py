@@ -45,7 +45,14 @@ import pandas as pd
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
-from modules import ai_analyst, autocleaner, cleaning, data_engine, visualization, report_writer  # noqa: E402
+from modules import (  # noqa: E402
+    ai_analyst,
+    autocleaner,
+    cleaning,
+    data_engine,
+    report_writer,
+    visualization,
+)
 
 TOOLS_DIR = Path(__file__).resolve().parent
 CACHE_DIR = REPO_ROOT / "corpus_cache"

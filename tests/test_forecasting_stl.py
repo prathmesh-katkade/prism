@@ -7,9 +7,12 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+import pytest
+from prism_api import forecasting as native_forecasting
 
 from modules.forecasting import (
     MIN_HISTORY_POINTS,
+    _infer_seasonal_periods,
     can_decompose,
     decompose_series,
     decomposition_verdict,
@@ -84,6 +87,31 @@ def test_prepare_series_errors_when_string_column_has_no_parseable_dates():
     series, freq, error = prepare_series(df, "date", "value")
     assert series is None
     assert error is not None
+
+
+@pytest.mark.parametrize(
+    ("alias", "seasonal_period"),
+    [
+        ("D", 7), ("B", 5), ("W", 52), ("M", 12), ("ME", 12), ("MS", 12),
+        ("Q", 4), ("QE-DEC", 4), ("QS", 4), ("A", 1), ("Y", 1), ("YE", 1),
+        ("H", 24), ("h", 24),
+    ],
+)
+def test_frequency_aliases_keep_legacy_and_native_seasonality_in_lockstep(alias, seasonal_period):
+    """pandas 2.3 offset spellings must not silently disable seasonality."""
+    assert _infer_seasonal_periods(alias) == seasonal_period
+    assert native_forecasting._infer_seasonal_periods(alias) == seasonal_period
+
+
+def test_month_end_inference_returns_pandas_current_canonical_frequency_in_both_ports():
+    frame = pd.DataFrame({"date": pd.date_range("2024-01-31", periods=24, freq="ME"), "value": range(24)})
+    legacy_series, legacy_freq, legacy_error = prepare_series(frame, "date", "value")
+    native_series, native_freq, native_error = native_forecasting.prepare_series(frame, "date", "value")
+
+    assert legacy_error is None and native_error is None
+    assert legacy_freq == native_freq == "ME"
+    assert legacy_series is not None and native_series is not None
+    assert _infer_seasonal_periods(legacy_freq) == native_forecasting._infer_seasonal_periods(native_freq) == 12
 
 
 # --- can_decompose ----------------------------------------------------------

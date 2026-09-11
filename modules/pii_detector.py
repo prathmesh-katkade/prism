@@ -166,8 +166,8 @@ def scan_dataframe(df: pd.DataFrame, column_types: dict[str, str]) -> dict:
         if non_null.empty:
             continue
 
-        def _pct(pattern_fn) -> float:
-            return 100 * non_null.apply(lambda v: bool(pattern_fn(v.strip()))).mean()
+        def _pct(pattern_fn, values=non_null) -> float:
+            return 100 * values.apply(lambda v: bool(pattern_fn(v.strip()))).mean()
 
         aadhaar_pct = _pct(_AADHAAR_RE.match)
         if aadhaar_pct >= MATCH_THRESHOLD_PCT:

@@ -16,7 +16,6 @@ from pathlib import Path
 from typing import Optional
 
 import pandas as pd
-
 import streamlit as st
 
 DEVELOPER_NAME = "Prathmesh Katkade"
@@ -149,20 +148,47 @@ def match_palette_query(query: str) -> Optional[str]:
 
 
 def render_hero() -> None:
-    """The big gradient-shimmer PRISM title + tagline, shown on the landing screen."""
+    """Render the dimensional landing hero and its concise product promise.
+
+    The decorative layers are deliberately CSS-only and ``aria-hidden`` so the
+    page stays fast, themeable, and intelligible to screen readers.
+    """
     st.markdown(
         """
-        <div style="text-align:center; padding: 2.5rem 0 1.25rem 0;">
-            <span class="prism-badge"><span class="prism-live-dot"></span>&nbsp;Ready</span>
-            <div class="prism-hero-title" style="margin-top:0.75rem;">PRISM</div>
-            <div style="font-size:1.2rem; color:var(--prism-text); font-weight:600; margin-top:0.4rem;">
-                Your AI-Powered Data Analyst
+        <section class="prism-hero" aria-labelledby="prism-hero-heading">
+            <div class="prism-hero-glow glow-one" aria-hidden="true"></div>
+            <div class="prism-hero-glow glow-two" aria-hidden="true"></div>
+            <div class="prism-orbit orbit-one" aria-hidden="true"><i></i></div>
+            <div class="prism-orbit orbit-two" aria-hidden="true"><i></i></div>
+            <div class="prism-hero-content">
+                <span class="prism-badge prism-ready"><span class="prism-live-dot"></span>Workspace ready</span>
+                <div class="prism-kicker">FROM RAW DATA TO CLEAR DECISIONS</div>
+                <h1 id="prism-hero-heading" class="prism-hero-title">PRISM</h1>
+                <div class="prism-hero-subtitle">Your AI-powered data workspace</div>
+                <p class="prism-hero-copy">
+                    Clean, explore, visualize, and question any dataset in one focused workspace.
+                    Start with your own file or a ready-made sample — no code required.
+                </p>
+                <div class="prism-hero-pills" aria-label="Product capabilities">
+                    <span>Auto-clean</span><span>Visual insights</span><span>Natural-language analysis</span>
+                </div>
             </div>
-            <div style="font-size:1rem; color:var(--prism-text-muted); margin-top:0.5rem;
-                        max-width:640px; margin-left:auto; margin-right:auto;">
-                Upload a dataset and get instant cleaning, visualization, SQL, and AI-driven insight —
-                no code required.
-            </div>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_workflow_strip() -> None:
+    """Show the landing-page mental model in three quickly scannable steps."""
+    st.markdown(
+        """
+        <div class="prism-workflow" aria-label="How Prism works">
+            <div class="prism-workflow-step"><b>01</b><span><strong>Bring your data</strong><small>CSV or Excel, safely in-browser</small></span></div>
+            <div class="prism-workflow-line" aria-hidden="true"></div>
+            <div class="prism-workflow-step"><b>02</b><span><strong>Prism maps the mess</strong><small>Quality, types, anomalies, and patterns</small></span></div>
+            <div class="prism-workflow-line" aria-hidden="true"></div>
+            <div class="prism-workflow-step"><b>03</b><span><strong>Leave with answers</strong><small>Charts, SQL, forecasts, and reports</small></span></div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -431,12 +457,12 @@ def render_column_profiler_grid(
                         from modules import india
                         is_currency = any(hint in col.lower() for hint in _CURRENCY_NAME_HINTS)
 
-                        def _fmt(v: float) -> str:
+                        def _fmt(v: float, format_currency: bool = is_currency) -> str:
                             # Indian grouping is a no-op under 1,000 — for small
                             # stats (e.g. an average of 7.4), prefer the plain
                             # decimal over india.indian_comma_group() rounding
                             # it away to "7".
-                            if is_currency:
+                            if format_currency:
                                 return india.format_inr(v)
                             if abs(v) >= 1000:
                                 return india.indian_comma_group(v)

@@ -13,7 +13,6 @@ import pytest
 from modules.visualization import (
     EXPLORE_CARDINALITY_MAX,
     EXPLORE_CARDINALITY_MIN,
-    EXPLORE_MAX_SUGGESTIONS,
     suggest_encodings,
     suggestion_to_builder_state,
 )
@@ -146,7 +145,6 @@ def test_every_suggestion_is_buildable_by_build_manual_chart():
     from modules.visualization import build_manual_chart
 
     n = 40
-    rng = np.random.default_rng(1)
     df = pd.DataFrame(
         {
             "spend": np.arange(n, dtype=float),

@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-import pytest
 
 from modules.confounder_detection import (
     auto_scan_for_confounding,

@@ -271,7 +271,7 @@ _NARRATION_PROMPT = (
     "There are {safe_count} safe fix(es) and {review_count} that need review.\n\n"
     "You are Atlas, Prism's data-cleaning assistant, speaking directly to the user. Write ONE "
     "plain-English sentence (max 25 words) narrating that result, for example: "
-    f'"Scan complete. 3 safe fixes applied. 2 need your judgment."\n'
+    '"Scan complete. 3 safe fixes applied. 2 need your judgment."\n'
     "Return ONLY that sentence, written in plain English with the real numbers substituted in — "
     "never Python code, never an f-string, never a code block, never a variable name."
 )

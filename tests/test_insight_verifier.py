@@ -4,7 +4,6 @@ catches Gemini making up (or mis-rounding) a number in Auto Analyst findings.
 from __future__ import annotations
 
 import pandas as pd
-import pytest
 
 from modules.insight_verifier import (
     compute_reference_numbers,

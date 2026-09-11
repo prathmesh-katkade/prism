@@ -28,13 +28,13 @@ import pandas as pd
 # as a package.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from modules import data_engine, profiling, sql_lab, type_coercion  # noqa: E402
-
+import matplotlib
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-import matplotlib
+from modules import data_engine, profiling, sql_lab, type_coercion  # noqa: E402
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 
@@ -137,7 +137,7 @@ def health():
 
 
 @app.post("/upload")
-async def upload(file: UploadFile = File(...), sheet: str | None = None):
+async def upload(file: UploadFile = File(...), sheet: str | None = None):  # noqa: B008 - FastAPI dependency declaration
     raw = await file.read()
     wrapped = _UploadWrapper(file.filename or "upload.csv", raw)
     df, error, warnings = data_engine.load_data(wrapped, sheet_name=sheet if sheet else 0)

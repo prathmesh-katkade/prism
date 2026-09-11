@@ -1,0 +1,199 @@
+"""Durable DatasetStore implementation for Phase 9.
+
+DatasetStore remains the authority for active revision semantics. This adapter
+persists its revision frames in the same configured history database so exact
+same-revision reruns can survive an API restart without trusting a registry
+snapshot as a substitute for source data.
+"""
+
+from __future__ import annotations
+
+import io
+import random
+import time
+import uuid
+from dataclasses import dataclass
+from datetime import datetime, timezone
+
+import pandas as pd
+from fastapi import HTTPException, status
+from prism_api_contracts import OverviewDataset
+from sqlalchemy import (
+    Boolean,
+    Column,
+    DateTime,
+    Integer,
+    MetaData,
+    String,
+    Table,
+    Text,
+    and_,
+    create_engine,
+    desc,
+    func,
+    insert,
+    select,
+    update,
+)
+from sqlalchemy.exc import IntegrityError, OperationalError
+
+from .durable_registry import history_database_url
+
+_metadata = MetaData()
+_revisions = Table(
+    "prism_dataset_revisions", _metadata,
+    Column("dataset_id", String(255), primary_key=True),
+    Column("revision", Integer, primary_key=True),
+    Column("source_fingerprint", String(255), primary_key=True),
+    Column("source_name", String(1024), nullable=False),
+    Column("row_count", Integer, nullable=False),
+    Column("column_count", Integer, nullable=False),
+    Column("frame_json", Text, nullable=False),
+    Column("is_active", Boolean, nullable=False, index=True),
+    Column("activated_at", DateTime(timezone=True), nullable=False, index=True),
+)
+_schema = Table("prism_dataset_schema_version", _metadata, Column("version", Integer, primary_key=True))
+
+
+@dataclass(frozen=True)
+class StoredDataset:
+    dataset: OverviewDataset
+    frame: pd.DataFrame
+    source_fingerprint: str
+
+
+class DurableDatasetStore:
+    """Append-only revision frames with the original DatasetStore API.
+
+    Revert changes only the active branch marker. Abandoned revisions remain
+    immutable audit material but are intentionally absent from ``revisions()``,
+    preserving the existing fingerprint-aware same-revision safety contract.
+    """
+
+    def __init__(self, database_url: str | None = None) -> None:
+        url = database_url or history_database_url()
+        self.engine = create_engine(url, future=True, pool_pre_ping=True, connect_args={"check_same_thread": False} if url.startswith("sqlite") else {})
+        _metadata.create_all(self.engine)
+        with self.engine.begin() as connection:
+            if connection.execute(select(_schema.c.version).limit(1)).scalar_one_or_none() is None:
+                connection.execute(insert(_schema).values(version=1))
+
+    @staticmethod
+    def _stored(row) -> StoredDataset:  # type: ignore[no-untyped-def]
+        frame = pd.read_json(io.StringIO(row["frame_json"]), orient="table")
+        dataset = OverviewDataset(dataset_id=row["dataset_id"], revision=row["revision"], source_name=row["source_name"], source_fingerprint=row["source_fingerprint"], row_count=row["row_count"], column_count=row["column_count"])
+        return StoredDataset(dataset=dataset, frame=frame, source_fingerprint=row["source_fingerprint"])
+
+    @staticmethod
+    def _frame_json(frame: pd.DataFrame) -> str:
+        return str(frame.to_json(orient="table", date_format="iso", index=True))
+
+    def put(self, frame: pd.DataFrame, source_name: str, source_fingerprint: str) -> OverviewDataset:
+        dataset = OverviewDataset(dataset_id=f"ds_{uuid.uuid4().hex}", revision=0, source_name=source_name, source_fingerprint=source_fingerprint, row_count=len(frame), column_count=len(frame.columns))
+        with self.engine.begin() as connection:
+            connection.execute(insert(_revisions).values(dataset_id=dataset.dataset_id, revision=0, source_fingerprint=source_fingerprint, source_name=source_name, row_count=len(frame), column_count=len(frame.columns), frame_json=self._frame_json(frame), is_active=True, activated_at=datetime.now(timezone.utc)))
+        return dataset
+
+    def get(self, dataset_id: str) -> StoredDataset:
+        # Active rows form the retained revision branch. Its highest revision
+        # is the head even when the database truncates activation timestamps
+        # to one second; revert explicitly deactivates every later revision.
+        statement = select(_revisions).where(and_(_revisions.c.dataset_id == dataset_id, _revisions.c.is_active.is_(True))).order_by(desc(_revisions.c.revision)).limit(1)
+        with self.engine.connect() as connection:
+            row = connection.execute(statement).mappings().first()
+        if row is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Overview dataset was not found.")
+        return self._stored(row)
+
+    def latest(self) -> StoredDataset | None:
+        with self.engine.connect() as connection:
+            dataset_id = connection.execute(select(_revisions.c.dataset_id).where(_revisions.c.is_active.is_(True)).order_by(desc(_revisions.c.activated_at)).limit(1)).scalar_one_or_none()
+        # Activation chooses the dataset; revision identity chooses its head.
+        return None if dataset_id is None else self.get(dataset_id)
+
+    def revisions(self, dataset_id: str) -> list[StoredDataset]:
+        self.get(dataset_id)
+        with self.engine.connect() as connection:
+            rows = connection.execute(select(_revisions).where(and_(_revisions.c.dataset_id == dataset_id, _revisions.c.is_active.is_(True))).order_by(_revisions.c.revision, _revisions.c.activated_at)).mappings().all()
+        return [self._stored(row) for row in rows]
+
+    def add_revision(self, dataset_id: str, frame: pd.DataFrame, fingerprint: str) -> OverviewDataset:
+        # Two overlapping apply requests for the same dataset must not both
+        # read the same "current" head and allocate the same next revision
+        # number under different fingerprints (the primary key would let both
+        # inserts succeed, breaking the linear undo history). with_for_update()
+        # below is a real row lock on MySQL/InnoDB, serializing concurrent
+        # readers -- but it is a documented no-op on SQLite, where two threads
+        # can both read the same head before either writes. The count check
+        # after the write closes that gap on every backend: it runs inside
+        # the same transaction as the insert, so whichever of two racing
+        # transactions commits second will see both rows (its own plus the
+        # winner's, now durable) and abort itself to retry against the fresh
+        # state -- verified empirically (not just reasoned about) against
+        # both a real MySQL-compatible server and SQLite under real thread
+        # concurrency.
+        max_attempts = 20
+        for attempt in range(max_attempts):
+            try:
+                with self.engine.begin() as connection:
+                    row = connection.execute(
+                        select(_revisions)
+                        .where(and_(_revisions.c.dataset_id == dataset_id, _revisions.c.is_active.is_(True)))
+                        .order_by(desc(_revisions.c.revision))
+                        .limit(1)
+                        .with_for_update()
+                    ).mappings().first()
+                    if row is None:
+                        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Overview dataset was not found.")
+                    dataset = OverviewDataset(dataset_id=dataset_id, revision=row["revision"] + 1, source_name=row["source_name"], source_fingerprint=fingerprint, row_count=len(frame), column_count=len(frame.columns))
+                    existing = connection.execute(
+                        select(_revisions.c.dataset_id).where(
+                            and_(
+                                _revisions.c.dataset_id == dataset_id,
+                                _revisions.c.revision == dataset.revision,
+                                _revisions.c.source_fingerprint == fingerprint,
+                            )
+                        )
+                    ).scalar_one_or_none()
+                    if existing is None:
+                        connection.execute(insert(_revisions).values(dataset_id=dataset_id, revision=dataset.revision, source_fingerprint=fingerprint, source_name=dataset.source_name, row_count=len(frame), column_count=len(frame.columns), frame_json=self._frame_json(frame), is_active=True, activated_at=datetime.now(timezone.utc)))
+                    else:
+                        # Reapplying the same deterministic transformation after undo
+                        # revives its immutable historical revision instead of inserting
+                        # a duplicate identity or silently losing provenance.
+                        connection.execute(
+                            update(_revisions)
+                            .where(
+                                and_(
+                                    _revisions.c.dataset_id == dataset_id,
+                                    _revisions.c.revision == dataset.revision,
+                                    _revisions.c.source_fingerprint == fingerprint,
+                                )
+                            )
+                            .values(is_active=True, activated_at=datetime.now(timezone.utc))
+                        )
+                    active_at_revision = connection.execute(
+                        select(func.count())
+                        .select_from(_revisions)
+                        .where(and_(_revisions.c.dataset_id == dataset_id, _revisions.c.revision == dataset.revision, _revisions.c.is_active.is_(True)))
+                    ).scalar_one()
+                    if active_at_revision != 1:
+                        raise OperationalError("revision allocation race", {}, RuntimeError("revision race"))
+                return dataset
+            except (IntegrityError, OperationalError):
+                if attempt == max_attempts - 1:
+                    raise
+                time.sleep(0.01 * (attempt + 1) + random.uniform(0, 0.01))
+        raise AssertionError("unreachable")
+
+    def revert(self, dataset_id: str, revision: int) -> OverviewDataset:
+        current = self.get(dataset_id)
+        available = self.revisions(dataset_id)
+        target = next((item for item in available if item.dataset.revision == revision), None)
+        if target is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Revision {revision} was not found for this dataset.")
+        with self.engine.begin() as connection:
+            connection.execute(update(_revisions).where(and_(_revisions.c.dataset_id == dataset_id, _revisions.c.is_active.is_(True), _revisions.c.revision > revision)).values(is_active=False))
+            connection.execute(update(_revisions).where(and_(_revisions.c.dataset_id == dataset_id, _revisions.c.revision == target.dataset.revision, _revisions.c.source_fingerprint == target.source_fingerprint)).values(is_active=True, activated_at=datetime.now(timezone.utc)))
+        del current
+        return target.dataset

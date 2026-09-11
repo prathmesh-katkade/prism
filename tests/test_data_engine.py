@@ -19,7 +19,6 @@ from __future__ import annotations
 import io
 
 import openpyxl
-import pandas as pd
 import pytest
 
 from modules.data_engine import (
