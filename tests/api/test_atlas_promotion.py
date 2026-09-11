@@ -166,6 +166,29 @@ def test_rollback_without_prior_production_raises(tmp_path) -> None:  # type: ig
         raise AssertionError("rollback with no history should have raised")
 
 
+def _delete_promotion_events(store: DurableAtlasPromotionStore, candidate_ids: set[str]) -> None:  # type: ignore[no-untyped-def]
+    """Remove exactly the rows a MySQL-fallback test created.
+
+    CI's phase-4-live-e2e job points PRISM_ANALYTICAL_HISTORY_DATABASE_URL at
+    one shared MySQL database for its whole pytest step, then runs the live
+    browser/backend E2E suite (including atlas-live.spec.ts, which asserts
+    "no production has ever been promoted in this live database") against
+    that same database next. A test that leaves real rows in
+    prism_atlas_production_pointer_events behind breaks that suite's honest-
+    empty-state assumption for a database it never actually promoted
+    anything in. DurableAtlasPromotionStore itself has no delete method by
+    design (an append-only audit trail); this reaches the table directly,
+    scoped to only the candidate ids this test itself created.
+    """
+    from prism_api.atlas_promotion import (
+        _events,  # noqa: PLC0415 -- test-only, deliberately not part of the store's public API
+    )
+    from sqlalchemy import delete
+
+    with store.engine.begin() as connection:
+        connection.execute(delete(_events).where(_events.c.candidate_id.in_(candidate_ids)))
+
+
 def test_promotion_ordering_survives_equal_promoted_at_timestamps(tmp_path) -> None:  # type: ignore[no-untyped-def]
     """A configured MySQL DATETIME can give two promotions within the same
     second an identical promoted_at; current_production()/history() must
@@ -196,42 +219,48 @@ def test_promotion_ordering_survives_equal_promoted_at_timestamps(tmp_path) -> N
     configured = os.environ.get("PRISM_ANALYTICAL_HISTORY_DATABASE_URL", "")
     database_url = configured if configured.startswith("mysql") else f"sqlite:///{(tmp_path / 'tied-promotions.sqlite').as_posix()}"
     store = DurableAtlasPromotionStore(database_url)
-    tied_instant = _datetime.now(_timezone.utc).replace(microsecond=0)
-    # bootstrap() is idempotent by design -- it no-ops once any production
-    # candidate exists, which on shared MySQL a prior test in this file may
-    # already have established -- so the anchor event is appended directly
-    # through the same low-level path promote()/rollback() use, with the
-    # tied instant passed explicitly rather than via the datetime.now() mock
-    # below (which only the still-public promote() call needs).
-    store._append_with_retry(  # noqa: SLF001
-        candidate_id=candidate_a, previous_candidate_id=None, decision_id=None,
-        is_rollback=False, reason="bootstrap", now=tied_instant,
-    )
-    with patch("prism_api.atlas_promotion.datetime") as clock:
-        clock.now.return_value = tied_instant
-
-        forced = AtlasPromotionDecision(
-            decision_id=f"decision_{run_id}",
-            candidate_id=candidate_b,
-            production_run_id="prod",
-            candidate_run_id="cand",
-            verdict=AtlasPromotionVerdict.PROMOTE_ELIGIBLE,
-            overall_production_pass_rate=0.5,
-            overall_candidate_pass_rate=0.9,
-            critical_regressions=[],
-            decided_at=tied_instant,
+    try:
+        tied_instant = _datetime.now(_timezone.utc).replace(microsecond=0)
+        # bootstrap() is idempotent by design -- it no-ops once any production
+        # candidate exists, which on shared MySQL a prior test in this file may
+        # already have established -- so the anchor event is appended directly
+        # through the same low-level path promote()/rollback() use, with the
+        # tied instant passed explicitly rather than via the datetime.now() mock
+        # below (which only the still-public promote() call needs).
+        store._append_with_retry(  # noqa: SLF001
+            candidate_id=candidate_a, previous_candidate_id=None, decision_id=None,
+            is_rollback=False, reason="bootstrap", now=tied_instant,
         )
-        promoted = store.promote(forced, reason="tied-clock promotion")
-        assert promoted.candidate_id == candidate_b
+        with patch("prism_api.atlas_promotion.datetime") as clock:
+            clock.now.return_value = tied_instant
 
-    # Both events share the same (mocked) promoted_at, so only the sequence
-    # tiebreaker can correctly say candidate_b is current, not candidate_a.
-    assert store.current_production().candidate_id == candidate_b  # type: ignore[union-attr]
-    assert [item.candidate_id for item in store.history(limit=2)] == [candidate_b, candidate_a]
+            forced = AtlasPromotionDecision(
+                decision_id=f"decision_{run_id}",
+                candidate_id=candidate_b,
+                production_run_id="prod",
+                candidate_run_id="cand",
+                verdict=AtlasPromotionVerdict.PROMOTE_ELIGIBLE,
+                overall_production_pass_rate=0.5,
+                overall_candidate_pass_rate=0.9,
+                critical_regressions=[],
+                decided_at=tied_instant,
+            )
+            promoted = store.promote(forced, reason="tied-clock promotion")
+            assert promoted.candidate_id == candidate_b
 
-    rolled_back = store.rollback(reason="tied-clock rollback")
-    assert rolled_back.candidate_id == candidate_a
-    assert store.current_production().candidate_id == candidate_a  # type: ignore[union-attr]
+        # Both events share the same (mocked) promoted_at, so only the sequence
+        # tiebreaker can correctly say candidate_b is current, not candidate_a.
+        assert store.current_production().candidate_id == candidate_b  # type: ignore[union-attr]
+        assert [item.candidate_id for item in store.history(limit=2)] == [candidate_b, candidate_a]
+
+        rolled_back = store.rollback(reason="tied-clock rollback")
+        assert rolled_back.candidate_id == candidate_a
+        assert store.current_production().candidate_id == candidate_a  # type: ignore[union-attr]
+    finally:
+        # Real MySQL is a database this test shares with everything else in
+        # this CI job, including the live E2E suite that runs right after --
+        # never leave these rows behind for it to see.
+        _delete_promotion_events(store, {candidate_a, candidate_b})
 
 
 def test_concurrent_promotion_events_never_share_a_sequence(tmp_path) -> None:  # type: ignore[no-untyped-def]
@@ -255,42 +284,48 @@ def test_concurrent_promotion_events_never_share_a_sequence(tmp_path) -> None:  
     configured = os.environ.get("PRISM_ANALYTICAL_HISTORY_DATABASE_URL", "")
     database_url = configured if configured.startswith("mysql") else f"sqlite:///{(tmp_path / 'concurrent-promotions.sqlite').as_posix()}"
     store = DurableAtlasPromotionStore(database_url)
-    # bootstrap() is idempotent by design -- it no-ops once any production
-    # candidate exists, which on shared MySQL a prior test in this file may
-    # already have established. Append the root event directly through the
-    # same low-level path the concurrent appends below use, so it always
-    # actually lands as its own row regardless of what ran before it.
-    store._append_with_retry(  # noqa: SLF001
-        candidate_id=root_candidate, previous_candidate_id=None, decision_id=None,
-        is_rollback=False, reason="bootstrap", now=datetime.now(timezone.utc),
-    )
+    try:
+        # bootstrap() is idempotent by design -- it no-ops once any production
+        # candidate exists, which on shared MySQL a prior test in this file may
+        # already have established. Append the root event directly through the
+        # same low-level path the concurrent appends below use, so it always
+        # actually lands as its own row regardless of what ran before it.
+        store._append_with_retry(  # noqa: SLF001
+            candidate_id=root_candidate, previous_candidate_id=None, decision_id=None,
+            is_rollback=False, reason="bootstrap", now=datetime.now(timezone.utc),
+        )
 
-    errors: list[BaseException] = []
+        errors: list[BaseException] = []
 
-    def append(candidate_id: str) -> None:
-        try:
-            store._append_with_retry(  # noqa: SLF001 -- exercising the lock/retry path directly
-                candidate_id=candidate_id,
-                previous_candidate_id=root_candidate,
-                decision_id=None,
-                is_rollback=False,
-                reason=f"concurrent append {candidate_id}",
-                now=datetime.now(timezone.utc),
-            )
-        except BaseException as exc:  # noqa: BLE001 -- surfaced via `errors` for the assertion below
-            errors.append(exc)
+        def append(candidate_id: str) -> None:
+            try:
+                store._append_with_retry(  # noqa: SLF001 -- exercising the lock/retry path directly
+                    candidate_id=candidate_id,
+                    previous_candidate_id=root_candidate,
+                    decision_id=None,
+                    is_rollback=False,
+                    reason=f"concurrent append {candidate_id}",
+                    now=datetime.now(timezone.utc),
+                )
+            except BaseException as exc:  # noqa: BLE001 -- surfaced via `errors` for the assertion below
+                errors.append(exc)
 
-    threads = [threading.Thread(target=append, args=(candidate_id,)) for candidate_id in concurrent_candidates]
-    for thread in threads:
-        thread.start()
-    for thread in threads:
-        thread.join()
+        threads = [threading.Thread(target=append, args=(candidate_id,)) for candidate_id in concurrent_candidates]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
 
-    assert not errors, f"append raised under concurrency: {errors}"
-    this_run = {root_candidate, *concurrent_candidates}
-    sequences = [item.candidate_id for item in store.history(limit=200) if item.candidate_id in this_run]
-    assert len(sequences) == 5  # bootstrap + 4 concurrent appends
-    assert len(set(sequences)) == 5, f"no candidate should be lost or duplicated: {sequences}"
+        assert not errors, f"append raised under concurrency: {errors}"
+        this_run = {root_candidate, *concurrent_candidates}
+        sequences = [item.candidate_id for item in store.history(limit=200) if item.candidate_id in this_run]
+        assert len(sequences) == 5  # bootstrap + 4 concurrent appends
+        assert len(set(sequences)) == 5, f"no candidate should be lost or duplicated: {sequences}"
+    finally:
+        # Real MySQL is a database this test shares with everything else in
+        # this CI job, including the live E2E suite that runs right after --
+        # never leave these rows behind for it to see.
+        _delete_promotion_events(store, {root_candidate, *concurrent_candidates})
 
 
 def test_promotion_store_migrates_a_pre_sequence_database_in_original_order(tmp_path) -> None:  # type: ignore[no-untyped-def]
