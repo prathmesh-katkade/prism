@@ -731,6 +731,7 @@ def run_operational_suite(
                 tool_call_count=len(response.tool_calls),
                 elapsed_ms=elapsed_ms,
                 detail=detail[:2_000],
+                observed_response=response,
             )
         )
     completed = datetime.now(timezone.utc)

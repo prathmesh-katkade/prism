@@ -2410,6 +2410,7 @@ class AtlasOperationalScenarioResult(ContractModel):
     tool_call_count: int = Field(ge=0)
     elapsed_ms: int = Field(ge=0)
     detail: str = Field(default="", max_length=2_000)
+    observed_response: Optional[AtlasOperationalSubjectResponse] = None
 
 
 class AtlasOperationalSuiteRun(ContractModel):

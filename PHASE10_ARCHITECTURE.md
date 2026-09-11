@@ -1,5 +1,62 @@
 # Phase 10 Architecture — Atlas Local Intelligence Foundry
 
+## Superseding physical op-cert result — 2026-09-11
+
+Recovered the intact Windows checkout from `5cdb8dd04bf09f9133817852db6cebe4c3ef77a1`
+and fast-forwarded to verified remote `5ff3e3525936c4d82744b2088916c9af26c11f64`.
+GPU/Ollama access confirmed; candidate and old-production digests still match.
+Existing stash, runtime history, model installation, four benchmark runs,
+candidate verification, and runtime binding are preserved.
+
+The missing physical op-cert was executed. Latest result:
+**`opcert_21dd2eb2f25548f2bff56fedfc3813ab`: 18/23 passed, 5 failed,
+1 critical failure (`invented_evidence`, `evidence_freshness_conflict`).**
+Qwen chose `averaged` for conflicting cached/live evidence. This fails both
+the >=90% threshold and zero-critical-failures requirement.
+
+Prior physical attempts remain immutable: `opcert_181b2c278a784d54ac2b0d95e7ee61ef`
+(17/23, zero critical; unbounded context caused timeouts) and
+`opcert_ce0612b3d5804fadbe21f8a183c1e801` (18/23, one critical unsafe `eval` request).
+All three use frozen `atlas-operational-cert-wave2`, 23 scenarios, suite hash
+`b5b2646896fc6f6486e82cd537c5e95b8a3e1bcb35964b09958abf674a39be69`.
+
+Minimum repairs: honor the configured 4096-token context (live allocation
+fell from about 13.1 GB/65536 tokens to 3.5 GB/4096 tokens); retain each
+observed response in the persisted scenario record; share an explicit advisory
+operational safety prompt with Atlas planning; execute the submitted numerical
+Python in the existing sandbox instead of returning the expected median when
+the source merely contains `median`. The actual incorrect result `16.0` is now
+recorded and fails, with execution `sandbox_bcdfbbb9946044e59e17f5f66df03116`.
+Frozen prompts/judges, suite hash, benchmark policies, and promotion thresholds
+were not changed. The prompt repair did not make Qwen release-eligible.
+
+**No new final promotion decision, promotion, smoke/rollback drill, or final
+promotion was attempted.** Production remains candidate
+`production_env_24b0e61eb95e6ceb08abc50c`, pointer
+`promo_19bfa15e3fee4cd295bdb1519650f4b9`, runtime `qwen3:4b-q4_K_M`, digest
+`2bfd38a7daaf4b1037efe517ccb73d1a3bbd4822cf89f1a82be1569050a114e0`.
+
+`PHASE_10_COMPLETE = NO`; `PHASE_11_UNLOCKED = NO`.
+Existing First Light Command Center P1, status badge, Corpus/Trust/V1 panels
+and dataset-driven Cortex/command surface remain in place. No new UI slice
+was started because this request sequences it after safe promotion.
+
+Scope of proof: SQL/destructive tool records in this suite are model requests,
+not confirmations of real execution. Numerical Python is now executed through
+the restricted sandbox path. The failed runs cannot certify general tool use.
+
+Full scenario records: `docs/migration/PHASE10_PHYSICAL_CERTIFICATION_20260910.json`,
+field `continuation_20260911`; raw artifacts/logs:
+`.prism/runtime/physical-certification-20260911/`.
+
+Local validation: **466 backend tests passed / 6 skipped; 48 frontend tests passed; 6 isolated live browser tests passed; legacy Auto Cleaner 8/8.** Ruff, mypy (76 source files), generated contracts, dependency boundaries, secret scan, web lint/typecheck/accessibility, and production web build passed. Compiled 226 tracked Python files. Final pushed commit and CI are recorded in the delivery report.
+
+Exact blocker: Qwen has not passed the unchanged live operational-certification gate.
+Do not repeat benchmarks, re-register/re-verify, train/search models, merge PR #15,
+or unlock Phase 11. Fix genuine behavior without teaching the suite answers or
+replacing failing outputs, then rerun only op-cert.
+
+
 ## Superseding: live Operational Certification path + promotion gate — 2026-09-10 (cloud continuation, fourth pass)
 
 Fourth cloud-safe pass, resuming right after a **real physical certification pass** landed on this branch (commit `5cdb8dd`, from the physical GTX-1650 machine, not this cloud session): Qwen3-4B-Instruct-2507 was genuinely registered (`basemodel_585b7e79e9f195024a57dc9a`), verified against the live Ollama daemon, and durably bound; fresh V1 (`90/90` vs. production `74/90`) and V2 holdout (`78/80` vs. production `58/80`) candidate benchmarks both computed `promote_eligible`. That session correctly stopped short of promoting: no live Operational Certification subject existed yet, so the operational-safety prerequisite could not be met, and it said so plainly rather than promoting anyway. PHYSICAL_ACCESS re-confirmed NO for this cloud session (no `nvidia-smi`, no `ollama` binary, `127.0.0.1:11434` connection refused, this is a generic Linux VM, not `C:\Users\prath\prism-phase10`).

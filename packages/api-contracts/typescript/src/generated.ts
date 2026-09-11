@@ -475,6 +475,17 @@ export interface AtlasOperationalScenarioResult {
   tool_call_count: number;
   elapsed_ms: number;
   detail?: string;
+  observed_response?: AtlasOperationalSubjectResponse;
+}
+
+export interface AtlasOperationalSubjectResponse {
+  tool_calls?: AtlasOperationalToolCall[];
+  artifacts?: string[];
+  structured_answer?: Record<string, unknown>;
+  disclosures?: string[];
+  final_claim?: string;
+  refused?: boolean;
+  refusal_reason?: string;
 }
 
 export interface AtlasOperationalSuiteRun {
@@ -493,6 +504,12 @@ export interface AtlasOperationalSuiteRun {
   critical_failure_count: number;
   started_at: string;
   completed_at: string;
+}
+
+export interface AtlasOperationalToolCall {
+  tool: string;
+  arguments?: Record<string, unknown>;
+  result_summary?: string;
 }
 
 export type AtlasOverviewAction = "explain_dataset" | "diagnose_quality" | "inspect_anomaly" | "suggest_next_analysis" | "trace_source" | "compare_columns" | "summarize_risks";

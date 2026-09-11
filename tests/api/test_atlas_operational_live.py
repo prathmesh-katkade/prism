@@ -122,6 +122,28 @@ def test_python_sandbox_never_executes_arbitrary_code_outside_the_declared_fixtu
     assert "result" not in response.structured_answer
 
 
+def test_python_sandbox_does_not_repair_an_incorrect_calculation(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    _mock_generate(monkeypatch, {
+        "tool_calls": [{"tool": "run_python", "arguments": {"code": "values = [4,8,15,16,23,42]\nmedian = values[len(values)//2]\nmedian"}}],
+        "structured_answer": {"result": 15.5}, "disclosures": [], "refused": False,
+    })
+    subject = AtlasProviderOperationalSubject(subject_id="wrong_median", runtime_model="qwen-test:latest")
+    response = subject.respond("task", AtlasOperationalScenarioId.PYTHON_SANDBOX_ANALYSIS_TASK)
+    assert response.structured_answer["result"] == 16
+    assert response.artifacts[0].startswith("sandbox_")
+
+
+def test_python_sandbox_does_not_accept_median_in_a_comment_as_execution(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    _mock_generate(monkeypatch, {
+        "tool_calls": [{"tool": "run_python", "arguments": {"code": "# median\neval('1+1')"}}],
+        "structured_answer": {"result": 15.5}, "disclosures": [], "refused": False,
+    })
+    subject = AtlasProviderOperationalSubject(subject_id="unsafe_median", runtime_model="qwen-test:latest")
+    response = subject.respond("task", AtlasOperationalScenarioId.PYTHON_SANDBOX_ANALYSIS_TASK)
+    assert "result" not in response.structured_answer
+    assert response.artifacts == []
+
+
 def test_disclosures_outside_the_declared_vocabulary_are_dropped(monkeypatch) -> None:  # type: ignore[no-untyped-def]
     _mock_generate(
         monkeypatch,
@@ -162,3 +184,30 @@ def test_a_well_behaved_live_model_can_pass_the_full_suite_through_real_harness_
     assert run.total_scenarios == len(scenarios)
     assert run.critical_failure_count == 0
     assert run.total_passed == run.total_scenarios
+    assert all(result.observed_response is not None for result in run.scenario_results)
+
+
+def test_live_certification_honors_bounded_context(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    monkeypatch.setenv("PRISM_ATLAS_BENCH_OLLAMA_CONTEXT_TOKENS", "4096")
+    captured = []
+
+    def generate(url, *, json, timeout):  # type: ignore[no-untyped-def]
+        captured.append(json)
+        return httpx.Response(200, json={"response": "{}"}, request=httpx.Request("POST", url))
+
+    monkeypatch.setattr("prism_api.atlas_operational_live.httpx.post", generate)
+    subject = AtlasProviderOperationalSubject(subject_id="bounded_test", runtime_model="qwen-test:latest")
+    subject.respond("task", AtlasOperationalScenarioId.DATASET_PROFILING)
+    assert captured[0]["options"] == {"num_ctx": 4096, "temperature": 0, "num_predict": 512}
+
+
+def test_invalid_context_never_sends_an_unbounded_request(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    def unexpected_request(*args, **kwargs):  # type: ignore[no-untyped-def]
+        raise AssertionError("Invalid resource policy must not reach Ollama")
+
+    monkeypatch.setattr("prism_api.atlas_operational_live.httpx.post", unexpected_request)
+    for value in ("invalid", "0", "-1"):
+        monkeypatch.setenv("PRISM_ATLAS_BENCH_OLLAMA_CONTEXT_TOKENS", value)
+        subject = AtlasProviderOperationalSubject(subject_id="invalid_test", runtime_model="qwen-test:latest")
+        response = subject.respond("task", AtlasOperationalScenarioId.DATASET_PROFILING)
+        assert response.tool_calls == []
