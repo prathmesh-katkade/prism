@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import uuid
+
 import pytest
 from fastapi import HTTPException
+from fastapi.testclient import TestClient
 from prism_api.atlas_feedback import DurableAtlasFeedbackStore
+from prism_api.main import create_app
 from prism_api_contracts import (
     AtlasEvidenceReference,
     AtlasFeedbackEvent,
@@ -101,3 +105,35 @@ def test_rejected_and_accepted_are_valid_binary_kinds(tmp_path) -> None:  # type
     kinds = {event.kind for event in store.list_for_run("run_5")}
 
     assert kinds == {AtlasFeedbackKind.ACCEPTED, AtlasFeedbackKind.REJECTED}
+
+
+def test_list_recent_spans_every_run_and_project_newest_first(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """The system-level Memory panel's Corrections discovery path: no
+    run_id or project_id required up front, unlike list_for_run/
+    list_for_project."""
+    store = _store(tmp_path)
+    first = store.record(AtlasFeedbackWriteRequest(run_id="run_a", project_id="proj_a", kind=AtlasFeedbackKind.HELPFUL, answer="First."))
+    second = store.record(AtlasFeedbackWriteRequest(run_id="run_b", kind=AtlasFeedbackKind.CORRECTED, answer="Wrong.", correction="Right."))
+
+    recent = store.list_recent()
+
+    assert [event.feedback_id for event in recent] == [second.feedback_id, first.feedback_id]
+    assert recent[0].correction == "Right."
+
+    bounded = store.list_recent(limit=1)
+    assert [event.feedback_id for event in bounded] == [second.feedback_id]
+
+
+def test_recent_feedback_route_surfaces_a_posted_event_without_a_run_or_project_id() -> None:
+    client = TestClient(create_app())
+    posted = client.post(
+        "/api/v1/atlas/feedback",
+        json={"run_id": f"run_recent_route_{uuid.uuid4().hex}", "kind": "helpful", "answer": "Route-level recent feedback check."},
+    )
+    assert posted.status_code == 201
+    feedback_id = posted.json()["feedback_id"]
+
+    response = client.get("/api/v1/atlas/feedback/recent", params={"limit": 500})
+    assert response.status_code == 200
+    ids = {event["feedback_id"] for event in response.json()}
+    assert feedback_id in ids

@@ -6,6 +6,9 @@ import type {
   AtlasBenchSuiteRun,
   AtlasCombinedSftDatasetVersion,
   AtlasCombinedTrainingSourceSummary,
+  AtlasEmbeddingCapability,
+  AtlasFeedbackEvent,
+  AtlasMemoryRecord,
   AtlasOperationalScenarioResult,
   AtlasOperationalSuiteRun,
   AtlasProductionPointer,
@@ -17,7 +20,7 @@ import type {
   AtlasVerifiedBaseModelCandidate,
 } from "@prism/api-contracts";
 import { apiUrl } from "../config/api";
-import { EvidencePanel, PipelineStepper, SpecialistActivity, ToolTimeline, GuardrailPanel as RunGuardrailPanel } from "./atlas-run-activity";
+import { EvidencePanel, FeedbackItem, groupMemoriesByClass, MEMORY_CLASS_LABELS, MemoryRecordItem, PipelineStepper, RunMemoryTrace, SpecialistActivity, ToolTimeline, GuardrailPanel as RunGuardrailPanel } from "./atlas-run-activity";
 
 type CorpusState = {
   systemSeed: AtlasSystemSeedManifest | null;
@@ -50,6 +53,11 @@ export function AtlasCommandCenter() {
   const [roster, setRoster] = useState<AtlasSpecialistIdentity[]>([]);
   const [recentRuns, setRecentRuns] = useState<AtlasRunResponse[]>([]);
   const [recentRunsFailed, setRecentRunsFailed] = useState(false);
+  const [runFeedbackByRun, setRunFeedbackByRun] = useState<Record<string, AtlasFeedbackEvent[]>>({});
+  const [systemMemories, setSystemMemories] = useState<AtlasMemoryRecord[]>([]);
+  const [recentFeedback, setRecentFeedback] = useState<AtlasFeedbackEvent[]>([]);
+  const [ragCapability, setRagCapability] = useState<AtlasEmbeddingCapability | null>(null);
+  const [memoryFailed, setMemoryFailed] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -128,9 +136,35 @@ export function AtlasCommandCenter() {
         const runs = await Promise.all(
           ids.map((id) => fetch(apiUrl(`/api/v1/atlas/runs/${id}`)).then((response) => (response.ok ? (response.json() as Promise<AtlasRunResponse>) : null)))
         );
-        if (!cancelled) setRecentRuns(runs.filter((item): item is AtlasRunResponse => item !== null));
+        const realRuns = runs.filter((item): item is AtlasRunResponse => item !== null);
+        if (!cancelled) setRecentRuns(realRuns);
+
+        // Real per-run corrections via the dedicated GET /feedback/runs/{id}
+        // route (an exact match) -- fetched alongside each recent run's own
+        // detail so the run browser's expanded view can show them without a
+        // second round trip per expansion.
+        const feedbackEntries = await Promise.all(
+          realRuns.map((run) => fetch(apiUrl(`/api/v1/atlas/feedback/runs/${run.run_id}`)).then((response) => (response.ok ? (response.json() as Promise<AtlasFeedbackEvent[]>) : [])).then((events) => [run.run_id, events] as const))
+        );
+        if (!cancelled) setRunFeedbackByRun(Object.fromEntries(feedbackEntries));
       } catch {
         if (!cancelled) setRecentRunsFailed(true);
+      }
+    }
+
+    async function loadMemory() {
+      try {
+        const [memoryResponse, feedbackResponse, ragResponse] = await Promise.all([
+          fetch(apiUrl("/api/v1/atlas/memories?limit=50")),
+          fetch(apiUrl("/api/v1/atlas/feedback/recent?limit=20")),
+          fetch(apiUrl("/api/v1/atlas/retrieval/capability")),
+        ]);
+        if (cancelled) return;
+        if (memoryResponse.ok) setSystemMemories((await memoryResponse.json()) as AtlasMemoryRecord[]);
+        if (feedbackResponse.ok) setRecentFeedback((await feedbackResponse.json()) as AtlasFeedbackEvent[]);
+        if (ragResponse.ok) setRagCapability((await ragResponse.json()) as AtlasEmbeddingCapability);
+      } catch {
+        if (!cancelled) setMemoryFailed(true);
       }
     }
 
@@ -138,6 +172,7 @@ export function AtlasCommandCenter() {
     void loadCorpus();
     void loadTrustHistory();
     void loadActivity();
+    void loadMemory();
     return () => {
       cancelled = true;
     };
@@ -148,11 +183,12 @@ export function AtlasCommandCenter() {
       <Hero status={status} failed={statusFailed} />
       <div className="acc-grid">
         <SystemCortexPanel status={status} candidate={candidate} verification={verification} v1Run={v1Run} opcertRun={opcertRun} corpus={corpus} />
-        <RunActivityPanel runs={recentRuns} failed={recentRunsFailed} roster={roster} />
+        <RunActivityPanel runs={recentRuns} failed={recentRunsFailed} roster={roster} memories={systemMemories} feedbackByRun={runFeedbackByRun} />
         <TrustPanel status={status} candidate={candidate} verification={verification} history={promotionHistory} benchRuns={benchByCandidate} />
         <BenchPanel status={status} run={v1Run} candidateRuns={benchByCandidate} />
         <OperationalCertPanel status={status} run={opcertRun} />
         <CorpusPanel corpus={corpus} />
+        <SystemMemoryPanel memories={systemMemories} feedback={recentFeedback} rag={ragCapability} failed={memoryFailed} />
       </div>
     </section>
   );
@@ -321,7 +357,19 @@ function LineageItem({ node, indent }: { node: { id: string; label: string; deta
  * pipeline/specialist/tool/guardrail components the live per-run workspace
  * below uses, over the same durable `plan.steps`/`events` data.
  */
-function RunActivityPanel({ runs, failed, roster }: { runs: AtlasRunResponse[]; failed: boolean; roster: AtlasSpecialistIdentity[] }) {
+function RunActivityPanel({
+  runs,
+  failed,
+  roster,
+  memories,
+  feedbackByRun,
+}: {
+  runs: AtlasRunResponse[];
+  failed: boolean;
+  roster: AtlasSpecialistIdentity[];
+  memories: AtlasMemoryRecord[];
+  feedbackByRun: Record<string, AtlasFeedbackEvent[]>;
+}) {
   const [openRunId, setOpenRunId] = useState<string | null>(null);
   return (
     <article className="acc-panel acc-panel-wide">
@@ -354,6 +402,7 @@ function RunActivityPanel({ runs, failed, roster }: { runs: AtlasRunResponse[]; 
                     <ToolTimeline run={run} />
                     <RunGuardrailPanel run={run} />
                     <EvidencePanel run={run} />
+                    <RunMemoryTrace run={run} memories={memories} feedback={feedbackByRun[run.run_id] ?? []} />
                   </div>
                 ) : null}
               </li>
@@ -680,6 +729,91 @@ function CorpusPanel({ corpus }: { corpus: CorpusState }) {
           </dl>
         </details>
       ) : null}
+    </article>
+  );
+}
+
+/**
+ * System-wide "what does ATLAS know" view: real Atlas memory (`GET
+ * /memories`, grouped by its real knowledge_class, sensitivity-gated),
+ * real corrections/feedback (`GET /feedback/recent`), and whether
+ * document/RAG retrieval is even configured (`GET /retrieval/capability`
+ * -- system-wide, no project needed). Project-scoped RAG chunk browsing
+ * (`GET /retrieval/chunks`) is not shown here: it requires a project_id
+ * this application has no real "current project" concept to supply, and
+ * inventing one would be exactly the fabricated relationship this panel
+ * exists to avoid.
+ */
+function SystemMemoryPanel({
+  memories,
+  feedback,
+  rag,
+  failed,
+}: {
+  memories: AtlasMemoryRecord[];
+  feedback: AtlasFeedbackEvent[];
+  rag: AtlasEmbeddingCapability | null;
+  failed: boolean;
+}) {
+  const groups = groupMemoriesByClass(memories);
+  return (
+    <article className="acc-panel acc-panel-wide acc-system-memory" aria-label="Atlas memory and knowledge">
+      <h2>Atlas memory &amp; knowledge</h2>
+      {failed ? (
+        <p className="acc-empty">Could not reach the Atlas memory endpoints.</p>
+      ) : (
+        <>
+          {groups.length ? (
+            groups.map((group) => (
+              <div key={group.knowledgeClass} className="acc-memory-group">
+                <h3>{MEMORY_CLASS_LABELS[group.knowledgeClass] ?? group.knowledgeClass.replaceAll("_", " ")}</h3>
+                <ul>
+                  {group.records.map((record) => (
+                    <MemoryRecordItem key={record.memory_id} record={record} />
+                  ))}
+                </ul>
+              </div>
+            ))
+          ) : (
+            <p className="acc-empty">No persisted ATLAS memory is available for this context.</p>
+          )}
+
+          <div className="acc-memory-group">
+            <h3>Recent corrections &amp; feedback</h3>
+            {feedback.length ? (
+              <ul>
+                {feedback.map((event) => (
+                  <FeedbackItem key={event.feedback_id} event={event} />
+                ))}
+              </ul>
+            ) : (
+              <p className="acc-empty">No feedback or corrections have been recorded yet.</p>
+            )}
+          </div>
+
+          <div className="acc-memory-group">
+            <h3>Documents &amp; RAG</h3>
+            {rag ? (
+              <dl className="acc-facts">
+                <div>
+                  <dt>Retrieval</dt>
+                  <dd>{rag.available ? `${rag.provider} · ${rag.model}` : "not configured"}</dd>
+                </div>
+                <div>
+                  <dt>Detail</dt>
+                  <dd>{rag.detail}</dd>
+                </div>
+              </dl>
+            ) : (
+              <p className="acc-empty">Could not reach the Atlas retrieval capability endpoint.</p>
+            )}
+            <p className="acc-cortex-caption">
+              Project-scoped document chunks exist in the backend but require a project_id this UI has no real project context to supply --
+              shown honestly as unavailable here rather than invented.
+            </p>
+          </div>
+        </>
+      )}
     </article>
   );
 }

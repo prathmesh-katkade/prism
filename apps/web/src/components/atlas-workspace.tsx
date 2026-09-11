@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { AtlasMemoryRecord, AtlasResourceSnapshot, AtlasRunResponse, AtlasSpecialistIdentity, CortexGraphState, CortexNode } from "@prism/api-contracts";
+import type { AtlasFeedbackEvent, AtlasMemoryRecord, AtlasResourceSnapshot, AtlasRunResponse, AtlasSpecialistIdentity, CortexGraphState, CortexNode } from "@prism/api-contracts";
 import { apiUrl } from "../config/api";
-import { buildSpecialistActivity, EvidencePanel, GuardrailPanel, PipelineStepper, ToolTimeline } from "./atlas-run-activity";
+import { buildSpecialistActivity, EvidencePanel, GuardrailPanel, PipelineStepper, RunMemoryTrace, ToolTimeline } from "./atlas-run-activity";
 
 const terminal = new Set(["completed", "failed", "cancelled"]);
 
@@ -14,6 +14,8 @@ export function AtlasWorkspace({ datasetId }: { datasetId: string | undefined })
   const [memories, setMemories] = useState<AtlasMemoryRecord[]>([]);
   const [resources, setResources] = useState<AtlasResourceSnapshot | null>(null);
   const [roster, setRoster] = useState<AtlasSpecialistIdentity[]>([]);
+  const [runMemories, setRunMemories] = useState<AtlasMemoryRecord[]>([]);
+  const [runFeedback, setRunFeedback] = useState<AtlasFeedbackEvent[]>([]);
   const [error, setError] = useState<string | null>(null);
   const cancelStream = useRef<AbortController | null>(null);
   useEffect(() => () => cancelStream.current?.abort(), []);
@@ -25,6 +27,28 @@ export function AtlasWorkspace({ datasetId }: { datasetId: string | undefined })
       .catch(() => undefined);
     return () => { cancelled = true; };
   }, []);
+  // Real per-run memory trace: memories bounded to a recent window (no
+  // dedicated run_id filter exists on GET /memories yet, so a bounded
+  // fetch is filtered client-side by source_ref === run_id -- the exact
+  // rule the backend's own Cortex graph builder uses) plus feedback via
+  // the dedicated GET /feedback/runs/{run_id} route (an exact match).
+  // Refetched only when the run identity or its terminal state changes,
+  // not on every SSE tick.
+  useEffect(() => {
+    if (!run) return;
+    let cancelled = false;
+    Promise.all([
+      fetch(apiUrl("/api/v1/atlas/memories?limit=100")).then((response) => (response.ok ? (response.json() as Promise<AtlasMemoryRecord[]>) : [])),
+      fetch(apiUrl(`/api/v1/atlas/feedback/runs/${run.run_id}`)).then((response) => (response.ok ? (response.json() as Promise<AtlasFeedbackEvent[]>) : [])),
+    ])
+      .then(([memoryRecords, feedbackEvents]) => {
+        if (cancelled) return;
+        setRunMemories(memoryRecords);
+        setRunFeedback(feedbackEvents);
+      })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [run?.run_id, run?.plan.state]);
   async function refresh(id: string) {
     const [runResponse, graphResponse] = await Promise.all([fetch(apiUrl(`/api/v1/atlas/runs/${id}`)), fetch(apiUrl(`/api/v1/atlas/runs/${id}/cortex`))]);
     if (runResponse.ok) setRun(await runResponse.json() as AtlasRunResponse);
@@ -41,7 +65,7 @@ export function AtlasWorkspace({ datasetId }: { datasetId: string | undefined })
     } catch (reason) { if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : "Atlas stream failed."); }
   }
   async function start() {
-    if (!datasetId) return; setError(null); setRun(null); setGraph(null);
+    if (!datasetId) return; setError(null); setRun(null); setGraph(null); setRunMemories([]); setRunFeedback([]);
     const response = await fetch(apiUrl("/api/v1/atlas/runs"), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ dataset_id: datasetId, objective, idempotency_key: crypto.randomUUID() }) });
     if (!response.ok) { setError((await response.json() as { detail?: string }).detail ?? "Atlas run could not start."); return; }
     const created = await response.json() as AtlasRunResponse; setRun(created); await refresh(created.run_id); void watch(created.run_id);
@@ -65,6 +89,7 @@ export function AtlasWorkspace({ datasetId }: { datasetId: string | undefined })
       <GuardrailPanel run={run} />
       <ToolTimeline run={run} />
       <EvidencePanel run={run} />
+      <RunMemoryTrace run={run} memories={runMemories} feedback={runFeedback} />
       <AtlasPulse memories={memories} resources={resources} onRefresh={() => void refreshPulse()} />
       {graph ? <CortexV1 graph={graph} /> : null}
     </> : null}
@@ -99,7 +124,7 @@ function CortexV1({ graph }: { graph: CortexGraphState }) {
   return <section className="cortex-v1" aria-label="Cortex real-state graph">
     <header><div><span className="eyebrow">CORTEX V1 · DURABLE STATE ONLY</span><h2>Run topology</h2><p>{nodes.length} real nodes · {edges.length} real relations · select a node to focus.</p></div><div className="cortex-controls"><button onClick={() => setZoom((value) => Math.min(1.5, value + 0.1))} aria-label="Zoom in Cortex">+</button><button onClick={() => setZoom((value) => Math.max(0.7, value - 0.1))} aria-label="Zoom out Cortex">−</button><button onClick={() => setFocus(null)} disabled={!focus}>Reset focus</button></div></header>
     <div className="cortex-filters" role="group" aria-label="Filter Cortex by node kind">{kinds.map((kind) => <button key={kind} type="button" className={`migration-chip ${hiddenKinds.has(kind) ? "" : "ready"}`} aria-pressed={!hiddenKinds.has(kind)} onClick={() => toggleKind(kind)}>{kind.replaceAll("_", " ")}</button>)}</div>
-    <svg viewBox="0 0 800 420" role="img" aria-label="Cortex graph of this Atlas run" className="cortex-canvas"><g transform={`translate(400 210) scale(${zoom}) translate(-400 -210)`}>{edges.map((edge) => { const a = positions[edge.source_node_id]!, b = positions[edge.target_node_id]!; return <path key={edge.edge_id} className={focus && edge.source_node_id !== focus && edge.target_node_id !== focus ? "is-muted" : ""} d={`M ${a.x} ${a.y} Q ${(a.x + b.x) / 2} ${Math.min(a.y, b.y) - 36} ${b.x} ${b.y}`} />; })}{nodes.map((node) => { const point = positions[node.node_id]!; return <g key={node.node_id} className={`${visible(node) ? "" : "is-muted"} state-${node.state}`} transform={`translate(${point.x} ${point.y})`} tabIndex={0} role="button" aria-label={`Focus ${node.label}`} onClick={() => setFocus(node.node_id)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") setFocus(node.node_id); }}><circle r={node.kind === "run" ? 24 : 14} /><text y={node.kind === "run" ? 43 : 32}>{node.label.slice(0, 28)}</text></g>; })}</g></svg>
+    <svg viewBox="0 0 800 420" role="img" aria-label="Cortex graph of this Atlas run" className="cortex-canvas"><g transform={`translate(400 210) scale(${zoom}) translate(-400 -210)`}>{edges.map((edge) => { const a = positions[edge.source_node_id]!, b = positions[edge.target_node_id]!; return <path key={edge.edge_id} className={focus && edge.source_node_id !== focus && edge.target_node_id !== focus ? "is-muted" : ""} d={`M ${a.x} ${a.y} Q ${(a.x + b.x) / 2} ${Math.min(a.y, b.y) - 36} ${b.x} ${b.y}`} />; })}{nodes.map((node) => { const point = positions[node.node_id]!; return <g key={node.node_id} className={`${visible(node) ? "" : "is-muted"} state-${node.state}${node.label.startsWith("Memory:") ? " is-memory" : ""}`} transform={`translate(${point.x} ${point.y})`} tabIndex={0} role="button" aria-label={`Focus ${node.label}`} onClick={() => setFocus(node.node_id)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") setFocus(node.node_id); }}><circle r={node.kind === "run" ? 24 : 14} /><text y={node.kind === "run" ? 43 : 32}>{node.label.slice(0, 28)}</text></g>; })}</g></svg>
     {focusedNode ? <dl className="cortex-detail" aria-label="Selected Cortex node"><dt>Kind</dt><dd>{focusedNode.kind.replaceAll("_", " ")}</dd><dt>Label</dt><dd>{focusedNode.label}</dd><dt>State</dt><dd>{focusedNode.state}</dd><dt>Source ID</dt><dd className="acc-mono">{focusedNode.source_id}</dd></dl> : null}
     <ul className="cortex-legend"><li>Running / current</li><li>Recorded evidence</li><li>Blocked or cancelled</li></ul>
   </section>;

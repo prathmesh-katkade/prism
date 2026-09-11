@@ -181,6 +181,20 @@ describe("Atlas command center", () => {
             { run_id: "benchrun_v2", subject_id: "subject_1", corpus_version: "atlasbench-v2-holdout-wave3", corpus_hash: "f".repeat(64), total_tasks: 80, total_passed: 78, category_scores: [{ category: "sql", total: 8, passed: 8 }], started_at: "2026-01-01T00:00:00Z", completed_at: "2026-01-01T00:00:00Z", candidate_id: candidateId },
           ]);
         }
+        if (path.includes("/memories")) {
+          return json([
+            { memory_id: "memory_1", scope: "session", knowledge_class: "project_knowledge", content: "Full private planning content.", source: "planning doc", source_ref: "atlas_recent_1", confidence: "high", timestamp: "2026-01-01T00:00:00Z", sensitivity: "internal", created_at: "2026-01-01T00:00:00Z" },
+          ]);
+        }
+        if (path.includes("/feedback/recent")) {
+          return json([{ feedback_id: "atlasfeedback_recent_1", run_id: "atlas_recent_1", kind: "helpful", answer: "Good profile.", created_at: "2026-01-02T00:02:00Z" }]);
+        }
+        if (path.endsWith("/feedback/runs/atlas_recent_1")) {
+          return json([{ feedback_id: "atlasfeedback_recent_1", run_id: "atlas_recent_1", kind: "helpful", answer: "Good profile.", created_at: "2026-01-02T00:02:00Z" }]);
+        }
+        if (path.includes("/retrieval/capability")) {
+          return json({ provider: "lexical", model: "none", revision: "v1", available: false, detail: "Vector embeddings are not configured; deterministic lexical retrieval remains available." });
+        }
         return notFound();
       })
     );
@@ -231,5 +245,20 @@ describe("Atlas command center", () => {
     fireEvent.click(runRow);
     expect(within(activityPanel).getByLabelText("Atlas request pipeline")).toBeInTheDocument();
     expect(within(activityPanel).getByLabelText("Atlas specialist activity")).toBeInTheDocument();
+
+    // Per-run memory trace inside the expanded run: the real memory linked
+    // via source_ref, and the real feedback from GET /feedback/runs/{id}.
+    const runMemoryTrace = within(activityPanel).getByLabelText("Atlas memory used by this run");
+    expect(within(runMemoryTrace).getByText("planning doc")).toBeInTheDocument();
+    expect(within(runMemoryTrace).getByText("Helpful")).toBeInTheDocument();
+
+    // System-wide memory panel: real grouped memory, real recent feedback,
+    // and honest RAG-not-configured/no-project-context disclosure.
+    const memoryPanel = screen.getByLabelText("Atlas memory and knowledge");
+    expect(within(memoryPanel).getByText("Project Knowledge", { selector: "h3" })).toBeInTheDocument();
+    expect(within(memoryPanel).getByText("planning doc")).toBeInTheDocument();
+    expect(within(memoryPanel).getByText("Recent corrections & feedback")).toBeInTheDocument();
+    expect(within(memoryPanel).getByText("not configured")).toBeInTheDocument();
+    expect(within(memoryPanel).getByText(/no real project context to supply/)).toBeInTheDocument();
   });
 });

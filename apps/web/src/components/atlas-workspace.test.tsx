@@ -12,22 +12,33 @@ const roster = [
   { specialist: "auditor", display_name: "Auditor", role: "Independent evidence and methodology verifier", visible: true },
 ];
 
-function mockAtlas(runBody: unknown) {
+function notFound(): Response {
+  return new Response(JSON.stringify({ detail: "not found" }), { status: 404, headers: { "content-type": "application/json" } });
+}
+
+function mockAtlas(runBody: unknown, options: { memories?: unknown[]; feedback?: unknown[] } = {}) {
   return vi.fn(async (input: string | URL, init?: RequestInit) => {
     const path = String(input);
     if (path.endsWith("/specialists")) return json(roster);
     if (init?.method === "POST" && path.endsWith("/runs")) return json(runBody, 202);
     if (path.endsWith("/events")) return new Response("event: atlas.run\ndata: {}\n\n", { headers: { "content-type": "text/event-stream" } });
     if (path.endsWith("/cortex")) return json(graph);
-    return json(runBody);
+    if (path.includes("/memories")) return json(options.memories ?? []);
+    if (path.includes("/feedback/runs/")) return json(options.feedback ?? []);
+    if (path.endsWith(`/runs/${(runBody as { run_id: string }).run_id}`)) return json(runBody);
+    return notFound();
   });
 }
 
 describe("Atlas workspace", () => {
   afterEach(() => vi.restoreAllMocks());
   it("requires a durable dataset context", () => { render(<AtlasWorkspace datasetId={undefined} />); expect(screen.getByText("Load a dataset before opening an investigation.")).toBeInTheDocument(); });
-  it("renders durable plan, council evidence, real Cortex graph, specialist activity, tool timeline, and pipeline stage", async () => {
-    vi.stubGlobal("fetch", mockAtlas(run));
+  it("renders durable plan, council evidence, real Cortex graph, specialist activity, tool timeline, pipeline stage, and memory trace", async () => {
+    const linkedMemory = { memory_id: "memory_1", scope: "session", knowledge_class: "user_memory", content: "The user asked to focus on North region revenue.", source: "operator note", source_ref: "atlas_1", confidence: "medium", timestamp: "2026-09-04T00:00:00Z", sensitivity: "internal", created_at: "2026-09-04T00:00:00Z" };
+    const privateMemory = { memory_id: "memory_2", scope: "global", knowledge_class: "model_knowledge", content: "SECRET RAW CONTENT SHOULD NEVER RENDER", source: "internal", source_ref: "atlas_1", confidence: "low", timestamp: "2026-09-04T00:00:00Z", sensitivity: "private", created_at: "2026-09-04T00:00:00Z" };
+    const unrelatedMemory = { memory_id: "memory_3", scope: "global", knowledge_class: "web_research", content: "Not linked to this run.", source: "web", source_ref: "atlas_other_run", confidence: "low", timestamp: "2026-09-04T00:00:00Z", sensitivity: "public", created_at: "2026-09-04T00:00:00Z" };
+    const correction = { feedback_id: "atlasfeedback_1", run_id: "atlas_1", kind: "corrected", answer: "SELECT * FROM sales", correction: "SELECT id, region FROM sales", created_at: "2026-09-04T00:01:00Z" };
+    vi.stubGlobal("fetch", mockAtlas(run, { memories: [linkedMemory, privateMemory, unrelatedMemory], feedback: [correction] }));
     render(<AtlasWorkspace datasetId="ds_1" />); fireEvent.click(screen.getByRole("button", { name: "Run investigation" }));
     await waitFor(() => expect(screen.getByText("Grounded answer")).toBeInTheDocument());
     expect(screen.getByText("Measured profile.")).toBeInTheDocument(); expect(screen.getByLabelText("Cortex real-state graph")).toBeInTheDocument();
@@ -67,6 +78,24 @@ describe("Atlas workspace", () => {
     expect(within(evidence).getByText("Dataset revision", { selector: ".migration-chip" })).toBeInTheDocument();
     expect(within(evidence).getByText(/ds_1 · revision 0/)).toBeInTheDocument();
     expect(within(evidence).getByText("scout")).toBeInTheDocument();
+
+    // Memory trace: only the memory actually linked to this run (real
+    // source_ref === run_id) appears, never the one from another run.
+    // Private content is never put in the DOM at all, even collapsed.
+    const memoryTrace = await screen.findByLabelText("Atlas memory used by this run");
+    expect(within(memoryTrace).getByText("operator note")).toBeInTheDocument();
+    expect(within(memoryTrace).queryByText("web")).not.toBeInTheDocument(); // unrelated-run memory excluded
+    expect(within(memoryTrace).queryByText("SECRET RAW CONTENT SHOULD NEVER RENDER")).not.toBeInTheDocument();
+    expect(within(memoryTrace).getByText(/hidden -- sensitivity: private/)).toBeInTheDocument();
+    fireEvent.click(within(memoryTrace).getByText("operator note"));
+    expect(within(memoryTrace).getByText("The user asked to focus on North region revenue.")).toBeInTheDocument();
+
+    // Corrections: the real feedback event for this run, from the
+    // dedicated GET /feedback/runs/{id} route.
+    expect(within(memoryTrace).getByText("Corrected")).toBeInTheDocument();
+    fireEvent.click(within(memoryTrace).getByText("atlas_1", { selector: "strong" }));
+    expect(within(memoryTrace).getByText("SELECT * FROM sales")).toBeInTheDocument();
+    expect(within(memoryTrace).getByText("SELECT id, region FROM sales")).toBeInTheDocument();
   });
   it("shows the real guardrail decision was checked clean, without inventing a pass when no decision is recorded", async () => {
     const checkedRun = { ...run, events: [{ type: "plan_created", payload: { guardrail_decision: { policy_version: "atlas-guardrails-v1", authority: "server", state: "checked", findings: [], decision_id: "dec_1" } } }] };

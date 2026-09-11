@@ -77,6 +77,14 @@
 .acc-trust-timeline li small { margin-left:auto;color:var(--faint);font:10px var(--mono); }
 .acc-memory-group { margin-top:12px; }.acc-memory-group h3 { margin:0 0 6px;color:var(--faint);font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase; }.acc-memory-group ul { list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px; }
 .acc-memory-group li { padding:6px 8px;border-left:2px solid var(--line-soft);background:var(--surface-raised);font-size:11px; }.acc-memory-group li strong { display:block;font-size:11px; }.acc-memory-group li small { display:block;color:var(--faint);margin-top:2px; }.acc-memory-redacted { font-style:italic;color:var(--faint); }
+.atlas-memory-trace,.acc-system-memory { margin-top:16px;padding:14px 16px;border:1px solid var(--line);background:var(--surface); }
+.atlas-memory-trace .acc-memory-group,.acc-system-memory .acc-memory-group { margin-top:14px; }.atlas-memory-trace .acc-memory-group h3,.acc-system-memory .acc-memory-group h3 { margin:0 0 6px;color:var(--faint);font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase; }
+.atlas-memory-trace ul,.acc-system-memory ul { list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px; }.atlas-memory-trace li,.acc-system-memory li { border-left:2px solid var(--line-soft);padding:0 0 0 10px; }
+.atlas-memory-trace summary,.acc-system-memory summary { cursor:pointer;font-size:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap; }.atlas-memory-trace summary small,.acc-system-memory summary small { margin-left:auto;color:var(--faint); }
+.atlas-memory-trace dl,.acc-system-memory dl { display:grid;grid-template-columns:auto 1fr;gap:4px 12px;margin:8px 0 4px 2px;font-size:11px; }.atlas-memory-trace dt,.acc-system-memory dt { color:var(--faint); }.atlas-memory-trace dd,.acc-system-memory dd { margin:0;color:var(--muted); }
+.memory-redacted { font-style:italic;color:var(--faint); }
+.atlas-memory-trace > p,.acc-system-memory > p { margin:12px 0 0;color:var(--faint);font-size:12px; }
+.cortex-canvas .is-memory circle { stroke:var(--accent);stroke-dasharray:3 2; }
 .acc-bench-corpus:not(:first-child) { margin-top:18px;padding-top:14px;border-top:1px solid var(--line-soft); }.acc-bench-corpus h3 { font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--faint); }
 .atlas-evidence { margin-top:16px;padding:14px 16px;border:1px solid var(--line);background:var(--surface); }.atlas-evidence > ul { list-style:none;margin:12px 0 0;padding:0;display:flex;flex-direction:column;gap:6px; }
 .atlas-evidence li { border-left:2px solid var(--line-soft);padding:0 0 0 10px; }.atlas-evidence summary { cursor:pointer;font-size:12px;display:flex;gap:8px;align-items:center; }.atlas-evidence summary .migration-chip { flex-shrink:0; }

@@ -169,6 +169,20 @@ class DurableAtlasFeedbackStore:
             rows = connection.execute(statement).mappings().all()
         return [self._record_row(row) for row in rows]
 
+    def list_recent(self, *, limit: int = 100) -> list[AtlasFeedbackEvent]:
+        """Newest-first feedback across every run/project -- the missing
+        system-level discovery path for a "Corrections" UI, mirroring
+        ``list_for_run``/``list_for_project`` without requiring either id
+        up front. ``created_at`` is already indexed."""
+        statement = (
+            select(_feedback)
+            .order_by(_feedback.c.created_at.desc(), _feedback.c.feedback_id.desc())
+            .limit(limit)
+        )
+        with self.engine.connect() as connection:
+            rows = connection.execute(statement).mappings().all()
+        return [self._record_row(row) for row in rows]
+
     def list_by_kind(self, kind: AtlasFeedbackKind, *, limit: int = 500) -> list[AtlasFeedbackEvent]:
         """Future DPO/KTO pipelines read their substrate through here.
 
@@ -196,6 +210,14 @@ _store = DurableAtlasFeedbackStore()
 @router.post("", response_model=AtlasFeedbackEvent, status_code=status.HTTP_201_CREATED)
 def record_feedback(request: AtlasFeedbackWriteRequest) -> AtlasFeedbackEvent:
     return _store.record(request)
+
+
+@router.get("/recent", response_model=list[AtlasFeedbackEvent])
+def list_recent_feedback(limit: int = Query(default=50, ge=1, le=500)) -> list[AtlasFeedbackEvent]:
+    """Newest-first feedback/corrections system-wide, for the Command
+    Center's Memory panel -- read-only discovery, no run_id or project_id
+    required up front."""
+    return _store.list_recent(limit=limit)
 
 
 @router.get("/runs/{run_id}", response_model=list[AtlasFeedbackEvent])

@@ -21,7 +21,7 @@
  * same real transform and the same presentational components back both.
  */
 
-import type { AtlasRunEvent, AtlasRunResponse, AtlasSpecialistId, AtlasSpecialistIdentity } from "@prism/api-contracts";
+import type { AtlasFeedbackEvent, AtlasMemoryRecord, AtlasRunEvent, AtlasRunResponse, AtlasSpecialistId, AtlasSpecialistIdentity } from "@prism/api-contracts";
 
 // --- Evidence lineage --------------------------------------------------------
 
@@ -413,5 +413,164 @@ export function PipelineStepper({ run }: { run: AtlasRunResponse | null }) {
         );
       })}
     </ol>
+  );
+}
+
+// --- Memory & corrections ----------------------------------------------------
+
+export const MEMORY_CLASS_LABELS: Record<string, string> = {
+  data_evidence: "Evidence Memory",
+  project_knowledge: "Project Knowledge",
+  user_memory: "User Memory",
+  model_knowledge: "Model Knowledge",
+  web_research: "Web Research",
+};
+
+const FEEDBACK_KIND_LABELS: Record<string, string> = {
+  helpful: "Helpful",
+  not_helpful: "Not helpful",
+  accepted: "Accepted",
+  rejected: "Rejected",
+  corrected: "Corrected",
+};
+const FEEDBACK_KIND_TONE: Record<string, string> = { helpful: "ready", accepted: "ready", not_helpful: "unavailable", rejected: "unavailable", corrected: "bridged" };
+
+/** The backend's own Cortex graph builder (`cortex_graph` in
+ * atlas_runtime.py) treats `source_ref === run_id` as the proof a memory
+ * record cites this run -- the same real rule applied here client-side,
+ * since `GET /memories` has no dedicated run_id filter yet. Never a
+ * heuristic on timestamp or text similarity. */
+export function filterMemoriesForRun(memories: AtlasMemoryRecord[], runId: string): AtlasMemoryRecord[] {
+  return memories.filter((record) => record.source_ref === runId);
+}
+
+/** Whether this record's `content` may ever be put in the DOM here.
+ * `public`/`internal` (the schema default) can be expanded on request;
+ * `private`/`restricted` content is never rendered by this general view --
+ * only its existence and safe metadata are shown. */
+export function memoryContentDisclosable(record: AtlasMemoryRecord): boolean {
+  return record.sensitivity === "public" || record.sensitivity === "internal";
+}
+
+export function groupMemoriesByClass(memories: AtlasMemoryRecord[]): { knowledgeClass: string; records: AtlasMemoryRecord[] }[] {
+  const groups = new Map<string, AtlasMemoryRecord[]>();
+  for (const record of memories) {
+    const list = groups.get(record.knowledge_class) ?? [];
+    list.push(record);
+    groups.set(record.knowledge_class, list);
+  }
+  return [...groups.entries()].map(([knowledgeClass, records]) => ({ knowledgeClass, records }));
+}
+
+export function MemoryRecordItem({ record }: { record: AtlasMemoryRecord }) {
+  const disclosable = memoryContentDisclosable(record);
+  return (
+    <li data-sensitivity={record.sensitivity}>
+      <details>
+        <summary>
+          <span className="migration-chip ready">{MEMORY_CLASS_LABELS[record.knowledge_class] ?? record.knowledge_class.replaceAll("_", " ")}</span>
+          <strong>{record.source}</strong>
+          <small className="acc-mono">{record.scope}</small>
+        </summary>
+        <dl>
+          <dt>Memory ID</dt>
+          <dd className="acc-mono">{record.memory_id}</dd>
+          {record.project_id ? (
+            <>
+              <dt>Project</dt>
+              <dd className="acc-mono">{record.project_id}</dd>
+            </>
+          ) : null}
+          <dt>Confidence</dt>
+          <dd>{record.confidence}</dd>
+          {record.created_at ? (
+            <>
+              <dt>Created</dt>
+              <dd>{new Date(record.created_at).toLocaleString()}</dd>
+            </>
+          ) : null}
+          {record.superseded_by ? (
+            <>
+              <dt>Superseded by</dt>
+              <dd className="acc-mono">{record.superseded_by}</dd>
+            </>
+          ) : null}
+          <dt>Content</dt>
+          <dd>{disclosable ? record.content : <span className="memory-redacted">hidden -- sensitivity: {record.sensitivity}</span>}</dd>
+        </dl>
+      </details>
+    </li>
+  );
+}
+
+export function FeedbackItem({ event }: { event: AtlasFeedbackEvent }) {
+  return (
+    <li data-kind={event.kind}>
+      <details>
+        <summary>
+          <span className={`migration-chip ${FEEDBACK_KIND_TONE[event.kind] ?? ""}`}>{FEEDBACK_KIND_LABELS[event.kind] ?? event.kind}</span>
+          <strong className="acc-mono">{event.run_id}</strong>
+          <small>{new Date(event.created_at).toLocaleString()}</small>
+        </summary>
+        <dl>
+          <dt>Answer</dt>
+          <dd>{event.answer}</dd>
+          {event.correction ? (
+            <>
+              <dt>Correction</dt>
+              <dd>{event.correction}</dd>
+            </>
+          ) : null}
+          {event.note ? (
+            <>
+              <dt>Note</dt>
+              <dd>{event.note}</dd>
+            </>
+          ) : null}
+          {event.project_id ? (
+            <>
+              <dt>Project</dt>
+              <dd className="acc-mono">{event.project_id}</dd>
+            </>
+          ) : null}
+        </dl>
+      </details>
+    </li>
+  );
+}
+
+/** Memory/feedback actually tied to one real run: memories via the same
+ * source_ref === run_id rule the backend's own Cortex graph uses, and
+ * feedback via the dedicated `GET /feedback/runs/{run_id}` route (an exact
+ * match, no filtering needed). A run with neither shows an honest empty
+ * state rather than nothing at all, so its absence reads as checked, not
+ * broken. */
+export function RunMemoryTrace({ run, memories, feedback }: { run: AtlasRunResponse; memories: AtlasMemoryRecord[]; feedback: AtlasFeedbackEvent[] }) {
+  const linked = filterMemoriesForRun(memories, run.run_id);
+  return (
+    <section className="atlas-memory-trace" aria-label="Atlas memory used by this run">
+      <span className="eyebrow">MEMORY &amp; CORRECTIONS</span>
+      {linked.length ? (
+        <div className="acc-memory-group">
+          <h3>Memory cited by this run</h3>
+          <ul>
+            {linked.map((record) => (
+              <MemoryRecordItem key={record.memory_id} record={record} />
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      {feedback.length ? (
+        <div className="acc-memory-group">
+          <h3>Corrections &amp; feedback on this run</h3>
+          <ul>
+            {feedback.map((event) => (
+              <FeedbackItem key={event.feedback_id} event={event} />
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      {!linked.length && !feedback.length ? <p>No persisted ATLAS memory or feedback is linked to this run yet.</p> : null}
+    </section>
   );
 }
