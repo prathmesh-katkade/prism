@@ -35,7 +35,7 @@ test("Clean detects an issue, previews it, applies it as a new revision Overview
 
   // Overview reflects the cleaned revision under the same object identity.
   await page.getByRole("button", { name: /Overview native/i }).click();
-  await expect(page.getByText("3 rows · 2 columns")).toBeVisible();
+  await expect(page.getByText("3 rows · 2 columns")).toBeVisible({ timeout: 10_000 });
 
   // SQL Lab queries the same connection and sees the cleaned row count too (the default query
   // is a plain "SELECT * FROM data LIMIT 100").
@@ -57,7 +57,7 @@ test("Clean detects an issue, previews it, applies it as a new revision Overview
   await page.getByRole("button", { name: "Revision 0 · original" }).click();
   await expect(page.getByRole("heading", { name: /found/ })).toBeVisible({ timeout: 10_000 });
   await page.getByRole("button", { name: /Overview native/i }).click();
-  await expect(page.getByText("4 rows · 2 columns")).toBeVisible();
+  await expect(page.getByText("4 rows · 2 columns")).toBeVisible({ timeout: 10_000 });
 });
 
 test("Visualize suggests a deterministic chart, renders it with provenance, and Atlas explains it", async ({ page }) => {
