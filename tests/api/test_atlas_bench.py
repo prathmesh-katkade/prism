@@ -107,3 +107,29 @@ def test_two_suite_runs_are_both_retained_never_overwritten(tmp_path) -> None:  
     assert run_1.run_id != run_2.run_id
     listed = store.list_runs_for_subject(subject.subject_id)
     assert {item.run_id for item in listed} == {run_1.run_id, run_2.run_id}
+
+
+def test_list_runs_for_candidate_spans_every_corpus_version(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """AtlasBench V2 discovery depends on this: candidate_id, not subject_id
+    (a runtime-model fingerprint), is the only field a caller can filter on
+    without already knowing which corpora exist."""
+    tasks = all_tasks()
+    store = DurableAtlasBenchStore(f"sqlite:///{(tmp_path / 'bench.sqlite').as_posix()}")
+    subject = PerfectReferenceSubject(tasks)
+
+    v1_run, v1_results = run_suite(subject, tasks, corpus_version=CORPUS_VERSION, corpus_hash_value=corpus_hash())
+    store.save(v1_run.model_copy(update={"subject_kind": "candidate", "candidate_id": "candidate_a"}), v1_results)
+    v2_run, v2_results = run_suite(subject, tasks, corpus_version="atlasbench-v2-holdout-wave3", corpus_hash_value="b" * 64)
+    store.save(v2_run.model_copy(update={"subject_kind": "candidate", "candidate_id": "candidate_a"}), v2_results)
+    other_run, other_results = run_suite(subject, tasks, corpus_version=CORPUS_VERSION, corpus_hash_value=corpus_hash())
+    store.save(other_run.model_copy(update={"subject_kind": "candidate", "candidate_id": "candidate_b"}), other_results)
+
+    listed = store.list_runs_for_candidate("candidate_a")
+    assert {item.run_id for item in listed} == {v1_run.run_id, v2_run.run_id}
+    assert {item.corpus_version for item in listed} == {CORPUS_VERSION, "atlasbench-v2-holdout-wave3"}
+    assert all(item.candidate_id == "candidate_a" for item in listed)
+
+    assert store.list_runs_for_candidate("candidate_b") == [
+        store.get_run(other_run.run_id)
+    ]
+    assert store.list_runs_for_candidate("candidate_unknown") == []

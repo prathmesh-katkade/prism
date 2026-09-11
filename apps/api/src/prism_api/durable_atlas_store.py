@@ -193,6 +193,17 @@ class DurableAtlasRunStore:
         with self.engine.connect() as connection:
             return [str(row) for row in connection.execute(statement).scalars().all()]
 
+    def list_recent_run_ids(self, *, limit: int = 20) -> list[str]:
+        """List run ids, newest first -- for the UI's recent-activity browser.
+
+        A separate method from ``list_run_ids`` (oldest first) rather than an
+        added parameter: that method's ordering is relied on by the Foundry
+        training-dataset walk and is left untouched.
+        """
+        statement = select(_runs.c.run_id).order_by(_runs.c.created_at.desc()).limit(limit)
+        with self.engine.connect() as connection:
+            return [str(row) for row in connection.execute(statement).scalars().all()]
+
     def create(
         self, request: AtlasRunRequest, provider: AtlasModelProviderName, plan: AtlasStructuredPlan
     ) -> AtlasRunResponse:

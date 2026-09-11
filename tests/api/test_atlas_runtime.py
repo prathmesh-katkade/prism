@@ -82,6 +82,40 @@ def test_atlas_sse_and_cortex_are_projections_of_stored_run_state() -> None:
     assert not any("thought" in node.label.lower() for node in graph.nodes)
 
 
+def test_recent_runs_are_listed_newest_first_for_the_activity_browser(tmp_path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    # Isolated to a temp durable store: `runs` is a process-wide singleton
+    # shared with every other test's Atlas run history, and the Foundry
+    # combined-SFT builder elsewhere in the suite scans that same run
+    # history for eligible examples -- two more real completed runs here
+    # would otherwise be real, unrelated cross-contamination for it.
+    from prism_api.atlas_runtime import runs as run_store
+    from prism_api.durable_atlas_store import DurableAtlasRunStore
+
+    monkeypatch.setattr(run_store, "_store", DurableAtlasRunStore(f"sqlite:///{tmp_path}/isolated-runs.db"))
+
+    client = TestClient(create_app())
+    dataset_id = _dataset(client)
+    first_run = client.post(
+        "/api/v1/atlas/runs",
+        json={"dataset_id": dataset_id, "objective": "First investigation."},
+    ).json()["run_id"]
+    time.sleep(0.01)  # force a distinct created_at from the first run
+    second_run = client.post(
+        "/api/v1/atlas/runs",
+        json={"dataset_id": dataset_id, "objective": "Second investigation."},
+    ).json()["run_id"]
+    _terminal_run(client, first_run)
+    _terminal_run(client, second_run)
+
+    response = client.get("/api/v1/atlas/runs", params={"limit": 2})
+    assert response.status_code == 200
+    recent_ids = response.json()
+    assert recent_ids[:2] == [second_run, first_run]
+
+    bounded = client.get("/api/v1/atlas/runs", params={"limit": 1})
+    assert bounded.json() == [second_run]
+
+
 def test_atlas_exposes_a_deterministic_provider_and_atlas_as_sole_voice() -> None:
     client = TestClient(create_app())
 

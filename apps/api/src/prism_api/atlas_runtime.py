@@ -451,6 +451,9 @@ class AtlasRunStore:
     def get(self, run_id: str) -> AtlasRunResponse:
         return self._store.get(run_id)
 
+    def list_recent_run_ids(self, *, limit: int = 20) -> list[str]:
+        return self._store.list_recent_run_ids(limit=limit)
+
     def ping(self) -> bool:
         return self._store.ping()
 

@@ -8,12 +8,16 @@ import type {
   AtlasCombinedTrainingSourceSummary,
   AtlasOperationalScenarioResult,
   AtlasOperationalSuiteRun,
+  AtlasProductionPointer,
   AtlasProductionTrustStatus,
+  AtlasRunResponse,
+  AtlasSpecialistIdentity,
   AtlasSyntheticTeacherManifest,
   AtlasSystemSeedManifest,
   AtlasVerifiedBaseModelCandidate,
 } from "@prism/api-contracts";
 import { apiUrl } from "../config/api";
+import { PipelineStepper, SpecialistActivity, ToolTimeline, GuardrailPanel as RunGuardrailPanel } from "./atlas-run-activity";
 
 type CorpusState = {
   systemSeed: AtlasSystemSeedManifest | null;
@@ -41,6 +45,11 @@ export function AtlasCommandCenter() {
   const [v1Run, setV1Run] = useState<AtlasBenchSuiteRun | null>(null);
   const [opcertRun, setOpcertRun] = useState<AtlasOperationalSuiteRun | null>(null);
   const [corpus, setCorpus] = useState<CorpusState>(emptyCorpus);
+  const [benchByCandidate, setBenchByCandidate] = useState<AtlasBenchSuiteRun[]>([]);
+  const [promotionHistory, setPromotionHistory] = useState<AtlasProductionPointer[]>([]);
+  const [roster, setRoster] = useState<AtlasSpecialistIdentity[]>([]);
+  const [recentRuns, setRecentRuns] = useState<AtlasRunResponse[]>([]);
+  const [recentRunsFailed, setRecentRunsFailed] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -75,6 +84,14 @@ export function AtlasCommandCenter() {
           const opcertResponse = await fetch(apiUrl(`/api/v1/atlas/operational-cert/runs/${body.latest_operational_cert_run_id}`));
           if (!cancelled && opcertResponse.ok) setOpcertRun((await opcertResponse.json()) as AtlasOperationalSuiteRun);
         }
+
+        // Every recorded bench run for the current production candidate,
+        // any corpus -- this is the whole AtlasBench V2 discovery path: no
+        // run id or candidate id is ever hardcoded into this component.
+        if (candidateId) {
+          const benchResponse = await fetch(apiUrl(`/api/v1/atlas/bench/runs-by-candidate/${candidateId}`));
+          if (!cancelled && benchResponse.ok) setBenchByCandidate((await benchResponse.json()) as AtlasBenchSuiteRun[]);
+        }
       } catch {
         if (!cancelled) setStatusFailed(true);
       }
@@ -95,8 +112,32 @@ export function AtlasCommandCenter() {
       if (!cancelled) setCorpus({ systemSeed: seed[0] ?? null, syntheticTeacher: teacher[0] ?? null, combinedSft: sft[0] ?? null, summary });
     }
 
+    async function loadTrustHistory() {
+      const response = await fetch(apiUrl("/api/v1/atlas/promotion/history")).catch(() => null);
+      if (!cancelled && response?.ok) setPromotionHistory((await response.json()) as AtlasProductionPointer[]);
+    }
+
+    async function loadActivity() {
+      const rosterResponse = await fetch(apiUrl("/api/v1/atlas/specialists")).catch(() => null);
+      if (!cancelled && rosterResponse?.ok) setRoster((await rosterResponse.json()) as AtlasSpecialistIdentity[]);
+
+      try {
+        const idsResponse = await fetch(apiUrl("/api/v1/atlas/runs?limit=8"));
+        if (!idsResponse.ok) throw new Error(String(idsResponse.status));
+        const ids = (await idsResponse.json()) as string[];
+        const runs = await Promise.all(
+          ids.map((id) => fetch(apiUrl(`/api/v1/atlas/runs/${id}`)).then((response) => (response.ok ? (response.json() as Promise<AtlasRunResponse>) : null)))
+        );
+        if (!cancelled) setRecentRuns(runs.filter((item): item is AtlasRunResponse => item !== null));
+      } catch {
+        if (!cancelled) setRecentRunsFailed(true);
+      }
+    }
+
     void loadStatus();
     void loadCorpus();
+    void loadTrustHistory();
+    void loadActivity();
     return () => {
       cancelled = true;
     };
@@ -107,9 +148,9 @@ export function AtlasCommandCenter() {
       <Hero status={status} failed={statusFailed} />
       <div className="acc-grid">
         <SystemCortexPanel status={status} candidate={candidate} verification={verification} v1Run={v1Run} opcertRun={opcertRun} corpus={corpus} />
-        <LiveActivityPanel />
-        <TrustPanel status={status} candidate={candidate} verification={verification} />
-        <BenchPanel status={status} run={v1Run} />
+        <RunActivityPanel runs={recentRuns} failed={recentRunsFailed} roster={roster} />
+        <TrustPanel status={status} candidate={candidate} verification={verification} history={promotionHistory} benchRuns={benchByCandidate} />
+        <BenchPanel status={status} run={v1Run} candidateRuns={benchByCandidate} />
         <OperationalCertPanel status={status} run={opcertRun} />
         <CorpusPanel corpus={corpus} />
       </div>
@@ -272,27 +313,90 @@ function LineageItem({ node, indent }: { node: { id: string; label: string; deta
   );
 }
 
-function LiveActivityPanel() {
+/**
+ * Real, recorded Atlas run history -- newest first, from `GET /runs` (a
+ * thin id list) resolved into full run detail per id. Nothing here is
+ * simulated: an empty list means no run has ever been recorded, not that
+ * this panel is hiding activity. Expanding a run reuses the exact same
+ * pipeline/specialist/tool/guardrail components the live per-run workspace
+ * below uses, over the same durable `plan.steps`/`events` data.
+ */
+function RunActivityPanel({ runs, failed, roster }: { runs: AtlasRunResponse[]; failed: boolean; roster: AtlasSpecialistIdentity[] }) {
+  const [openRunId, setOpenRunId] = useState<string | null>(null);
   return (
-    <article className="acc-panel">
-      <h2>Live activity</h2>
-      <p className="acc-empty">
-        No Atlas investigation is active from this screen. Open a dataset in the workspace below to see real specialist, tool, and guardrail
-        activity for that run -- this panel never simulates activity that isn&apos;t actually happening.
-      </p>
+    <article className="acc-panel acc-panel-wide">
+      <h2>Run activity</h2>
+      {failed ? (
+        <p className="acc-empty">Could not reach the Atlas run history endpoint.</p>
+      ) : !runs.length ? (
+        <p className="acc-empty">
+          No Atlas investigation has been recorded yet. Real specialist, tool, and guardrail activity for any run will appear here as soon
+          as one exists -- this panel never simulates activity that isn&apos;t actually happening.
+        </p>
+      ) : (
+        <ul className="acc-run-list">
+          {runs.map((run) => {
+            const open = openRunId === run.run_id;
+            return (
+              <li key={run.run_id}>
+                <button type="button" className="acc-run-summary" aria-expanded={open} onClick={() => setOpenRunId(open ? null : run.run_id)}>
+                  <strong>{run.plan.objective}</strong>
+                  <span className={`migration-chip ${run.plan.state === "completed" ? "ready" : run.plan.state === "failed" ? "unavailable" : "bridged"}`}>
+                    {(run.plan.state ?? "unknown").replaceAll("_", " ")}
+                  </span>
+                  <span className="acc-mono">{run.plan.dataset_id}</span>
+                  <span className="acc-mono">{run.created_at ? new Date(run.created_at).toLocaleString() : ""}</span>
+                </button>
+                {open ? (
+                  <div className="acc-run-detail">
+                    <PipelineStepper run={run} />
+                    <SpecialistActivity run={run} roster={roster} />
+                    <ToolTimeline run={run} />
+                    <RunGuardrailPanel run={run} />
+                  </div>
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </article>
   );
 }
 
+const TRUST_STAGE_LABELS: Record<string, string> = { registered: "Registered", verified: "Verified", runtime_bound: "Runtime bound", benchmarked: "Benchmarked", opcert: "Operational Certification", production: "Production", rollback: "Restored via rollback" };
+
+/** A real lifecycle read off already-established facts -- nothing here
+ * decides eligibility; it mirrors the same `critical == 0 && pass rate >=
+ * 90%` rule the server's own promotion gate enforces, purely for display. */
 function TrustPanel({
   status,
   candidate,
   verification,
+  history,
+  benchRuns,
 }: {
   status: AtlasProductionTrustStatus | null;
   candidate: AtlasVerifiedBaseModelCandidate | null;
   verification: AtlasBaseModelVerification | null;
+  history: AtlasProductionPointer[];
+  benchRuns: AtlasBenchSuiteRun[];
 }) {
+  const critical = status?.latest_operational_cert_critical_failures ?? 0;
+  const passed = status?.latest_operational_cert_total_passed ?? 0;
+  const total = status?.latest_operational_cert_total_scenarios ?? 0;
+  const opcertRun = Boolean(status?.latest_operational_cert_run_id);
+  const eligible = opcertRun && critical === 0 && total > 0 && passed / total >= 0.9;
+  const stages = status?.production
+    ? [
+        { id: "registered", reached: Boolean(status.candidate_kind) },
+        { id: "verified", reached: status.trust_verification_state === "verified" },
+        { id: "runtime_bound", reached: Boolean(status.runtime_model_digest) },
+        { id: "benchmarked", reached: benchRuns.length > 0 || Boolean(status.latest_v1_run_id) },
+        { id: "opcert", reached: opcertRun },
+        { id: "production", reached: true },
+      ]
+    : [];
   return (
     <article className="acc-panel">
       <h2>Model trust</h2>
@@ -300,6 +404,16 @@ function TrustPanel({
         <p className="acc-empty">No production candidate to show trust for yet.</p>
       ) : (
         <>
+          <ol className="acc-trust-timeline" aria-label="Model trust lifecycle">
+            {stages.map((stage) => (
+              <li key={stage.id} className={stage.reached ? "is-reached" : ""}>{TRUST_STAGE_LABELS[stage.id]}</li>
+            ))}
+            <li className={opcertRun ? (eligible ? "is-reached" : "is-blocked") : ""}>
+              {opcertRun ? (eligible ? "Promotion eligible" : "Promotion blocked") : "Promotion pending"}
+              {opcertRun && !eligible ? <small>{critical > 0 ? `${critical} critical` : "below 90%"}</small> : null}
+            </li>
+            {status.production.is_rollback ? <li className="is-current">{TRUST_STAGE_LABELS.rollback}<small>{status.production.reason}</small></li> : null}
+          </ol>
           <dl className="acc-facts">
             <div>
               <dt>Runtime model</dt>
@@ -357,44 +471,85 @@ function TrustPanel({
               </dl>
             </details>
           ) : null}
+          {history.length > 1 ? (
+            <details className="acc-details">
+              <summary>Promotion history ({history.length})</summary>
+              <ul className="acc-scenario-list">
+                {history.map((pointer) => (
+                  <li key={pointer.event_id}>
+                    <strong className="acc-mono">{pointer.candidate_id}</strong>
+                    {pointer.is_rollback ? <span> · rollback</span> : null}
+                    <p>{pointer.reason}</p>
+                    <small>{new Date(pointer.promoted_at).toLocaleString()}</small>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          ) : null}
         </>
       )}
     </article>
   );
 }
 
-function BenchPanel({ status, run }: { status: AtlasProductionTrustStatus | null; run: AtlasBenchSuiteRun | null }) {
+function CategoryMatrix({ scores }: { scores: AtlasBenchSuiteRun["category_scores"] }) {
+  if (!scores?.length) return null;
   return (
-    <article className="acc-panel">
-      <h2>AtlasBench V1</h2>
+    <table className="acc-matrix">
+      <thead>
+        <tr>
+          <th scope="col">Category</th>
+          <th scope="col">Passed</th>
+        </tr>
+      </thead>
+      <tbody>
+        {scores.map((score) => (
+          <tr key={score.category}>
+            <td>{score.category.replaceAll("_", " ")}</td>
+            <td>{score.passed}/{score.total}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+/** One section per real corpus_version recorded for this candidate --
+ * V1's own numbers come from the already-trusted current-status fields;
+ * any other corpus (V2 holdout, or a future wave) is discovered purely
+ * from `GET /bench/runs-by-candidate/{id}`, never a hardcoded run id. */
+function BenchPanel({ status, run, candidateRuns }: { status: AtlasProductionTrustStatus | null; run: AtlasBenchSuiteRun | null; candidateRuns: AtlasBenchSuiteRun[] }) {
+  const shownVersion = run?.corpus_version ?? null;
+  const otherVersions = [...new Map(candidateRuns.filter((item) => item.corpus_version !== shownVersion).map((item) => [item.corpus_version, item])).values()].sort((a, b) =>
+    a.corpus_version.localeCompare(b.corpus_version)
+  );
+  return (
+    <article className="acc-panel acc-panel-wide">
+      <h2>AtlasBench</h2>
       {!status?.latest_v1_run_id ? (
-        <p className="acc-empty">No AtlasBench V1 run recorded for the current production candidate yet.</p>
+        <p className="acc-empty">No AtlasBench run recorded for the current production candidate yet.</p>
       ) : (
         <>
-          <p className="acc-score">
-            {status.latest_v1_total_passed ?? "?"} / {status.latest_v1_total_tasks ?? "?"}
-          </p>
-          {run?.category_scores?.length ? (
-            <table className="acc-matrix">
-              <thead>
-                <tr>
-                  <th scope="col">Category</th>
-                  <th scope="col">Passed</th>
-                </tr>
-              </thead>
-              <tbody>
-                {run.category_scores.map((score) => (
-                  <tr key={score.category}>
-                    <td>{score.category.replaceAll("_", " ")}</td>
-                    <td>
-                      {score.passed}/{score.total}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : null}
-          <p className="acc-cortex-caption">V2 holdout evidence exists but isn&apos;t surfaced by the current-status API for an arbitrary corpus yet -- shown honestly as absent rather than guessed.</p>
+          <div className="acc-bench-corpus">
+            <h3 className="acc-cortex-caption-secondary">{run?.corpus_version ?? "primary corpus"}</h3>
+            <p className="acc-score">
+              {status.latest_v1_total_passed ?? "?"} / {status.latest_v1_total_tasks ?? "?"}
+            </p>
+            <CategoryMatrix scores={run?.category_scores} />
+          </div>
+          {otherVersions.length ? (
+            otherVersions.map((item) => (
+              <div className="acc-bench-corpus" key={item.corpus_version}>
+                <h3 className="acc-cortex-caption-secondary">{item.corpus_version}</h3>
+                <p className="acc-score">
+                  {item.total_passed} / {item.total_tasks}
+                </p>
+                <CategoryMatrix scores={item.category_scores} />
+              </div>
+            ))
+          ) : (
+            <p className="acc-cortex-caption">No additional-corpus AtlasBench run (for example, a V2 holdout) is recorded for this candidate yet.</p>
+          )}
         </>
       )}
     </article>
@@ -459,9 +614,11 @@ function OperationalCertPanel({ status, run }: { status: AtlasProductionTrustSta
 }
 
 function CorpusPanel({ corpus }: { corpus: CorpusState }) {
+  const summary = corpus.summary;
   return (
-    <article className="acc-panel">
-      <h2>Atlas Intelligence corpus</h2>
+    <article className="acc-panel acc-panel-wide">
+      <h2>Atlas Intelligence Lab</h2>
+      <p className="acc-cortex-caption">Every SFT source class stays auditable on its own -- never blended into one indistinguishable pool.</p>
       <dl className="acc-facts">
         <div>
           <dt>System seed</dt>
@@ -476,6 +633,14 @@ function CorpusPanel({ corpus }: { corpus: CorpusState }) {
           </dd>
         </div>
         <div>
+          <dt>History-derived (verified)</dt>
+          <dd>{summary ? `${summary.verified_history_examples} eligible examples` : "not computed"}</dd>
+        </div>
+        <div>
+          <dt>User corrections</dt>
+          <dd>{summary ? `${summary.user_correction_examples} eligible examples` : "not computed"}</dd>
+        </div>
+        <div>
           <dt>Combined SFT</dt>
           <dd>
             {corpus.combinedSft
@@ -484,6 +649,21 @@ function CorpusPanel({ corpus }: { corpus: CorpusState }) {
           </dd>
         </div>
       </dl>
+      {corpus.systemSeed?.domain_counts?.length ? (
+        <div className="acc-bars" aria-label="System seed distribution by domain">
+          {(() => {
+            const counts = corpus.systemSeed!.domain_counts!;
+            const max = Math.max(...counts.map((entry) => entry.example_count));
+            return counts.map((item) => (
+              <div key={item.domain} className="acc-bar-row">
+                <span>{item.domain.replaceAll("_", " ")}</span>
+                <span className="acc-bar-track"><span className="acc-bar-fill" style={{ width: `${max ? (item.example_count / max) * 100 : 0}%` }} /></span>
+                <span className="acc-mono">{item.example_count}</span>
+              </div>
+            ));
+          })()}
+        </div>
+      ) : null}
       {corpus.combinedSft ? (
         <details className="acc-details">
           <summary>Provenance hashes</summary>
@@ -496,19 +676,6 @@ function CorpusPanel({ corpus }: { corpus: CorpusState }) {
               <dt>Aggregate content hash</dt>
               <dd className="acc-mono">{corpus.combinedSft.aggregate_content_hash}</dd>
             </div>
-          </dl>
-        </details>
-      ) : null}
-      {corpus.systemSeed?.domain_counts?.length ? (
-        <details className="acc-details">
-          <summary>System seed by domain</summary>
-          <dl className="acc-facts">
-            {corpus.systemSeed.domain_counts.map((item) => (
-              <div key={item.domain}>
-                <dt>{item.domain.replaceAll("_", " ")}</dt>
-                <dd>{item.example_count}</dd>
-              </div>
-            ))}
           </dl>
         </details>
       ) : null}

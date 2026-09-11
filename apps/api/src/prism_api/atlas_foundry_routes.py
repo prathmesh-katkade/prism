@@ -503,6 +503,17 @@ def get_bench_run_failures(run_id: str, limit: int = Query(default=200, ge=1, le
     return _bench_store.failed_tasks(run_id, limit=limit)
 
 
+@bench_router.get("/runs-by-candidate/{candidate_id}", response_model=list[AtlasBenchSuiteRun])
+def list_bench_runs_for_candidate(candidate_id: str, limit: int = Query(default=50, ge=1, le=200)) -> list[AtlasBenchSuiteRun]:
+    """Every recorded AtlasBench run (any corpus -- V1, V2, or later) naming
+    this candidate. Discovery only: it decides nothing about promotion and
+    does not require the candidate to be verified or current production.
+    This is what lets the GUI show AtlasBench V2 evidence for a candidate
+    without the frontend ever hardcoding a run id or candidate id.
+    """
+    return _bench_store.list_runs_for_candidate(candidate_id, limit=limit)
+
+
 promotion_router = APIRouter(prefix="/api/v1/atlas/promotion", tags=["atlas-promotion"])
 
 

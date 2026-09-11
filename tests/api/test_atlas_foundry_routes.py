@@ -232,3 +232,36 @@ def test_bench_run_endpoints_404_cleanly_for_an_unknown_run() -> None:
     empty_list = client.get("/api/v1/atlas/bench/runs/some_subject")
     assert empty_list.status_code == 200
     assert empty_list.json() == []
+
+
+def test_runs_by_candidate_route_surfaces_every_recorded_corpus_for_that_candidate() -> None:
+    """This is the whole AtlasBench V2 discovery path: the frontend never
+    hardcodes a run id or candidate id, it asks this route for whatever the
+    server has actually recorded against a real candidate_id."""
+    import uuid
+
+    from prism_api.atlas_bench_store import DurableAtlasBenchStore
+
+    client = TestClient(create_app())
+    unknown = client.get("/api/v1/atlas/bench/runs-by-candidate/does_not_exist")
+    assert unknown.status_code == 200
+    assert unknown.json() == []
+
+    candidate_id = f"candidate_{uuid.uuid4().hex}"
+    from prism_api.atlas_bench_corpus import CORPUS_VERSION, all_tasks, corpus_hash
+    from prism_api.atlas_bench_runner import PerfectReferenceSubject, run_suite
+
+    tasks = all_tasks()
+    subject = PerfectReferenceSubject(tasks)
+    v1_run, v1_results = run_suite(subject, tasks, corpus_version=CORPUS_VERSION, corpus_hash_value=corpus_hash())
+    v2_run, v2_results = run_suite(subject, tasks, corpus_version="atlasbench-v2-holdout-wave3", corpus_hash_value="c" * 64)
+    store = DurableAtlasBenchStore()
+    store.save(v1_run.model_copy(update={"subject_kind": "candidate", "candidate_id": candidate_id}), v1_results)
+    store.save(v2_run.model_copy(update={"subject_kind": "candidate", "candidate_id": candidate_id}), v2_results)
+
+    response = client.get(f"/api/v1/atlas/bench/runs-by-candidate/{candidate_id}")
+    assert response.status_code == 200
+    runs = response.json()
+    assert {run["run_id"] for run in runs} == {v1_run.run_id, v2_run.run_id}
+    assert {run["corpus_version"] for run in runs} == {CORPUS_VERSION, "atlasbench-v2-holdout-wave3"}
+    assert all(run["candidate_id"] == candidate_id for run in runs)

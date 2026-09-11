@@ -195,6 +195,25 @@ class DurableAtlasBenchStore:
             rows = connection.execute(statement).mappings().all()
         return [self._run_record(row) for row in rows]
 
+    def list_runs_for_candidate(self, candidate_id: str, *, limit: int = 50) -> list[AtlasBenchSuiteRun]:
+        """All recorded runs (any corpus version) naming this candidate_id.
+
+        ``candidate_id`` is indexed, unlike the free-form ``subject_id``
+        (a runtime-model fingerprint, not a candidate identity) that
+        ``list_runs_for_subject`` filters on -- this is the only durable path
+        that lets a caller ask "what has this candidate been evaluated
+        against" without already knowing which corpora exist.
+        """
+        statement = (
+            select(_runs)
+            .where(_runs.c.candidate_id == candidate_id)
+            .order_by(_runs.c.completed_at.desc(), _runs.c.run_id.desc())
+            .limit(limit)
+        )
+        with self.engine.connect() as connection:
+            rows = connection.execute(statement).mappings().all()
+        return [self._run_record(row) for row in rows]
+
     def list_runs_for_corpus(self, corpus_version: str, corpus_hash: str, *, limit: int = 200) -> list[AtlasBenchSuiteRun]:
         """Return immutable run evidence for one exact frozen corpus only."""
         statement = (

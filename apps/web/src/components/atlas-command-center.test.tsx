@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AtlasCommandCenter } from "./atlas-command-center";
 
@@ -24,11 +24,13 @@ describe("Atlas command center", () => {
     vi.stubGlobal("fetch", vi.fn(async (input: string | URL) => {
       const path = String(input);
       if (path.includes("/promotion/current-status")) return json({ production: null, candidate_kind: null, runtime_model: null });
-      return json([]);
+      if (path.includes("/specialists") || path.includes("/atlas/runs?limit=8") || path.includes("/promotion/history")) return json([]);
+      return notFound();
     }));
     render(<AtlasCommandCenter />);
     await waitFor(() => expect(screen.getByText("NO PRODUCTION MODEL")).toBeInTheDocument());
     expect(screen.getByText(/No production pointer exists yet/)).toBeInTheDocument();
+    expect(screen.getByText(/No Atlas investigation has been recorded yet/)).toBeInTheDocument();
   });
 
   it("never labels a legacy production pointer as verified, and offers no fake live activity", async () => {
@@ -41,12 +43,13 @@ describe("Atlas command center", () => {
           runtime_model: "legacy-model:latest",
         });
       }
-      return json([]);
+      if (path.includes("/specialists") || path.includes("/atlas/runs?limit=8") || path.includes("/promotion/history")) return json([]);
+      return notFound();
     }));
     render(<AtlasCommandCenter />);
     await waitFor(() => expect(screen.getByRole("heading", { name: "legacy-model:latest" })).toBeInTheDocument());
     expect(screen.getByText("LEGACY")).toBeInTheDocument();
-    expect(screen.getByText(/No Atlas investigation is active/)).toBeInTheDocument();
+    expect(screen.getByText(/No Atlas investigation has been recorded yet/)).toBeInTheDocument();
     // The legacy pointer has a candidate_id but no trust registry entry --
     // the System Cortex must show the production node without inventing a
     // candidate/verification lineage that was never established.
@@ -148,6 +151,36 @@ describe("Atlas command center", () => {
         if (path.includes("training-datasets:combined-summary")) {
           return json({ seed_version: "seed-v1", system_seed_examples: 125, verified_history_examples: 40, user_correction_examples: 5, synthetic_teacher_examples: 80, total_eligible: 250, computed_at: "2026-01-01T00:00:00Z" });
         }
+        if (path.includes("/specialists")) {
+          return json([
+            { specialist: "scout", display_name: "Scout", role: "Dataset reconnaissance and profiling", visible: true },
+            { specialist: "curator", display_name: "Curator", role: "Data quality and cleaning readiness", visible: true },
+          ]);
+        }
+        if (path.includes("/atlas/runs?limit=8")) return json(["atlas_recent_1"]);
+        if (path.endsWith("/atlas/runs/atlas_recent_1")) {
+          return json({
+            run_id: "atlas_recent_1",
+            plan: { plan_id: "plan_recent_1", objective: "Profile the quarterly dataset", dataset_id: "ds_recent", provider: "deterministic", state: "completed", created_at: "2026-01-02T00:00:00Z", steps: [] },
+            answer: "Atlas completed a deterministic first-pass assessment.",
+            council: [],
+            evidence: [],
+            events: [],
+            created_at: "2026-01-02T00:00:00Z",
+          });
+        }
+        if (path.includes("/promotion/history")) {
+          return json([
+            { event_id: "evt_2", candidate_id: candidateId, reason: "final promotion", promoted_at: "2026-01-01T00:00:00Z" },
+            { event_id: "evt_0", candidate_id: "legacy", reason: "bootstrap", promoted_at: "2025-06-01T00:00:00Z" },
+          ]);
+        }
+        if (path.includes(`/bench/runs-by-candidate/${candidateId}`)) {
+          return json([
+            { run_id: "benchrun_1", subject_id: "subject_1", corpus_version: "atlasbench-v1", corpus_hash: "a".repeat(64), total_tasks: 90, total_passed: 90, category_scores: [{ category: "sql", total: 10, passed: 10 }], started_at: "2026-01-01T00:00:00Z", completed_at: "2026-01-01T00:00:00Z", candidate_id: candidateId },
+            { run_id: "benchrun_v2", subject_id: "subject_1", corpus_version: "atlasbench-v2-holdout-wave3", corpus_hash: "f".repeat(64), total_tasks: 80, total_passed: 78, category_scores: [{ category: "sql", total: 8, passed: 8 }], started_at: "2026-01-01T00:00:00Z", completed_at: "2026-01-01T00:00:00Z", candidate_id: candidateId },
+          ]);
+        }
         return notFound();
       })
     );
@@ -174,5 +207,29 @@ describe("Atlas command center", () => {
     failedSummary.click();
     expect(within(opcertPanel).getByText(/evidence freshness conflict/)).toBeInTheDocument();
     expect(within(opcertPanel).getByText("chose cached over fresh")).toBeInTheDocument();
+
+    // AtlasBench: V1's number still comes from the trusted current-status
+    // fields, and V2 is discovered purely via runs-by-candidate -- never a
+    // hardcoded run id or corpus label.
+    const benchPanel = screen.getByText("AtlasBench", { selector: "h2" }).closest("article") as HTMLElement;
+    expect(within(benchPanel).getByText("atlasbench-v1")).toBeInTheDocument();
+    expect(within(benchPanel).getByText("atlasbench-v2-holdout-wave3")).toBeInTheDocument();
+    expect(within(benchPanel).getByText("78 / 80")).toBeInTheDocument();
+
+    // Model trust lifecycle: real stages reached from already-established facts.
+    const trustPanel = screen.getByText("Model trust").closest("article") as HTMLElement;
+    const timeline = within(trustPanel).getByLabelText("Model trust lifecycle");
+    expect(within(timeline).getByText("Registered").closest("li")).toHaveClass("is-reached");
+    expect(within(timeline).getByText("Verified").closest("li")).toHaveClass("is-reached");
+    expect(within(timeline).getByText("Promotion blocked").closest("li")).toHaveClass("is-blocked");
+    expect(within(trustPanel).getByText(/Promotion history/)).toBeInTheDocument();
+
+    // Run activity: a real recorded run, expandable into the same real
+    // pipeline/specialist/tool/guardrail views the per-run workspace uses.
+    const activityPanel = screen.getByText("Run activity").closest("article") as HTMLElement;
+    const runRow = within(activityPanel).getByText("Profile the quarterly dataset");
+    fireEvent.click(runRow);
+    expect(within(activityPanel).getByLabelText("Atlas request pipeline")).toBeInTheDocument();
+    expect(within(activityPanel).getByLabelText("Atlas specialist activity")).toBeInTheDocument();
   });
 });

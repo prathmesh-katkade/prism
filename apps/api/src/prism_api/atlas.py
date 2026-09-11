@@ -59,6 +59,17 @@ def list_specialists() -> list[AtlasSpecialistIdentity]:
     return list(SPECIALISTS)
 
 
+@router.get("/runs", response_model=list[str])
+def list_recent_runs(limit: int = Query(default=20, ge=1, le=100)) -> list[str]:
+    """Newest-first run ids for the Command Center's recent-activity browser.
+
+    Read-only discovery only -- it returns ids, never a summary this route
+    would have to keep synchronized with the run itself; a caller fetches
+    full, current detail per id via the existing ``GET /runs/{run_id}``.
+    """
+    return runs.list_recent_run_ids(limit=limit)
+
+
 @router.post("/runs", response_model=AtlasRunResponse, status_code=status.HTTP_202_ACCEPTED)
 def start_run(request: AtlasRunRequest) -> AtlasRunResponse:
     run = runs.create(request, providers.select())
