@@ -73,6 +73,14 @@ describe("Stats workspace", () => {
     await waitFor(() => expect(screen.getByText("Insufficient evidence")).toBeInTheDocument());
     expect(screen.getByText(/does not establish that no correlation exists/)).toBeInTheDocument();
   });
+
+  it("shows the error state with a retry control, never an indefinite loading spinner, when the initial load fails", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("offline"); }));
+    render(<StatsWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText("Stats Lab could not load this dataset.")).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
+    expect(screen.queryByText("Preparing Stats Lab")).not.toBeInTheDocument();
+  });
 });
 
 function json(body: unknown, status = 200): Response {

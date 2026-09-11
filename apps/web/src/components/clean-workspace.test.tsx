@@ -41,6 +41,14 @@ describe("Clean workspace", () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/apply"), expect.objectContaining({ method: "POST" })));
     await waitFor(() => expect(screen.getByText(/revision 1/)).toBeInTheDocument());
   });
+
+  it("shows the error state with a retry control, never an indefinite loading spinner, when the initial load fails", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("offline"); }));
+    render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText("Clean could not load this dataset.")).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
+    expect(screen.queryByText("Scanning for quality issues")).not.toBeInTheDocument();
+  });
 });
 
 function json(body: unknown, status = 200): Response {

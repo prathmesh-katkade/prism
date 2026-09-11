@@ -77,8 +77,12 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
   }
 
   if (state === "empty") return <section className="overview-state empty-state"><span className="eyebrow">CLEAN · NATIVE WORKSPACE</span><h1>Load a dataset in Overview first.</h1><p>Clean operates on the same server-held dataset Overview and SQL Lab already use — there is nothing to clean until one is loaded.</p><button onClick={() => onOpenWorkflow("overview")}>Open Overview</button></section>;
-  if (state === "loading" || !clean) return <section className="overview-state loading-state" aria-live="polite"><span className="loading-bar" /><h2>Scanning for quality issues</h2><p>Reusing Overview's own deterministic profile — nothing is recomputed twice.</p></section>;
+  // error must be checked before the loading/null-data fallback: a failed
+  // first load never populates `clean`, so `!clean` alone would keep
+  // matching the loading branch forever and the error (with its retry
+  // control) would never be reachable.
   if (state === "error") return <section className="overview-state error-state" role="alert"><h2>Clean could not load this dataset.</h2><p>{error}</p><button onClick={() => datasetId && void refresh(datasetId)}>Retry</button></section>;
+  if (state === "loading" || !clean) return <section className="overview-state loading-state" aria-live="polite"><span className="loading-bar" /><h2>Scanning for quality issues</h2><p>Reusing Overview's own deterministic profile — nothing is recomputed twice.</p></section>;
 
   return <article className="clean-workspace three-pane">
     <nav className="clean-issues" aria-label="Data quality issue navigator" tabIndex={0}>

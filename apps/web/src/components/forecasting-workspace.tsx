@@ -88,8 +88,12 @@ export function ForecastingWorkspace({ datasetId, onSelectContext, onOpenWorkflo
   }
 
   if (state === "empty") return <section className="overview-state empty-state"><span className="eyebrow">FORECASTING · NATIVE WORKSPACE</span><h1>Load a dataset in Overview first.</h1><p>Forecasting projects the same server-held dataset Overview and SQL Lab already use.</p><button onClick={() => onOpenWorkflow("overview")}>Open Overview</button></section>;
-  if (state === "loading" || !profile) return <section className="overview-state loading-state" aria-live="polite"><span className="loading-bar" /><h2>Preparing Forecasting</h2><p>Model selection is deterministic — Exponential Smoothing is tried first, SARIMAX is the fallback.</p></section>;
+  // error must be checked before the loading/null-data fallback: a failed
+  // first load never populates `profile`, so `!profile` alone would keep
+  // matching the loading branch forever and the error (with its retry
+  // control) would never be reachable.
   if (state === "error") return <section className="overview-state error-state" role="alert"><h2>Forecasting could not load this dataset.</h2><p>{error}</p><button onClick={() => datasetId && void load(datasetId)}>Retry</button></section>;
+  if (state === "loading" || !profile) return <section className="overview-state loading-state" aria-live="polite"><span className="loading-bar" /><h2>Preparing Forecasting</h2><p>Model selection is deterministic — Exponential Smoothing is tried first, SARIMAX is the fallback.</p></section>;
 
   const datetimeColumns = profile.columns.filter((c) => c.semantic_type === "datetime");
   const numericColumns = profile.columns.filter((c) => c.semantic_type === "numeric");

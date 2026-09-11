@@ -44,6 +44,14 @@ describe("Visualize workspace", () => {
     fireEvent.click(screen.getByRole("button", { name: "Explain this chart" }));
     await waitFor(() => expect(screen.getByText(/answers a comparison question/)).toBeInTheDocument());
   });
+
+  it("shows the error state with a retry control, never an indefinite loading spinner, when the initial load fails", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("offline"); }));
+    render(<VisualizeWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText("Visualize could not suggest a chart.")).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
+    expect(screen.queryByText("Choosing a chart for this data")).not.toBeInTheDocument();
+  });
 });
 
 function json(body: unknown, status = 200): Response {

@@ -62,8 +62,16 @@ export function VisualizeWorkspace({ datasetId, onSelectContext, onOpenWorkflow 
   }
 
   if (state === "empty") return <section className="overview-state empty-state"><span className="eyebrow">VISUALIZE · NATIVE WORKSPACE</span><h1>Load a dataset in Overview first.</h1><p>Visualize charts the same server-held dataset Overview and SQL Lab already use.</p><button onClick={() => onOpenWorkflow("overview")}>Open Overview</button></section>;
+  // error must be checked before the loading/null-data fallback: a failed
+  // first load never populates `profile`, so `!profile` alone would keep
+  // matching the loading branch forever and the error (with its retry
+  // control) would never be reachable. `!spec` stays a separate, later
+  // check -- during a legitimate "loading" state spec is null too, so
+  // folding it into this same unconditional check would misreport loading
+  // as an error.
+  if (state === "error") return <section className="overview-state error-state" role="alert"><h2>Visualize could not suggest a chart.</h2><p>{error}</p><button onClick={() => datasetId && void load(datasetId)}>Retry</button></section>;
   if (state === "loading" || !profile) return <section className="overview-state loading-state" aria-live="polite"><span className="loading-bar" /><h2>Choosing a chart for this data</h2><p>Chart selection is deterministic — the same intent and column types always suggest the same mark.</p></section>;
-  if (state === "error" || !spec) return <section className="overview-state error-state" role="alert"><h2>Visualize could not suggest a chart.</h2><p>{error}</p><button onClick={() => datasetId && void load(datasetId)}>Retry</button></section>;
+  if (!spec) return <section className="overview-state error-state" role="alert"><h2>Visualize could not suggest a chart.</h2><p>{error}</p><button onClick={() => datasetId && void load(datasetId)}>Retry</button></section>;
 
   const categorical = profile.columns.filter((c) => c.semantic_type === "categorical" || c.semantic_type === "datetime");
   const numeric = profile.columns.filter((c) => c.semantic_type === "numeric");

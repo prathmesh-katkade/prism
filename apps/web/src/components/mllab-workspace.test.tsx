@@ -108,6 +108,14 @@ describe("ML Lab workspace", () => {
     expect(body.target_col).toBe("x1");
     expect(body.feature_cols).toEqual(["x2"]);
   });
+
+  it("shows the error state with a retry control, never an indefinite loading spinner, when the initial load fails", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("offline"); }));
+    render(<MlLabWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText("ML Lab could not load this dataset.")).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
+    expect(screen.queryByText("Preparing ML Lab")).not.toBeInTheDocument();
+  });
 });
 
 function json(body: unknown, status = 200): Response {

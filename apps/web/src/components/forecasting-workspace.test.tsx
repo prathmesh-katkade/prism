@@ -86,6 +86,14 @@ describe("Forecasting workspace", () => {
     // The accessible name embeds both counts, proving the chart renders the band alongside every point.
     expect(screen.getByRole("img", { name: "Forecast chart: 2 observed points and 3 forecast points" })).toBeInTheDocument();
   });
+
+  it("shows the error state with a retry control, never an indefinite loading spinner, when the initial load fails", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("offline"); }));
+    render(<ForecastingWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText("Forecasting could not load this dataset.")).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
+    expect(screen.queryByText("Preparing Forecasting")).not.toBeInTheDocument();
+  });
 });
 
 function json(body: unknown, status = 200): Response {

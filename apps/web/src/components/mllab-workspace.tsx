@@ -140,8 +140,12 @@ export function MlLabWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
   }
 
   if (state === "empty") return <section className="overview-state empty-state"><span className="eyebrow">ML LAB · NATIVE WORKSPACE</span><h1>Load a dataset in Overview first.</h1><p>ML Lab explores baselines against the same server-held dataset Overview and SQL Lab already use. This is a baseline exploration tool, not a model-deployment pipeline.</p><button onClick={() => onOpenWorkflow("overview")}>Open Overview</button></section>;
-  if (state === "loading" || !profile) return <section className="overview-state loading-state" aria-live="polite"><span className="loading-bar" /><h2>Preparing ML Lab</h2><p>Task detection is deterministic — dtype and cardinality decide classification vs. regression, never an LLM.</p></section>;
+  // error must be checked before the loading/null-data fallback: a failed
+  // first load never populates `profile`, so `!profile` alone would keep
+  // matching the loading branch forever and the error (with its retry
+  // control) would never be reachable.
   if (state === "error") return <section className="overview-state error-state" role="alert"><h2>ML Lab could not load this dataset.</h2><p>{error}</p><button onClick={() => datasetId && void load(datasetId)}>Retry</button></section>;
+  if (state === "loading" || !profile) return <section className="overview-state loading-state" aria-live="polite"><span className="loading-bar" /><h2>Preparing ML Lab</h2><p>Task detection is deterministic — dtype and cardinality decide classification vs. regression, never an LLM.</p></section>;
 
   return <article className="mllab-workspace three-pane">
     <nav className="mllab-fields" aria-label="Target, features, and analysis" tabIndex={0}>
