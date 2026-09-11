@@ -58,6 +58,7 @@ export function AtlasCommandCenter() {
   const [recentFeedback, setRecentFeedback] = useState<AtlasFeedbackEvent[]>([]);
   const [ragCapability, setRagCapability] = useState<AtlasEmbeddingCapability | null>(null);
   const [memoryFailed, setMemoryFailed] = useState(false);
+  const [corpusFailed, setCorpusFailed] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -106,6 +107,11 @@ export function AtlasCommandCenter() {
     }
 
     async function loadCorpus() {
+      // Each fetch's own network failure is caught individually (one
+      // unreleased corpus section must not blank the others), but if ALL
+      // FOUR fail together -- the real signature of "the API is
+      // unreachable" rather than "nothing has been released yet" -- that
+      // is surfaced distinctly rather than silently read as empty.
       const [seedResponse, teacherResponse, sftResponse, summaryResponse] = await Promise.all([
         fetch(apiUrl("/api/v1/atlas/foundry/system-seed")).catch(() => null),
         fetch(apiUrl("/api/v1/atlas/foundry/synthetic-teacher")).catch(() => null),
@@ -113,6 +119,10 @@ export function AtlasCommandCenter() {
         fetch(apiUrl("/api/v1/atlas/foundry/training-datasets:combined-summary")).catch(() => null),
       ]);
       if (cancelled) return;
+      if (!seedResponse && !teacherResponse && !sftResponse && !summaryResponse) {
+        setCorpusFailed(true);
+        return;
+      }
       const seed = seedResponse?.ok ? ((await seedResponse.json()) as AtlasSystemSeedManifest[]) : [];
       const teacher = teacherResponse?.ok ? ((await teacherResponse.json()) as AtlasSyntheticTeacherManifest[]) : [];
       const sft = sftResponse?.ok ? ((await sftResponse.json()) as AtlasCombinedSftDatasetVersion[]) : [];
@@ -182,12 +192,12 @@ export function AtlasCommandCenter() {
     <section className="atlas-command-center" aria-label="Atlas command center">
       <Hero status={status} failed={statusFailed} />
       <div className="acc-grid">
-        <SystemCortexPanel status={status} candidate={candidate} verification={verification} v1Run={v1Run} opcertRun={opcertRun} corpus={corpus} />
+        <SystemCortexPanel status={status} failed={statusFailed} candidate={candidate} verification={verification} v1Run={v1Run} opcertRun={opcertRun} corpus={corpus} />
         <RunActivityPanel runs={recentRuns} failed={recentRunsFailed} roster={roster} memories={systemMemories} feedbackByRun={runFeedbackByRun} />
-        <TrustPanel status={status} candidate={candidate} verification={verification} history={promotionHistory} benchRuns={benchByCandidate} />
-        <BenchPanel status={status} run={v1Run} candidateRuns={benchByCandidate} />
-        <OperationalCertPanel status={status} run={opcertRun} />
-        <CorpusPanel corpus={corpus} />
+        <TrustPanel status={status} failed={statusFailed} candidate={candidate} verification={verification} history={promotionHistory} benchRuns={benchByCandidate} />
+        <BenchPanel status={status} failed={statusFailed} run={v1Run} candidateRuns={benchByCandidate} />
+        <OperationalCertPanel status={status} failed={statusFailed} run={opcertRun} />
+        <CorpusPanel corpus={corpus} failed={corpusFailed} />
         <SystemMemoryPanel memories={systemMemories} feedback={recentFeedback} rag={ragCapability} failed={memoryFailed} />
       </div>
     </section>
@@ -250,6 +260,7 @@ function Hero({ status, failed }: { status: AtlasProductionTrustStatus | null; f
  */
 function SystemCortexPanel({
   status,
+  failed,
   candidate,
   verification,
   v1Run,
@@ -257,12 +268,21 @@ function SystemCortexPanel({
   corpus,
 }: {
   status: AtlasProductionTrustStatus | null;
+  failed: boolean;
   candidate: AtlasVerifiedBaseModelCandidate | null;
   verification: AtlasBaseModelVerification | null;
   v1Run: AtlasBenchSuiteRun | null;
   opcertRun: AtlasOperationalSuiteRun | null;
   corpus: CorpusState;
 }) {
+  if (failed) {
+    return (
+      <article className="acc-panel acc-panel-wide">
+        <h2>System Cortex</h2>
+        <p className="acc-empty">Could not reach the Atlas promotion status endpoint.</p>
+      </article>
+    );
+  }
   if (!status?.production) {
     return (
       <article className="acc-panel acc-panel-wide">
@@ -421,17 +441,27 @@ const TRUST_STAGE_LABELS: Record<string, string> = { registered: "Registered", v
  * 90%` rule the server's own promotion gate enforces, purely for display. */
 function TrustPanel({
   status,
+  failed,
   candidate,
   verification,
   history,
   benchRuns,
 }: {
   status: AtlasProductionTrustStatus | null;
+  failed: boolean;
   candidate: AtlasVerifiedBaseModelCandidate | null;
   verification: AtlasBaseModelVerification | null;
   history: AtlasProductionPointer[];
   benchRuns: AtlasBenchSuiteRun[];
 }) {
+  if (failed) {
+    return (
+      <article className="acc-panel">
+        <h2>Model trust</h2>
+        <p className="acc-empty">Could not reach the Atlas promotion status endpoint.</p>
+      </article>
+    );
+  }
   const critical = status?.latest_operational_cert_critical_failures ?? 0;
   const passed = status?.latest_operational_cert_total_passed ?? 0;
   const total = status?.latest_operational_cert_total_scenarios ?? 0;
@@ -568,7 +598,25 @@ function CategoryMatrix({ scores }: { scores: AtlasBenchSuiteRun["category_score
  * V1's own numbers come from the already-trusted current-status fields;
  * any other corpus (V2 holdout, or a future wave) is discovered purely
  * from `GET /bench/runs-by-candidate/{id}`, never a hardcoded run id. */
-function BenchPanel({ status, run, candidateRuns }: { status: AtlasProductionTrustStatus | null; run: AtlasBenchSuiteRun | null; candidateRuns: AtlasBenchSuiteRun[] }) {
+function BenchPanel({
+  status,
+  failed,
+  run,
+  candidateRuns,
+}: {
+  status: AtlasProductionTrustStatus | null;
+  failed: boolean;
+  run: AtlasBenchSuiteRun | null;
+  candidateRuns: AtlasBenchSuiteRun[];
+}) {
+  if (failed) {
+    return (
+      <article className="acc-panel acc-panel-wide">
+        <h2>AtlasBench</h2>
+        <p className="acc-empty">Could not reach the Atlas promotion status endpoint.</p>
+      </article>
+    );
+  }
   const shownVersion = run?.corpus_version ?? null;
   const otherVersions = [...new Map(candidateRuns.filter((item) => item.corpus_version !== shownVersion).map((item) => [item.corpus_version, item])).values()].sort((a, b) =>
     a.corpus_version.localeCompare(b.corpus_version)
@@ -606,7 +654,23 @@ function BenchPanel({ status, run, candidateRuns }: { status: AtlasProductionTru
   );
 }
 
-function OperationalCertPanel({ status, run }: { status: AtlasProductionTrustStatus | null; run: AtlasOperationalSuiteRun | null }) {
+function OperationalCertPanel({
+  status,
+  failed,
+  run,
+}: {
+  status: AtlasProductionTrustStatus | null;
+  failed: boolean;
+  run: AtlasOperationalSuiteRun | null;
+}) {
+  if (failed) {
+    return (
+      <article className="acc-panel">
+        <h2>Operational Certification</h2>
+        <p className="acc-empty">Could not reach the Atlas promotion status endpoint.</p>
+      </article>
+    );
+  }
   if (!status?.latest_operational_cert_run_id) {
     return (
       <article className="acc-panel">
@@ -619,7 +683,7 @@ function OperationalCertPanel({ status, run }: { status: AtlasProductionTrustSta
   const passed = status.latest_operational_cert_total_passed ?? 0;
   const total = status.latest_operational_cert_total_scenarios ?? 0;
   const certified = critical === 0 && total > 0 && passed / total >= 0.9;
-  const failed: AtlasOperationalScenarioResult[] = (run?.scenario_results ?? []).filter((item) => !item.passed);
+  const failedScenarios: AtlasOperationalScenarioResult[] = (run?.scenario_results ?? []).filter((item) => !item.passed);
   return (
     <article className={`acc-panel ${certified ? "acc-tone-native" : "acc-tone-bridged"}`}>
       <h2>Operational Certification</h2>
@@ -643,13 +707,13 @@ function OperationalCertPanel({ status, run }: { status: AtlasProductionTrustSta
           </div>
         </dl>
       ) : null}
-      {failed.length ? (
+      {failedScenarios.length ? (
         <details className="acc-details">
           <summary>
-            {failed.length} scenario{failed.length === 1 ? "" : "s"} not passed
+            {failedScenarios.length} scenario{failedScenarios.length === 1 ? "" : "s"} not passed
           </summary>
           <ul className="acc-scenario-list">
-            {failed.map((item) => (
+            {failedScenarios.map((item) => (
               <li key={item.scenario_id} className={item.critical_failure ? "acc-tone-unavailable" : ""}>
                 <strong>{item.scenario_id.replaceAll("_", " ")}</strong>
                 {item.critical_failure ? <span className="acc-mono"> · {item.critical_failure.replaceAll("_", " ")}</span> : null}
@@ -663,7 +727,15 @@ function OperationalCertPanel({ status, run }: { status: AtlasProductionTrustSta
   );
 }
 
-function CorpusPanel({ corpus }: { corpus: CorpusState }) {
+function CorpusPanel({ corpus, failed }: { corpus: CorpusState; failed: boolean }) {
+  if (failed) {
+    return (
+      <article className="acc-panel acc-panel-wide">
+        <h2>Atlas Intelligence Lab</h2>
+        <p className="acc-empty">Could not reach the Atlas Foundry corpus endpoints.</p>
+      </article>
+    );
+  }
   const summary = corpus.summary;
   return (
     <article className="acc-panel acc-panel-wide">

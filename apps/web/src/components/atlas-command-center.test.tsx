@@ -18,6 +18,18 @@ describe("Atlas command center", () => {
     vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("offline"); }));
     render(<AtlasCommandCenter />);
     await waitFor(() => expect(screen.getByText("STATUS UNKNOWN")).toBeInTheDocument());
+    // A total network failure must read as "failed" everywhere it affects --
+    // never silently degrade into the same "nothing here yet" text a truly
+    // empty system would show. Every panel driven by the promotion-status
+    // fetch (Hero, System Cortex, Model Trust, AtlasBench, Operational
+    // Certification) gets its own honest "could not reach" message, as do
+    // the run-history, memory, and corpus panels whose own fetches also
+    // failed in this scenario.
+    const statusEndpointMessages = screen.getAllByText("Could not reach the Atlas promotion status endpoint.");
+    expect(statusEndpointMessages.length).toBe(5); // Hero, System Cortex, Model Trust, AtlasBench, Operational Certification
+    expect(screen.getByText("Could not reach the Atlas run history endpoint.")).toBeInTheDocument();
+    expect(screen.getByText("Could not reach the Atlas memory endpoints.")).toBeInTheDocument();
+    expect(screen.getByText("Could not reach the Atlas Foundry corpus endpoints.")).toBeInTheDocument();
   });
 
   it("shows no production model rather than fabricating one when none has ever been promoted", async () => {
