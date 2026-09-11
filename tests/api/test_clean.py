@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import unittest.mock
+
 from fastapi.testclient import TestClient
 from prism_api.main import create_app
 
@@ -127,6 +129,64 @@ def test_transformation_history_accumulates_with_provenance() -> None:
     state = client.get(f"/api/v1/clean/datasets/{dataset_id}/state").json()
     assert [item["resulting_revision"] for item in state["history"]] == [1, 2]
     assert all(item["source_fingerprint"] != item["resulting_fingerprint"] for item in state["history"])
+
+
+def test_transformation_history_is_reconstructed_from_durable_storage_not_a_process_cache() -> None:
+    """Clean's history used to live only in a process-local dict, lost on
+    every API restart even though the underlying revisions were already
+    durable. Prove the fix by reading history through brand-new store/
+    registry connections to the same database file -- exactly what a real
+    restart leaves behind -- rather than through the running app's
+    warmed-up singletons."""
+    import prism_api.clean as clean_module
+    from prism_api.durable_dataset_store import DurableDatasetStore
+    from prism_api.durable_registry import DurableAnalyticalObjectRegistry, history_database_url
+
+    client = TestClient(create_app())
+    dataset_id = _dataset(client)
+    client.post(f"/api/v1/clean/datasets/{dataset_id}/apply", json={"operation": "drop_duplicates"})
+    client.post(f"/api/v1/clean/datasets/{dataset_id}/apply", json={"operation": "trim_whitespace", "column": "label"})
+    before_restart = clean_module._durable_history(dataset_id)  # noqa: SLF001
+    assert [item.resulting_revision for item in before_restart] == [1, 2]
+
+    url = history_database_url()
+    fresh_overview_store = DurableDatasetStore(url)
+    fresh_registry = DurableAnalyticalObjectRegistry(url)
+    with (
+        unittest.mock.patch.object(clean_module, "overview_store", fresh_overview_store),
+        unittest.mock.patch.object(clean_module, "registry", fresh_registry),
+    ):
+        after_restart = clean_module._durable_history(dataset_id)  # noqa: SLF001
+
+    assert [item.resulting_revision for item in after_restart] == [1, 2]
+    assert [item.transformation_id for item in after_restart] == [item.transformation_id for item in before_restart]
+    assert [item.operation for item in after_restart] == [item.operation for item in before_restart]
+    assert [item.source_fingerprint for item in after_restart] == [item.source_fingerprint for item in before_restart]
+    assert [item.resulting_fingerprint for item in after_restart] == [item.resulting_fingerprint for item in before_restart]
+
+
+def test_apply_reverts_the_revision_it_just_created_if_provenance_registration_fails() -> None:
+    """A failure between committing the new revision and registering its
+    provenance must not leave the mutation live behind a failed response --
+    a client retry would otherwise apply on top of already-mutated data."""
+    import prism_api.clean as clean_module
+
+    client = TestClient(create_app())
+    dataset_id = _dataset(client)
+
+    with unittest.mock.patch.object(clean_module, "register_clean_transformation", side_effect=RuntimeError("history database unavailable")):
+        response = client.post(f"/api/v1/clean/datasets/{dataset_id}/apply", json={"operation": "drop_duplicates"})
+    assert response.status_code == 500
+
+    state = client.get(f"/api/v1/clean/datasets/{dataset_id}/state").json()
+    assert state["dataset"]["revision"] == 0
+    assert state["dataset"]["row_count"] == 5
+    assert state["history"] == []
+
+    # The dataset is usable again on the next attempt, not stuck mid-failure.
+    retried = client.post(f"/api/v1/clean/datasets/{dataset_id}/apply", json={"operation": "drop_duplicates"})
+    assert retried.status_code == 201
+    assert retried.json()["dataset"]["revision"] == 1
 
 
 def test_atlas_explains_an_issue_and_proposes_a_previewable_fix_without_applying_it() -> None:

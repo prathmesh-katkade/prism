@@ -14,10 +14,11 @@ import hashlib
 import math
 import uuid
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, cast
 
 import pandas as pd
 from fastapi import APIRouter, HTTPException, status
+from prism_analytical_schemas import CleaningReproducibilitySpec, ObjectKind
 from prism_api_contracts import (
     AtlasCleanAction,
     AtlasCleanRequest,
@@ -37,13 +38,55 @@ from prism_api_contracts import (
 )
 from prism_overview_analytics import build_overview
 
-from .analytical_objects import register_clean_transformation
+from .analytical_objects import register_clean_transformation, registry
 from .overview import StoredDataset
 from .overview import store as overview_store
 
 router = APIRouter(prefix="/api/v1/clean", tags=["clean"])
 PREVIEW_SAMPLE_ROWS = 10
-_history: dict[str, list[CleanTransformation]] = {}
+
+
+def _durable_history(dataset_id: str) -> list[CleanTransformation]:
+    """Reconstruct Clean's applied-transformation history from the durable
+    analytical-object registry (populated by register_clean_transformation
+    on every apply) instead of a process-local cache, so it survives an API
+    restart. The registry is append-only and keeps every branch a revert
+    ever walked away from, so records are filtered against DatasetStore's
+    own current active-revision list -- the real source of truth for which
+    branch is live -- rather than trusted on their own.
+    """
+    active_fingerprint_by_revision = {item.dataset.revision: item.source_fingerprint for item in overview_store.revisions(dataset_id)}
+    transformations: list[CleanTransformation] = []
+    for record in registry.list_for_dataset(dataset_id, kind=ObjectKind.CLEANING_PLAN):
+        reproducibility = record.provenance.reproducibility
+        if not isinstance(reproducibility, CleaningReproducibilitySpec):
+            continue
+        resulting_revision = record.provenance.dataset.revision
+        resulting_fingerprint = record.provenance.dataset.source_fingerprint
+        if active_fingerprint_by_revision.get(resulting_revision) != resulting_fingerprint:
+            continue  # an abandoned branch a revert walked away from
+        source_revision = cast(int, record.payload.get("source_revision", resulting_revision - 1))
+        parameters = dict(reproducibility.parameters)
+        column = parameters.pop("column", None)
+        affected_columns_raw = parameters.pop("affected_columns", [])
+        evidence_refs = record.provenance.evidence_refs
+        transformation_id = evidence_refs[0].evidence_id if evidence_refs else record.object_id.removeprefix("clean_")
+        transformations.append(CleanTransformation(
+            transformation_id=transformation_id,
+            operation=CleanOperation(reproducibility.operation),
+            column=cast("str | None", column),
+            parameters=parameters,
+            affected_rows=cast(int, record.payload.get("affected_rows", 0)),
+            affected_columns=cast("list[str]", affected_columns_raw) if isinstance(affected_columns_raw, list) else [],
+            source_revision=source_revision,
+            resulting_revision=resulting_revision,
+            source_fingerprint=active_fingerprint_by_revision.get(source_revision, resulting_fingerprint),
+            resulting_fingerprint=resulting_fingerprint,
+            reversible=cast(bool, record.payload.get("reversible", True)),
+            created_at=record.provenance.created_at,
+        ))
+    transformations.sort(key=lambda item: item.resulting_revision)
+    return transformations
 
 
 def _fingerprint(frame: pd.DataFrame) -> str:
@@ -213,7 +256,7 @@ def _health(frame: pd.DataFrame):  # type: ignore[no-untyped-def]
 
 def _state(stored: StoredDataset) -> CleanStateResponse:
     issues = detect_issues(stored.frame)
-    return CleanStateResponse(dataset=stored.dataset, issues=issues, history=_history.get(stored.dataset.dataset_id, []), health=_health(stored.frame))
+    return CleanStateResponse(dataset=stored.dataset, issues=issues, history=_durable_history(stored.dataset.dataset_id), health=_health(stored.frame))
 
 
 @router.get("/datasets/{dataset_id}/state", response_model=CleanStateResponse)
@@ -247,16 +290,23 @@ def apply_transformation(dataset_id: str, request: CleanTransformationRequest) -
         source_fingerprint=stored.source_fingerprint, resulting_fingerprint=fingerprint,
         reversible=True, created_at=datetime.now(timezone.utc),
     )
-    _history.setdefault(dataset_id, []).append(transformation)
-    register_clean_transformation(stored, transformation, warnings)
+    try:
+        register_clean_transformation(stored, transformation, warnings)
+    except Exception as error:
+        # The revision above is already durable; a failure here would leave
+        # it live with no matching provenance record, and a client retry
+        # would then apply on top of data that was mutated despite the
+        # failed response. Compensate by reverting before surfacing the
+        # failure, so the client sees a clean error against unchanged data
+        # rather than an unhandled exception.
+        overview_store.revert(dataset_id, source_revision)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Applying the transformation failed while recording its provenance; no change was made.") from error
     return CleanApplyResponse(dataset=dataset, transformation=transformation, issues=detect_issues(updated), health=_health(updated))
 
 
 @router.post("/datasets/{dataset_id}/undo", response_model=CleanStateResponse)
 def undo(dataset_id: str, request: CleanUndoRequest) -> CleanStateResponse:
     overview_store.revert(dataset_id, request.to_revision)
-    history = _history.get(dataset_id, [])
-    _history[dataset_id] = [item for item in history if item.resulting_revision <= request.to_revision]
     return _state(overview_store.get(dataset_id))
 
 
@@ -281,6 +331,6 @@ def atlas_action(dataset_id: str, request: AtlasCleanRequest) -> AtlasCleanRespo
             action=request.action, summary=f"Proposed: {issue.suggested_operation.value.replace('_', ' ')} on {issue.column or 'the dataset'}. Preview it before applying — Atlas does not clean data without visibility.",
             uncertainty=uncertainty, evidence=[AtlasEvidence(label="Affected rows", value=f"{issue.affected_rows:,}")], proposed_operation=proposal,
         )
-    history = _history.get(dataset_id, [])
+    history = _durable_history(dataset_id)
     summary = f"{len(history)} transformation(s) applied so far, from revision 0 to {stored.dataset.revision}." if history else "No transformations have been applied to this dataset yet."
     return AtlasCleanResponse(action=request.action, summary=summary, uncertainty=uncertainty, evidence=[], proposed_operation=None)
