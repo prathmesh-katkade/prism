@@ -101,8 +101,12 @@ test("ATLAS First Light: honest system state, a real investigation, and the rece
   // AtlasBench V2 and Operational Certification: no candidate has ever been
   // verified or certified in this live database, so both stay honestly
   // absent -- never a hardcoded run id, and never PASSED without evidence.
+  // This is the certification-pending truthfulness the whole panel exists to
+  // guarantee: "no certification yet" must never be rendered or read as "a
+  // certification attempt failed."
   const commandCenterAfterReload = page.getByLabel("Atlas command center");
   await expect(commandCenterAfterReload.getByText("Operational Certification", { exact: true })).toBeVisible();
   await expect(commandCenterAfterReload.getByText("PASSED", { exact: true })).not.toBeVisible();
   await expect(commandCenterAfterReload.getByText(/No AtlasBench run recorded/)).toBeVisible();
+  await expect(commandCenterAfterReload.getByText(/No live Operational Certification run recorded/)).toBeVisible();
 });
