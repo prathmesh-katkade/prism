@@ -230,8 +230,17 @@ def _execute_python_sandbox(arguments: dict[str, Any]) -> tuple[Optional[float],
         expression = tree.body[-1].value
         if not (isinstance(expression, ast.Call) and isinstance(expression.func, ast.Name) and expression.func.id == "print"):
             tree.body[-1] = ast.Expr(value=ast.Call(func=ast.Name(id="print", ctx=ast.Load()), args=[expression], keywords=[]))
+    # ``allowed_attributes`` above advertises ``statistics.median``,
+    # ``numpy.median``/``np.median``/``np.array`` as legitimate qualified
+    # forms, but binding only the bare ``median`` name left every qualified
+    # form fail with a NameError regardless of correctness -- a harness bug,
+    # not a model error. Bind every name the allowlist actually promises,
+    # independent of which specific form the submitted code happens to use.
+    prelude = "import statistics\nfrom statistics import median\n"
+    if any(name in code for name in ("numpy", "np.")):
+        prelude += "try:\n    import numpy\n    import numpy as np\nexcept ImportError:\n    pass\n"
     execution = AtlasPythonSandbox().execute(AtlasSandboxExecutionRequest(
-        code="from statistics import median\n" + ast.unparse(ast.fix_missing_locations(tree)),
+        code=prelude + ast.unparse(ast.fix_missing_locations(tree)),
         timeout_ms=10_000,
     ))
     if execution.state != "completed":

@@ -102,6 +102,42 @@ def test_python_sandbox_computes_the_real_median_when_the_tool_is_called(monkeyp
     assert response.structured_answer["result"] == 15.5
 
 
+def test_python_sandbox_computes_the_real_median_using_the_qualified_statistics_form(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    # ``statistics.median(...)`` is one of the schema's own advertised
+    # ``allowed_attributes`` forms, so a submission using it must actually
+    # execute -- not fail closed with a NameError just because it is
+    # qualified rather than bare (opcert_9504e9959fdf43fcabbe387edba24a1a
+    # observed exactly this: state != "completed", result stripped to None).
+    _mock_generate(
+        monkeypatch,
+        {
+            "tool_calls": [{"tool": "run_python", "arguments": {"code": "statistics.median([4,8,15,16,23,42])"}}],
+            "structured_answer": {},
+            "disclosures": [],
+            "refused": False,
+        },
+    )
+    subject = AtlasProviderOperationalSubject(subject_id="live_test", runtime_model="qwen-test:latest")
+    response = subject.respond("task", AtlasOperationalScenarioId.PYTHON_SANDBOX_ANALYSIS_TASK)
+    assert response.structured_answer["result"] == 15.5
+
+
+def test_python_sandbox_computes_the_real_median_using_the_qualified_numpy_form(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    # Same bug class, the numpy-qualified allowed form.
+    _mock_generate(
+        monkeypatch,
+        {
+            "tool_calls": [{"tool": "run_python", "arguments": {"code": "np.median([4,8,15,16,23,42])"}}],
+            "structured_answer": {},
+            "disclosures": [],
+            "refused": False,
+        },
+    )
+    subject = AtlasProviderOperationalSubject(subject_id="live_test", runtime_model="qwen-test:latest")
+    response = subject.respond("task", AtlasOperationalScenarioId.PYTHON_SANDBOX_ANALYSIS_TASK)
+    assert response.structured_answer["result"] == 15.5
+
+
 def test_python_sandbox_strips_a_claimed_result_when_the_tool_was_never_called(monkeypatch) -> None:  # type: ignore[no-untyped-def]
     _mock_generate(monkeypatch, {"tool_calls": [], "structured_answer": {"result": 15.5}, "disclosures": [], "refused": False})
     subject = AtlasProviderOperationalSubject(subject_id="live_test", runtime_model="qwen-test:latest")
