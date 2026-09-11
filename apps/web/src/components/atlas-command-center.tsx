@@ -17,7 +17,7 @@ import type {
   AtlasVerifiedBaseModelCandidate,
 } from "@prism/api-contracts";
 import { apiUrl } from "../config/api";
-import { PipelineStepper, SpecialistActivity, ToolTimeline, GuardrailPanel as RunGuardrailPanel } from "./atlas-run-activity";
+import { EvidencePanel, PipelineStepper, SpecialistActivity, ToolTimeline, GuardrailPanel as RunGuardrailPanel } from "./atlas-run-activity";
 
 type CorpusState = {
   systemSeed: AtlasSystemSeedManifest | null;
@@ -353,6 +353,7 @@ function RunActivityPanel({ runs, failed, roster }: { runs: AtlasRunResponse[]; 
                     <SpecialistActivity run={run} roster={roster} />
                     <ToolTimeline run={run} />
                     <RunGuardrailPanel run={run} />
+                    <EvidencePanel run={run} />
                   </div>
                 ) : null}
               </li>

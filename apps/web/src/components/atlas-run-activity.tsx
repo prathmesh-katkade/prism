@@ -23,6 +23,110 @@
 
 import type { AtlasRunEvent, AtlasRunResponse, AtlasSpecialistId, AtlasSpecialistIdentity } from "@prism/api-contracts";
 
+// --- Evidence lineage --------------------------------------------------------
+
+export type EvidenceLineageEntry = {
+  evidence_id: string;
+  kind: string;
+  summary: string;
+  dataset_id: string | null;
+  dataset_revision: number | null;
+  source_fingerprint: string | null;
+  citedBy: string[];
+};
+
+const EVIDENCE_KIND_LABELS: Record<string, string> = {
+  dataset_revision: "Dataset revision",
+  overview_profile: "Overview profile",
+  analytical_object: "Analytical object",
+  tool_output: "Tool output",
+  web_research: "Web research",
+  memory: "Memory",
+  project_knowledge: "Project knowledge",
+};
+
+/** Every real evidence reference this run recorded (`run.evidence`, the
+ * durable deduped set), cross-referenced against council conclusions to
+ * show which specialist(s) actually cited it -- real lineage, not an
+ * inferred one. `AtlasEvidenceReference` carries no freshness/timestamp/
+ * verification-state fields today, so this never fabricates them; only
+ * evidence_id, kind, summary, dataset_id/revision, and source_fingerprint
+ * are shown. */
+export function buildEvidenceLineage(run: AtlasRunResponse): EvidenceLineageEntry[] {
+  const byId = new Map<string, EvidenceLineageEntry>();
+  const upsert = (item: { evidence_id: string; kind: string; summary: string; dataset_id?: string; dataset_revision?: number; source_fingerprint?: string }, specialist?: string) => {
+    const existing = byId.get(item.evidence_id);
+    if (existing) {
+      if (specialist && !existing.citedBy.includes(specialist)) existing.citedBy.push(specialist);
+      return;
+    }
+    byId.set(item.evidence_id, {
+      evidence_id: item.evidence_id,
+      kind: item.kind,
+      summary: item.summary,
+      dataset_id: item.dataset_id ?? null,
+      dataset_revision: item.dataset_revision ?? null,
+      source_fingerprint: item.source_fingerprint ?? null,
+      citedBy: specialist ? [specialist] : [],
+    });
+  };
+  for (const item of run.evidence ?? []) upsert(item);
+  for (const conclusion of run.council ?? []) {
+    for (const item of conclusion.evidence ?? []) upsert(item, conclusion.specialist);
+  }
+  return [...byId.values()];
+}
+
+export function EvidencePanel({ run }: { run: AtlasRunResponse }) {
+  const entries = buildEvidenceLineage(run);
+  return (
+    <section className="atlas-evidence" aria-label="Atlas evidence">
+      <span className="eyebrow">EVIDENCE{entries.length ? ` · ${entries.length} RECORD${entries.length === 1 ? "" : "S"}` : ""}</span>
+      {entries.length ? (
+        <ul>
+          {entries.map((entry) => (
+            <li key={entry.evidence_id}>
+              <details>
+                <summary>
+                  <span className="migration-chip ready">{EVIDENCE_KIND_LABELS[entry.kind] ?? entry.kind.replaceAll("_", " ")}</span>
+                  <strong className="acc-mono">{entry.evidence_id}</strong>
+                </summary>
+                <dl>
+                  <dt>Summary</dt>
+                  <dd>{entry.summary}</dd>
+                  {entry.dataset_id ? (
+                    <>
+                      <dt>Dataset</dt>
+                      <dd className="acc-mono">
+                        {entry.dataset_id}
+                        {entry.dataset_revision !== null ? ` · revision ${entry.dataset_revision}` : ""}
+                      </dd>
+                    </>
+                  ) : null}
+                  {entry.source_fingerprint ? (
+                    <>
+                      <dt>Source fingerprint</dt>
+                      <dd className="acc-mono">{entry.source_fingerprint}</dd>
+                    </>
+                  ) : null}
+                  {entry.citedBy.length ? (
+                    <>
+                      <dt>Cited by</dt>
+                      <dd>{entry.citedBy.join(", ")}</dd>
+                    </>
+                  ) : null}
+                </dl>
+              </details>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p>No evidence has been recorded for this run yet.</p>
+      )}
+    </section>
+  );
+}
+
 // --- Guardrail decision -----------------------------------------------------
 
 export type GuardrailFinding = { category: string; rule: string; subject: string; detail: string; state: string };

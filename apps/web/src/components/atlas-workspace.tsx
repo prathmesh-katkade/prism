@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { AtlasMemoryRecord, AtlasResourceSnapshot, AtlasRunResponse, AtlasSpecialistIdentity, CortexGraphState, CortexNode } from "@prism/api-contracts";
 import { apiUrl } from "../config/api";
-import { buildSpecialistActivity, GuardrailPanel, PipelineStepper, ToolTimeline } from "./atlas-run-activity";
+import { buildSpecialistActivity, EvidencePanel, GuardrailPanel, PipelineStepper, ToolTimeline } from "./atlas-run-activity";
 
 const terminal = new Set(["completed", "failed", "cancelled"]);
 
@@ -64,6 +64,7 @@ export function AtlasWorkspace({ datasetId }: { datasetId: string | undefined })
       <section className="atlas-answer" aria-live="polite"><span className="eyebrow">ATLAS · GROUNDED ANSWER</span><h2>{run.answer ?? "Atlas is collecting durable evidence."}</h2>{run.uncertainty ? <p><strong>Uncertainty:</strong> {run.uncertainty}</p> : null}</section>
       <GuardrailPanel run={run} />
       <ToolTimeline run={run} />
+      <EvidencePanel run={run} />
       <AtlasPulse memories={memories} resources={resources} onRefresh={() => void refreshPulse()} />
       {graph ? <CortexV1 graph={graph} /> : null}
     </> : null}

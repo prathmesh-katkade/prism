@@ -56,6 +56,17 @@ describe("Atlas workspace", () => {
     // Command Core pipeline: a completed, answered run has reached Result.
     const pipeline = screen.getByLabelText("Atlas request pipeline");
     expect(within(pipeline).getByText("Result").closest("li")).toHaveClass("is-reached");
+
+    // Evidence lineage: real record from council.evidence (the fixture's
+    // top-level run.evidence is empty), attributed to the specialist that
+    // actually cited it -- not a hardcoded freshness/verification claim
+    // AtlasEvidenceReference doesn't carry.
+    const evidence = screen.getByLabelText("Atlas evidence");
+    expect(within(evidence).getByText(/1 RECORD/)).toBeInTheDocument();
+    fireEvent.click(within(evidence).getByText("dataset:ds_1:r0"));
+    expect(within(evidence).getByText("Dataset revision", { selector: ".migration-chip" })).toBeInTheDocument();
+    expect(within(evidence).getByText(/ds_1 · revision 0/)).toBeInTheDocument();
+    expect(within(evidence).getByText("scout")).toBeInTheDocument();
   });
   it("shows the real guardrail decision was checked clean, without inventing a pass when no decision is recorded", async () => {
     const checkedRun = { ...run, events: [{ type: "plan_created", payload: { guardrail_decision: { policy_version: "atlas-guardrails-v1", authority: "server", state: "checked", findings: [], decision_id: "dec_1" } } }] };
