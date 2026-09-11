@@ -1,5 +1,26 @@
 # PRISM Claude Session Handoff
 
+## Superseding: physical Phase 10 complete — 2026-09-11
+
+Live certification on `a9e65d6223a49025c9560525defc8d113c308df3`: **22/23, zero critical failures**,
+run `opcert_8dadca72c67e4beea73759d248653e7b`. Promotion, real inference smoke, mandatory rollback,
+exact old digest restoration, final promotion and restart verification all
+completed. Final production is `qwen3:4b-instruct-2507-q4_K_M` at digest
+`0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0`; it is server-recorded VERIFIED production.
+The old model and all failed certification records remain preserved.
+
+Local gates: 522 backend passed / 6 skipped, 50 frontend passed, 7 live E2E
+passed, all static/build gates passed. A reproduced MySQL timestamp-tie
+revision-read defect behind CI #216 was fixed without changing frozen data,
+judges, thresholds or certification code. PR #15 remains open; verify CI on
+the containing commit before merge. Phase 11 is not started.
+
+See `docs/migration/PHASE10_PHYSICAL_CLOSEOUT_20260911.md` and its companion
+JSON for full source/run identities and the complete promotion/rollback proof.
+Older blocked checkpoints below are historical and superseded by this one.
+
+**PHASE_10_COMPLETE = YES; PHASE_11_UNLOCKED = NO; CONTINUATION_SAFE = YES.**
+
 ## Superseding: physical op-cert rerun after fixes, still blocked — 2026-09-11 (physical, sixth pass)
 
 Local machine confirmed live for this pass: `nvidia-smi` (GTX 1650, 4 GiB,

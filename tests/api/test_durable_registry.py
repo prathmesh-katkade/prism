@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import uuid
 from datetime import datetime, timezone
+from unittest.mock import patch
 
 import pandas as pd
 from prism_analytical_schemas import (
@@ -95,3 +96,31 @@ def test_dataset_revisions_survive_restart_and_revert_keeps_branch_safety(tmp_pa
     recovered.revert(created.dataset_id, 0)
     assert recovered.get(created.dataset_id).source_fingerprint == "a" * 32
     assert [item.dataset.revision for item in recovered.revisions(created.dataset_id)] == [0]
+
+
+def test_dataset_revision_selection_survives_equal_activation_times(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """MySQL DATETIME may give rapid upload/apply operations the same second."""
+    configured = os.environ.get("PRISM_ANALYTICAL_HISTORY_DATABASE_URL", "")
+    database_url = configured if configured.startswith("mysql") else f"sqlite:///{(tmp_path / 'tied-revisions.sqlite').as_posix()}"
+    store = DurableDatasetStore(database_url)
+    # Exercise the same tie against CI's real MySQL store as well as SQLite.
+    activation = datetime.now(timezone.utc).replace(microsecond=0)
+    try:
+        with patch("prism_api.durable_dataset_store.datetime") as clock:
+            clock.now.return_value = activation
+            original = store.put(pd.DataFrame({"value": [1, 1, 2]}), "tied.csv", "a" * 32)
+            first = store.add_revision(original.dataset_id, pd.DataFrame({"value": [1, 2]}), "b" * 32)
+            assert store.get(original.dataset_id).dataset == first
+            second = store.add_revision(original.dataset_id, pd.DataFrame({"value": [2]}), "c" * 32)
+            assert second.revision == 2
+            assert store.get(original.dataset_id).dataset == second
+            if not configured.startswith("mysql"):
+                assert store.latest().dataset == second
+            store.revert(original.dataset_id, 0)
+            assert store.get(original.dataset_id).dataset == original
+            reapplied = store.add_revision(original.dataset_id, pd.DataFrame({"value": [1, 2]}), "b" * 32)
+            assert reapplied == first
+            assert store.get(original.dataset_id).dataset == first
+            assert [item.dataset.revision for item in store.revisions(original.dataset_id)] == [0, 1]
+    finally:
+        store.engine.dispose()
