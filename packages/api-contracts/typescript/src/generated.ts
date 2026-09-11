@@ -74,6 +74,124 @@ export interface AnalyticalProvenance {
   created_at: string;
 }
 
+export interface AtlasAdapterCapability {
+  adapter: AtlasAdapterId;
+  can_load: boolean;
+  can_unload: boolean;
+  can_hot_swap: boolean;
+  memory_cost_mb?: number;
+  compatible_base_models?: string[];
+  detail: string;
+}
+
+export type AtlasAdapterId = "atlas-core" | "atlas-sql" | "atlas-statistics" | "atlas-ml" | "atlas-forecast" | "atlas-research";
+
+export interface AtlasBaseModelVerification {
+  verification_id: string;
+  candidate_id: string;
+  upstream_model_id: string;
+  upstream_revision: string;
+  license: string;
+  runtime_model: string;
+  live_runtime_digest?: string;
+  live_manifest_digest?: string;
+  aggregate_candidate_fingerprint?: string;
+  verification_state: AtlasCandidateVerificationState;
+  verification_failure_reason?: string;
+  created_at: string;
+  verified_at?: string;
+}
+
+export type AtlasBenchCategory = "sql" | "statistics" | "machine_learning" | "forecasting" | "causal_safety" | "agentic" | "evidence" | "python_sandbox" | "personality" | "general";
+
+export interface AtlasBenchCategoryCount {
+  category: AtlasBenchCategory;
+  task_count: number;
+}
+
+export interface AtlasBenchCategoryScore {
+  category: AtlasBenchCategory;
+  total: number;
+  passed: number;
+}
+
+export type AtlasBenchCorpusId = "atlasbench-v1" | "atlasbench-v2-holdout";
+
+export interface AtlasBenchCorpusSummary {
+  corpus_version: string;
+  corpus_hash: string;
+  total_tasks: number;
+  category_counts?: AtlasBenchCategoryCount[];
+}
+
+export interface AtlasBenchSuiteRun {
+  run_id: string;
+  subject_id: string;
+  corpus_version: string;
+  corpus_hash: string;
+  total_tasks: number;
+  total_passed: number;
+  category_scores?: AtlasBenchCategoryScore[];
+  started_at: string;
+  completed_at: string;
+  subject_kind?: "generic" | "production" | "candidate" | "arena";
+  candidate_id?: string;
+  candidate_fingerprint?: string;
+  trust_verification_id?: string;
+  runtime_model?: string;
+  runtime_model_digest?: string;
+  provider?: string;
+  evaluation_policy_id?: string;
+}
+
+export interface AtlasBenchTaskResult {
+  task_id: string;
+  category: AtlasBenchCategory;
+  subject_id: string;
+  chosen_choice?: number;
+  correct: boolean;
+  raw_answer?: string;
+  evaluated_at: string;
+}
+
+export interface AtlasCandidateArtifact {
+  candidate_id: string;
+  job_id: string;
+  recipe_id: string;
+  base_model: string;
+  method: AtlasTrainingRecipeMethod;
+  adapter_path: string;
+  dataset_version_id: string;
+  created_at: string;
+}
+
+export interface AtlasCandidateArtifactFile {
+  relative_path: string;
+  sha256: string;
+  size_bytes: number;
+  file_type: string;
+}
+
+export type AtlasCandidateKind = "trained_adapter" | "verified_base_model";
+
+export interface AtlasCandidateVerification {
+  verification_id: string;
+  candidate_id: string;
+  training_job_id: string;
+  recipe_id: string;
+  base_model: string;
+  dataset_version_id: string;
+  recipe_hash: string;
+  adapter_files?: AtlasCandidateArtifactFile[];
+  aggregate_candidate_fingerprint?: string;
+  verification_state: AtlasCandidateVerificationState;
+  verification_failure_reason?: string;
+  created_at: string;
+  verified_at?: string;
+}
+
+export type AtlasCandidateVerificationState = "pending" | "verified" | "rejected";
+
 export type AtlasCleanAction = "explain_issue" | "propose_fix" | "compare_before_after";
 
 export interface AtlasCleanRequest {
@@ -89,9 +207,105 @@ export interface AtlasCleanResponse {
   proposed_operation?: CleanTransformationRequest;
 }
 
+export interface AtlasCombinedSftDatasetVersion {
+  version_id: string;
+  seed_version: string;
+  history_dataset_version?: string;
+  history_dataset_hash?: string;
+  synthetic_teacher_version?: string;
+  system_seed_count: number;
+  atlas_history_count: number;
+  synthetic_teacher_count?: number;
+  total_sft_count: number;
+  train_count: number;
+  validation_count: number;
+  test_count: number;
+  aggregate_content_hash: string;
+  source_manifests?: Record<string, string>;
+  created_at: string;
+}
+
+export interface AtlasCombinedTrainingSourceSummary {
+  seed_version: string;
+  system_seed_examples: number;
+  verified_history_examples: number;
+  user_correction_examples: number;
+  synthetic_teacher_examples?: number;
+  total_eligible: number;
+  computed_at: string;
+}
+
+export interface AtlasCouncilConclusion {
+  specialist: AtlasSpecialistId;
+  conclusion: string;
+  confidence: "low" | "medium" | "high";
+  objections?: string[];
+  evidence?: AtlasEvidenceReference[];
+}
+
+export interface AtlasCriticalRegression {
+  category: AtlasBenchCategory;
+  production_pass_rate: number;
+  candidate_pass_rate: number;
+}
+
+export interface AtlasEmbeddingCapability {
+  provider: string;
+  model: string;
+  revision: string;
+  dimension?: number;
+  available: boolean;
+  detail: string;
+}
+
 export interface AtlasEvidence {
   label: string;
   value: string;
+}
+
+export interface AtlasEvidenceReference {
+  evidence_id: string;
+  kind: "dataset_revision" | "overview_profile" | "analytical_object" | "tool_output" | "web_research" | "memory" | "project_knowledge";
+  summary: string;
+  dataset_id?: string;
+  dataset_revision?: number;
+  source_fingerprint?: string;
+}
+
+export interface AtlasFeatureDeclaration {
+  name: string;
+  derived_from?: string[];
+  outcome_proxy?: boolean;
+  post_outcome?: boolean;
+  available_at?: string;
+  lag?: number;
+  window_start_offset?: number;
+  window_end_offset?: number;
+  label_window_overlap?: boolean;
+}
+
+export interface AtlasFeedbackEvent {
+  feedback_id: string;
+  run_id: string;
+  project_id?: string;
+  kind: AtlasFeedbackKind;
+  answer: string;
+  evidence?: AtlasEvidenceReference[];
+  correction?: string;
+  note?: string;
+  created_at: string;
+}
+
+export type AtlasFeedbackKind = "helpful" | "not_helpful" | "accepted" | "rejected" | "corrected";
+
+export interface AtlasFeedbackWriteRequest {
+  run_id: string;
+  project_id?: string;
+  kind: AtlasFeedbackKind;
+  answer: string;
+  evidence?: AtlasEvidenceReference[];
+  correction?: string;
+  note?: string;
 }
 
 export type AtlasForecastAction = "explain_method" | "explain_trend" | "explain_seasonality" | "explain_changepoints" | "explain_intervals";
@@ -109,6 +323,59 @@ export interface AtlasForecastResponse {
   evidence: AtlasEvidence[];
 }
 
+export type AtlasFoundryBackendName = "soup" | "mock";
+
+export interface AtlasFoundryCapability {
+  backend: AtlasFoundryBackendName;
+  soup_available: boolean;
+  soup_version?: string;
+  can_train: boolean;
+  can_cancel: boolean;
+  can_pause?: boolean;
+  detail: string;
+}
+
+export interface AtlasFoundryPreflight {
+  compatible: boolean;
+  estimated_total_memory_gb?: number;
+  estimated_tokens_per_sec?: number;
+  recommended_batch_size?: number;
+  detail: string;
+}
+
+export interface AtlasGuardrailContext {
+  target?: string;
+  prediction_cutoff?: string;
+  features?: AtlasFeatureDeclaration[];
+  evidence_object_ids?: string[];
+  evidence_metric?: string;
+}
+
+export interface AtlasKnowledgeChunk {
+  chunk_id: string;
+  project_id: string;
+  source_ref: string;
+  content_version: string;
+  location: string;
+  content: string;
+  injection_detected?: boolean;
+  score?: number;
+}
+
+export interface AtlasKnowledgeSearchRequest {
+  project_id: string;
+  query: string;
+  limit?: number;
+}
+
+export interface AtlasKnowledgeSourceRequest {
+  project_id: string;
+  source_ref: string;
+  content: string;
+  content_version: string;
+  kind: "markdown" | "text" | "python" | "sql" | "notebook_metadata" | "documentation";
+}
+
 export type AtlasLineageAction = "explain_provenance" | "explain_staleness" | "explain_lineage" | "compare_versions" | "recommend_reruns" | "explain_evidence";
 
 export interface AtlasLineageRequest {
@@ -122,6 +389,48 @@ export interface AtlasLineageResponse {
   uncertainty: string;
   evidence: AtlasEvidence[];
   limitation?: string;
+}
+
+export type AtlasMemoryClass = "data_evidence" | "project_knowledge" | "user_memory" | "model_knowledge" | "web_research";
+
+export interface AtlasMemoryRecord {
+  memory_id: string;
+  scope: AtlasMemoryScope;
+  knowledge_class: AtlasMemoryClass;
+  content: string;
+  source: string;
+  confidence: "low" | "medium" | "high";
+  timestamp: string;
+  source_ref?: string;
+  workspace_id?: string;
+  sensitivity?: "public" | "internal" | "private" | "restricted";
+  user_editable?: boolean;
+  deletable?: boolean;
+  provenance?: AtlasEvidenceReference[];
+  reinforcement?: number;
+  last_used?: string;
+  contradictions?: string[];
+  superseded_by?: string;
+  project_id?: string;
+  created_at?: string;
+  updated_at?: string;
+  last_used_at?: string;
+}
+
+export type AtlasMemoryScope = "session" | "project" | "workspace" | "global";
+
+export interface AtlasMemoryWriteRequest {
+  scope: AtlasMemoryScope;
+  knowledge_class: AtlasMemoryClass;
+  content: string;
+  source: string;
+  source_ref?: string;
+  confidence?: "low" | "medium" | "high";
+  project_id?: string;
+  workspace_id?: string;
+  sensitivity?: "public" | "internal" | "private" | "restricted";
+  user_editable?: boolean;
+  provenance?: AtlasEvidenceReference[];
 }
 
 export type AtlasMlAction = "explain_task_type" | "compare_models" | "explain_cross_validation" | "explain_imbalance" | "explain_feature_importance" | "identify_overfitting";
@@ -140,6 +449,92 @@ export interface AtlasMlResponse {
   evidence: AtlasEvidence[];
 }
 
+export interface AtlasModelArenaEntry {
+  run_id: string;
+  subject_kind: "production" | "candidate" | "arena";
+  runtime_model: string;
+  runtime_model_digest: string;
+  total_passed: number;
+  total_tasks: number;
+  production_delta: number;
+  category_scores?: AtlasBenchCategoryScore[];
+  critical_regression_categories?: AtlasBenchCategory[];
+  elapsed_ms: number;
+  candidate_id?: string;
+  candidate_fingerprint?: string;
+}
+
+export interface AtlasModelArenaSummary {
+  corpus_version: string;
+  corpus_hash: string;
+  production_run_id: string;
+  production_runtime_model: string;
+  production_runtime_model_digest: string;
+  entries?: AtlasModelArenaEntry[];
+}
+
+export interface AtlasModelProviderCapabilities {
+  provider: AtlasModelProviderName;
+  available: boolean;
+  capabilities?: AtlasProviderCapability[];
+  raw_data_policy?: "never" | "explicitly_authorized";
+  detail: string;
+}
+
+export type AtlasModelProviderName = "deterministic" | "ollama";
+
+export type AtlasOperationalCriticalFailureKind = "invented_evidence" | "destructive_unauthorized_tool_call" | "secret_exposure" | "private_data_transmission" | "unsupported_causal_claim" | "prompt_injection_obedience" | "benchmark_manipulation" | "fabricated_tool_completion";
+
+export type AtlasOperationalScenarioId = "dataset_profiling" | "data_quality_diagnosis" | "sql_analytical_execution" | "hallucinated_schema_refusal" | "sql_join_grain_correctness" | "statistical_test_selection" | "correlation_vs_causation" | "target_leakage_detection" | "class_imbalance_metric_choice" | "forecast_chronological_split" | "python_unsafe_operation_rejection" | "evidence_provenance_grounding" | "insufficient_evidence_refusal" | "prompt_injection_in_dataset" | "unauthorized_destructive_action_refusal" | "preprocessing_leakage_detection" | "time_series_feature_leakage" | "python_sandbox_analysis_task" | "evidence_freshness_conflict" | "rag_prompt_injection" | "business_recommendation_with_tradeoff" | "uncertainty_communication" | "concise_senior_ds_explanation";
+
+export interface AtlasOperationalScenarioResult {
+  scenario_id: AtlasOperationalScenarioId;
+  passed: boolean;
+  critical_failure?: AtlasOperationalCriticalFailureKind;
+  evidence_refs?: string[];
+  tool_call_count: number;
+  elapsed_ms: number;
+  detail?: string;
+  observed_response?: AtlasOperationalSubjectResponse;
+}
+
+export interface AtlasOperationalSubjectResponse {
+  tool_calls?: AtlasOperationalToolCall[];
+  artifacts?: string[];
+  structured_answer?: Record<string, unknown>;
+  disclosures?: string[];
+  final_claim?: string;
+  refused?: boolean;
+  refusal_reason?: string;
+  guardrail_decision?: Record<string, unknown>;
+  action_audit?: Record<string, unknown>[];
+  model_response_received?: boolean;
+}
+
+export interface AtlasOperationalSuiteRun {
+  run_id: string;
+  suite_version: string;
+  suite_hash: string;
+  subject_id: string;
+  subject_kind?: "reference" | "candidate" | "production";
+  candidate_id?: string;
+  trust_verification_id?: string;
+  runtime_model?: string;
+  runtime_model_digest?: string;
+  scenario_results?: AtlasOperationalScenarioResult[];
+  total_scenarios: number;
+  total_passed: number;
+  critical_failure_count: number;
+  started_at: string;
+  completed_at: string;
+}
+
+export interface AtlasOperationalToolCall {
+  tool: string;
+  arguments?: Record<string, unknown>;
+  result_summary?: string;
+}
+
 export type AtlasOverviewAction = "explain_dataset" | "diagnose_quality" | "inspect_anomaly" | "suggest_next_analysis" | "trace_source" | "compare_columns" | "summarize_risks";
 
 export interface AtlasOverviewRequest {
@@ -154,6 +549,323 @@ export interface AtlasOverviewResponse {
   uncertainty: string;
   evidence: AtlasEvidence[];
   provenance: OverviewProvenance;
+}
+
+export type AtlasPlanState = "draft" | "running" | "completed" | "failed" | "cancelled";
+
+export interface AtlasPlanStep {
+  step_id: string;
+  title: string;
+  kind: AtlasStepKind;
+  specialist: AtlasSpecialistId;
+  tool_name: string;
+  rationale?: string;
+  dependencies?: string[];
+  tool_args?: Record<string, unknown>;
+  expected_evidence?: string[];
+  state?: AtlasStepState;
+  max_attempts?: number;
+  attempts?: number;
+  requires_approval?: boolean;
+  evidence?: AtlasEvidenceReference[];
+  error?: string;
+}
+
+export interface AtlasPreferenceDatasetVersion {
+  version_id: string;
+  created_at: string;
+  source_count: number;
+  excluded_count: number;
+  train_count: number;
+  validation_count: number;
+  test_count: number;
+  content_hash: string;
+}
+
+export interface AtlasPreferencePair {
+  pair_id: string;
+  source: AtlasPreferencePairSource;
+  rejected_memory_id: string;
+  chosen_memory_id: string;
+  project_id?: string;
+  prompt_context: string;
+  rejected_response: string;
+  chosen_response: string;
+  evaluator_label: string;
+  split: AtlasTrainingSplit;
+  content_hash: string;
+  created_at: string;
+}
+
+export type AtlasPreferencePairSource = "memory_supersession";
+
+export interface AtlasProductionPointer {
+  event_id: string;
+  candidate_id: string;
+  previous_candidate_id?: string;
+  decision_id?: string;
+  is_rollback?: boolean;
+  reason: string;
+  promoted_at: string;
+}
+
+export interface AtlasProductionTrustStatus {
+  production?: AtlasProductionPointer;
+  candidate_kind?: AtlasCandidateKind;
+  runtime_model?: string;
+  runtime_model_digest?: string;
+  trust_verification_state?: AtlasCandidateVerificationState;
+  latest_v1_run_id?: string;
+  latest_v1_total_passed?: number;
+  latest_v1_total_tasks?: number;
+  latest_operational_cert_run_id?: string;
+  latest_operational_cert_total_passed?: number;
+  latest_operational_cert_total_scenarios?: number;
+  latest_operational_cert_critical_failures?: number;
+}
+
+export interface AtlasPromotionDecision {
+  decision_id: string;
+  candidate_id: string;
+  production_run_id: string;
+  candidate_run_id: string;
+  verdict: AtlasPromotionVerdict;
+  overall_production_pass_rate: number;
+  overall_candidate_pass_rate: number;
+  critical_regressions?: AtlasCriticalRegression[];
+  decided_at: string;
+}
+
+export type AtlasPromotionVerdict = "promote_eligible" | "hold" | "reject";
+
+export type AtlasProviderCapability = "structured_planning" | "local_inference" | "streaming";
+
+export interface AtlasResearchRequest {
+  query: string;
+  url?: string;
+  project_id?: string;
+  offline?: boolean;
+}
+
+export interface AtlasResearchResult {
+  research_id: string;
+  query: string;
+  status: "completed" | "blocked" | "offline" | "failed";
+  source_url?: string;
+  title?: string;
+  retrieved_at: string;
+  content_hash?: string;
+  excerpt?: string;
+  citations?: AtlasEvidenceReference[];
+  injection_detected?: boolean;
+  detail: string;
+}
+
+export interface AtlasResourceLease {
+  lease_id: string;
+  workload: AtlasResourceWorkload;
+  state: "active" | "queued" | "preempted" | "released" | "cancelled";
+  granted_at?: string;
+  reason: string;
+}
+
+export interface AtlasResourceLeaseRequest {
+  workload: AtlasResourceWorkload;
+  allow_preemption?: boolean;
+}
+
+export type AtlasResourcePriority = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+
+export interface AtlasResourceSnapshot {
+  cpu_count: number;
+  memory_total_mb?: number;
+  memory_available_mb?: number;
+  storage_free_mb?: number;
+  gpu_available?: boolean;
+  gpu_name?: string;
+  vram_total_mb?: number;
+  gpu_telemetry_detail: string;
+  active_leases?: AtlasResourceLease[];
+}
+
+export interface AtlasResourceWorkload {
+  workload_id: string;
+  priority: AtlasResourcePriority;
+  cancellable?: boolean;
+  description: string;
+  requires_gpu?: boolean;
+  cpu_slots?: number;
+  memory_mb?: number;
+}
+
+export interface AtlasRetrievalChunk {
+  chunk_id: string;
+  project_id: string;
+  knowledge_class: AtlasMemoryClass;
+  source_type: string;
+  source_id: string;
+  source_version: string;
+  locator: string;
+  content_hash: string;
+  normalized_text: string;
+  embedding_provider: string;
+  embedding_model: string;
+  embedding_revision: string;
+  embedding_dimension?: number;
+  indexed_at: string;
+  freshness: "active" | "stale" | "deleted" | "superseded";
+  confidence: "low" | "medium" | "high";
+  prompt_injection_flag: boolean;
+  safety_metadata?: Record<string, unknown>;
+  superseded_by?: string;
+}
+
+export interface AtlasRetrievalChunkUpsertRequest {
+  project_id: string;
+  knowledge_class: AtlasMemoryClass;
+  source_type: "atlas_memory" | "markdown" | "text" | "python" | "sql" | "notebook_metadata" | "analytical_evidence" | "foundry_metadata" | "training_metadata" | "candidate_metadata" | "atlasbench_metadata" | "web_research";
+  source_id: string;
+  source_version: string;
+  locator: string;
+  content: string;
+  confidence?: "low" | "medium" | "high";
+}
+
+export interface AtlasRetrievalQueryRequest {
+  project_id: string;
+  query: string;
+  knowledge_classes?: AtlasMemoryClass[];
+  limit?: number;
+  include_stale?: boolean;
+}
+
+export interface AtlasRetrievalResult {
+  chunk_id: string;
+  project_id: string;
+  knowledge_class: AtlasMemoryClass;
+  source_type: string;
+  source_id: string;
+  source_version: string;
+  locator: string;
+  content_hash: string;
+  normalized_text: string;
+  embedding_provider: string;
+  embedding_model: string;
+  embedding_revision: string;
+  embedding_dimension?: number;
+  indexed_at: string;
+  freshness: "active" | "stale" | "deleted" | "superseded";
+  confidence: "low" | "medium" | "high";
+  prompt_injection_flag: boolean;
+  safety_metadata?: Record<string, unknown>;
+  superseded_by?: string;
+  lexical_score?: number;
+  vector_score?: number;
+  recency_score?: number;
+  confidence_score?: number;
+  scope_score?: number;
+  class_weight?: number;
+  hybrid_score?: number;
+}
+
+export interface AtlasRunEvent {
+  event_id: string;
+  run_id: string;
+  sequence: number;
+  type: AtlasRunEventType;
+  occurred_at: string;
+  specialist?: AtlasSpecialistId;
+  step_id?: string;
+  payload?: Record<string, unknown>;
+}
+
+export type AtlasRunEventType = "run_created" | "plan_created" | "step_started" | "step_completed" | "council_conclusion" | "run_completed" | "run_failed" | "run_cancelled";
+
+export interface AtlasRunRequest {
+  dataset_id: string;
+  objective: string;
+  idempotency_key?: string;
+  guardrail_context?: AtlasGuardrailContext;
+}
+
+export interface AtlasRunResponse {
+  run_id: string;
+  plan: AtlasStructuredPlan;
+  answer?: string;
+  uncertainty?: string;
+  evidence?: AtlasEvidenceReference[];
+  council?: AtlasCouncilConclusion[];
+  events?: AtlasRunEvent[];
+  cancellation_requested?: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface AtlasSandboxArtifact {
+  artifact_id: string;
+  filename: string;
+  media_type: string;
+  byte_count: number;
+  sha256: string;
+}
+
+export type AtlasSandboxErrorKind = "policy" | "path" | "network" | "timeout" | "cancelled" | "resource_limit" | "execution";
+
+export interface AtlasSandboxExecutionRequest {
+  code: string;
+  timeout_ms?: number;
+  seed?: number;
+}
+
+export interface AtlasSandboxExecutionResult {
+  execution_id: string;
+  state: "completed" | "failed" | "cancelled" | "timed_out";
+  stdout?: string;
+  stderr?: string;
+  artifacts?: AtlasSandboxArtifact[];
+  error_kind?: AtlasSandboxErrorKind;
+  error?: string;
+  duration_ms: number;
+  limits_enforced?: string[];
+  guardrail_decision?: Record<string, unknown>;
+}
+
+export interface AtlasSandboxWorkerHealth {
+  state: "ready" | "degraded";
+  execution_mode: "native_worker" | "container_worker";
+  network_policy: string;
+  process_tree_termination: boolean;
+  cpu_quota_enforced: boolean;
+  memory_quota_enforced: boolean;
+  container_available: boolean;
+  detail: string;
+}
+
+export interface AtlasSftTrainingRecord {
+  record_id: string;
+  source_kind: "system_seed" | "atlas_run" | "synthetic_teacher";
+  source_ref: string;
+  source_version: string;
+  project_id?: string;
+  dataset_id?: string;
+  instruction: string;
+  input?: string;
+  output: string;
+  uncertainty?: string;
+  split: AtlasTrainingSplit;
+  content_hash: string;
+  provenance?: Record<string, unknown>;
+  created_at: string;
+}
+
+export type AtlasSpecialistId = "atlas" | "scout" | "curator" | "query" | "stat" | "forge" | "oracle" | "lens" | "researcher" | "librarian" | "auditor";
+
+export interface AtlasSpecialistIdentity {
+  specialist: AtlasSpecialistId;
+  display_name: string;
+  role: string;
+  visible?: boolean;
+  speaks_to_user?: boolean;
 }
 
 export type AtlasSqlAction = "explain_query" | "optimize_query" | "debug_error" | "inspect_plan" | "generate_sql" | "compare_queries" | "explain_selection" | "trace_lineage" | "convert_result";
@@ -189,6 +901,196 @@ export interface AtlasStatsResponse {
   summary: string;
   uncertainty: string;
   evidence: AtlasEvidence[];
+}
+
+export type AtlasStepKind = "profile_dataset" | "data_quality" | "sql_question" | "methodology_review" | "statistical_analysis" | "forecast" | "machine_learning" | "visualization" | "explain_history" | "python_analysis" | "research" | "audit_evidence";
+
+export type AtlasStepState = "pending" | "running" | "completed" | "failed" | "cancelled" | "blocked";
+
+export interface AtlasStructuredPlan {
+  plan_id: string;
+  objective: string;
+  dataset_id: string;
+  state?: AtlasPlanState;
+  provider: AtlasModelProviderName;
+  steps: AtlasPlanStep[];
+  created_at: string;
+}
+
+export interface AtlasSyntheticTeacherExample {
+  teacher_example_id: string;
+  generation_policy_version: string;
+  teacher_model: string;
+  teacher_revision: string;
+  skill_area: AtlasSyntheticTeacherSkillArea;
+  topic: string;
+  source_kind?: string;
+  license: string;
+  instruction: string;
+  input?: string;
+  output: string;
+  uncertainty?: string;
+  validation_status: AtlasSyntheticTeacherValidationStatus;
+  validation_note: string;
+  content_hash: string;
+  created_at: string;
+}
+
+export interface AtlasSyntheticTeacherManifest {
+  generation_policy_version: string;
+  created_at: string;
+  example_count: number;
+  skill_area_counts?: AtlasSyntheticTeacherSkillAreaCount[];
+  aggregate_content_hash: string;
+  atlasbench_v1_leakage_guard_passed: boolean;
+  atlasbench_v2_leakage_guard_passed: boolean;
+  intra_corpus_duplicate_guard_passed: boolean;
+  license_validation_passed: boolean;
+  secret_scan_passed: boolean;
+}
+
+export type AtlasSyntheticTeacherSkillArea = "sql" | "statistics" | "causal_reasoning" | "machine_learning" | "forecasting" | "evidence" | "agentic_safety" | "python" | "senior_ds_communication";
+
+export interface AtlasSyntheticTeacherSkillAreaCount {
+  skill_area: AtlasSyntheticTeacherSkillArea;
+  example_count: number;
+}
+
+export type AtlasSyntheticTeacherValidationStatus = "executed" | "calculated" | "reviewed";
+
+export type AtlasSystemSeedDomain = "causal_safety" | "evidence" | "sql" | "statistics" | "forecasting" | "senior_ds_behavior" | "security_agentic";
+
+export interface AtlasSystemSeedDomainCount {
+  domain: AtlasSystemSeedDomain;
+  example_count: number;
+}
+
+export interface AtlasSystemSeedExample {
+  seed_example_id: string;
+  seed_version: string;
+  domain: AtlasSystemSeedDomain;
+  topic: string;
+  source_kind?: string;
+  user_request: string;
+  final_answer: string;
+  uncertainty?: string;
+  review_status: AtlasSystemSeedReviewStatus;
+  content_hash: string;
+  created_at: string;
+}
+
+export interface AtlasSystemSeedManifest {
+  seed_version: string;
+  created_at: string;
+  example_count: number;
+  domain_counts?: AtlasSystemSeedDomainCount[];
+  aggregate_content_hash: string;
+  leakage_guard_passed: boolean;
+}
+
+export type AtlasSystemSeedReviewStatus = "draft" | "reviewed";
+
+export interface AtlasTrainingDatasetVersion {
+  version_id: string;
+  created_at: string;
+  source_run_count: number;
+  excluded_count: number;
+  train_count: number;
+  validation_count: number;
+  test_count: number;
+  content_hash: string;
+}
+
+export interface AtlasTrainingExample {
+  example_id: string;
+  source: AtlasTrainingExampleSource;
+  source_run_id: string;
+  dataset_id: string;
+  split: AtlasTrainingSplit;
+  user_request: string;
+  dataset_metadata?: Record<string, unknown>;
+  plan_steps?: AtlasPlanStep[];
+  evidence?: AtlasEvidenceReference[];
+  council?: AtlasCouncilConclusion[];
+  final_answer: string;
+  uncertainty?: string;
+  quality_label: string;
+  content_hash: string;
+  created_at: string;
+}
+
+export type AtlasTrainingExampleSource = "atlas_run";
+
+export interface AtlasTrainingJob {
+  job_id: string;
+  recipe_id: string;
+  backend: AtlasFoundryBackendName;
+  state: AtlasTrainingJobState;
+  resource_lease_id?: string;
+  process_id?: number;
+  workspace_path?: string;
+  error?: string;
+  started_at?: string;
+  completed_at?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export type AtlasTrainingJobState = "queued" | "running" | "completed" | "failed" | "cancelled";
+
+export interface AtlasTrainingRecipe {
+  recipe_id: string;
+  base_model: string;
+  method: AtlasTrainingRecipeMethod;
+  task: "sft" | "dpo";
+  dataset_version_id: string;
+  quantization?: "none" | "4bit" | "8bit";
+  lora_r?: number;
+  lora_alpha?: number;
+  lora_dropout?: number;
+  target_modules?: string[];
+  epochs?: number;
+  learning_rate?: number;
+  batch_size?: number;
+  gradient_accumulation_steps?: number;
+  max_length?: number;
+  seed?: number;
+  stream_layers?: boolean;
+  recipe_version?: string;
+  created_at: string;
+}
+
+export type AtlasTrainingRecipeMethod = "lora" | "qlora";
+
+export type AtlasTrainingSplit = "train" | "validation" | "test";
+
+export interface AtlasVerifiedBaseModelCandidate {
+  candidate_id: string;
+  candidate_kind?: string;
+  upstream_model_id: string;
+  upstream_revision: string;
+  license: string;
+  official_source: string;
+  runtime_model: string;
+  declared_runtime_digest: string;
+  quantization?: string;
+  declared_manifest_digest?: string;
+  declared_blob_digests?: string[];
+  parameter_count?: number;
+  created_at: string;
+}
+
+export interface AtlasVerifiedBaseModelRegistrationRequest {
+  upstream_model_id: string;
+  upstream_revision: string;
+  license: string;
+  official_source: string;
+  runtime_model: string;
+  declared_runtime_digest: string;
+  quantization?: string;
+  declared_manifest_digest?: string;
+  declared_blob_digests?: string[];
+  parameter_count?: number;
 }
 
 export type AtlasVisualizeAction = "explain_chart" | "identify_anomaly" | "propose_alternative";
@@ -315,6 +1217,30 @@ export interface CorrelationFinding {
   right: string;
   coefficient: number;
 }
+
+export interface CortexEdge {
+  edge_id: string;
+  source_node_id: string;
+  target_node_id: string;
+  relation: "contains" | "executed_by" | "produced" | "supports" | "uses" | "generated_by";
+}
+
+export interface CortexGraphState {
+  run_id: string;
+  nodes?: CortexNode[];
+  edges?: CortexEdge[];
+  generated_at: string;
+}
+
+export interface CortexNode {
+  node_id: string;
+  kind: CortexNodeKind;
+  label: string;
+  state: string;
+  source_id: string;
+}
+
+export type CortexNodeKind = "run" | "plan_step" | "specialist" | "evidence" | "dataset" | "analytical_object" | "tool" | "artifact";
 
 export interface DatasetRef {
   dataset_id: string;

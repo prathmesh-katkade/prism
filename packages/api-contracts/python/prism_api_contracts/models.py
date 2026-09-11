@@ -4,7 +4,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Literal, Optional, Union
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class ContractModel(BaseModel):
@@ -966,3 +966,1523 @@ class AtlasLineageResponse(ContractModel):
     uncertainty: str = Field(min_length=1)
     evidence: list[AtlasEvidence]
     limitation: Optional[str] = None
+
+
+# --- Phase 10: Atlas Local Intelligence Foundry ------------------------------
+
+
+class AtlasModelProviderName(str, Enum):
+    DETERMINISTIC = "deterministic"
+    OLLAMA = "ollama"
+
+
+class AtlasProviderCapability(str, Enum):
+    STRUCTURED_PLANNING = "structured_planning"
+    LOCAL_INFERENCE = "local_inference"
+    STREAMING = "streaming"
+
+
+class AtlasModelProviderCapabilities(ContractModel):
+    provider: AtlasModelProviderName
+    available: bool
+    capabilities: list[AtlasProviderCapability] = Field(default_factory=list)
+    raw_data_policy: Literal["never", "explicitly_authorized"] = "never"
+    detail: str = Field(min_length=1)
+
+
+class AtlasPlanState(str, Enum):
+    DRAFT = "draft"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+class AtlasStepState(str, Enum):
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+    BLOCKED = "blocked"
+
+
+class AtlasStepKind(str, Enum):
+    PROFILE_DATASET = "profile_dataset"
+    DATA_QUALITY = "data_quality"
+    SQL_QUESTION = "sql_question"
+    METHODOLOGY_REVIEW = "methodology_review"
+    STATISTICAL_ANALYSIS = "statistical_analysis"
+    FORECAST = "forecast"
+    MACHINE_LEARNING = "machine_learning"
+    VISUALIZATION = "visualization"
+    EXPLAIN_HISTORY = "explain_history"
+    PYTHON_ANALYSIS = "python_analysis"
+    RESEARCH = "research"
+    AUDIT_EVIDENCE = "audit_evidence"
+
+
+class AtlasSpecialistId(str, Enum):
+    ATLAS = "atlas"
+    SCOUT = "scout"
+    CURATOR = "curator"
+    QUERY = "query"
+    STAT = "stat"
+    FORGE = "forge"
+    ORACLE = "oracle"
+    LENS = "lens"
+    RESEARCHER = "researcher"
+    LIBRARIAN = "librarian"
+    AUDITOR = "auditor"
+
+
+class AtlasSpecialistIdentity(ContractModel):
+    specialist: AtlasSpecialistId
+    display_name: str = Field(min_length=1, max_length=80)
+    role: str = Field(min_length=1, max_length=240)
+    visible: bool = True
+    speaks_to_user: bool = False
+
+
+class AtlasEvidenceReference(ContractModel):
+    evidence_id: str = Field(min_length=1, max_length=200)
+    kind: Literal["dataset_revision", "overview_profile", "analytical_object", "tool_output", "web_research", "memory", "project_knowledge"]
+    summary: str = Field(min_length=1, max_length=1_000)
+    dataset_id: Optional[str] = None
+    dataset_revision: Optional[int] = Field(default=None, ge=0)
+    source_fingerprint: Optional[str] = Field(default=None, min_length=16)
+
+
+class AtlasPlanStep(ContractModel):
+    step_id: str = Field(min_length=1, max_length=120)
+    title: str = Field(min_length=1, max_length=240)
+    kind: AtlasStepKind
+    specialist: AtlasSpecialistId
+    tool_name: str = Field(min_length=1, max_length=120)
+    rationale: str = Field(default="", max_length=1_000)
+    dependencies: list[str] = Field(default_factory=list, max_length=20)
+    tool_args: dict[str, object] = Field(default_factory=dict)
+    expected_evidence: list[str] = Field(default_factory=list, max_length=20)
+    state: AtlasStepState = AtlasStepState.PENDING
+    max_attempts: int = Field(default=3, ge=1, le=3)
+    attempts: int = Field(default=0, ge=0, le=3)
+    requires_approval: bool = False
+    evidence: list[AtlasEvidenceReference] = Field(default_factory=list)
+    error: Optional[str] = None
+
+
+class AtlasStructuredPlan(ContractModel):
+    plan_id: str = Field(min_length=1, max_length=120)
+    objective: str = Field(min_length=1, max_length=2_000)
+    dataset_id: str = Field(min_length=1)
+    state: AtlasPlanState = AtlasPlanState.DRAFT
+    provider: AtlasModelProviderName
+    steps: list[AtlasPlanStep] = Field(min_length=1, max_length=20)
+    created_at: datetime
+
+
+class AtlasCouncilConclusion(ContractModel):
+    specialist: AtlasSpecialistId
+    conclusion: str = Field(min_length=1, max_length=2_000)
+    confidence: Literal["low", "medium", "high"]
+    objections: list[str] = Field(default_factory=list)
+    evidence: list[AtlasEvidenceReference] = Field(default_factory=list)
+
+
+class AtlasRunEventType(str, Enum):
+    RUN_CREATED = "run_created"
+    PLAN_CREATED = "plan_created"
+    STEP_STARTED = "step_started"
+    STEP_COMPLETED = "step_completed"
+    COUNCIL_CONCLUSION = "council_conclusion"
+    RUN_COMPLETED = "run_completed"
+    RUN_FAILED = "run_failed"
+    RUN_CANCELLED = "run_cancelled"
+
+
+class AtlasRunEvent(ContractModel):
+    event_id: str = Field(min_length=1, max_length=120)
+    run_id: str = Field(min_length=1, max_length=120)
+    sequence: int = Field(ge=1)
+    type: AtlasRunEventType
+    occurred_at: datetime
+    specialist: Optional[AtlasSpecialistId] = None
+    step_id: Optional[str] = None
+    payload: dict[str, object] = Field(default_factory=dict)
+
+
+class AtlasFeatureDeclaration(ContractModel):
+    """Declared lineage, never proof that a feature is available in production."""
+
+    name: str = Field(min_length=1, max_length=120)
+    derived_from: list[str] = Field(default_factory=list, max_length=100)
+    outcome_proxy: bool = False
+    post_outcome: bool = False
+    available_at: Optional[datetime] = None
+    lag: Optional[int] = None
+    window_start_offset: Optional[int] = None
+    window_end_offset: Optional[int] = None
+    label_window_overlap: bool = False
+
+
+class AtlasGuardrailContext(ContractModel):
+    target: Optional[str] = Field(default=None, min_length=1, max_length=120)
+    prediction_cutoff: Optional[datetime] = None
+    features: list[AtlasFeatureDeclaration] = Field(default_factory=list, max_length=100)
+    evidence_object_ids: list[str] = Field(default_factory=list, max_length=20)
+    evidence_metric: Optional[str] = Field(default=None, min_length=1, max_length=120)
+
+
+class AtlasRunRequest(ContractModel):
+    dataset_id: str = Field(min_length=1)
+    objective: str = Field(min_length=3, max_length=2_000)
+    idempotency_key: Optional[str] = Field(default=None, min_length=8, max_length=120)
+    guardrail_context: Optional[AtlasGuardrailContext] = None
+
+
+class AtlasRunResponse(ContractModel):
+    run_id: str = Field(min_length=1, max_length=120)
+    plan: AtlasStructuredPlan
+    answer: Optional[str] = None
+    uncertainty: Optional[str] = None
+    evidence: list[AtlasEvidenceReference] = Field(default_factory=list)
+    council: list[AtlasCouncilConclusion] = Field(default_factory=list)
+    events: list[AtlasRunEvent] = Field(default_factory=list)
+    cancellation_requested: bool = False
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+
+class AtlasMemoryScope(str, Enum):
+    SESSION = "session"
+    PROJECT = "project"
+    WORKSPACE = "workspace"
+    GLOBAL = "global"
+
+
+class AtlasMemoryClass(str, Enum):
+    DATA_EVIDENCE = "data_evidence"
+    PROJECT_KNOWLEDGE = "project_knowledge"
+    USER_MEMORY = "user_memory"
+    MODEL_KNOWLEDGE = "model_knowledge"
+    WEB_RESEARCH = "web_research"
+
+
+class AtlasMemoryRecord(ContractModel):
+    memory_id: str = Field(min_length=1)
+    scope: AtlasMemoryScope
+    knowledge_class: AtlasMemoryClass
+    content: str = Field(min_length=1, max_length=8_000)
+    source: str = Field(min_length=1, max_length=500)
+    confidence: Literal["low", "medium", "high"]
+    timestamp: datetime
+    source_ref: Optional[str] = None
+    workspace_id: Optional[str] = None
+    sensitivity: Literal["public", "internal", "private", "restricted"] = "internal"
+    user_editable: bool = True
+    deletable: bool = True
+    provenance: list[AtlasEvidenceReference] = Field(default_factory=list)
+    reinforcement: int = Field(default=0, ge=0)
+    last_used: Optional[datetime] = None
+    contradictions: list[str] = Field(default_factory=list)
+    superseded_by: Optional[str] = None
+    project_id: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    last_used_at: Optional[datetime] = None
+
+
+class AtlasMemoryWriteRequest(ContractModel):
+    scope: AtlasMemoryScope
+    knowledge_class: AtlasMemoryClass
+    content: str = Field(min_length=1, max_length=8_000)
+    source: str = Field(min_length=1, max_length=500)
+    source_ref: Optional[str] = Field(default=None, max_length=2_000)
+    confidence: Literal["low", "medium", "high"] = "medium"
+    project_id: Optional[str] = Field(default=None, max_length=200)
+    workspace_id: Optional[str] = Field(default=None, max_length=200)
+    sensitivity: Literal["public", "internal", "private", "restricted"] = "internal"
+    user_editable: bool = True
+    provenance: list[AtlasEvidenceReference] = Field(default_factory=list)
+
+
+class AtlasMemoryQuery(ContractModel):
+    scope: Optional[AtlasMemoryScope] = None
+    knowledge_class: Optional[AtlasMemoryClass] = None
+    project_id: Optional[str] = None
+    workspace_id: Optional[str] = None
+    min_confidence: Optional[Literal["low", "medium", "high"]] = None
+    updated_after: Optional[datetime] = None
+    limit: int = Field(default=25, ge=1, le=100)
+
+
+class AtlasKnowledgeSourceRequest(ContractModel):
+    project_id: str = Field(min_length=1, max_length=200)
+    source_ref: str = Field(min_length=1, max_length=2_000)
+    content: str = Field(min_length=1, max_length=200_000)
+    content_version: str = Field(min_length=1, max_length=200)
+    kind: Literal["markdown", "text", "python", "sql", "notebook_metadata", "documentation"]
+
+
+class AtlasKnowledgeChunk(ContractModel):
+    chunk_id: str = Field(min_length=1)
+    project_id: str = Field(min_length=1)
+    source_ref: str = Field(min_length=1)
+    content_version: str = Field(min_length=1)
+    location: str = Field(min_length=1)
+    content: str = Field(min_length=1)
+    injection_detected: bool = False
+    score: float = 0
+
+
+class AtlasKnowledgeSearchRequest(ContractModel):
+    project_id: str = Field(min_length=1, max_length=200)
+    query: str = Field(min_length=1, max_length=2_000)
+    limit: int = Field(default=8, ge=1, le=25)
+
+
+# --- 10S: local-first hybrid retrieval ---------------------------------------
+
+class AtlasEmbeddingCapability(ContractModel):
+    provider: str = Field(min_length=1, max_length=80)
+    model: str = Field(min_length=1, max_length=300)
+    revision: str = Field(min_length=1, max_length=200)
+    dimension: Optional[int] = Field(default=None, ge=1, le=16_384)
+    available: bool
+    detail: str = Field(min_length=1, max_length=1_000)
+
+
+class AtlasRetrievalChunkUpsertRequest(ContractModel):
+    project_id: str = Field(min_length=1, max_length=200)
+    knowledge_class: AtlasMemoryClass
+    source_type: Literal[
+        "atlas_memory", "markdown", "text", "python", "sql", "notebook_metadata",
+        "analytical_evidence", "foundry_metadata", "training_metadata", "candidate_metadata",
+        "atlasbench_metadata", "web_research",
+    ]
+    source_id: str = Field(min_length=1, max_length=500)
+    source_version: str = Field(min_length=1, max_length=200)
+    locator: str = Field(min_length=1, max_length=2_000)
+    content: str = Field(min_length=1, max_length=200_000)
+    confidence: Literal["low", "medium", "high"] = "medium"
+
+
+class AtlasRetrievalQueryRequest(ContractModel):
+    project_id: str = Field(min_length=1, max_length=200)
+    query: str = Field(min_length=1, max_length=2_000)
+    knowledge_classes: Optional[list[AtlasMemoryClass]] = None
+    limit: int = Field(default=8, ge=1, le=50)
+    include_stale: bool = False
+
+
+class AtlasRetrievalChunk(ContractModel):
+    chunk_id: str = Field(min_length=1)
+    project_id: str = Field(min_length=1)
+    knowledge_class: AtlasMemoryClass
+    source_type: str = Field(min_length=1)
+    source_id: str = Field(min_length=1)
+    source_version: str = Field(min_length=1)
+    locator: str = Field(min_length=1)
+    content_hash: str = Field(min_length=64, max_length=64)
+    normalized_text: str = Field(min_length=1)
+    embedding_provider: str = Field(min_length=1)
+    embedding_model: str = Field(min_length=1)
+    embedding_revision: str = Field(min_length=1)
+    embedding_dimension: Optional[int] = None
+    indexed_at: datetime
+    freshness: Literal["active", "stale", "deleted", "superseded"]
+    confidence: Literal["low", "medium", "high"]
+    prompt_injection_flag: bool
+    safety_metadata: dict[str, Any] = Field(default_factory=dict)
+    superseded_by: Optional[str] = None
+
+
+class AtlasRetrievalResult(AtlasRetrievalChunk):
+    lexical_score: float = 0
+    vector_score: float = 0
+    recency_score: float = 0
+    confidence_score: float = 0
+    scope_score: float = 0
+    class_weight: float = 0
+    hybrid_score: float = 0
+
+
+class AtlasResearchRequest(ContractModel):
+    query: str = Field(min_length=1, max_length=2_000)
+    url: Optional[str] = Field(default=None, max_length=2_000)
+    project_id: Optional[str] = Field(default=None, max_length=200)
+    offline: bool = False
+
+
+class AtlasResearchResult(ContractModel):
+    research_id: str = Field(min_length=1)
+    query: str = Field(min_length=1)
+    status: Literal["completed", "blocked", "offline", "failed"]
+    source_url: Optional[str] = None
+    title: Optional[str] = None
+    retrieved_at: datetime
+    content_hash: Optional[str] = None
+    excerpt: Optional[str] = None
+    citations: list[AtlasEvidenceReference] = Field(default_factory=list)
+    injection_detected: bool = False
+    detail: str = Field(min_length=1, max_length=2_000)
+
+
+class CortexNodeKind(str, Enum):
+    RUN = "run"
+    PLAN_STEP = "plan_step"
+    SPECIALIST = "specialist"
+    EVIDENCE = "evidence"
+    DATASET = "dataset"
+    ANALYTICAL_OBJECT = "analytical_object"
+    TOOL = "tool"
+    ARTIFACT = "artifact"
+
+
+class CortexNode(ContractModel):
+    node_id: str = Field(min_length=1)
+    kind: CortexNodeKind
+    label: str = Field(min_length=1, max_length=240)
+    state: str = Field(min_length=1, max_length=80)
+    source_id: str = Field(min_length=1)
+
+
+class CortexEdge(ContractModel):
+    edge_id: str = Field(min_length=1)
+    source_node_id: str = Field(min_length=1)
+    target_node_id: str = Field(min_length=1)
+    relation: Literal["contains", "executed_by", "produced", "supports", "uses", "generated_by"]
+
+
+class CortexGraphState(ContractModel):
+    run_id: str = Field(min_length=1)
+    nodes: list[CortexNode] = Field(default_factory=list)
+    edges: list[CortexEdge] = Field(default_factory=list)
+    generated_at: datetime
+
+
+class AtlasSandboxErrorKind(str, Enum):
+    POLICY = "policy"
+    PATH = "path"
+    NETWORK = "network"
+    TIMEOUT = "timeout"
+    CANCELLED = "cancelled"
+    RESOURCE_LIMIT = "resource_limit"
+    EXECUTION = "execution"
+
+
+class AtlasSandboxArtifact(ContractModel):
+    artifact_id: str = Field(min_length=1, max_length=160)
+    filename: str = Field(min_length=1, max_length=255)
+    media_type: str = Field(min_length=1, max_length=120)
+    byte_count: int = Field(ge=0)
+    sha256: str = Field(min_length=64, max_length=64)
+
+
+class AtlasSandboxExecutionRequest(ContractModel):
+    code: str = Field(min_length=1, max_length=24_000)
+    timeout_ms: int = Field(default=15_000, ge=100, le=60_000)
+    seed: int = Field(default=42, ge=0, le=2_147_483_647)
+
+
+class AtlasSandboxExecutionResult(ContractModel):
+    execution_id: str = Field(min_length=1, max_length=160)
+    state: Literal["completed", "failed", "cancelled", "timed_out"]
+    stdout: str = Field(default="", max_length=32_000)
+    stderr: str = Field(default="", max_length=32_000)
+    artifacts: list[AtlasSandboxArtifact] = Field(default_factory=list)
+    error_kind: Optional[AtlasSandboxErrorKind] = None
+    error: Optional[str] = Field(default=None, max_length=2_000)
+    duration_ms: int = Field(ge=0)
+    limits_enforced: list[str] = Field(default_factory=list)
+    guardrail_decision: dict[str, object] = Field(default_factory=dict)
+
+
+class AtlasSandboxWorkerHealth(ContractModel):
+    state: Literal["ready", "degraded"]
+    execution_mode: Literal["native_worker", "container_worker"]
+    network_policy: Literal["deny_by_default"]
+    process_tree_termination: bool
+    cpu_quota_enforced: bool
+    memory_quota_enforced: bool
+    container_available: bool
+    detail: str = Field(min_length=1, max_length=2_000)
+
+
+class AtlasModelTrust(ContractModel):
+    source_verified: bool = False
+    license_verified: bool = False
+    manifest_verified: bool = False
+    checksum_verified: bool = False
+    compatibility_verified: bool = False
+    atlasbench_verified: bool = False
+
+
+class AtlasBenchmarkVerdict(str, Enum):
+    PENDING = "pending"
+    PROMOTED = "promoted"
+    REJECTED = "rejected"
+
+
+class AtlasBenchmarkResult(ContractModel):
+    suite_id: str = Field(min_length=1)
+    candidate_id: str = Field(min_length=1)
+    critical_regressions: int = Field(ge=0)
+    verdict: AtlasBenchmarkVerdict
+    evaluated_at: datetime
+
+
+# --- 10P: AtlasBench (task corpus + suite runs) ------------------------
+
+
+class AtlasBenchCategory(str, Enum):
+    SQL = "sql"
+    STATISTICS = "statistics"
+    MACHINE_LEARNING = "machine_learning"
+    FORECASTING = "forecasting"
+    CAUSAL_SAFETY = "causal_safety"
+    AGENTIC = "agentic"
+    EVIDENCE = "evidence"
+    PYTHON_SANDBOX = "python_sandbox"
+    PERSONALITY = "personality"
+    GENERAL = "general"
+
+
+class AtlasBenchCorpusId(str, Enum):
+    """A bounded, server-owned allowlist of real frozen benchmark corpora a
+    client may select for a production/candidate run -- never a channel for
+    a client to name arbitrary tasks, answers, or scoring. Each member
+    resolves server-side to whatever the *current* frozen corpus module for
+    that id actually contains; the resulting run's own ``corpus_version``/
+    ``corpus_hash`` record exactly which frozen wave was used.
+    """
+
+    ATLASBENCH_V1 = "atlasbench-v1"
+    ATLASBENCH_V2_HOLDOUT = "atlasbench-v2-holdout"
+
+
+class AtlasBenchTask(ContractModel):
+    """One deterministic, structured benchmark item.
+
+    Task definitions and their correct answers live only in a frozen,
+    version-controlled corpus module -- never behind a runtime API that
+    could write to them -- so a candidate under evaluation can never see,
+    let alone influence, its own judge.
+    """
+
+    task_id: str = Field(min_length=1, max_length=120)
+    category: AtlasBenchCategory
+    prompt: str = Field(min_length=1, max_length=2_000)
+    choices: list[str] = Field(min_length=2, max_length=8)
+    correct_choice: int = Field(ge=0)
+    rationale: str = Field(min_length=1, max_length=1_000)
+    tags: list[str] = Field(default_factory=list, max_length=10)
+
+    @model_validator(mode="after")
+    def _correct_choice_in_range(self) -> "AtlasBenchTask":
+        if not 0 <= self.correct_choice < len(self.choices):
+            raise ValueError(f"correct_choice {self.correct_choice} is out of range for {len(self.choices)} choices")
+        return self
+
+
+class AtlasBenchTaskResult(ContractModel):
+    task_id: str = Field(min_length=1, max_length=120)
+    category: AtlasBenchCategory
+    subject_id: str = Field(min_length=1, max_length=120)
+    chosen_choice: Optional[int] = Field(default=None, ge=0)
+    correct: bool
+    raw_answer: str = Field(default="", max_length=2_000)
+    evaluated_at: datetime
+
+
+class AtlasBenchCategoryScore(ContractModel):
+    category: AtlasBenchCategory
+    total: int = Field(ge=0)
+    passed: int = Field(ge=0)
+
+
+class AtlasBenchCategoryCount(ContractModel):
+    category: AtlasBenchCategory
+    task_count: int = Field(ge=0)
+
+
+class AtlasBenchCorpusSummary(ContractModel):
+    """A safe, public view of the corpus: counts only, never the tasks'
+    ``correct_choice`` or ``rationale`` -- exposing those over an API would
+    hand any client (including a candidate under evaluation) the answer key.
+    """
+
+    corpus_version: str = Field(min_length=1, max_length=64)
+    corpus_hash: str = Field(min_length=32, max_length=64)
+    total_tasks: int = Field(ge=0)
+    category_counts: list[AtlasBenchCategoryCount] = Field(default_factory=list)
+
+
+class AtlasBenchSuiteRun(ContractModel):
+    run_id: str = Field(min_length=1, max_length=120)
+    subject_id: str = Field(min_length=1, max_length=120)
+    corpus_version: str = Field(min_length=1, max_length=64)
+    corpus_hash: str = Field(min_length=32, max_length=64)
+    total_tasks: int = Field(ge=0)
+    total_passed: int = Field(ge=0)
+    category_scores: list[AtlasBenchCategoryScore] = Field(default_factory=list)
+    started_at: datetime
+    completed_at: datetime
+    # Server-owned subject provenance.  Legacy generic runs retain the
+    # defaults, while candidate science must populate every binding field.
+    subject_kind: Literal["generic", "production", "candidate", "arena"] = "generic"
+    candidate_id: Optional[str] = Field(default=None, max_length=120)
+    candidate_fingerprint: Optional[str] = Field(default=None, max_length=64)
+    trust_verification_id: Optional[str] = Field(default=None, max_length=120)
+    runtime_model: Optional[str] = Field(default=None, max_length=300)
+    runtime_model_digest: Optional[str] = Field(default=None, max_length=200)
+    provider: Optional[str] = Field(default=None, max_length=32)
+    # Deterministic identity over the exact live-provider inference policy
+    # (context window, temperature, output tokens, timeout, prompt schema,
+    # corpus) this run used. None for non-provider (reference/test) subjects
+    # and for any run that predates this field or used an ambiguous/default
+    # policy (e.g. an unset context window) -- such a run is legacy evidence
+    # and two of them are never treated as comparable just because both are
+    # None. See ``atlas_bench_policy.compute_evaluation_policy_id``.
+    evaluation_policy_id: Optional[str] = Field(default=None, min_length=64, max_length=64)
+
+
+class AtlasModelArenaEntry(ContractModel):
+    """One immutable, digest-bound AtlasBench run as ranked by the server.
+
+    An arena entry is evidence, not a promotion decision.  In particular,
+    ``arena`` subjects are off-the-shelf evaluation baselines and cannot be
+    passed to the promotion route in place of a verified Foundry candidate.
+    """
+
+    run_id: str = Field(min_length=1, max_length=120)
+    subject_kind: Literal["production", "candidate", "arena"]
+    runtime_model: str = Field(min_length=1, max_length=300)
+    runtime_model_digest: str = Field(min_length=1, max_length=200)
+    total_passed: int = Field(ge=0)
+    total_tasks: int = Field(ge=0)
+    production_delta: int
+    category_scores: list[AtlasBenchCategoryScore] = Field(default_factory=list)
+    critical_regression_categories: list[AtlasBenchCategory] = Field(default_factory=list)
+    elapsed_ms: int = Field(ge=0)
+    candidate_id: Optional[str] = Field(default=None, max_length=120)
+    candidate_fingerprint: Optional[str] = Field(default=None, max_length=64)
+
+
+class AtlasModelArenaSummary(ContractModel):
+    """Server-calculated comparison of immutable runs on one frozen corpus."""
+
+    corpus_version: str = Field(min_length=1, max_length=64)
+    corpus_hash: str = Field(min_length=32, max_length=64)
+    production_run_id: str = Field(min_length=1, max_length=120)
+    production_runtime_model: str = Field(min_length=1, max_length=300)
+    production_runtime_model_digest: str = Field(min_length=1, max_length=200)
+    entries: list[AtlasModelArenaEntry] = Field(default_factory=list)
+
+
+# --- 10Q: Shadow Brain, promotion policy, and rollback ------------------
+
+
+class AtlasPromotionVerdict(str, Enum):
+    """The three locked outcomes -- deliberately distinct from the coarser
+    ``AtlasBenchmarkVerdict`` stub, which predates this policy."""
+
+    PROMOTE_ELIGIBLE = "promote_eligible"
+    HOLD = "hold"
+    REJECT = "reject"
+
+
+class AtlasCriticalRegression(ContractModel):
+    category: AtlasBenchCategory
+    production_pass_rate: float = Field(ge=0, le=1)
+    candidate_pass_rate: float = Field(ge=0, le=1)
+
+
+class AtlasPromotionDecision(ContractModel):
+    """The result of comparing a candidate's AtlasBench run against
+    production's, under the locked policy: IMPROVE TARGET CAPABILITY + NO
+    UNACCEPTABLE CRITICAL REGRESSION. A candidate cannot win on aggregate
+    score while regressing a critical category -- ``critical_regressions``
+    is what makes that non-negotiable, auditable, and machine-checkable
+    rather than a judgment call made at promotion time.
+    """
+
+    decision_id: str = Field(min_length=1, max_length=120)
+    candidate_id: str = Field(min_length=1, max_length=120)
+    production_run_id: str = Field(min_length=1, max_length=120)
+    candidate_run_id: str = Field(min_length=1, max_length=120)
+    verdict: AtlasPromotionVerdict
+    overall_production_pass_rate: float = Field(ge=0, le=1)
+    overall_candidate_pass_rate: float = Field(ge=0, le=1)
+    critical_regressions: list[AtlasCriticalRegression] = Field(default_factory=list)
+    decided_at: datetime
+
+
+class AtlasProductionPointer(ContractModel):
+    """One durable event in the production-pointer history: a promotion or
+    a rollback. The latest row (by ``promoted_at``) is current production;
+    every prior row remains -- promotion is additive, never an overwrite,
+    so the full history is always the rollback list.
+    """
+
+    event_id: str = Field(min_length=1, max_length=120)
+    candidate_id: str = Field(min_length=1, max_length=120)
+    previous_candidate_id: Optional[str] = Field(default=None, max_length=120)
+    decision_id: Optional[str] = Field(default=None, max_length=120)
+    is_rollback: bool = False
+    reason: str = Field(min_length=1, max_length=1_000)
+    promoted_at: datetime
+
+
+class AtlasAdapterId(str, Enum):
+    ATLAS_CORE = "atlas-core"
+    ATLAS_SQL = "atlas-sql"
+    ATLAS_STATISTICS = "atlas-statistics"
+    ATLAS_ML = "atlas-ml"
+    ATLAS_FORECAST = "atlas-forecast"
+    ATLAS_RESEARCH = "atlas-research"
+
+
+class AtlasAdapterCapability(ContractModel):
+    """Truthful per-adapter capability report. No runtime wired into this
+    project today can load, unload, or hot-swap a LoRA adapter at inference
+    time -- Atlas's providers are deterministic Python logic or an Ollama
+    HTTP call, neither with adapter-loading machinery -- so every field here
+    is honestly False/empty rather than assuming a capability exists.
+    """
+
+    adapter: AtlasAdapterId
+    can_load: bool
+    can_unload: bool
+    can_hot_swap: bool
+    memory_cost_mb: Optional[int] = Field(default=None, ge=0)
+    compatible_base_models: list[str] = Field(default_factory=list)
+    detail: str = Field(min_length=1, max_length=1_000)
+
+
+class AtlasResourcePriority(int, Enum):
+    USER_INTERACTION = 0
+    ATLAS_INFERENCE = 1
+    ACTIVE_ANALYSIS = 2
+    SPECIALIST_INFERENCE = 3
+    INDEXING = 4
+    FOUNDRY_TRAINING = 5
+    MAINTENANCE = 6
+
+
+class AtlasResourceWorkload(ContractModel):
+    workload_id: str = Field(min_length=1)
+    priority: AtlasResourcePriority
+    cancellable: bool = True
+    description: str = Field(min_length=1, max_length=500)
+    requires_gpu: bool = False
+    cpu_slots: int = Field(default=1, ge=1, le=64)
+    memory_mb: int = Field(default=256, ge=64, le=262_144)
+
+
+class AtlasResourceLeaseRequest(ContractModel):
+    workload: AtlasResourceWorkload
+    allow_preemption: bool = True
+
+
+class AtlasResourceLease(ContractModel):
+    lease_id: str = Field(min_length=1)
+    workload: AtlasResourceWorkload
+    state: Literal["active", "queued", "preempted", "released", "cancelled"]
+    granted_at: Optional[datetime] = None
+    reason: str = Field(min_length=1, max_length=1_000)
+
+
+class AtlasResourceSnapshot(ContractModel):
+    cpu_count: int = Field(ge=1)
+    memory_total_mb: Optional[int] = Field(default=None, ge=0)
+    memory_available_mb: Optional[int] = Field(default=None, ge=0)
+    storage_free_mb: Optional[int] = Field(default=None, ge=0)
+    gpu_available: bool = False
+    gpu_name: Optional[str] = None
+    vram_total_mb: Optional[int] = Field(default=None, ge=0)
+    gpu_telemetry_detail: str = Field(min_length=1, max_length=1_000)
+    active_leases: list[AtlasResourceLease] = Field(default_factory=list)
+
+
+class AtlasTrainingExampleSource(str, Enum):
+    """Where a training example was derived from. Only ATLAS_RUN exists so
+    far; USER_CORRECTION (for DPO pairs) and others arrive with 10O."""
+
+    ATLAS_RUN = "atlas_run"
+
+
+class AtlasTrainingSplit(str, Enum):
+    TRAIN = "train"
+    VALIDATION = "validation"
+    TEST = "test"
+
+
+class AtlasTrainingExample(ContractModel):
+    """One verified SFT sample built from real, durable Atlas run history.
+
+    Deliberately excludes hidden chain-of-thought: ``plan_steps`` and
+    ``council`` carry only the same typed, already-redacted structures Atlas
+    exposes to the user (declared tool calls/state, visible specialist
+    conclusions and objections) -- never private model reasoning. Dataset
+    context stays compact metadata (an id/revision reference); no raw
+    dataset rows are ever included.
+    """
+
+    example_id: str = Field(min_length=1, max_length=120)
+    source: AtlasTrainingExampleSource
+    source_run_id: str = Field(min_length=1, max_length=120)
+    dataset_id: str = Field(min_length=1, max_length=255)
+    split: AtlasTrainingSplit
+    user_request: str = Field(min_length=1, max_length=2_000)
+    dataset_metadata: dict[str, object] = Field(default_factory=dict)
+    plan_steps: list[AtlasPlanStep] = Field(default_factory=list, max_length=20)
+    evidence: list[AtlasEvidenceReference] = Field(default_factory=list)
+    council: list[AtlasCouncilConclusion] = Field(default_factory=list)
+    final_answer: str = Field(min_length=1, max_length=4_000)
+    uncertainty: Optional[str] = Field(default=None, max_length=1_000)
+    quality_label: str = Field(min_length=1, max_length=64)
+    content_hash: str = Field(min_length=32, max_length=64)
+    created_at: datetime
+
+
+class AtlasTrainingExclusion(ContractModel):
+    """A run considered but not turned into a training example, and why --
+    the dataset builder must be inspectable, not a black box."""
+
+    run_id: str = Field(min_length=1, max_length=120)
+    reason: str = Field(min_length=1, max_length=500)
+
+
+class AtlasTrainingDatasetVersion(ContractModel):
+    """Durable manifest for one deterministic export of the training corpus."""
+
+    version_id: str = Field(min_length=1, max_length=120)
+    created_at: datetime
+    source_run_count: int = Field(ge=0)
+    excluded_count: int = Field(ge=0)
+    train_count: int = Field(ge=0)
+    validation_count: int = Field(ge=0)
+    test_count: int = Field(ge=0)
+    content_hash: str = Field(min_length=32, max_length=64)
+
+
+class AtlasSystemSeedDomain(str, Enum):
+    """The specific weak-benchmark areas this V1 corpus was written to teach.
+    Distinct from every real-data source class below -- a seed example never
+    claims to be a real Atlas run, real user correction, or real feedback."""
+
+    CAUSAL_SAFETY = "causal_safety"
+    EVIDENCE = "evidence"
+    SQL = "sql"
+    STATISTICS = "statistics"
+    FORECASTING = "forecasting"
+    SENIOR_DS_BEHAVIOR = "senior_ds_behavior"
+    SECURITY_AGENTIC = "security_agentic"
+
+
+class AtlasSystemSeedReviewStatus(str, Enum):
+    DRAFT = "draft"
+    REVIEWED = "reviewed"
+
+
+class AtlasSystemSeedExample(ContractModel):
+    """One hand-authored, reviewed SFT example teaching a specific
+    analytical or safety concept -- never presented as a real Atlas run or
+    real user interaction. ``source_kind`` is always ``"system_seed"``,
+    structurally distinct from ``AtlasTrainingExampleSource.ATLAS_RUN`` and
+    from ``AtlasPreferencePairSource`` (real corrections): mixing these
+    source classes so they become indistinguishable is exactly what this
+    field exists to prevent."""
+
+    seed_example_id: str = Field(min_length=1, max_length=120)
+    seed_version: str = Field(min_length=1, max_length=40)
+    domain: AtlasSystemSeedDomain
+    topic: str = Field(min_length=1, max_length=120)
+    source_kind: Literal["system_seed"] = "system_seed"
+    user_request: str = Field(min_length=1, max_length=2_000)
+    final_answer: str = Field(min_length=1, max_length=4_000)
+    uncertainty: Optional[str] = Field(default=None, max_length=1_000)
+    review_status: AtlasSystemSeedReviewStatus
+    content_hash: str = Field(min_length=32, max_length=64)
+    created_at: datetime
+
+
+class AtlasSystemSeedDomainCount(ContractModel):
+    domain: AtlasSystemSeedDomain
+    example_count: int = Field(ge=0)
+
+
+class AtlasSystemSeedManifest(ContractModel):
+    """Durable, immutable manifest for one released system-seed version.
+
+    A seed version is never mutated after release -- a content change is a
+    new ``seed_version`` and a new manifest, exactly like an immutable
+    ``AtlasTrainingDatasetVersion``."""
+
+    seed_version: str = Field(min_length=1, max_length=40)
+    created_at: datetime
+    example_count: int = Field(ge=0)
+    domain_counts: list[AtlasSystemSeedDomainCount] = Field(default_factory=list)
+    aggregate_content_hash: str = Field(min_length=32, max_length=64)
+    leakage_guard_passed: bool
+
+
+class AtlasCombinedTrainingSourceSummary(ContractModel):
+    """Counts each SFT source class separately -- never blended into one
+    indistinguishable pool, per the locked source-class-separation rule.
+    ``total_eligible`` is a sum for convenience only; the per-source counts
+    remain the auditable record of what actually went into that total."""
+
+    seed_version: str = Field(min_length=1, max_length=40)
+    system_seed_examples: int = Field(ge=0)
+    verified_history_examples: int = Field(ge=0)
+    user_correction_examples: int = Field(ge=0)
+    synthetic_teacher_examples: int = Field(default=0, ge=0)
+    total_eligible: int = Field(ge=0)
+    computed_at: datetime
+
+
+class AtlasSftTrainingRecord(ContractModel):
+    """A source-neutral, immutable SFT record.  It deliberately has no
+    ``source_run_id``: a system seed must never impersonate Atlas history."""
+
+    record_id: str = Field(min_length=1, max_length=120)
+    source_kind: Literal["system_seed", "atlas_run", "synthetic_teacher"]
+    source_ref: str = Field(min_length=1, max_length=255)
+    source_version: str = Field(min_length=1, max_length=120)
+    project_id: Optional[str] = Field(default=None, max_length=200)
+    dataset_id: Optional[str] = Field(default=None, max_length=255)
+    instruction: str = Field(min_length=1, max_length=2_000)
+    input: str = Field(default="", max_length=2_000)
+    output: str = Field(min_length=1, max_length=4_000)
+    uncertainty: Optional[str] = Field(default=None, max_length=1_000)
+    split: AtlasTrainingSplit
+    content_hash: str = Field(min_length=32, max_length=64)
+    provenance: dict[str, object] = Field(default_factory=dict)
+    created_at: datetime
+
+
+class AtlasCombinedSftDatasetVersion(ContractModel):
+    version_id: str = Field(min_length=1, max_length=120)
+    seed_version: str = Field(min_length=1, max_length=40)
+    history_dataset_version: Optional[str] = Field(default=None, max_length=120)
+    history_dataset_hash: Optional[str] = Field(default=None, max_length=64)
+    synthetic_teacher_version: Optional[str] = Field(default=None, max_length=40)
+    system_seed_count: int = Field(ge=0)
+    atlas_history_count: int = Field(ge=0)
+    synthetic_teacher_count: int = Field(default=0, ge=0)
+    total_sft_count: int = Field(ge=0)
+    train_count: int = Field(ge=0)
+    validation_count: int = Field(ge=0)
+    test_count: int = Field(ge=0)
+    aggregate_content_hash: str = Field(min_length=32, max_length=64)
+    source_manifests: dict[str, str] = Field(default_factory=dict)
+    created_at: datetime
+
+
+class AtlasSyntheticTeacherSkillArea(str, Enum):
+    """The skill taxonomy Corpus V2's teacher-generated wave is written
+    against. Distinct from ``AtlasSystemSeedDomain`` (the V1 seed corpus) --
+    a new, deliberately separate taxonomy for a new, deliberately separate
+    source class."""
+
+    SQL = "sql"
+    STATISTICS = "statistics"
+    CAUSAL_REASONING = "causal_reasoning"
+    MACHINE_LEARNING = "machine_learning"
+    FORECASTING = "forecasting"
+    EVIDENCE = "evidence"
+    AGENTIC_SAFETY = "agentic_safety"
+    PYTHON = "python"
+    SENIOR_DS_COMMUNICATION = "senior_ds_communication"
+
+
+class AtlasSyntheticTeacherValidationStatus(str, Enum):
+    """How an example's correctness was actually checked before release --
+    never just asserted by the teacher that generated it."""
+
+    EXECUTED = "executed"
+    """A SQL/Python snippet in the example was actually run and its stated
+    output verified against the real result."""
+    CALCULATED = "calculated"
+    """A numeric/statistical claim was independently recomputed and matches."""
+    REVIEWED = "reviewed"
+    """No executable claim to check; manually reviewed for correctness."""
+
+
+class AtlasSyntheticTeacherExample(ContractModel):
+    """One LLM-generated ("teacher") SFT example -- never presented as a
+    real Atlas run, real user interaction, or real user correction.
+    Generated strictly from ``AtlasSyntheticTeacherSkillArea`` specifications,
+    never from AtlasBench questions, choices, or rationales -- ``skill_area``
+    plus ``topic`` is the only generation input, structurally incapable of
+    encoding a specific benchmark item. ``source_kind`` is always the
+    literal ``"synthetic_teacher"``, matching the same source-class-separation
+    rule ``AtlasSystemSeedExample`` and ``AtlasTrainingExampleSource`` use."""
+
+    teacher_example_id: str = Field(min_length=1, max_length=120)
+    generation_policy_version: str = Field(min_length=1, max_length=40)
+    teacher_model: str = Field(min_length=1, max_length=200)
+    teacher_revision: str = Field(min_length=1, max_length=200)
+    skill_area: AtlasSyntheticTeacherSkillArea
+    topic: str = Field(min_length=1, max_length=120)
+    source_kind: Literal["synthetic_teacher"] = "synthetic_teacher"
+    license: str = Field(min_length=1, max_length=120)
+    instruction: str = Field(min_length=1, max_length=2_000)
+    input: str = Field(default="", max_length=2_000)
+    output: str = Field(min_length=1, max_length=4_000)
+    uncertainty: Optional[str] = Field(default=None, max_length=1_000)
+    validation_status: AtlasSyntheticTeacherValidationStatus
+    validation_note: str = Field(min_length=1, max_length=1_000)
+    content_hash: str = Field(min_length=32, max_length=64)
+    created_at: datetime
+
+
+class AtlasSyntheticTeacherSkillAreaCount(ContractModel):
+    skill_area: AtlasSyntheticTeacherSkillArea
+    example_count: int = Field(ge=0)
+
+
+class AtlasSyntheticTeacherManifest(ContractModel):
+    """Durable, immutable manifest for one released synthetic-teacher
+    corpus version -- never mutated after release, exactly like
+    ``AtlasSystemSeedManifest``: a content change is a new
+    ``generation_policy_version`` and a new manifest."""
+
+    generation_policy_version: str = Field(min_length=1, max_length=40)
+    created_at: datetime
+    example_count: int = Field(ge=0)
+    skill_area_counts: list[AtlasSyntheticTeacherSkillAreaCount] = Field(default_factory=list)
+    aggregate_content_hash: str = Field(min_length=32, max_length=64)
+    atlasbench_v1_leakage_guard_passed: bool
+    atlasbench_v2_leakage_guard_passed: bool
+    intra_corpus_duplicate_guard_passed: bool
+    license_validation_passed: bool
+    secret_scan_passed: bool
+
+
+class AtlasPreferencePairSource(str, Enum):
+    """Where a DPO pair came from. Only a real, already-durable correction
+    event qualifies -- never a manufactured negative example. KTO has no
+    typed source yet: no genuine binary accept/reject signal exists in the
+    product to source it from, and this project does not fabricate one."""
+
+    MEMORY_SUPERSESSION = "memory_supersession"
+
+
+class AtlasPreferencePair(ContractModel):
+    """One verified DPO pair: an Atlas memory a user or verifier corrected,
+    recorded via the real ``supersede()`` mechanism. ``rejected_response`` is
+    the original (superseded) content; ``chosen_response`` is the correction
+    that replaced it; ``evaluator_label`` is the real contradiction reason
+    supplied at supersession time -- never inferred or invented.
+    """
+
+    pair_id: str = Field(min_length=1, max_length=120)
+    source: AtlasPreferencePairSource
+    rejected_memory_id: str = Field(min_length=1, max_length=120)
+    chosen_memory_id: str = Field(min_length=1, max_length=120)
+    project_id: Optional[str] = Field(default=None, max_length=200)
+    prompt_context: str = Field(min_length=1, max_length=500)
+    rejected_response: str = Field(min_length=1, max_length=8_000)
+    chosen_response: str = Field(min_length=1, max_length=8_000)
+    evaluator_label: str = Field(min_length=1, max_length=2_000)
+    split: AtlasTrainingSplit
+    content_hash: str = Field(min_length=32, max_length=64)
+    created_at: datetime
+
+
+class AtlasPreferenceExclusion(ContractModel):
+    memory_id: str = Field(min_length=1, max_length=120)
+    reason: str = Field(min_length=1, max_length=500)
+
+
+class AtlasPreferenceDatasetVersion(ContractModel):
+    version_id: str = Field(min_length=1, max_length=120)
+    created_at: datetime
+    source_count: int = Field(ge=0)
+    excluded_count: int = Field(ge=0)
+    train_count: int = Field(ge=0)
+    validation_count: int = Field(ge=0)
+    test_count: int = Field(ge=0)
+    content_hash: str = Field(min_length=32, max_length=64)
+
+
+# --- 10M: Atlas Foundry (training backend abstraction) ----------------------
+
+
+class AtlasFoundryBackendName(str, Enum):
+    SOUP = "soup"
+    MOCK = "mock"
+
+
+class AtlasFoundryCapability(ContractModel):
+    """Truthful backend capability report -- never assume, always probe.
+
+    ``can_pause`` is honestly always ``False`` in this wave: a real training
+    subprocess can be cancelled (killed), but nothing here implements a real
+    pause/resume checkpoint handshake yet. Reporting ``True`` would be lying
+    about a resource-preemption capability this project does not have.
+    """
+
+    backend: AtlasFoundryBackendName
+    soup_available: bool
+    soup_version: Optional[str] = Field(default=None, max_length=64)
+    can_train: bool
+    can_cancel: bool
+    can_pause: bool = False
+    detail: str = Field(min_length=1, max_length=1_000)
+
+
+class AtlasTrainingRecipeMethod(str, Enum):
+    LORA = "lora"
+    QLORA = "qlora"
+
+
+class AtlasTrainingRecipe(ContractModel):
+    """A fully validated, typed training configuration.
+
+    This is the ONLY path from a training request to a Soup invocation: the
+    backend renders this model to a YAML config file and always shells out
+    with a fixed, constant argv shape (``["soup", "train", "--config", path]``)
+    -- never a string built from LLM output or free-form user text. No field
+    here is a raw command fragment; everything is a bounded, typed value.
+    """
+
+    recipe_id: str = Field(min_length=1, max_length=120)
+    base_model: str = Field(min_length=1, max_length=300)
+    method: AtlasTrainingRecipeMethod
+    task: Literal["sft", "dpo"]
+    dataset_version_id: str = Field(min_length=1, max_length=120)
+    quantization: Literal["none", "4bit", "8bit"] = "4bit"
+    lora_r: int = Field(default=16, ge=1, le=256)
+    lora_alpha: int = Field(default=32, ge=1, le=512)
+    lora_dropout: float = Field(default=0.05, ge=0.0, le=0.9)
+    target_modules: list[str] = Field(default_factory=lambda: ["q_proj", "v_proj"], max_length=32)
+    epochs: int = Field(default=1, ge=1, le=100)
+    learning_rate: float = Field(default=2.0e-4, gt=0, le=1.0)
+    batch_size: int = Field(default=1, ge=1, le=1_024)
+    gradient_accumulation_steps: int = Field(default=1, ge=1, le=256)
+    max_length: int = Field(default=2_048, ge=64, le=131_072)
+    seed: int = Field(default=7, ge=0)
+    # BETA in Soup; opt-in default here because the practical hardware target
+    # for this wave is a 4 GB laptop GPU, where the frozen base cannot
+    # otherwise fit resident. See docs/performance-and-quantization.md upstream.
+    stream_layers: bool = True
+    recipe_version: str = "prism-foundry-recipe-v1"
+    created_at: datetime
+
+
+class AtlasTrainingJobState(str, Enum):
+    QUEUED = "queued"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+class AtlasTrainingJob(ContractModel):
+    job_id: str = Field(min_length=1, max_length=120)
+    recipe_id: str = Field(min_length=1, max_length=120)
+    backend: AtlasFoundryBackendName
+    state: AtlasTrainingJobState
+    resource_lease_id: Optional[str] = Field(default=None, max_length=120)
+    process_id: Optional[int] = None
+    workspace_path: Optional[str] = Field(default=None, max_length=2_000)
+    error: Optional[str] = Field(default=None, max_length=2_000)
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class AtlasTrainingMetric(ContractModel):
+    job_id: str = Field(min_length=1, max_length=120)
+    step: int = Field(ge=0)
+    loss: Optional[float] = None
+    learning_rate: Optional[float] = None
+    recorded_at: datetime
+
+
+class AtlasTrainingCheckpoint(ContractModel):
+    checkpoint_id: str = Field(min_length=1, max_length=160)
+    job_id: str = Field(min_length=1, max_length=120)
+    step: int = Field(ge=0)
+    path: str = Field(min_length=1, max_length=2_000)
+    created_at: datetime
+
+
+class AtlasFoundryPreflight(ContractModel):
+    """Result of a read-only, non-mutating resource estimate before training.
+
+    Numeric fields are ``None`` -- not a guessed number -- when the backend
+    cannot produce a real estimate (e.g. the mock backend).
+    """
+
+    compatible: bool
+    estimated_total_memory_gb: Optional[float] = Field(default=None, ge=0)
+    estimated_tokens_per_sec: Optional[float] = Field(default=None, ge=0)
+    recommended_batch_size: Optional[int] = Field(default=None, ge=1)
+    detail: str = Field(min_length=1, max_length=1_000)
+
+
+class AtlasCandidateArtifact(ContractModel):
+    """A trained adapter, durably registered -- never a production model by
+    itself; promotion (10Q) is a separate, gated decision."""
+
+    candidate_id: str = Field(min_length=1, max_length=120)
+    job_id: str = Field(min_length=1, max_length=120)
+    recipe_id: str = Field(min_length=1, max_length=120)
+    base_model: str = Field(min_length=1, max_length=300)
+    method: AtlasTrainingRecipeMethod
+    adapter_path: str = Field(min_length=1, max_length=2_000)
+    dataset_version_id: str = Field(min_length=1, max_length=120)
+    created_at: datetime
+
+
+class AtlasCandidateVerificationState(str, Enum):
+    """A registered candidate records only that a job produced *some*
+    adapter output -- not that it is intact, unmodified, or safe to load.
+    PENDING means no verification pass has run yet; only VERIFIED may enter
+    AtlasBench candidate evaluation, receive an Ollama runtime binding, or
+    become promotion-eligible."""
+
+    PENDING = "pending"
+    VERIFIED = "verified"
+    REJECTED = "rejected"
+
+
+class AtlasCandidateArtifactFile(ContractModel):
+    """One real file found under a candidate's adapter workspace."""
+
+    relative_path: str = Field(min_length=1, max_length=2_000)
+    sha256: str = Field(min_length=64, max_length=64)
+    size_bytes: int = Field(ge=0)
+    file_type: str = Field(min_length=1, max_length=32)
+
+
+class AtlasCandidateVerification(ContractModel):
+    """One durable, append-only verification pass over a candidate artifact.
+
+    A later re-verification of the same candidate_id is a new row, never an
+    edit of a prior one -- verification evidence is never silently
+    overwritten, matching promotion/rollback history elsewhere in Foundry.
+    """
+
+    verification_id: str = Field(min_length=1, max_length=120)
+    candidate_id: str = Field(min_length=1, max_length=120)
+    training_job_id: str = Field(min_length=1, max_length=120)
+    recipe_id: str = Field(min_length=1, max_length=120)
+    base_model: str = Field(min_length=1, max_length=300)
+    dataset_version_id: str = Field(min_length=1, max_length=120)
+    recipe_hash: str = Field(min_length=1, max_length=64)
+    adapter_files: list[AtlasCandidateArtifactFile] = Field(default_factory=list, max_length=10_000)
+    aggregate_candidate_fingerprint: Optional[str] = Field(default=None, min_length=64, max_length=64)
+    verification_state: AtlasCandidateVerificationState
+    verification_failure_reason: Optional[str] = Field(default=None, max_length=1_000)
+    created_at: datetime
+    verified_at: Optional[datetime] = None
+
+
+class AtlasCandidateKind(str, Enum):
+    """The two legitimate ways an Atlas release candidate can exist.
+
+    ``TRAINED_ADAPTER`` is Foundry-trained output (``AtlasCandidateArtifact``,
+    verified by ``atlas_candidate_trust``). ``VERIFIED_BASE_MODEL`` is an
+    untouched off-the-shelf model (``AtlasVerifiedBaseModelCandidate``,
+    verified by ``atlas_base_model_trust``) admitted without any fabricated
+    training provenance. Both converge on the exact same AtlasBench candidate
+    evaluation, promotion decision, production pointer, rollback, and audit
+    history -- there is no second promotion system for either kind.
+    """
+
+    TRAINED_ADAPTER = "trained_adapter"
+    VERIFIED_BASE_MODEL = "verified_base_model"
+
+
+class AtlasVerifiedBaseModelCandidate(ContractModel):
+    """A durably registered off-the-shelf model, admitted as a legitimate
+    release candidate on its own declared identity -- never by inventing a
+    Foundry job, recipe, dataset, or adapter path for a model nothing here
+    trained. Registration alone proves nothing: only a fresh, real
+    ``AtlasBaseModelVerification`` with ``verification_state=VERIFIED`` may
+    let this candidate enter AtlasBench candidate evaluation or promotion,
+    exactly like a trained candidate's own verification gate.
+    """
+
+    candidate_id: str = Field(min_length=1, max_length=120)
+    candidate_kind: Literal[AtlasCandidateKind.VERIFIED_BASE_MODEL] = (
+        AtlasCandidateKind.VERIFIED_BASE_MODEL
+    )
+    upstream_model_id: str = Field(min_length=1, max_length=300)
+    upstream_revision: str = Field(min_length=1, max_length=200)
+    license: str = Field(min_length=1, max_length=100)
+    official_source: str = Field(min_length=1, max_length=2_000)
+    runtime_model: str = Field(min_length=1, max_length=300)
+    declared_runtime_digest: str = Field(min_length=1, max_length=200)
+    quantization: Optional[str] = Field(default=None, max_length=64)
+    declared_manifest_digest: Optional[str] = Field(default=None, max_length=200)
+    declared_blob_digests: list[str] = Field(default_factory=list, max_length=64)
+    parameter_count: Optional[int] = Field(default=None, ge=1)
+    created_at: datetime
+
+
+class AtlasVerifiedBaseModelRegistrationRequest(ContractModel):
+    """Client-supplied fields for declaring one base-model candidate.
+
+    ``candidate_id``, ``candidate_kind``, and ``created_at`` are server-owned
+    -- a client cannot forge any of them, matching every other append-only
+    Atlas record. The server derives ``candidate_id`` deterministically from
+    ``upstream_model_id``/``upstream_revision``/``runtime_model`` so
+    re-declaring the same real identity is idempotent.
+    """
+
+    upstream_model_id: str = Field(min_length=1, max_length=300)
+    upstream_revision: str = Field(min_length=1, max_length=200)
+    license: str = Field(min_length=1, max_length=100)
+    official_source: str = Field(min_length=1, max_length=2_000)
+    runtime_model: str = Field(min_length=1, max_length=300)
+    declared_runtime_digest: str = Field(min_length=1, max_length=200)
+    quantization: Optional[str] = Field(default=None, max_length=64)
+    declared_manifest_digest: Optional[str] = Field(default=None, max_length=200)
+    declared_blob_digests: list[str] = Field(default_factory=list, max_length=64)
+    parameter_count: Optional[int] = Field(default=None, ge=1)
+
+
+class AtlasBaseModelVerification(ContractModel):
+    """One durable, append-only verification pass over a verified-base-model
+    candidate's declared identity against the *live* local Ollama daemon --
+    never a client-supplied ``VERIFIED`` flag. A later re-verification of the
+    same ``candidate_id`` is a new row, never an edit of a prior one, matching
+    ``AtlasCandidateVerification``'s append-only discipline exactly.
+    """
+
+    verification_id: str = Field(min_length=1, max_length=120)
+    candidate_id: str = Field(min_length=1, max_length=120)
+    upstream_model_id: str = Field(min_length=1, max_length=300)
+    upstream_revision: str = Field(min_length=1, max_length=200)
+    license: str = Field(min_length=1, max_length=100)
+    runtime_model: str = Field(min_length=1, max_length=300)
+    live_runtime_digest: Optional[str] = Field(default=None, max_length=200)
+    live_manifest_digest: Optional[str] = Field(default=None, max_length=200)
+    aggregate_candidate_fingerprint: Optional[str] = Field(default=None, min_length=64, max_length=64)
+    verification_state: AtlasCandidateVerificationState
+    verification_failure_reason: Optional[str] = Field(default=None, max_length=1_000)
+    created_at: datetime
+    verified_at: Optional[datetime] = None
+
+
+class AtlasFeedbackKind(str, Enum):
+    """The only feedback shapes Atlas records.
+
+    ``helpful``/``not_helpful``/``accepted``/``rejected`` are binary signal --
+    the future KTO training substrate. ``corrected`` carries a human-supplied
+    replacement answer -- the future DPO substrate. Nothing else is a valid
+    feedback kind; an unrecognized string is rejected, not coerced.
+    """
+
+    HELPFUL = "helpful"
+    NOT_HELPFUL = "not_helpful"
+    ACCEPTED = "accepted"
+    REJECTED = "rejected"
+    CORRECTED = "corrected"
+
+
+class AtlasFeedbackEvent(ContractModel):
+    """One durable, append-only human feedback signal on one Atlas answer.
+
+    A feedback event is bound to the exact answer, its evidence, the run
+    that produced it, and (when applicable) a project -- so a later training
+    pipeline can trace every signal back to its original context rather than
+    trusting a bare rating. A changed mind is a new event, never an edit or
+    deletion of a prior one, matching promotion/verification history
+    elsewhere in Foundry. This is a recorded human judgment, not training
+    data on its own: AtlasBench tasks/choices/rationales must never appear
+    here as ``answer`` or ``correction``.
+    """
+
+    feedback_id: str = Field(min_length=1, max_length=140)
+    run_id: str = Field(min_length=1, max_length=140)
+    project_id: Optional[str] = Field(default=None, max_length=200)
+    kind: AtlasFeedbackKind
+    answer: str = Field(min_length=1, max_length=20_000)
+    evidence: list[AtlasEvidenceReference] = Field(default_factory=list, max_length=200)
+    correction: Optional[str] = Field(default=None, max_length=20_000)
+    note: Optional[str] = Field(default=None, max_length=2_000)
+    created_at: datetime
+
+    @model_validator(mode="after")
+    def _correction_matches_kind(self) -> "AtlasFeedbackEvent":
+        if self.kind is AtlasFeedbackKind.CORRECTED and not (self.correction and self.correction.strip()):
+            raise ValueError("kind=corrected requires a non-empty correction.")
+        if self.kind is not AtlasFeedbackKind.CORRECTED and self.correction is not None:
+            raise ValueError(f"correction is only valid when kind=corrected, not kind={self.kind.value!r}.")
+        return self
+
+
+class AtlasFeedbackWriteRequest(ContractModel):
+    """Client-supplied fields for recording one feedback event.
+
+    ``feedback_id`` and ``created_at`` are server-owned -- a client cannot
+    forge either, matching every other append-only Atlas record.
+    """
+
+    run_id: str = Field(min_length=1, max_length=140)
+    project_id: Optional[str] = Field(default=None, max_length=200)
+    kind: AtlasFeedbackKind
+    answer: str = Field(min_length=1, max_length=20_000)
+    evidence: list[AtlasEvidenceReference] = Field(default_factory=list, max_length=200)
+    correction: Optional[str] = Field(default=None, max_length=20_000)
+    note: Optional[str] = Field(default=None, max_length=2_000)
+
+    @model_validator(mode="after")
+    def _correction_matches_kind(self) -> "AtlasFeedbackWriteRequest":
+        if self.kind is AtlasFeedbackKind.CORRECTED and not (self.correction and self.correction.strip()):
+            raise ValueError("kind=corrected requires a non-empty correction.")
+        if self.kind is not AtlasFeedbackKind.CORRECTED and self.correction is not None:
+            raise ValueError(f"correction is only valid when kind=corrected, not kind={self.kind.value!r}.")
+        return self
+
+
+# --- Operational Certification Suite (mission WAVE C) ------------------------
+
+
+class AtlasOperationalScenarioId(str, Enum):
+    """Wave 1+2 of the Operational Certification Suite (23 scenarios) -- a
+    real subset of the mission's 25-40-scenario target, not the finished
+    suite. Multiple-choice AtlasBench proves reasoning; these scenarios
+    probe observable tool-use and safety behavior instead, which a
+    multiple-choice item cannot."""
+
+    DATASET_PROFILING = "dataset_profiling"
+    DATA_QUALITY_DIAGNOSIS = "data_quality_diagnosis"
+    SQL_ANALYTICAL_EXECUTION = "sql_analytical_execution"
+    HALLUCINATED_SCHEMA_REFUSAL = "hallucinated_schema_refusal"
+    SQL_JOIN_GRAIN_CORRECTNESS = "sql_join_grain_correctness"
+    STATISTICAL_TEST_SELECTION = "statistical_test_selection"
+    CORRELATION_VS_CAUSATION = "correlation_vs_causation"
+    TARGET_LEAKAGE_DETECTION = "target_leakage_detection"
+    CLASS_IMBALANCE_METRIC_CHOICE = "class_imbalance_metric_choice"
+    FORECAST_CHRONOLOGICAL_SPLIT = "forecast_chronological_split"
+    PYTHON_UNSAFE_OPERATION_REJECTION = "python_unsafe_operation_rejection"
+    EVIDENCE_PROVENANCE_GROUNDING = "evidence_provenance_grounding"
+    INSUFFICIENT_EVIDENCE_REFUSAL = "insufficient_evidence_refusal"
+    PROMPT_INJECTION_IN_DATASET = "prompt_injection_in_dataset"
+    UNAUTHORIZED_DESTRUCTIVE_ACTION_REFUSAL = "unauthorized_destructive_action_refusal"
+    PREPROCESSING_LEAKAGE_DETECTION = "preprocessing_leakage_detection"
+    TIME_SERIES_FEATURE_LEAKAGE = "time_series_feature_leakage"
+    PYTHON_SANDBOX_ANALYSIS_TASK = "python_sandbox_analysis_task"
+    EVIDENCE_FRESHNESS_CONFLICT = "evidence_freshness_conflict"
+    RAG_PROMPT_INJECTION = "rag_prompt_injection"
+    BUSINESS_RECOMMENDATION_WITH_TRADEOFF = "business_recommendation_with_tradeoff"
+    UNCERTAINTY_COMMUNICATION = "uncertainty_communication"
+    CONCISE_SENIOR_DS_EXPLANATION = "concise_senior_ds_explanation"
+
+
+class AtlasOperationalCriticalFailureKind(str, Enum):
+    """The mission's explicit operational safety gates. Any one of these on
+    a scenario is an immediate certification-critical failure -- never
+    averaged away by other passing scenarios, matching the same
+    non-negotiable-critical-category discipline as AtlasBench promotion."""
+
+    INVENTED_EVIDENCE = "invented_evidence"
+    DESTRUCTIVE_UNAUTHORIZED_TOOL_CALL = "destructive_unauthorized_tool_call"
+    SECRET_EXPOSURE = "secret_exposure"
+    PRIVATE_DATA_TRANSMISSION = "private_data_transmission"
+    UNSUPPORTED_CAUSAL_CLAIM = "unsupported_causal_claim"
+    PROMPT_INJECTION_OBEDIENCE = "prompt_injection_obedience"
+    BENCHMARK_MANIPULATION = "benchmark_manipulation"
+    FABRICATED_TOOL_COMPLETION = "fabricated_tool_completion"
+
+
+class AtlasOperationalToolCall(ContractModel):
+    """One observable tool invocation a subject made while handling a
+    scenario. This -- not hidden chain-of-thought -- is the evidence the
+    deterministic judge scores against."""
+
+    tool: str = Field(min_length=1, max_length=120)
+    arguments: dict[str, Any] = Field(default_factory=dict)
+    result_summary: str = Field(default="", max_length=2_000)
+
+
+class AtlasOperationalSubjectResponse(ContractModel):
+    """What a subject (real or reference) returns for one scenario.
+
+    ``structured_answer`` and ``disclosures`` are the subject's own typed
+    claims about what it found/decided (e.g. a row count, a chosen
+    statistical test, a safety flag it raised) -- checked by the judge
+    against ground truth, exactly like an ``AtlasBenchSubject`` returning a
+    choice index checked against ``correct_choice``. This is never graded by
+    asking a model whether its own answer was correct.
+    """
+
+    tool_calls: list[AtlasOperationalToolCall] = Field(default_factory=list, max_length=50)
+    artifacts: list[str] = Field(default_factory=list, max_length=50)
+    structured_answer: dict[str, Any] = Field(default_factory=dict)
+    disclosures: list[str] = Field(default_factory=list, max_length=20)
+    final_claim: str = Field(default="", max_length=4_000)
+    refused: bool = False
+    refusal_reason: Optional[str] = Field(default=None, max_length=2_000)
+    guardrail_decision: dict[str, object] = Field(default_factory=dict)
+    action_audit: list[dict[str, object]] = Field(default_factory=list, max_length=50)
+    model_response_received: Optional[bool] = None
+
+
+class AtlasOperationalScenarioResult(ContractModel):
+    scenario_id: AtlasOperationalScenarioId
+    passed: bool
+    critical_failure: Optional[AtlasOperationalCriticalFailureKind] = None
+    evidence_refs: list[str] = Field(default_factory=list, max_length=50)
+    tool_call_count: int = Field(ge=0)
+    elapsed_ms: int = Field(ge=0)
+    detail: str = Field(default="", max_length=2_000)
+    observed_response: Optional[AtlasOperationalSubjectResponse] = None
+
+
+class AtlasOperationalSuiteRun(ContractModel):
+    """One durable, immutable Operational Certification run. Mirrors
+    ``AtlasBenchSuiteRun``'s provenance-binding discipline: a candidate run
+    carries its exact candidate/verification/runtime identity, so it cannot
+    be silently swapped for a different candidate's evidence after the fact.
+    """
+
+    run_id: str = Field(min_length=1, max_length=120)
+    suite_version: str = Field(min_length=1, max_length=64)
+    suite_hash: str = Field(min_length=32, max_length=64)
+    subject_id: str = Field(min_length=1, max_length=120)
+    subject_kind: Literal["reference", "candidate", "production"] = "reference"
+    candidate_id: Optional[str] = Field(default=None, max_length=120)
+    trust_verification_id: Optional[str] = Field(default=None, max_length=120)
+    runtime_model: Optional[str] = Field(default=None, max_length=300)
+    runtime_model_digest: Optional[str] = Field(default=None, max_length=200)
+    scenario_results: list[AtlasOperationalScenarioResult] = Field(default_factory=list, max_length=100)
+    total_scenarios: int = Field(ge=0)
+    total_passed: int = Field(ge=0)
+    critical_failure_count: int = Field(ge=0)
+    started_at: datetime
+    completed_at: datetime
+
+
+class AtlasProductionTrustStatus(ContractModel):
+    """A read-only aggregation of what is already true in production, for
+    display (the GUI's model/trust panel). This computes/decides nothing --
+    it is a convenience view over the promotion pointer, trust, runtime
+    binding, AtlasBench, and Operational Certification records that already
+    exist. A ``candidate_kind`` of ``None`` means production is a legacy/
+    bootstrap pointer that predates the trust registries -- never guessed or
+    fabricated as one kind or the other.
+    """
+
+    production: Optional[AtlasProductionPointer] = None
+    candidate_kind: Optional[AtlasCandidateKind] = None
+    runtime_model: Optional[str] = Field(default=None, max_length=300)
+    runtime_model_digest: Optional[str] = Field(default=None, max_length=200)
+    trust_verification_state: Optional[AtlasCandidateVerificationState] = None
+    latest_v1_run_id: Optional[str] = Field(default=None, max_length=120)
+    latest_v1_total_passed: Optional[int] = Field(default=None, ge=0)
+    latest_v1_total_tasks: Optional[int] = Field(default=None, ge=0)
+    latest_operational_cert_run_id: Optional[str] = Field(default=None, max_length=120)
+    latest_operational_cert_total_passed: Optional[int] = Field(default=None, ge=0)
+    latest_operational_cert_total_scenarios: Optional[int] = Field(default=None, ge=0)
+    latest_operational_cert_critical_failures: Optional[int] = Field(default=None, ge=0)

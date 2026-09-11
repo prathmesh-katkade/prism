@@ -1,7 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 import path from "node:path";
 
-const python = process.platform === "win32" ? path.resolve(".venv/Scripts/python.exe") : "python";
+const python = process.env.PRISM_PYTHON ?? (process.platform === "win32" ? path.resolve(".venv/Scripts/python.exe") : "python");
 const apiDirectory = path.resolve("apps/api/src");
 
 export default defineConfig({

@@ -415,8 +415,19 @@ def register_ai_evidence(
             parent_refs=[ParentRef(object_id=dataset_revision.object_id, relation="derived_from")],
             warnings=list(response.limiting_factors),
             evidence_refs=[
-                EvidenceRef(evidence_id=item.provenance_ref, kind=item.kind, summary=item.value[:500])
-                for item in response.evidence
+                # `provenance_ref` identifies where an item came from (e.g. the
+                # dataset profile), not the item itself -- several evidence
+                # entries share the same source (the quality summary and every
+                # profiled column all cite "overview-profile"). Using it bare
+                # as evidence_id collapsed them onto one id, which the History
+                # workspace renders as a React list key: real duplicate keys,
+                # not just a display quirk. Every entry keeps a distinct id.
+                EvidenceRef(
+                    evidence_id=f"{item.provenance_ref}:{item.kind}:{index}",
+                    kind=item.kind,
+                    summary=item.value[:500],
+                )
+                for index, item in enumerate(response.evidence)
             ],
             reproducibility=GenericReproducibilitySpec(
                 producer=producer,

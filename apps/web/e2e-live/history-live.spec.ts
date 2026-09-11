@@ -11,10 +11,39 @@ test("History workspace shows a real SQL Lab result through the live API and ope
     }
   });
   expect(upload.status()).toBe(201);
+  const dataset = await upload.json() as { dataset_id: string };
 
   await page.goto("/");
   await page.getByRole("button", { name: /SQL Lab native/i }).click();
   await expect(page.locator(".monaco-editor")).toBeVisible();
+
+  // The live suite shares one API process, so earlier tests may have created
+  // other local datasets. Bind SQL Lab to the dataset created by THIS test
+  // instead of relying on connection-list ordering. Use the toolbar's actual
+  // select rather than its accessible label because Monaco/query hydration can
+  // render before the labelled control is exposed to the accessibility tree,
+  // and because the <select>'s accessible name computation includes its
+  // currently selected option text once earlier tests have left connections
+  // registered -- the toolbar has exactly one <select> (Parameters is a
+  // <textarea>), so this stays unambiguous without depending on accname value.
+  const source = page.locator(".query-toolbar select");
+  await expect(source).toBeVisible({ timeout: 10_000 });
+  const targetConnectionId = `local:${dataset.dataset_id}`;
+  await expect(source.locator(`option[value="${targetConnectionId}"]`)).toHaveCount(1, { timeout: 10_000 });
+
+  // In the common case the newly uploaded dataset is already the selected
+  // connection and its schema request has completed before this assertion. Do
+  // not wait for a second response that will never arrive. Only synchronize on
+  // the schema request when we actually change the connection.
+  if (await source.inputValue() !== targetConnectionId) {
+    const schemaResponse = page.waitForResponse((response) => {
+      const decodedUrl = decodeURIComponent(response.url());
+      return decodedUrl.includes(`/sql-lab/connections/${targetConnectionId}/schema`) && response.status() === 200;
+    });
+    await source.selectOption(targetConnectionId);
+    await schemaResponse;
+  }
+
   const runQuery = page.getByRole("button", { name: /Run query/ });
   await expect(runQuery).toBeEnabled();
   // Sync on the actual results response rather than a bare click - see

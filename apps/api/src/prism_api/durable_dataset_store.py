@@ -82,7 +82,7 @@ class DurableDatasetStore:
 
     @staticmethod
     def _frame_json(frame: pd.DataFrame) -> str:
-        return frame.to_json(orient="table", date_format="iso", index=True)
+        return str(frame.to_json(orient="table", date_format="iso", index=True))
 
     def put(self, frame: pd.DataFrame, source_name: str, source_fingerprint: str) -> OverviewDataset:
         dataset = OverviewDataset(dataset_id=f"ds_{uuid.uuid4().hex}", revision=0, source_name=source_name, source_fingerprint=source_fingerprint, row_count=len(frame), column_count=len(frame.columns))
@@ -91,7 +91,10 @@ class DurableDatasetStore:
         return dataset
 
     def get(self, dataset_id: str) -> StoredDataset:
-        statement = select(_revisions).where(and_(_revisions.c.dataset_id == dataset_id, _revisions.c.is_active.is_(True))).order_by(desc(_revisions.c.activated_at)).limit(1)
+        # Active rows form the retained revision branch. Its highest revision
+        # is the head even when the database truncates activation timestamps
+        # to one second; revert explicitly deactivates every later revision.
+        statement = select(_revisions).where(and_(_revisions.c.dataset_id == dataset_id, _revisions.c.is_active.is_(True))).order_by(desc(_revisions.c.revision)).limit(1)
         with self.engine.connect() as connection:
             row = connection.execute(statement).mappings().first()
         if row is None:
@@ -100,8 +103,9 @@ class DurableDatasetStore:
 
     def latest(self) -> StoredDataset | None:
         with self.engine.connect() as connection:
-            row = connection.execute(select(_revisions).where(_revisions.c.is_active.is_(True)).order_by(desc(_revisions.c.activated_at)).limit(1)).mappings().first()
-        return None if row is None else self._stored(row)
+            dataset_id = connection.execute(select(_revisions.c.dataset_id).where(_revisions.c.is_active.is_(True)).order_by(desc(_revisions.c.activated_at)).limit(1)).scalar_one_or_none()
+        # Activation chooses the dataset; revision identity chooses its head.
+        return None if dataset_id is None else self.get(dataset_id)
 
     def revisions(self, dataset_id: str) -> list[StoredDataset]:
         self.get(dataset_id)
