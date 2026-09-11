@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import threading
 import uuid
 from datetime import datetime, timezone
 from unittest.mock import patch
@@ -122,5 +123,46 @@ def test_dataset_revision_selection_survives_equal_activation_times(tmp_path) ->
             assert reapplied == first
             assert store.get(original.dataset_id).dataset == first
             assert [item.dataset.revision for item in store.revisions(original.dataset_id)] == [0, 1]
+    finally:
+        store.engine.dispose()
+
+
+def test_concurrent_add_revision_never_allocates_the_same_revision_twice(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """Two overlapping apply requests must serialize onto distinct revisions.
+
+    Both transactions read the same "current" head and, without the row lock
+    in add_revision, could both compute the same next revision number and
+    both insert successfully (different fingerprints keep the composite
+    primary key unique), silently producing two rows claiming to be the same
+    revision and breaking the linear undo history."""
+    configured = os.environ.get("PRISM_ANALYTICAL_HISTORY_DATABASE_URL", "")
+    database_url = configured if configured.startswith("mysql") else f"sqlite:///{(tmp_path / 'concurrent-revisions.sqlite').as_posix()}"
+    store = DurableDatasetStore(database_url)
+    try:
+        original = store.put(pd.DataFrame({"value": [1]}), "concurrent.csv", "a" * 32)
+
+        results: list[object] = [None, None]
+        errors: list[BaseException] = []
+
+        def apply(index: int, fingerprint: str) -> None:
+            try:
+                results[index] = store.add_revision(original.dataset_id, pd.DataFrame({"value": [index]}), fingerprint)
+            except BaseException as exc:  # noqa: BLE001 -- surfaced via `errors` for the assertion below
+                errors.append(exc)
+
+        threads = [
+            threading.Thread(target=apply, args=(0, "b" * 32)),
+            threading.Thread(target=apply, args=(1, "c" * 32)),
+        ]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+
+        assert not errors, f"add_revision raised under concurrency: {errors}"
+        revisions = [item.dataset.revision for item in store.revisions(original.dataset_id)]
+        assert revisions == sorted(revisions), "revisions must stay ordered"
+        assert len(revisions) == len(set(revisions)), f"no revision number may be allocated twice: {revisions}"
+        assert sorted(r.revision for r in results) == [1, 2]  # type: ignore[attr-defined]
     finally:
         store.engine.dispose()

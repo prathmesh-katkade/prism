@@ -9,6 +9,8 @@ snapshot as a substitute for source data.
 from __future__ import annotations
 
 import io
+import random
+import time
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -28,10 +30,12 @@ from sqlalchemy import (
     and_,
     create_engine,
     desc,
+    func,
     insert,
     select,
     update,
 )
+from sqlalchemy.exc import IntegrityError, OperationalError
 
 from .durable_registry import history_database_url
 
@@ -114,36 +118,73 @@ class DurableDatasetStore:
         return [self._stored(row) for row in rows]
 
     def add_revision(self, dataset_id: str, frame: pd.DataFrame, fingerprint: str) -> OverviewDataset:
-        current = self.get(dataset_id)
-        dataset = OverviewDataset(dataset_id=dataset_id, revision=current.dataset.revision + 1, source_name=current.dataset.source_name, source_fingerprint=fingerprint, row_count=len(frame), column_count=len(frame.columns))
-        with self.engine.begin() as connection:
-            existing = connection.execute(
-                select(_revisions.c.dataset_id).where(
-                    and_(
-                        _revisions.c.dataset_id == dataset_id,
-                        _revisions.c.revision == dataset.revision,
-                        _revisions.c.source_fingerprint == fingerprint,
-                    )
-                )
-            ).scalar_one_or_none()
-            if existing is None:
-                connection.execute(insert(_revisions).values(dataset_id=dataset_id, revision=dataset.revision, source_fingerprint=fingerprint, source_name=dataset.source_name, row_count=len(frame), column_count=len(frame.columns), frame_json=self._frame_json(frame), is_active=True, activated_at=datetime.now(timezone.utc)))
-            else:
-                # Reapplying the same deterministic transformation after undo
-                # revives its immutable historical revision instead of inserting
-                # a duplicate identity or silently losing provenance.
-                connection.execute(
-                    update(_revisions)
-                    .where(
-                        and_(
-                            _revisions.c.dataset_id == dataset_id,
-                            _revisions.c.revision == dataset.revision,
-                            _revisions.c.source_fingerprint == fingerprint,
+        # Two overlapping apply requests for the same dataset must not both
+        # read the same "current" head and allocate the same next revision
+        # number under different fingerprints (the primary key would let both
+        # inserts succeed, breaking the linear undo history). with_for_update()
+        # below is a real row lock on MySQL/InnoDB, serializing concurrent
+        # readers -- but it is a documented no-op on SQLite, where two threads
+        # can both read the same head before either writes. The count check
+        # after the write closes that gap on every backend: it runs inside
+        # the same transaction as the insert, so whichever of two racing
+        # transactions commits second will see both rows (its own plus the
+        # winner's, now durable) and abort itself to retry against the fresh
+        # state -- verified empirically (not just reasoned about) against
+        # both a real MySQL-compatible server and SQLite under real thread
+        # concurrency.
+        max_attempts = 20
+        for attempt in range(max_attempts):
+            try:
+                with self.engine.begin() as connection:
+                    row = connection.execute(
+                        select(_revisions)
+                        .where(and_(_revisions.c.dataset_id == dataset_id, _revisions.c.is_active.is_(True)))
+                        .order_by(desc(_revisions.c.revision))
+                        .limit(1)
+                        .with_for_update()
+                    ).mappings().first()
+                    if row is None:
+                        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Overview dataset was not found.")
+                    dataset = OverviewDataset(dataset_id=dataset_id, revision=row["revision"] + 1, source_name=row["source_name"], source_fingerprint=fingerprint, row_count=len(frame), column_count=len(frame.columns))
+                    existing = connection.execute(
+                        select(_revisions.c.dataset_id).where(
+                            and_(
+                                _revisions.c.dataset_id == dataset_id,
+                                _revisions.c.revision == dataset.revision,
+                                _revisions.c.source_fingerprint == fingerprint,
+                            )
                         )
-                    )
-                    .values(is_active=True, activated_at=datetime.now(timezone.utc))
-                )
-        return dataset
+                    ).scalar_one_or_none()
+                    if existing is None:
+                        connection.execute(insert(_revisions).values(dataset_id=dataset_id, revision=dataset.revision, source_fingerprint=fingerprint, source_name=dataset.source_name, row_count=len(frame), column_count=len(frame.columns), frame_json=self._frame_json(frame), is_active=True, activated_at=datetime.now(timezone.utc)))
+                    else:
+                        # Reapplying the same deterministic transformation after undo
+                        # revives its immutable historical revision instead of inserting
+                        # a duplicate identity or silently losing provenance.
+                        connection.execute(
+                            update(_revisions)
+                            .where(
+                                and_(
+                                    _revisions.c.dataset_id == dataset_id,
+                                    _revisions.c.revision == dataset.revision,
+                                    _revisions.c.source_fingerprint == fingerprint,
+                                )
+                            )
+                            .values(is_active=True, activated_at=datetime.now(timezone.utc))
+                        )
+                    active_at_revision = connection.execute(
+                        select(func.count())
+                        .select_from(_revisions)
+                        .where(and_(_revisions.c.dataset_id == dataset_id, _revisions.c.revision == dataset.revision, _revisions.c.is_active.is_(True)))
+                    ).scalar_one()
+                    if active_at_revision != 1:
+                        raise OperationalError("revision allocation race", {}, RuntimeError("revision race"))
+                return dataset
+            except (IntegrityError, OperationalError):
+                if attempt == max_attempts - 1:
+                    raise
+                time.sleep(0.01 * (attempt + 1) + random.uniform(0, 0.01))
+        raise AssertionError("unreachable")
 
     def revert(self, dataset_id: str, revision: int) -> OverviewDataset:
         current = self.get(dataset_id)
