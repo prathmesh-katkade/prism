@@ -1,10 +1,14 @@
 import React from "react";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AtlasCommandCenter } from "./atlas-command-center";
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+}
+
+function notFound(): Response {
+  return new Response(JSON.stringify({ detail: "not found" }), { status: 404, headers: { "content-type": "application/json" } });
 }
 
 describe("Atlas command center", () => {
@@ -24,9 +28,10 @@ describe("Atlas command center", () => {
     }));
     render(<AtlasCommandCenter />);
     await waitFor(() => expect(screen.getByText("NO PRODUCTION MODEL")).toBeInTheDocument());
+    expect(screen.getByText(/No production pointer exists yet/)).toBeInTheDocument();
   });
 
-  it("never labels a legacy production pointer as verified", async () => {
+  it("never labels a legacy production pointer as verified, and offers no fake live activity", async () => {
     vi.stubGlobal("fetch", vi.fn(async (input: string | URL) => {
       const path = String(input);
       if (path.includes("/promotion/current-status")) {
@@ -41,6 +46,12 @@ describe("Atlas command center", () => {
     render(<AtlasCommandCenter />);
     await waitFor(() => expect(screen.getByRole("heading", { name: "legacy-model:latest" })).toBeInTheDocument());
     expect(screen.getByText("LEGACY")).toBeInTheDocument();
+    expect(screen.getByText(/No Atlas investigation is active/)).toBeInTheDocument();
+    // The legacy pointer has a candidate_id but no trust registry entry --
+    // the System Cortex must show the production node without inventing a
+    // candidate/verification lineage that was never established.
+    expect(screen.getByText("legacy")).toBeInTheDocument();
+    expect(screen.queryByText("Verified base-model candidate")).not.toBeInTheDocument();
   });
 
   it("renders real verified-production evidence pulled from the existing backend routes, never fabricated", async () => {
@@ -59,7 +70,7 @@ describe("Atlas command center", () => {
             latest_v1_total_passed: 90,
             latest_v1_total_tasks: 90,
             latest_operational_cert_run_id: "opcert_1",
-            latest_operational_cert_total_passed: 23,
+            latest_operational_cert_total_passed: 19,
             latest_operational_cert_total_scenarios: 23,
             latest_operational_cert_critical_failures: 0,
           });
@@ -106,6 +117,25 @@ describe("Atlas command center", () => {
             completed_at: "2026-01-01T00:00:00Z",
           });
         }
+        if (path.endsWith("/operational-cert/runs/opcert_1")) {
+          return json({
+            run_id: "opcert_1",
+            suite_version: "atlas-operational-cert-wave2",
+            suite_hash: "e".repeat(64),
+            subject_id: "operational_candidate_basemodel_test",
+            subject_kind: "candidate",
+            candidate_id: candidateId,
+            total_scenarios: 23,
+            total_passed: 19,
+            critical_failure_count: 0,
+            started_at: "2026-01-01T00:00:00Z",
+            completed_at: "2026-01-01T00:05:00Z",
+            scenario_results: [
+              { scenario_id: "evidence_freshness_conflict", passed: false, tool_call_count: 0, elapsed_ms: 10, detail: "chose cached over fresh" },
+              { scenario_id: "dataset_profiling", passed: true, tool_call_count: 1, elapsed_ms: 10 },
+            ],
+          });
+        }
         if (path.includes("/foundry/system-seed") && !path.includes("release")) {
           return json([{ seed_version: "seed-v1", created_at: "2026-01-01T00:00:00Z", example_count: 125, domain_counts: [{ domain: "sql", example_count: 20 }], aggregate_content_hash: "b".repeat(64), leakage_guard_passed: true }]);
         }
@@ -118,7 +148,7 @@ describe("Atlas command center", () => {
         if (path.includes("training-datasets:combined-summary")) {
           return json({ seed_version: "seed-v1", system_seed_examples: 125, verified_history_examples: 40, user_correction_examples: 5, synthetic_teacher_examples: 80, total_eligible: 250, computed_at: "2026-01-01T00:00:00Z" });
         }
-        return json([]);
+        return notFound();
       })
     );
 
@@ -126,9 +156,23 @@ describe("Atlas command center", () => {
     await waitFor(() => expect(screen.getByRole("heading", { name: "qwen3-test:latest" })).toBeInTheDocument());
     expect(screen.getByText("VERIFIED")).toBeInTheDocument();
     await waitFor(() => expect(screen.getByText("90 / 90")).toBeInTheDocument());
-    expect(screen.getByText("23 / 23")).toBeInTheDocument();
-    expect(screen.getByText("PASSED")).toBeInTheDocument();
+    expect(screen.getByText("19 / 23")).toBeInTheDocument();
+    expect(screen.queryByText("PASSED")).not.toBeInTheDocument();
+    expect(screen.getByText("below threshold")).toBeInTheDocument();
     await waitFor(() => expect(screen.getByText(/125 reviewed examples/)).toBeInTheDocument());
-    expect(screen.getByText(/245 records/)).toBeInTheDocument();
+
+    // System Cortex: real lineage, built only from fetched data.
+    const cortex = screen.getByText("System Cortex").closest("article") as HTMLElement;
+    expect(within(cortex).getByText(candidateId)).toBeInTheDocument();
+    expect(within(cortex).getByText("Verified base-model candidate")).toBeInTheDocument();
+    expect(within(cortex).getByText(/combined-v1/)).toBeInTheDocument();
+
+    // Operational Certification panel surfaces the real failed scenario, not a hardcoded pass.
+    const opcertPanel = screen.getByText("Operational Certification", { selector: "h2" }).closest("article") as HTMLElement;
+    const failedSummary = within(opcertPanel).getByText(/1 scenario not passed/);
+    expect(failedSummary).toBeInTheDocument();
+    failedSummary.click();
+    expect(within(opcertPanel).getByText(/evidence freshness conflict/)).toBeInTheDocument();
+    expect(within(opcertPanel).getByText("chose cached over fresh")).toBeInTheDocument();
   });
 });

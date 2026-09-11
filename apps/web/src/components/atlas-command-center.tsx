@@ -6,6 +6,8 @@ import type {
   AtlasBenchSuiteRun,
   AtlasCombinedSftDatasetVersion,
   AtlasCombinedTrainingSourceSummary,
+  AtlasOperationalScenarioResult,
+  AtlasOperationalSuiteRun,
   AtlasProductionTrustStatus,
   AtlasSyntheticTeacherManifest,
   AtlasSystemSeedManifest,
@@ -26,10 +28,10 @@ const emptyCorpus: CorpusState = { systemSeed: null, syntheticTeacher: null, com
  * ATLAS First Light Command Center: the system-wide status screen above the
  * per-dataset AtlasWorkspace below it. Every number here comes from an
  * existing, already-tested backend route -- current-status, the base-model
- * trust routes, a bench run detail, and the Foundry corpus list routes.
- * Nothing here decides or verifies anything new, and nothing is hardcoded:
- * if production is still the legacy pointer, this honestly says so instead
- * of claiming Qwen is production.
+ * trust routes, a bench run detail, the operational-cert run detail, and
+ * the Foundry corpus list routes. Nothing here decides or verifies anything
+ * new, and nothing is hardcoded: if production is still the legacy pointer,
+ * this honestly says so instead of claiming Qwen is production.
  */
 export function AtlasCommandCenter() {
   const [status, setStatus] = useState<AtlasProductionTrustStatus | null>(null);
@@ -37,6 +39,7 @@ export function AtlasCommandCenter() {
   const [candidate, setCandidate] = useState<AtlasVerifiedBaseModelCandidate | null>(null);
   const [verification, setVerification] = useState<AtlasBaseModelVerification | null>(null);
   const [v1Run, setV1Run] = useState<AtlasBenchSuiteRun | null>(null);
+  const [opcertRun, setOpcertRun] = useState<AtlasOperationalSuiteRun | null>(null);
   const [corpus, setCorpus] = useState<CorpusState>(emptyCorpus);
 
   useEffect(() => {
@@ -66,6 +69,11 @@ export function AtlasCommandCenter() {
         if (body.latest_v1_run_id) {
           const runResponse = await fetch(apiUrl(`/api/v1/atlas/bench/runs/detail/${body.latest_v1_run_id}`));
           if (!cancelled && runResponse.ok) setV1Run((await runResponse.json()) as AtlasBenchSuiteRun);
+        }
+
+        if (body.latest_operational_cert_run_id) {
+          const opcertResponse = await fetch(apiUrl(`/api/v1/atlas/operational-cert/runs/${body.latest_operational_cert_run_id}`));
+          if (!cancelled && opcertResponse.ok) setOpcertRun((await opcertResponse.json()) as AtlasOperationalSuiteRun);
         }
       } catch {
         if (!cancelled) setStatusFailed(true);
@@ -98,9 +106,11 @@ export function AtlasCommandCenter() {
     <section className="atlas-command-center" aria-label="Atlas command center">
       <Hero status={status} failed={statusFailed} />
       <div className="acc-grid">
+        <SystemCortexPanel status={status} candidate={candidate} verification={verification} v1Run={v1Run} opcertRun={opcertRun} corpus={corpus} />
+        <LiveActivityPanel />
         <TrustPanel status={status} candidate={candidate} verification={verification} />
         <BenchPanel status={status} run={v1Run} />
-        <OperationalCertPanel status={status} />
+        <OperationalCertPanel status={status} run={opcertRun} />
         <CorpusPanel corpus={corpus} />
       </div>
     </section>
@@ -136,7 +146,7 @@ function Hero({ status, failed }: { status: AtlasProductionTrustStatus | null; f
   }
   const verified = status.candidate_kind && status.trust_verification_state === "verified";
   const tone = verified ? "acc-tone-native" : status.candidate_kind ? "acc-tone-bridged" : "acc-tone-legacy";
-  const roleLabel = verified ? "VERIFIED" : status.candidate_kind ? "UNVERIFIED" : "LEGACY";
+  const roleLabel = verified ? "VERIFIED" : status.candidate_kind ? "CERTIFICATION PENDING" : "LEGACY";
   return (
     <header className={`acc-hero ${tone}`}>
       <span className="eyebrow">ATLAS · ONLINE</span>
@@ -149,6 +159,128 @@ function Hero({ status, failed }: { status: AtlasProductionTrustStatus | null; f
         <span>PRODUCTION</span>
       </p>
     </header>
+  );
+}
+
+/**
+ * The system-level counterpart to the per-run Cortex inside AtlasWorkspace
+ * below: a lineage view built entirely from entities this component already
+ * fetched for the other panels. Edges are only drawn where the backend
+ * itself records the relationship (a candidate_id shared between the
+ * production pointer, a bench run and an operational-cert run; a
+ * seed_version/synthetic_teacher_version a combined SFT release actually
+ * references) -- never a relationship this component is only guessing at.
+ */
+function SystemCortexPanel({
+  status,
+  candidate,
+  verification,
+  v1Run,
+  opcertRun,
+  corpus,
+}: {
+  status: AtlasProductionTrustStatus | null;
+  candidate: AtlasVerifiedBaseModelCandidate | null;
+  verification: AtlasBaseModelVerification | null;
+  v1Run: AtlasBenchSuiteRun | null;
+  opcertRun: AtlasOperationalSuiteRun | null;
+  corpus: CorpusState;
+}) {
+  if (!status?.production) {
+    return (
+      <article className="acc-panel acc-panel-wide">
+        <h2>System Cortex</h2>
+        <p className="acc-empty">No production pointer exists yet -- nothing to trace lineage from.</p>
+      </article>
+    );
+  }
+  type Node = { id: string; label: string; detail: string; tone?: string };
+  const productionNode: Node = {
+    id: "production",
+    label: "Production pointer",
+    detail: status.production.candidate_id,
+  };
+  const trustNodes: Node[] = [];
+  if (status.candidate_kind) {
+    trustNodes.push({ id: "candidate", label: "Verified base-model candidate", detail: candidate?.upstream_model_id ?? status.production.candidate_id });
+    if (verification) trustNodes.push({ id: "verification", label: "Trust verification", detail: verification.verification_state, tone: verification.verification_state === "verified" ? "acc-tone-native" : "acc-tone-bridged" });
+  }
+  const evidenceNodes: Node[] = [];
+  if (status.latest_v1_run_id) {
+    const completed = v1Run?.completed_at ? ` · ${new Date(v1Run.completed_at).toLocaleDateString()}` : "";
+    evidenceNodes.push({ id: "v1", label: "AtlasBench V1", detail: `${status.latest_v1_total_passed ?? "?"}/${status.latest_v1_total_tasks ?? "?"}${completed}`, tone: "acc-tone-native" });
+  }
+  if (status.latest_operational_cert_run_id) {
+    const critical = status.latest_operational_cert_critical_failures ?? 0;
+    const completed = opcertRun?.completed_at ? ` · ${new Date(opcertRun.completed_at).toLocaleDateString()}` : "";
+    evidenceNodes.push({
+      id: "opcert",
+      label: `Operational Certification${completed}`,
+      detail: `${status.latest_operational_cert_total_passed ?? "?"}/${status.latest_operational_cert_total_scenarios ?? "?"}${critical > 0 ? ` · ${critical} critical` : ""}`,
+      tone: critical > 0 ? "acc-tone-unavailable" : "acc-tone-bridged",
+    });
+  }
+  const corpusNodes: Node[] = [];
+  if (corpus.systemSeed) corpusNodes.push({ id: "seed", label: "System seed corpus", detail: `${corpus.systemSeed.example_count} examples · ${corpus.systemSeed.seed_version}` });
+  if (corpus.syntheticTeacher) corpusNodes.push({ id: "teacher", label: "Synthetic teacher corpus", detail: `${corpus.syntheticTeacher.example_count} examples · ${corpus.syntheticTeacher.generation_policy_version}` });
+  if (corpus.combinedSft) corpusNodes.push({ id: "combined", label: "Combined SFT release", detail: `${corpus.combinedSft.total_sft_count} records · ${corpus.combinedSft.version_id}` });
+
+  return (
+    <article className="acc-panel acc-panel-wide">
+      <h2>System Cortex</h2>
+      <p className="acc-cortex-caption">Real persisted lineage -- production trust, bench and certification evidence, and the training corpus. No hidden reasoning; every node below is a durable record.</p>
+      <div className="acc-cortex">
+        <ol className="acc-lineage">
+          <LineageItem node={productionNode} />
+          {trustNodes.map((node) => (
+            <LineageItem key={node.id} node={node} indent />
+          ))}
+        </ol>
+        {evidenceNodes.length ? (
+          <ol className="acc-lineage acc-lineage-branch">
+            {evidenceNodes.map((node) => (
+              <LineageItem key={node.id} node={node} />
+            ))}
+          </ol>
+        ) : (
+          <p className="acc-empty">No bench or operational-cert evidence recorded for this candidate yet.</p>
+        )}
+        {corpusNodes.length ? (
+          <>
+            <p className="acc-cortex-caption acc-cortex-caption-secondary">Training corpus (independent of current production identity)</p>
+            <ol className="acc-lineage acc-lineage-branch">
+              {corpusNodes.map((node) => (
+                <LineageItem key={node.id} node={node} />
+              ))}
+            </ol>
+          </>
+        ) : null}
+      </div>
+    </article>
+  );
+}
+
+function LineageItem({ node, indent }: { node: { id: string; label: string; detail: string; tone?: string }; indent?: boolean }) {
+  return (
+    <li className={`acc-lineage-node ${node.tone ?? ""} ${indent ? "acc-lineage-indent" : ""}`}>
+      <span className="acc-lineage-dot" aria-hidden="true" />
+      <div>
+        <strong>{node.label}</strong>
+        <p className="acc-mono">{node.detail}</p>
+      </div>
+    </li>
+  );
+}
+
+function LiveActivityPanel() {
+  return (
+    <article className="acc-panel">
+      <h2>Live activity</h2>
+      <p className="acc-empty">
+        No Atlas investigation is active from this screen. Open a dataset in the workspace below to see real specialist, tool, and guardrail
+        activity for that run -- this panel never simulates activity that isn&apos;t actually happening.
+      </p>
+    </article>
   );
 }
 
@@ -262,13 +394,14 @@ function BenchPanel({ status, run }: { status: AtlasProductionTrustStatus | null
               </tbody>
             </table>
           ) : null}
+          <p className="acc-cortex-caption">V2 holdout evidence exists but isn&apos;t surfaced by the current-status API for an arbitrary corpus yet -- shown honestly as absent rather than guessed.</p>
         </>
       )}
     </article>
   );
 }
 
-function OperationalCertPanel({ status }: { status: AtlasProductionTrustStatus | null }) {
+function OperationalCertPanel({ status, run }: { status: AtlasProductionTrustStatus | null; run: AtlasOperationalSuiteRun | null }) {
   if (!status?.latest_operational_cert_run_id) {
     return (
       <article className="acc-panel">
@@ -281,6 +414,7 @@ function OperationalCertPanel({ status }: { status: AtlasProductionTrustStatus |
   const passed = status.latest_operational_cert_total_passed ?? 0;
   const total = status.latest_operational_cert_total_scenarios ?? 0;
   const certified = critical === 0 && total > 0 && passed / total >= 0.9;
+  const failed: AtlasOperationalScenarioResult[] = (run?.scenario_results ?? []).filter((item) => !item.passed);
   return (
     <article className={`acc-panel ${certified ? "acc-tone-native" : "acc-tone-bridged"}`}>
       <h2>Operational Certification</h2>
@@ -288,6 +422,38 @@ function OperationalCertPanel({ status }: { status: AtlasProductionTrustStatus |
         {passed} / {total}
       </p>
       <p className="acc-status-line">{certified ? "PASSED" : critical > 0 ? `${critical} critical failure(s)` : "below threshold"}</p>
+      {run ? (
+        <dl className="acc-facts">
+          <div>
+            <dt>Suite</dt>
+            <dd className="acc-mono">{run.suite_version}</dd>
+          </div>
+          <div>
+            <dt>Run ID</dt>
+            <dd className="acc-mono">{run.run_id}</dd>
+          </div>
+          <div>
+            <dt>Completed</dt>
+            <dd>{new Date(run.completed_at).toLocaleString()}</dd>
+          </div>
+        </dl>
+      ) : null}
+      {failed.length ? (
+        <details className="acc-details">
+          <summary>
+            {failed.length} scenario{failed.length === 1 ? "" : "s"} not passed
+          </summary>
+          <ul className="acc-scenario-list">
+            {failed.map((item) => (
+              <li key={item.scenario_id} className={item.critical_failure ? "acc-tone-unavailable" : ""}>
+                <strong>{item.scenario_id.replaceAll("_", " ")}</strong>
+                {item.critical_failure ? <span className="acc-mono"> · {item.critical_failure.replaceAll("_", " ")}</span> : null}
+                {item.detail ? <p>{item.detail}</p> : null}
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
     </article>
   );
 }
