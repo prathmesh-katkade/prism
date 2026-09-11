@@ -121,6 +121,7 @@ jobs:
         run: |
           pytest tests/sql_lab/test_mysql_connector_parity.py
           pytest tests/api/test_durable_registry.py
+          pytest tests/api/test_atlas_promotion.py
           npm run test:e2e:live
 
   secret-scan:

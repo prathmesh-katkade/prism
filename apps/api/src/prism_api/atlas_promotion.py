@@ -21,6 +21,8 @@ nothing here is reachable from candidate/subject code, matching the same
 
 from __future__ import annotations
 
+import random
+import time
 import uuid
 from datetime import datetime, timezone
 from typing import Optional, Sequence
@@ -38,16 +40,23 @@ from sqlalchemy import (
     Boolean,
     Column,
     DateTime,
+    Integer,
     MetaData,
     String,
     Table,
     create_engine,
+    desc,
     insert,
+    inspect,
     select,
+    text,
+    update,
 )
-from sqlalchemy.engine import Engine
+from sqlalchemy.engine import Connection, Engine
+from sqlalchemy.exc import IntegrityError, OperationalError
 
 from .atlas_bench_runner import AtlasBenchSubject, run_suite
+from .atlas_schema_utils import ensure_index
 from .durable_registry import history_database_url
 
 CRITICAL_CATEGORIES: frozenset[AtlasBenchCategory] = frozenset(
@@ -151,6 +160,15 @@ _events = Table(
     "prism_atlas_production_pointer_events",
     _metadata,
     Column("event_id", String(120), primary_key=True),
+    # True insertion order, independent of clock resolution: a configured
+    # MySQL DATETIME column can give two promotions within the same second
+    # an identical `promoted_at`, leaving ORDER BY promoted_at with no
+    # tiebreaker -- current_production()/history() could then non-
+    # deterministically resolve to the wrong event, and rollback() (which
+    # reads the two most recent via history()) could restore the wrong
+    # candidate. `sequence` is allocated under a row lock in _append() and
+    # is what ordering now relies on; promoted_at is kept for display only.
+    Column("sequence", Integer, nullable=False),
     Column("candidate_id", String(120), nullable=False, index=True),
     Column("previous_candidate_id", String(120), nullable=True),
     Column("decision_id", String(120), nullable=True),
@@ -172,6 +190,89 @@ class DurableAtlasPromotionStore:
             connect_args={"check_same_thread": False} if url.startswith("sqlite") else {},
         )
         _metadata.create_all(self.engine)
+        with self.engine.begin() as connection:
+            existing = {str(item["name"]) for item in inspect(connection).get_columns("prism_atlas_production_pointer_events")}
+            if "sequence" not in existing:
+                # A table that pre-dates the `sequence` tiebreaker: add it
+                # nullable (a non-empty table cannot take a NOT NULL column
+                # without a default in one ALTER) and backfill every existing
+                # row from its promoted_at order -- the real promotion events
+                # already on disk were each separated by a live inference
+                # call, so promoted_at correctly orders them even though it
+                # is not trusted for that going forward.
+                connection.execute(text("ALTER TABLE prism_atlas_production_pointer_events ADD COLUMN sequence INTEGER"))
+                rows = connection.execute(
+                    select(_events.c.event_id).order_by(_events.c.promoted_at, _events.c.event_id)
+                ).all()
+                for backfilled_sequence, row in enumerate(rows):
+                    connection.execute(
+                        update(_events).where(_events.c.event_id == row.event_id).values(sequence=backfilled_sequence)
+                    )
+            # `sequence` has no legitimate duplicate the way a dataset
+            # revision number can (branching after an undo intentionally
+            # keeps an abandoned row at the same revision) -- a UNIQUE index
+            # is the correct, database-enforced guarantee here, not just a
+            # best-effort lock. `with_for_update()` in _append() is a no-op
+            # on SQLite, so without this, two concurrent appends could both
+            # read the same max sequence and both insert it; with this, the
+            # loser's insert raises IntegrityError and the retry loop in
+            # _append_with_retry() re-reads the now-committed state.
+            ensure_index(
+                connection,
+                "prism_atlas_production_pointer_events",
+                "ux_prism_atlas_production_pointer_events_sequence",
+                "CREATE UNIQUE INDEX ux_prism_atlas_production_pointer_events_sequence "
+                "ON prism_atlas_production_pointer_events (sequence)",
+            )
+
+    @staticmethod
+    def _append(
+        connection: Connection,
+        *,
+        candidate_id: str,
+        previous_candidate_id: Optional[str],
+        decision_id: Optional[str],
+        is_rollback: bool,
+        reason: str,
+        now: datetime,
+    ) -> None:
+        """Allocate the next `sequence` under a row lock and insert.
+
+        Must run inside the caller's `engine.begin()` transaction so the lock
+        (a real row lock on MySQL/InnoDB, a no-op on SQLite whose own
+        single-writer file lock instead raises OperationalError on the
+        loser) is held for the insert too -- otherwise two concurrent
+        appends could both read the same max sequence and allocate the same
+        next one.
+        """
+        last_sequence = connection.execute(
+            select(_events.c.sequence).order_by(desc(_events.c.sequence)).limit(1).with_for_update()
+        ).scalar_one_or_none()
+        next_sequence = 0 if last_sequence is None else last_sequence + 1
+        connection.execute(
+            insert(_events).values(
+                event_id=f"promo_{uuid.uuid4().hex}",
+                sequence=next_sequence,
+                candidate_id=candidate_id,
+                previous_candidate_id=previous_candidate_id,
+                decision_id=decision_id,
+                is_rollback=is_rollback,
+                reason=reason,
+                promoted_at=now,
+            )
+        )
+
+    def _append_with_retry(self, **kwargs: object) -> None:
+        max_attempts = 20
+        for attempt in range(max_attempts):
+            try:
+                with self.engine.begin() as connection:
+                    self._append(connection, **kwargs)  # type: ignore[arg-type]
+                return
+            except (IntegrityError, OperationalError):
+                if attempt == max_attempts - 1:
+                    raise
+                time.sleep(0.01 * (attempt + 1) + random.uniform(0, 0.01))
 
     def bootstrap(self, candidate_id: str, *, reason: str) -> AtlasProductionPointer:
         """Persist the already-configured production model once.
@@ -183,19 +284,14 @@ class DurableAtlasPromotionStore:
         current = self.current_production()
         if current is not None:
             return current
-        now = datetime.now(timezone.utc)
-        with self.engine.begin() as connection:
-            connection.execute(
-                insert(_events).values(
-                    event_id=f"promo_{uuid.uuid4().hex}",
-                    candidate_id=candidate_id,
-                    previous_candidate_id=None,
-                    decision_id=None,
-                    is_rollback=False,
-                    reason=reason,
-                    promoted_at=now,
-                )
-            )
+        self._append_with_retry(
+            candidate_id=candidate_id,
+            previous_candidate_id=None,
+            decision_id=None,
+            is_rollback=False,
+            reason=reason,
+            now=datetime.now(timezone.utc),
+        )
         record = self.current_production()
         assert record is not None
         return record
@@ -208,19 +304,14 @@ class DurableAtlasPromotionStore:
                 f"its decision verdict was {decision.verdict.value}, not promote_eligible."
             )
         current = self.current_production()
-        now = datetime.now(timezone.utc)
-        with self.engine.begin() as connection:
-            connection.execute(
-                insert(_events).values(
-                    event_id=f"promo_{uuid.uuid4().hex}",
-                    candidate_id=decision.candidate_id,
-                    previous_candidate_id=current.candidate_id if current else None,
-                    decision_id=decision.decision_id,
-                    is_rollback=False,
-                    reason=reason,
-                    promoted_at=now,
-                )
-            )
+        self._append_with_retry(
+            candidate_id=decision.candidate_id,
+            previous_candidate_id=current.candidate_id if current else None,
+            decision_id=decision.decision_id,
+            is_rollback=False,
+            reason=reason,
+            now=datetime.now(timezone.utc),
+        )
         record = self.current_production()
         assert record is not None
         return record
@@ -231,19 +322,14 @@ class DurableAtlasPromotionStore:
         if len(history) < 2:
             raise ValueError("No prior production candidate to roll back to.")
         current, previous = history[0], history[1]
-        now = datetime.now(timezone.utc)
-        with self.engine.begin() as connection:
-            connection.execute(
-                insert(_events).values(
-                    event_id=f"promo_{uuid.uuid4().hex}",
-                    candidate_id=previous.candidate_id,
-                    previous_candidate_id=current.candidate_id,
-                    decision_id=None,
-                    is_rollback=True,
-                    reason=reason,
-                    promoted_at=now,
-                )
-            )
+        self._append_with_retry(
+            candidate_id=previous.candidate_id,
+            previous_candidate_id=current.candidate_id,
+            decision_id=None,
+            is_rollback=True,
+            reason=reason,
+            now=datetime.now(timezone.utc),
+        )
         record = self.current_production()
         assert record is not None
         return record
@@ -262,11 +348,11 @@ class DurableAtlasPromotionStore:
 
     def current_production(self) -> Optional[AtlasProductionPointer]:
         with self.engine.connect() as connection:
-            row = connection.execute(select(_events).order_by(_events.c.promoted_at.desc()).limit(1)).mappings().first()
+            row = connection.execute(select(_events).order_by(desc(_events.c.sequence)).limit(1)).mappings().first()
         return None if row is None else self._record(row)
 
     def history(self, *, limit: int = 100) -> list[AtlasProductionPointer]:
-        statement = select(_events).order_by(_events.c.promoted_at.desc()).limit(limit)
+        statement = select(_events).order_by(desc(_events.c.sequence)).limit(limit)
         with self.engine.connect() as connection:
             rows = connection.execute(statement).mappings().all()
         return [self._record(row) for row in rows]

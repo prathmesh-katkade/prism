@@ -17,7 +17,7 @@ from prism_api.atlas_promotion import (
     decide_promotion,
     shadow_compare,
 )
-from prism_api_contracts import AtlasAdapterId, AtlasPromotionVerdict
+from prism_api_contracts import AtlasAdapterId, AtlasPromotionDecision, AtlasPromotionVerdict
 
 
 def _runs():  # type: ignore[no-untyped-def]
@@ -164,6 +164,164 @@ def test_rollback_without_prior_production_raises(tmp_path) -> None:  # type: ig
         assert "No prior production candidate" in str(error)
     else:
         raise AssertionError("rollback with no history should have raised")
+
+
+def test_promotion_ordering_survives_equal_promoted_at_timestamps(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """A configured MySQL DATETIME can give two promotions within the same
+    second an identical promoted_at; current_production()/history() must
+    still resolve to genuine insertion order via the sequence tiebreaker,
+    not an arbitrary DB-dependent order among tied rows."""
+    import os
+    from datetime import datetime as _datetime
+    from datetime import timezone as _timezone
+    from unittest.mock import patch
+
+    # Real MySQL is what genuinely exercises the tie: it clusters rows by
+    # primary key (a random UUID here), not insertion order, so tied
+    # promoted_at values return in an order uncorrelated with which
+    # promotion actually happened second -- unlike SQLite, whose tie order
+    # happens to coincide with insertion order and would pass even with the
+    # old (buggy) promoted_at-only ordering. CI's phase-4-live-e2e job runs
+    # this file with PRISM_ANALYTICAL_HISTORY_DATABASE_URL set to a real
+    # MySQL service container for exactly this reason.
+    configured = os.environ.get("PRISM_ANALYTICAL_HISTORY_DATABASE_URL", "")
+    database_url = configured if configured.startswith("mysql") else f"sqlite:///{(tmp_path / 'tied-promotions.sqlite').as_posix()}"
+    store = DurableAtlasPromotionStore(database_url)
+    tied_instant = _datetime.now(_timezone.utc).replace(microsecond=0)
+    with patch("prism_api.atlas_promotion.datetime") as clock:
+        clock.now.return_value = tied_instant
+        anchor = store.bootstrap("candidate_a", reason="bootstrap")
+        assert anchor.candidate_id == "candidate_a"
+
+        forced = AtlasPromotionDecision(
+            decision_id="decision_b",
+            candidate_id="candidate_b",
+            production_run_id="prod",
+            candidate_run_id="cand",
+            verdict=AtlasPromotionVerdict.PROMOTE_ELIGIBLE,
+            overall_production_pass_rate=0.5,
+            overall_candidate_pass_rate=0.9,
+            critical_regressions=[],
+            decided_at=tied_instant,
+        )
+        promoted = store.promote(forced, reason="tied-clock promotion")
+        assert promoted.candidate_id == "candidate_b"
+
+    # Both events share the same (mocked) promoted_at, so only the sequence
+    # tiebreaker can correctly say candidate_b is current, not candidate_a.
+    assert store.current_production().candidate_id == "candidate_b"  # type: ignore[union-attr]
+    assert [item.candidate_id for item in store.history()] == ["candidate_b", "candidate_a"]
+
+    rolled_back = store.rollback(reason="tied-clock rollback")
+    assert rolled_back.candidate_id == "candidate_a"
+    assert store.current_production().candidate_id == "candidate_a"  # type: ignore[union-attr]
+
+
+def test_concurrent_promotion_events_never_share_a_sequence(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """Two overlapping appends (e.g. a promote racing a rollback) must not
+    both allocate the same sequence -- with_for_update() alone is a no-op on
+    SQLite, so the UNIQUE index on sequence is the real guarantee; the loser
+    raises IntegrityError and _append_with_retry() re-reads and retries."""
+    import os
+    import threading
+    from datetime import datetime, timezone
+
+    configured = os.environ.get("PRISM_ANALYTICAL_HISTORY_DATABASE_URL", "")
+    database_url = configured if configured.startswith("mysql") else f"sqlite:///{(tmp_path / 'concurrent-promotions.sqlite').as_posix()}"
+    store = DurableAtlasPromotionStore(database_url)
+    store.bootstrap("candidate_root", reason="bootstrap")
+
+    errors: list[BaseException] = []
+
+    def append(candidate_id: str) -> None:
+        try:
+            store._append_with_retry(  # noqa: SLF001 -- exercising the lock/retry path directly
+                candidate_id=candidate_id,
+                previous_candidate_id="candidate_root",
+                decision_id=None,
+                is_rollback=False,
+                reason=f"concurrent append {candidate_id}",
+                now=datetime.now(timezone.utc),
+            )
+        except BaseException as exc:  # noqa: BLE001 -- surfaced via `errors` for the assertion below
+            errors.append(exc)
+
+    threads = [threading.Thread(target=append, args=(f"candidate_{i}",)) for i in range(4)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert not errors, f"append raised under concurrency: {errors}"
+    sequences = [item.candidate_id for item in store.history(limit=10)]
+    assert len(sequences) == 5  # bootstrap + 4 concurrent appends
+    assert len(set(sequences)) == 5, f"no candidate should be lost or duplicated: {sequences}"
+
+
+def test_promotion_store_migrates_a_pre_sequence_database_in_original_order(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """A database written before the sequence tiebreaker existed must not
+    break on open, and its existing history must keep its real order."""
+    import uuid
+    from datetime import datetime, timedelta, timezone
+
+    from sqlalchemy import Boolean, Column, DateTime, MetaData, String, Table, create_engine, insert
+
+    database_url = f"sqlite:///{(tmp_path / 'legacy-promotions.sqlite').as_posix()}"
+    legacy_metadata = MetaData()
+    legacy_events = Table(
+        "prism_atlas_production_pointer_events",
+        legacy_metadata,
+        Column("event_id", String(120), primary_key=True),
+        Column("candidate_id", String(120), nullable=False),
+        Column("previous_candidate_id", String(120), nullable=True),
+        Column("decision_id", String(120), nullable=True),
+        Column("is_rollback", Boolean, nullable=False),
+        Column("reason", String(1_000), nullable=False),
+        Column("promoted_at", DateTime(timezone=True), nullable=False),
+    )
+    engine = create_engine(database_url, future=True)
+    legacy_metadata.create_all(engine)
+    # Safely in the past relative to the real wall clock, so the fresh
+    # promotion below (using real datetime.now()) is unambiguously later
+    # regardless of how many milliseconds this test takes to run -- this
+    # test is about surviving migration, not about a timestamp tie.
+    base = datetime.now(timezone.utc) - timedelta(hours=1)
+    with engine.begin() as connection:
+        for offset, (candidate, previous) in enumerate([("legacy_a", None), ("legacy_b", "legacy_a")]):
+            connection.execute(
+                insert(legacy_events).values(
+                    event_id=f"promo_{uuid.uuid4().hex}",
+                    candidate_id=candidate,
+                    previous_candidate_id=previous,
+                    decision_id=None,
+                    is_rollback=False,
+                    reason="pre-migration history",
+                    promoted_at=base + timedelta(seconds=offset),
+                )
+            )
+    engine.dispose()
+
+    # Opening the store against the legacy schema must migrate in place
+    # (ADD COLUMN + backfill), not raise, and must preserve real order.
+    store = DurableAtlasPromotionStore(database_url)
+    assert [item.candidate_id for item in store.history()] == ["legacy_b", "legacy_a"]
+    assert store.current_production().candidate_id == "legacy_b"  # type: ignore[union-attr]
+
+    # New writes against the migrated database keep working and sort after
+    # every backfilled row.
+    forced = AtlasPromotionDecision(
+        decision_id="decision_c",
+        candidate_id="legacy_c",
+        production_run_id="prod",
+        candidate_run_id="cand",
+        verdict=AtlasPromotionVerdict.PROMOTE_ELIGIBLE,
+        overall_production_pass_rate=0.5,
+        overall_candidate_pass_rate=0.9,
+        critical_regressions=[],
+        decided_at=datetime.now(timezone.utc),
+    )
+    store.promote(forced, reason="first promotion after migration")
+    assert [item.candidate_id for item in store.history()] == ["legacy_c", "legacy_b", "legacy_a"]
 
 
 def test_adapter_capabilities_are_honestly_all_unsupported_right_now() -> None:
