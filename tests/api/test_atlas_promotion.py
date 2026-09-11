@@ -172,6 +172,7 @@ def test_promotion_ordering_survives_equal_promoted_at_timestamps(tmp_path) -> N
     still resolve to genuine insertion order via the sequence tiebreaker,
     not an arbitrary DB-dependent order among tied rows."""
     import os
+    import uuid
     from datetime import datetime as _datetime
     from datetime import timezone as _timezone
     from unittest.mock import patch
@@ -184,18 +185,34 @@ def test_promotion_ordering_survives_equal_promoted_at_timestamps(tmp_path) -> N
     # old (buggy) promoted_at-only ordering. CI's phase-4-live-e2e job runs
     # this file with PRISM_ANALYTICAL_HISTORY_DATABASE_URL set to a real
     # MySQL service container for exactly this reason.
+    #
+    # Real MySQL also has no tmp_path-style per-test isolation -- this test's
+    # rows land in the same shared table every other test in this file using
+    # the same fallback writes to -- so candidate ids are made unique per run
+    # and `history()` is read only for its first two (most recent) entries,
+    # never asserted as the database's entire content.
+    run_id = uuid.uuid4().hex[:8]
+    candidate_a, candidate_b = f"candidate_a_{run_id}", f"candidate_b_{run_id}"
     configured = os.environ.get("PRISM_ANALYTICAL_HISTORY_DATABASE_URL", "")
     database_url = configured if configured.startswith("mysql") else f"sqlite:///{(tmp_path / 'tied-promotions.sqlite').as_posix()}"
     store = DurableAtlasPromotionStore(database_url)
     tied_instant = _datetime.now(_timezone.utc).replace(microsecond=0)
+    # bootstrap() is idempotent by design -- it no-ops once any production
+    # candidate exists, which on shared MySQL a prior test in this file may
+    # already have established -- so the anchor event is appended directly
+    # through the same low-level path promote()/rollback() use, with the
+    # tied instant passed explicitly rather than via the datetime.now() mock
+    # below (which only the still-public promote() call needs).
+    store._append_with_retry(  # noqa: SLF001
+        candidate_id=candidate_a, previous_candidate_id=None, decision_id=None,
+        is_rollback=False, reason="bootstrap", now=tied_instant,
+    )
     with patch("prism_api.atlas_promotion.datetime") as clock:
         clock.now.return_value = tied_instant
-        anchor = store.bootstrap("candidate_a", reason="bootstrap")
-        assert anchor.candidate_id == "candidate_a"
 
         forced = AtlasPromotionDecision(
-            decision_id="decision_b",
-            candidate_id="candidate_b",
+            decision_id=f"decision_{run_id}",
+            candidate_id=candidate_b,
             production_run_id="prod",
             candidate_run_id="cand",
             verdict=AtlasPromotionVerdict.PROMOTE_ELIGIBLE,
@@ -205,16 +222,16 @@ def test_promotion_ordering_survives_equal_promoted_at_timestamps(tmp_path) -> N
             decided_at=tied_instant,
         )
         promoted = store.promote(forced, reason="tied-clock promotion")
-        assert promoted.candidate_id == "candidate_b"
+        assert promoted.candidate_id == candidate_b
 
     # Both events share the same (mocked) promoted_at, so only the sequence
     # tiebreaker can correctly say candidate_b is current, not candidate_a.
-    assert store.current_production().candidate_id == "candidate_b"  # type: ignore[union-attr]
-    assert [item.candidate_id for item in store.history()] == ["candidate_b", "candidate_a"]
+    assert store.current_production().candidate_id == candidate_b  # type: ignore[union-attr]
+    assert [item.candidate_id for item in store.history(limit=2)] == [candidate_b, candidate_a]
 
     rolled_back = store.rollback(reason="tied-clock rollback")
-    assert rolled_back.candidate_id == "candidate_a"
-    assert store.current_production().candidate_id == "candidate_a"  # type: ignore[union-attr]
+    assert rolled_back.candidate_id == candidate_a
+    assert store.current_production().candidate_id == candidate_a  # type: ignore[union-attr]
 
 
 def test_concurrent_promotion_events_never_share_a_sequence(tmp_path) -> None:  # type: ignore[no-untyped-def]
@@ -224,12 +241,29 @@ def test_concurrent_promotion_events_never_share_a_sequence(tmp_path) -> None:  
     raises IntegrityError and _append_with_retry() re-reads and retries."""
     import os
     import threading
+    import uuid
     from datetime import datetime, timezone
+
+    # Real MySQL has no tmp_path-style per-test isolation -- every test using
+    # the `configured` fallback appends to the same shared table across the
+    # whole file, so this test's own rows must be identified by their own
+    # unique candidate ids rather than by an exact total row count.
+    run_id = uuid.uuid4().hex[:8]
+    root_candidate = f"candidate_root_{run_id}"
+    concurrent_candidates = [f"candidate_{i}_{run_id}" for i in range(4)]
 
     configured = os.environ.get("PRISM_ANALYTICAL_HISTORY_DATABASE_URL", "")
     database_url = configured if configured.startswith("mysql") else f"sqlite:///{(tmp_path / 'concurrent-promotions.sqlite').as_posix()}"
     store = DurableAtlasPromotionStore(database_url)
-    store.bootstrap("candidate_root", reason="bootstrap")
+    # bootstrap() is idempotent by design -- it no-ops once any production
+    # candidate exists, which on shared MySQL a prior test in this file may
+    # already have established. Append the root event directly through the
+    # same low-level path the concurrent appends below use, so it always
+    # actually lands as its own row regardless of what ran before it.
+    store._append_with_retry(  # noqa: SLF001
+        candidate_id=root_candidate, previous_candidate_id=None, decision_id=None,
+        is_rollback=False, reason="bootstrap", now=datetime.now(timezone.utc),
+    )
 
     errors: list[BaseException] = []
 
@@ -237,7 +271,7 @@ def test_concurrent_promotion_events_never_share_a_sequence(tmp_path) -> None:  
         try:
             store._append_with_retry(  # noqa: SLF001 -- exercising the lock/retry path directly
                 candidate_id=candidate_id,
-                previous_candidate_id="candidate_root",
+                previous_candidate_id=root_candidate,
                 decision_id=None,
                 is_rollback=False,
                 reason=f"concurrent append {candidate_id}",
@@ -246,14 +280,15 @@ def test_concurrent_promotion_events_never_share_a_sequence(tmp_path) -> None:  
         except BaseException as exc:  # noqa: BLE001 -- surfaced via `errors` for the assertion below
             errors.append(exc)
 
-    threads = [threading.Thread(target=append, args=(f"candidate_{i}",)) for i in range(4)]
+    threads = [threading.Thread(target=append, args=(candidate_id,)) for candidate_id in concurrent_candidates]
     for thread in threads:
         thread.start()
     for thread in threads:
         thread.join()
 
     assert not errors, f"append raised under concurrency: {errors}"
-    sequences = [item.candidate_id for item in store.history(limit=10)]
+    this_run = {root_candidate, *concurrent_candidates}
+    sequences = [item.candidate_id for item in store.history(limit=200) if item.candidate_id in this_run]
     assert len(sequences) == 5  # bootstrap + 4 concurrent appends
     assert len(set(sequences)) == 5, f"no candidate should be lost or duplicated: {sequences}"
 
