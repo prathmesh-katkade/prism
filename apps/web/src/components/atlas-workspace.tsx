@@ -96,17 +96,26 @@ export function AtlasWorkspace({
       .catch(() => undefined);
     return () => { cancelled = true; };
   }, [run?.run_id, run?.plan.state]);
-  async function refresh(id: string) {
+  async function refresh(id: string): Promise<AtlasRunResponse | null> {
     const [runResponse, graphResponse] = await Promise.all([fetch(apiUrl(`/api/v1/atlas/runs/${id}`)), fetch(apiUrl(`/api/v1/atlas/runs/${id}/cortex`))]);
     if (runResponse.ok) {
       const nextRun = await runResponse.json() as AtlasRunResponse;
-      if (nextRun.plan.dataset_id !== datasetId) return;
+      if (nextRun.plan.dataset_id !== datasetId) return null;
       setRun(nextRun);
       if (graphResponse.ok) setGraph(await graphResponse.json() as CortexGraphState);
+      return nextRun;
     }
+    return null;
   }
   useEffect(() => {
-    if (datasetId && initialRunId) void refresh(initialRunId);
+    if (!datasetId || !initialRunId) return;
+    // A restored run may still be executing: a one-time snapshot alone would
+    // leave the pipeline/graph/result frozen until a manual reload, since only
+    // the SSE watcher below consumes further durable updates.
+    void (async () => {
+      const restored = await refresh(initialRunId);
+      if (restored && !terminal.has(restored.plan.state ?? "")) void watch(initialRunId);
+    })();
   }, [datasetId, initialRunId]);
   async function watch(id: string) {
     cancelStream.current?.abort(); const controller = new AbortController(); cancelStream.current = controller;

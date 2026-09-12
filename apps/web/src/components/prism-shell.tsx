@@ -70,8 +70,19 @@ export function PrismShell() {
   // Dataset context normally enters through Overview's upload control. Retain a
   // shareable local restore path so a browser reload can reconnect native
   // workspaces, including the real per-run Cortex, to an already-durable dataset.
-  const [activeDatasetId, setActiveDatasetId] = useState<string | undefined>(initialDatasetId);
-  const [activeAtlasRunId] = useState<string | undefined>(initialRunId);
+  // Both start `undefined` (matching the server-rendered HTML, since this
+  // component's server pass has no `window`) and are hydrated from the URL in
+  // an effect below -- reading the URL directly in the lazy initializer would
+  // return a real value only on the client's first render, mismatching what
+  // the server actually sent and forcing React to discard and regenerate it.
+  const [activeDatasetId, setActiveDatasetId] = useState<string | undefined>(undefined);
+  const [activeAtlasRunId, setActiveAtlasRunId] = useState<string | undefined>(undefined);
+  useEffect(() => {
+    const datasetId = initialDatasetId();
+    if (datasetId) setActiveDatasetId(datasetId);
+    const runId = initialRunId();
+    if (runId) setActiveAtlasRunId(runId);
+  }, []);
   const commandTrigger = useRef<HTMLButtonElement>(null);
   const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? baseTab;
   const activeMigration = activeTab.workflow ? findMigration(activeTab.workflow) : null;

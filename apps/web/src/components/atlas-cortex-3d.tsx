@@ -77,6 +77,12 @@ export function AtlasCortex3D({
 }) {
   const [focus, setFocus] = useState<string | null>(null);
   const [distance, setDistance] = useState(7);
+  // A node_id (and, for shared specialist/tool ids, the step it resolved to)
+  // is only meaningful for the run that produced it. Starting a new
+  // investigation replaces `run`/`graph` in place rather than remounting this
+  // component, so a stale focus would otherwise either mute every node in the
+  // new graph (isVisible) or point the parent's selection at the wrong step.
+  useEffect(() => { setFocus(null); }, [run?.run_id]);
   const nodes = useMemo(() => graph?.nodes ?? [], [graph]);
   const edges = graph?.edges ?? [];
   const kinds = useMemo(() => [...new Set(nodes.map((node) => node.kind))].sort(), [nodes]);
