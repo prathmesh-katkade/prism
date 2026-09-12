@@ -1,9 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import type { AtlasFeedbackEvent, AtlasMemoryRecord, AtlasResourceSnapshot, AtlasRunResponse, AtlasSpecialistIdentity, CortexGraphState, CortexNode } from "@prism/api-contracts";
+import { useEffect, useRef, useState } from "react";
+import type { AtlasFeedbackEvent, AtlasMemoryRecord, AtlasResourceSnapshot, AtlasRunResponse, AtlasSpecialistIdentity, CortexGraphState } from "@prism/api-contracts";
 import { apiUrl } from "../config/api";
 import { buildSpecialistActivity, EvidencePanel, GuardrailPanel, PipelineStepper, RunMemoryTrace, ToolTimeline } from "./atlas-run-activity";
+import { AtlasCortex3D } from "./atlas-cortex-3d";
+
+export { connectedStepIdForNode } from "./atlas-cortex-shared";
 
 const terminal = new Set(["completed", "failed", "cancelled"]);
 
@@ -109,7 +112,7 @@ export function AtlasWorkspace({ datasetId, initialRunId }: { datasetId: string 
       <EvidencePanel run={run} />
       <RunMemoryTrace run={run} memories={runMemories} feedback={runFeedback} />
       <AtlasPulse memories={memories} resources={resources} onRefresh={() => void refreshPulse()} />
-      {graph ? <CortexV1 graph={graph} run={run} selectedStepId={selectedStepId} onSelectStep={setSelectedStepId} /> : null}
+      {graph ? <AtlasCortex3D graph={graph} run={run} selectedStepId={selectedStepId} onSelectStep={setSelectedStepId} /> : null}
     </> : null}
   </article>;
 }
@@ -137,33 +140,3 @@ function SpecialistRail({ run, roster, selectedStepId, onSelectStep }: { run: At
 function CouncilInspector({ run, selectedStepId }: { run: AtlasRunResponse; selectedStepId: string | null }) { const council = run.council ?? []; const selectedStep = (run.plan.steps ?? []).find((step) => step.step_id === selectedStepId); const selectedCouncil = selectedStep ? council.filter((item) => item.specialist === selectedStep.specialist) : council; return <aside className="atlas-council"><span className="eyebrow">COUNCIL · EVIDENCE</span>{selectedStep ? <p className="atlas-selection-caption">Showing evidence reported by <strong>{selectedStep.specialist}</strong> for the selected plan step.</p> : null}{selectedCouncil.length ? selectedCouncil.map((item) => <article key={`${item.specialist}-${item.conclusion}`}><strong>{item.specialist}</strong><p>{item.conclusion}</p>{(item.objections ?? []).map((objection) => <small key={objection}>Objection: {objection}</small>)}{(item.evidence ?? []).map((evidence) => <code key={evidence.evidence_id}>{evidence.evidence_id}</code>)}</article>) : <p>{selectedStep ? "No conclusion is recorded for this selected step yet." : "Conclusions will appear only after a real tool records evidence."}</p>}</aside>; }
 function AtlasPulse({ memories, resources, onRefresh }: { memories: AtlasMemoryRecord[]; resources: AtlasResourceSnapshot | null; onRefresh: () => void }) { return <section className="atlas-run-grid" aria-label="Atlas memory and resource pulse"><aside className="atlas-council"><span className="eyebrow">MEMORY · INSPECTOR</span>{memories.length ? memories.map((memory) => <article key={memory.memory_id}><strong>{memory.scope} · {memory.confidence}</strong><p>{memory.content}</p><small>{memory.source}</small></article>) : <p>No memories loaded. Atlas memory is durable, scoped, and user-reviewable.</p>}</aside><aside className="atlas-specialists"><span className="eyebrow">ATLAS PULSE</span>{resources ? <><strong>{resources.cpu_count} CPU threads</strong><small>{resources.memory_available_mb ?? "Unknown"} MB RAM available</small><small>{resources.gpu_available ? `${resources.gpu_name ?? "GPU"} · ${resources.vram_total_mb ?? "unknown"} MB VRAM` : resources.gpu_telemetry_detail}</small></> : <p>Refresh to inspect real host capability and active workloads.</p>}<button className="secondary" onClick={onRefresh}>Refresh Atlas Pulse</button></aside><aside className="atlas-council"><span className="eyebrow">RESEARCH · CITATIONS</span><p>Researcher only accepts specific allowlisted HTTPS sources. Web material stays untrusted and is kept distinct from local evidence.</p></aside></section>; }
 
-/** Cortex V2: the same real, durable graph -- extended, never replaced --
- * with a kind filter (derived only from kinds actually present) and a
- * detail panel for whatever node is currently focused. */
-export function connectedStepIdForNode(node: CortexNode, run: AtlasRunResponse): string | null {
-  const steps = run.plan.steps ?? [];
-  if (node.kind === "plan_step") return steps.some((step) => step.step_id === node.source_id) ? node.source_id : null;
-  if (node.kind === "specialist") return steps.find((step) => step.specialist === node.source_id && step.state === "running")?.step_id ?? steps.find((step) => step.specialist === node.source_id)?.step_id ?? null;
-  if (node.kind === "tool") return steps.find((step) => step.tool_name === node.source_id && step.state === "running")?.step_id ?? steps.find((step) => step.tool_name === node.source_id)?.step_id ?? null;
-  return null;
-}
-
-function CortexV1({ graph, run, selectedStepId, onSelectStep }: { graph: CortexGraphState; run: AtlasRunResponse; selectedStepId: string | null; onSelectStep(stepId: string): void }) {
-  const [focus, setFocus] = useState<string | null>(null); const [zoom, setZoom] = useState(1);
-  const nodes = useMemo(() => graph.nodes ?? [], [graph]); const edges = graph.edges ?? [];
-  const kinds = useMemo(() => [...new Set(nodes.map((node) => node.kind))].sort(), [nodes]);
-  const [hiddenKinds, setHiddenKinds] = useState<Set<string>>(new Set());
-  const positions = useMemo(() => Object.fromEntries(nodes.map((node, index) => [node.node_id, positionFor(node, index, nodes.length)])), [nodes]);
-  const visible = (node: CortexNode) => !hiddenKinds.has(node.kind) && (!focus || node.node_id === focus || edges.some((edge) => (edge.source_node_id === focus && edge.target_node_id === node.node_id) || (edge.target_node_id === focus && edge.source_node_id === node.node_id)));
-  const focusedNode = focus ? nodes.find((node) => node.node_id === focus) ?? null : null;
-  function toggleKind(kind: string) { setHiddenKinds((prev) => { const next = new Set(prev); if (next.has(kind)) next.delete(kind); else next.add(kind); return next; }); }
-  const active = run.plan.state === "running";
-  return <section className="cortex-v1" aria-label="Cortex real-state graph">
-    <header><div><span className="eyebrow">CORTEX · DURABLE STATE ONLY</span><h2>Run topology</h2><p>{nodes.length} real nodes · {edges.length} real relations · {active ? "flow reflects the active persisted run." : "ambient layout only; no event flow is implied."}</p></div><div className="cortex-controls"><button onClick={() => setZoom((value) => Math.min(1.5, value + 0.1))} aria-label="Zoom in Cortex">+</button><button onClick={() => setZoom((value) => Math.max(0.7, value - 0.1))} aria-label="Zoom out Cortex">−</button><button onClick={() => setFocus(null)} disabled={!focus}>Reset focus</button></div></header>
-    <div className="cortex-filters" role="group" aria-label="Filter Cortex by node kind">{kinds.map((kind) => <button key={kind} type="button" className={`migration-chip ${hiddenKinds.has(kind) ? "" : "ready"}`} aria-pressed={!hiddenKinds.has(kind)} onClick={() => toggleKind(kind)}>{kind.replaceAll("_", " ")}</button>)}</div>
-    <svg viewBox="0 0 800 420" role="img" aria-label="Cortex graph of this Atlas run" className="cortex-canvas" data-active={active}>{<g transform={`translate(400 210) scale(${zoom}) translate(-400 -210)`}>{edges.map((edge) => { const a = positions[edge.source_node_id]!, b = positions[edge.target_node_id]!; return <path key={edge.edge_id} className={focus && edge.source_node_id !== focus && edge.target_node_id !== focus ? "is-muted" : ""} d={`M ${a.x} ${a.y} Q ${(a.x + b.x) / 2} ${Math.min(a.y, b.y) - 36} ${b.x} ${b.y}`} />; })}{nodes.map((node) => { const point = positions[node.node_id]!; const connectedStepId = connectedStepIdForNode(node, run); const selected = connectedStepId === selectedStepId; return <g key={node.node_id} className={`${visible(node) ? "" : "is-muted"} state-${node.state}${node.label.startsWith("Memory:") ? " is-memory" : ""}${selected ? " is-selected" : ""}`} transform={`translate(${point.x} ${point.y})`} tabIndex={0} role="button" aria-label={`Focus ${node.label}`} onClick={() => { setFocus(node.node_id); if (connectedStepId) onSelectStep(connectedStepId); }} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { setFocus(node.node_id); if (connectedStepId) onSelectStep(connectedStepId); } }}><circle r={node.kind === "run" ? 24 : 14} /><text y={node.kind === "run" ? 43 : 32}>{node.label.slice(0, 28)}</text></g>; })}</g>}</svg>
-    {focusedNode ? <dl className="cortex-detail" aria-label="Selected Cortex node"><dt>Kind</dt><dd>{focusedNode.kind.replaceAll("_", " ")}</dd><dt>Label</dt><dd>{focusedNode.label}</dd><dt>State</dt><dd>{focusedNode.state}</dd><dt>Source ID</dt><dd className="acc-mono">{focusedNode.source_id}</dd></dl> : null}
-    <ul className="cortex-legend"><li>Running / current</li><li>Recorded evidence</li><li>Blocked or cancelled</li></ul>
-  </section>;
-}
-function positionFor(node: CortexNode, index: number, total: number) { if (node.kind === "run") return { x: 400, y: 210 }; const angle = (index / Math.max(1, total - 1)) * Math.PI * 2; const radius = node.kind === "evidence" ? 170 : 110; return { x: 400 + Math.cos(angle) * radius, y: 210 + Math.sin(angle) * radius }; }

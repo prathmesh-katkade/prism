@@ -93,3 +93,32 @@
 .atlas-evidence { margin-top:16px;padding:14px 16px;border:1px solid var(--line);background:var(--surface); }.atlas-evidence > ul { list-style:none;margin:12px 0 0;padding:0;display:flex;flex-direction:column;gap:6px; }
 .atlas-evidence li { border-left:2px solid var(--line-soft);padding:0 0 0 10px; }.atlas-evidence summary { cursor:pointer;font-size:12px;display:flex;gap:8px;align-items:center; }.atlas-evidence summary .migration-chip { flex-shrink:0; }
 .atlas-evidence dl { display:grid;grid-template-columns:auto 1fr;gap:4px 12px;margin:8px 0 4px 2px;font-size:11px; }.atlas-evidence dt { color:var(--faint); }.atlas-evidence dd { margin:0;color:var(--muted); }.atlas-evidence > p { margin:12px 0 0;color:var(--faint);font-size:12px; }
+/* Cortex V3: the immersive 3D scene. The stage reserves a real chunk of the
+   viewport (roughly half on a laptop-height window) so the core reads as a
+   presence, not a thumbnail; it never grows large enough on its own to push
+   the rest of the run's real evidence below the fold. */
+.cortex-3d .cortex-stage { position:relative;width:100%;min-height:360px;height:56vh;max-height:640px;margin-top:14px;border:1px solid var(--line-soft);border-radius:6px;overflow:hidden;background:radial-gradient(circle at 50% 42%,color-mix(in srgb,var(--accent-soft) 30%,transparent),transparent 55%),var(--canvas); }
+.cortex-3d .cortex-stage canvas { display:block;width:100% !important;height:100% !important;cursor:grab; }
+.cortex-3d .cortex-stage canvas:active { cursor:grabbing; }
+.cortex-stage-fallback { position:absolute;inset:0;display:grid;place-items:center; }
+.cortex-orb-static { width:120px;height:120px;border-radius:50%;background:radial-gradient(circle at 38% 32%,color-mix(in srgb,var(--muted) 55%,transparent),transparent 60%),var(--surface-raised);border:2px solid var(--faint);box-shadow:0 0 40px -6px color-mix(in srgb,var(--faint) 45%,transparent);animation:cortex-orb-breathe 4.5s ease-in-out infinite; }
+.cortex-orb-static.is-active { border-color:var(--accent);box-shadow:0 0 46px -4px color-mix(in srgb,var(--accent) 65%,transparent);animation-duration:1.4s; }
+@keyframes cortex-orb-breathe { 50% { transform:scale(1.06); } }
+/* A real, keyboard-focusable mirror of every node the canvas draws -- kept
+   off-screen until focused so pointer users see the 3D scene while keyboard
+   and screen-reader users get identical facts and actions via native
+   buttons, never depending on canvas hit-testing. */
+/* A real, keyboard-operable mirror of every node the canvas draws: pointer
+   users get the 3D scene, keyboard and screen-reader users get the same
+   facts and actions as an ordinary chip row, never depending on canvas
+   hit-testing. */
+.cortex-node-list { list-style:none;display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 0;padding:0; }
+.cortex-node-list button { padding:6px 9px;border:1px solid var(--line);border-radius:4px;background:var(--surface-raised);color:var(--text);font-size:11px;cursor:pointer; }
+.cortex-node-list button[data-tone="active"] { border-color:var(--accent);color:var(--accent); }
+.cortex-node-list button[data-tone="good"] { border-color:var(--good); }
+.cortex-node-list button[data-tone="danger"] { border-color:var(--danger); }
+.cortex-node-list button[data-muted="true"] { opacity:.4; }
+.cortex-node-list button[aria-pressed="true"] { background:var(--surface-muted);box-shadow:inset 0 0 0 2px var(--accent); }
+.cortex-node-list small { display:block;color:var(--faint);font:9px var(--mono);text-transform:uppercase;margin-top:2px; }
+@media (max-width:1000px) { .cortex-3d .cortex-stage { height:44vh; } }
+@media (prefers-reduced-motion:reduce) { .cortex-orb-static { animation:none; } }

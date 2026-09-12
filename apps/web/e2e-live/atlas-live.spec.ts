@@ -89,6 +89,21 @@ test("ATLAS First Light: honest system state, a real investigation, and the rece
   await page.keyboard.press("Enter");
   await expect(firstEvidenceDetail.getByText("Summary")).toBeVisible();
 
+  // Cortex: the real durable graph, now a 3D scene in a real browser (never
+  // the jsdom/no-WebGL fallback), plus its accessible node chip row --
+  // clicking a real node updates the detail panel with that node's actual
+  // persisted facts, never an invented one.
+  const cortex = page.getByLabel("Cortex real-state graph");
+  await expect(cortex).toBeVisible();
+  await expect(cortex.locator(".cortex-stage canvas")).toBeVisible();
+  const cortexNodes = page.getByLabel("Cortex nodes");
+  const runNodeButton = cortexNodes.getByRole("button", { name: "Focus Atlas run" });
+  await expect(runNodeButton).toBeVisible();
+  await runNodeButton.click();
+  const cortexDetail = page.getByLabel("Selected Cortex node");
+  await expect(cortexDetail).toBeVisible();
+  await expect(cortexDetail.getByText("run", { exact: true })).toBeVisible();
+
   // Memory/RAG: a brand-new run cites no prior memory and has received no
   // feedback -- the truthful empty state, not a hidden or broken panel.
   const memoryTrace = page.getByLabel("Atlas memory used by this run");
