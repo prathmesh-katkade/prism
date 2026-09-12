@@ -16,7 +16,6 @@ import { EvidenceInspector } from "./evidence-inspector";
 import { HistoryWorkspace } from "./history-workspace";
 import { AtlasWorkspace } from "./atlas-workspace";
 import { AtlasStatusBadge } from "./atlas-status-badge";
-import { AtlasCommandCenter } from "./atlas-command-center";
 import { EvolutionWorkspace } from "./evolution-workspace";
 import { migrationPresentation, phaseTwoMigrations, type InspectorObjectState, type ShellStatus, type WorkspaceTab } from "../state/shell-model";
 import { useLayoutState } from "../state/use-layout-state";
@@ -43,6 +42,18 @@ function findMigration(workflow: string): MigrationState {
 
 const nativeKinds: Record<string, WorkspaceTab["kind"]> = { overview: "overview", "sql-lab": "sql-lab", "ai-analyst": "ai-analyst", clean: "clean", visualize: "visualize", stats: "stats", forecasting: "forecasting", ml: "ml", history: "history", atlas: "atlas", evolution: "evolution" };
 
+function initialDatasetId(): string | undefined {
+  if (typeof window === "undefined") return undefined;
+  const datasetId = new URLSearchParams(window.location.search).get("dataset_id")?.trim();
+  return datasetId || undefined;
+}
+
+function initialRunId(): string | undefined {
+  if (typeof window === "undefined") return undefined;
+  const runId = new URLSearchParams(window.location.search).get("run_id")?.trim();
+  return runId || undefined;
+}
+
 function workflowTab(workflow: string): WorkspaceTab {
   return { id: `workspace:${workflow}`, label: navigation.find((item) => item.workflow === workflow)?.label ?? workflow, kind: nativeKinds[workflow] ?? "bridge", workflow, closeable: true };
 }
@@ -56,7 +67,22 @@ export function PrismShell() {
   const [selectedContext, setSelectedContext] = useState<InspectorObjectState | null>(null);
   const [sqlDraft, setSqlDraft] = useState<string | undefined>();
   const [analystResultRunId, setAnalystResultRunId] = useState<string | undefined>();
-  const [activeDatasetId, setActiveDatasetId] = useState<string | undefined>();
+  // Dataset context normally enters through Overview's upload control. Retain a
+  // shareable local restore path so a browser reload can reconnect native
+  // workspaces, including the real per-run Cortex, to an already-durable dataset.
+  // Both start `undefined` (matching the server-rendered HTML, since this
+  // component's server pass has no `window`) and are hydrated from the URL in
+  // an effect below -- reading the URL directly in the lazy initializer would
+  // return a real value only on the client's first render, mismatching what
+  // the server actually sent and forcing React to discard and regenerate it.
+  const [activeDatasetId, setActiveDatasetId] = useState<string | undefined>(undefined);
+  const [activeAtlasRunId, setActiveAtlasRunId] = useState<string | undefined>(undefined);
+  useEffect(() => {
+    const datasetId = initialDatasetId();
+    if (datasetId) setActiveDatasetId(datasetId);
+    const runId = initialRunId();
+    if (runId) setActiveAtlasRunId(runId);
+  }, []);
   const commandTrigger = useRef<HTMLButtonElement>(null);
   const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? baseTab;
   const activeMigration = activeTab.workflow ? findMigration(activeTab.workflow) : null;
@@ -177,7 +203,7 @@ export function PrismShell() {
             <div className="workspace-tab-actions"><button className="tab-add" aria-label="Open command surface" onClick={() => setCommandOpen(true)}>+</button><button className={layout.splitView ? "tab-tool is-active" : "tab-tool"} aria-label="Toggle split view" aria-pressed={layout.splitView} onClick={() => updateLayout({ splitView: !layout.splitView })}><Icon name="split" /></button></div>
           </div>
           <section id={`panel-${activeTab.id}`} role="tabpanel" aria-labelledby={`tab-${activeTab.id}`} className={layout.splitView ? "workspace-content split-enabled" : "workspace-content"}>
-            <WorkspaceSurface tab={activeTab} status={status} onStatusChange={setStatus} onOpenCommand={() => setCommandOpen(true)} onSelectContext={setSelectedContext} onOpenWorkflow={openWorkflow} sqlDraft={sqlDraft} analystResultRunId={analystResultRunId} activeDatasetId={activeDatasetId} onDatasetReady={setActiveDatasetId} onSqlDraft={(draft) => { setSqlDraft(draft); openWorkflow("sql-lab"); }} onUseAsEvidence={(runId) => { setAnalystResultRunId(runId); openWorkflow("ai-analyst"); }} />
+            <WorkspaceSurface tab={activeTab} status={status} onStatusChange={setStatus} onOpenCommand={() => setCommandOpen(true)} onSelectContext={setSelectedContext} onOpenWorkflow={openWorkflow} sqlDraft={sqlDraft} analystResultRunId={analystResultRunId} activeDatasetId={activeDatasetId} initialAtlasRunId={activeAtlasRunId} onDatasetReady={setActiveDatasetId} onSqlDraft={(draft) => { setSqlDraft(draft); openWorkflow("sql-lab"); }} onUseAsEvidence={(runId) => { setAnalystResultRunId(runId); openWorkflow("ai-analyst"); }} onEnterAtlasImmersive={() => updateLayout({ railCollapsed: true, inspectorOpen: false })} onExitAtlasImmersive={() => updateLayout({ railCollapsed: false, inspectorOpen: true })} onBackToProject={() => { setActiveTabId(baseTab.id); setStatus("project-loaded"); }} />
             {layout.splitView ? <aside className="split-foundation" aria-label="Secondary tab group foundation"><p>SECONDARY TAB GROUP</p><strong>Drop a tab here</strong><span>Split-view layout is saved locally. Analytical content does not duplicate here until its migration phase.</span></aside> : null}
           </section>
           <button className={layout.atlasExpanded ? "atlas-presence is-expanded" : "atlas-presence"} onClick={() => updateLayout({ atlasExpanded: !layout.atlasExpanded })} aria-expanded={layout.atlasExpanded} aria-label="Expand Atlas workspace"><span className="atlas-signal"><i /><i /><i /></span><span><strong>Atlas</strong><small>{layout.atlasExpanded ? "Context workspace ready" : "Watching workspace context"}</small></span><Icon name="arrow" /></button>
@@ -194,7 +220,7 @@ function ResizeHandle({ panel, value, onPointerDown, onKeyboardResize }: { panel
   return <div className={`resize-handle resize-handle-${panel}`} role="separator" aria-label={`Resize ${panel === "rail" ? "navigation" : "inspector"}`} aria-orientation="vertical" aria-valuemin={panel === "rail" ? 180 : 240} aria-valuemax={panel === "rail" ? 360 : 420} aria-valuenow={value} tabIndex={0} onPointerDown={(event) => onPointerDown(panel, event)} onKeyDown={(event) => { if (event.key === "ArrowLeft") onKeyboardResize(-12); if (event.key === "ArrowRight") onKeyboardResize(12); }} />;
 }
 
-function WorkspaceSurface({ tab, status, onStatusChange, onOpenCommand, onSelectContext, onOpenWorkflow, sqlDraft, analystResultRunId, activeDatasetId, onDatasetReady, onSqlDraft, onUseAsEvidence }: { tab: WorkspaceTab; status: ShellStatus; onStatusChange(status: ShellStatus): void; onOpenCommand(): void; onSelectContext(state: InspectorObjectState): void; onOpenWorkflow(workflow: string): void; sqlDraft: string | undefined; analystResultRunId: string | undefined; activeDatasetId: string | undefined; onDatasetReady(datasetId: string): void; onSqlDraft(draft: string): void; onUseAsEvidence(runId: string): void }) {
+function WorkspaceSurface({ tab, status, onStatusChange, onOpenCommand, onSelectContext, onOpenWorkflow, sqlDraft, analystResultRunId, activeDatasetId, initialAtlasRunId, onDatasetReady, onSqlDraft, onUseAsEvidence, onEnterAtlasImmersive, onExitAtlasImmersive, onBackToProject }: { tab: WorkspaceTab; status: ShellStatus; onStatusChange(status: ShellStatus): void; onOpenCommand(): void; onSelectContext(state: InspectorObjectState): void; onOpenWorkflow(workflow: string): void; sqlDraft: string | undefined; analystResultRunId: string | undefined; activeDatasetId: string | undefined; initialAtlasRunId: string | undefined; onDatasetReady(datasetId: string): void; onSqlDraft(draft: string): void; onUseAsEvidence(runId: string): void; onEnterAtlasImmersive(): void; onExitAtlasImmersive(): void; onBackToProject(): void }) {
   if (tab.kind === "overview") return <OverviewWorkspace activeDatasetId={activeDatasetId} onSelectContext={onSelectContext} onOpenWorkflow={onOpenWorkflow} onDatasetReady={onDatasetReady} />;
   if (tab.kind === "sql-lab") return <QueryStudio onSelectContext={onSelectContext} {...(sqlDraft ? { initialSql: sqlDraft } : {})} onUseAsEvidence={onUseAsEvidence} />;
   if (tab.kind === "ai-analyst") return <AiAnalyst datasetId={activeDatasetId} resultRunId={analystResultRunId} onSqlDraft={onSqlDraft} onSelectContext={onSelectContext} />;
@@ -206,10 +232,13 @@ function WorkspaceSurface({ tab, status, onStatusChange, onOpenCommand, onSelect
   if (tab.kind === "history") return <HistoryWorkspace onSelectContext={onSelectContext} />;
   if (tab.kind === "atlas")
     return (
-      <>
-        <AtlasCommandCenter />
-        <AtlasWorkspace datasetId={activeDatasetId} />
-      </>
+      <AtlasWorkspace
+        datasetId={activeDatasetId}
+        initialRunId={initialAtlasRunId}
+        onEnterImmersive={onEnterAtlasImmersive}
+        onExitImmersive={onExitAtlasImmersive}
+        onBackToProject={onBackToProject}
+      />
     );
   if (tab.kind === "evolution") return <EvolutionWorkspace />;
   if (tab.kind === "bridge" && tab.workflow) {

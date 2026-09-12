@@ -1,13 +1,43 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import type { AtlasFeedbackEvent, AtlasMemoryRecord, AtlasResourceSnapshot, AtlasRunResponse, AtlasSpecialistIdentity, CortexGraphState, CortexNode } from "@prism/api-contracts";
+import { useEffect, useRef, useState } from "react";
+import type { KeyboardEvent } from "react";
+import type { AtlasFeedbackEvent, AtlasMemoryRecord, AtlasResourceSnapshot, AtlasRunResponse, AtlasSpecialistIdentity, CortexGraphState } from "@prism/api-contracts";
 import { apiUrl } from "../config/api";
-import { buildSpecialistActivity, EvidencePanel, GuardrailPanel, PipelineStepper, RunMemoryTrace, ToolTimeline } from "./atlas-run-activity";
+import { PipelineStepper } from "./atlas-run-activity";
+import { AtlasCortex3D } from "./atlas-cortex-3d";
+import { AtlasInspectorDrawer } from "./atlas-inspector-drawer";
+import { AtlasCommandCenter } from "./atlas-command-center";
+import { AtlasStatusBadge } from "./atlas-status-badge";
+import { Icon } from "./icons";
+import type { CortexSelection } from "./atlas-cortex-shared";
+
+export { connectedStepIdForNode } from "./atlas-cortex-shared";
 
 const terminal = new Set(["completed", "failed", "cancelled"]);
 
-export function AtlasWorkspace({ datasetId }: { datasetId: string | undefined }) {
+/**
+ * ATLAS's immersive shell: a dedicated environment (top identity/status,
+ * a dominant 3D Cortex, a bottom command bar, a side context inspector)
+ * rather than another flat stack of panels in the ordinary PRISM tab body.
+ * `onEnterImmersive`/`onExitImmersive` are optional so this still renders
+ * correctly wherever a caller (a test, a future embed) doesn't wire them --
+ * they only ever ask the *shell* to recede/restore its own nav chrome, never
+ * fabricate or gate any Atlas data.
+ */
+export function AtlasWorkspace({
+  datasetId,
+  initialRunId,
+  onEnterImmersive,
+  onExitImmersive,
+  onBackToProject,
+}: {
+  datasetId: string | undefined;
+  initialRunId?: string | undefined;
+  onEnterImmersive?: () => void;
+  onExitImmersive?: () => void;
+  onBackToProject?: () => void;
+}) {
   const [objective, setObjective] = useState("Profile this dataset and identify the evidence needed for the next decision.");
   const [run, setRun] = useState<AtlasRunResponse | null>(null);
   const [graph, setGraph] = useState<CortexGraphState | null>(null);
@@ -16,9 +46,26 @@ export function AtlasWorkspace({ datasetId }: { datasetId: string | undefined })
   const [roster, setRoster] = useState<AtlasSpecialistIdentity[]>([]);
   const [runMemories, setRunMemories] = useState<AtlasMemoryRecord[]>([]);
   const [runFeedback, setRunFeedback] = useState<AtlasFeedbackEvent[]>([]);
+  const [selectedStepId, setSelectedStepId] = useState<string | null>(null);
+  const [selection, setSelection] = useState<CortexSelection>({ kind: "core" });
+  const [systemOpen, setSystemOpen] = useState(false);
+  const [resultExpanded, setResultExpanded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const cancelStream = useRef<AbortController | null>(null);
   useEffect(() => () => cancelStream.current?.abort(), []);
+
+  // Entering the Atlas tab collapses PRISM's own nav/inspector chrome so the
+  // Cortex gets a dedicated environment; leaving (unmount, or "Back to
+  // PRISM") restores it. Both are no-ops when the caller doesn't wire them.
+  useEffect(() => {
+    onEnterImmersive?.();
+    return () => onExitImmersive?.();
+    // Intentionally mount/unmount-only: the caller's callbacks are expected
+    // to be stable enough to collapse/restore nav chrome once per Atlas tab
+    // lifetime, not on every parent re-render (which would otherwise fight
+    // the user's own manual rail/inspector toggles).
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     fetch(apiUrl("/api/v1/atlas/specialists"))
@@ -49,11 +96,27 @@ export function AtlasWorkspace({ datasetId }: { datasetId: string | undefined })
       .catch(() => undefined);
     return () => { cancelled = true; };
   }, [run?.run_id, run?.plan.state]);
-  async function refresh(id: string) {
+  async function refresh(id: string): Promise<AtlasRunResponse | null> {
     const [runResponse, graphResponse] = await Promise.all([fetch(apiUrl(`/api/v1/atlas/runs/${id}`)), fetch(apiUrl(`/api/v1/atlas/runs/${id}/cortex`))]);
-    if (runResponse.ok) setRun(await runResponse.json() as AtlasRunResponse);
-    if (graphResponse.ok) setGraph(await graphResponse.json() as CortexGraphState);
+    if (runResponse.ok) {
+      const nextRun = await runResponse.json() as AtlasRunResponse;
+      if (nextRun.plan.dataset_id !== datasetId) return null;
+      setRun(nextRun);
+      if (graphResponse.ok) setGraph(await graphResponse.json() as CortexGraphState);
+      return nextRun;
+    }
+    return null;
   }
+  useEffect(() => {
+    if (!datasetId || !initialRunId) return;
+    // A restored run may still be executing: a one-time snapshot alone would
+    // leave the pipeline/graph/result frozen until a manual reload, since only
+    // the SSE watcher below consumes further durable updates.
+    void (async () => {
+      const restored = await refresh(initialRunId);
+      if (restored && !terminal.has(restored.plan.state ?? "")) void watch(initialRunId);
+    })();
+  }, [datasetId, initialRunId]);
   async function watch(id: string) {
     cancelStream.current?.abort(); const controller = new AbortController(); cancelStream.current = controller;
     try {
@@ -65,7 +128,7 @@ export function AtlasWorkspace({ datasetId }: { datasetId: string | undefined })
     } catch (reason) { if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : "Atlas stream failed."); }
   }
   async function start() {
-    if (!datasetId) return; setError(null); setRun(null); setGraph(null); setRunMemories([]); setRunFeedback([]);
+    if (!datasetId) return; setError(null); setRun(null); setGraph(null); setRunMemories([]); setRunFeedback([]); setSelectedStepId(null); setSelection({ kind: "core" }); setResultExpanded(false);
     const response = await fetch(apiUrl("/api/v1/atlas/runs"), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ dataset_id: datasetId, objective, idempotency_key: crypto.randomUUID() }) });
     if (!response.ok) { setError((await response.json() as { detail?: string }).detail ?? "Atlas run could not start."); return; }
     const created = await response.json() as AtlasRunResponse; setRun(created); await refresh(created.run_id); void watch(created.run_id);
@@ -76,57 +139,136 @@ export function AtlasWorkspace({ datasetId }: { datasetId: string | undefined })
     if (memoryResponse.ok) setMemories(await memoryResponse.json() as AtlasMemoryRecord[]);
     if (resourceResponse.ok) setResources(await resourceResponse.json() as AtlasResourceSnapshot);
   }
-  if (!datasetId) return <section className="atlas-state empty-state"><span className="eyebrow">ATLAS · LOCAL ORCHESTRATION</span><h1>Load a dataset before opening an investigation.</h1><p>Atlas plans against durable dataset metadata and never ships raw rows to a provider.</p></section>;
+  useEffect(() => {
+    if (!run) return;
+    const steps = run.plan.steps ?? [];
+    if (!steps.length) { setSelectedStepId(null); return; }
+    const stillExists = selectedStepId && steps.some((step) => step.step_id === selectedStepId);
+    if (stillExists) return;
+    const current = steps.find((step) => step.state === "running") ?? [...steps].reverse().find((step) => step.state === "completed") ?? steps[0];
+    setSelectedStepId(current?.step_id ?? null);
+  }, [run, selectedStepId]);
+
   const state = run?.plan.state ?? "ready";
-  return <article className="atlas-workspace">
-    <header className="atlas-heading"><div><span className="eyebrow">ATLAS · OPERATIONS DESK</span><h1>Make the analytical route inspectable.</h1><p>Plans are advisory until PRISM validates every declared tool. Evidence, objections, and events are durable.</p></div><span className={`migration-chip ${state === "failed" ? "unavailable" : "ready"}`} aria-live="polite">{state.replaceAll("_", " ")}</span></header>
-    <section className="atlas-command" aria-label="Atlas investigation"><label htmlFor="atlas-objective">Investigation objective</label><textarea id="atlas-objective" value={objective} onChange={(event) => setObjective(event.target.value)} maxLength={2000} /><div><button onClick={() => void start()} disabled={state === "running"}>Run investigation</button>{run && !terminal.has(run.plan.state ?? "") ? <button className="secondary" onClick={() => void cancel()}>Cancel run</button> : null}</div></section>
-    {error ? <p className="query-error" role="alert">{error}</p> : null}
-    {run ? <>
-      <PipelineStepper run={run} />
-      <section className="atlas-run-grid"><PlanTimeline run={run} /><SpecialistRail run={run} roster={roster} /><CouncilInspector run={run} /></section>
-      <section className="atlas-answer" aria-live="polite"><span className="eyebrow">ATLAS · GROUNDED ANSWER</span><h2>{run.answer ?? "Atlas is collecting durable evidence."}</h2>{run.uncertainty ? <p><strong>Uncertainty:</strong> {run.uncertainty}</p> : null}</section>
-      <GuardrailPanel run={run} />
-      <ToolTimeline run={run} />
-      <EvidencePanel run={run} />
-      <RunMemoryTrace run={run} memories={runMemories} feedback={runFeedback} />
-      <AtlasPulse memories={memories} resources={resources} onRefresh={() => void refreshPulse()} />
-      {graph ? <CortexV1 graph={graph} /> : null}
-    </> : null}
-  </article>;
+  const running = state === "running";
+
+  return (
+    <div className="atlas-immersive">
+      <header className="atlas-immersive-top">
+        <div className="atlas-immersive-identity">
+          <span className="eyebrow">ATLAS</span>
+          <strong>Immersive Cortex</strong>
+        </div>
+        <AtlasStatusBadge />
+        <button type="button" className="atlas-immersive-system-toggle" aria-expanded={systemOpen} onClick={() => setSystemOpen((value) => !value)}>
+          {systemOpen ? "Hide system status" : "System status"}
+        </button>
+        {onBackToProject ? <button type="button" className="atlas-immersive-exit" onClick={onBackToProject}>Back to PRISM</button> : null}
+      </header>
+      {systemOpen ? <div className="atlas-immersive-system"><AtlasCommandCenter /></div> : null}
+      {!datasetId ? (
+        <section className="atlas-state empty-state">
+          <span className="eyebrow">ATLAS · LOCAL ORCHESTRATION</span>
+          <h1>Load a dataset before opening an investigation.</h1>
+          <p>Atlas plans against durable dataset metadata and never ships raw rows to a provider.</p>
+        </section>
+      ) : (
+        <div className="atlas-immersive-body">
+          {run ? <PipelineStepper run={run} onSelectStage={(stage) => setSelection({ kind: "pipeline", stage })} /> : null}
+          {run ? <RunJourney run={run} selectedStepId={selectedStepId} onSelectStep={setSelectedStepId} /> : null}
+          {error ? <p className="query-error" role="alert">{error}</p> : null}
+          <div className="atlas-immersive-main">
+            <div className="atlas-immersive-stage-wrap">
+              <AtlasCortex3D graph={graph} run={run} selectedStepId={selectedStepId} onSelectStep={setSelectedStepId} onSelectNode={setSelection} />
+              {run ? <AtlasResultPanel run={run} expanded={resultExpanded} onToggle={() => setResultExpanded((value) => !value)} /> : null}
+            </div>
+            {run ? (
+              <AtlasInspectorDrawer
+                run={run}
+                roster={roster}
+                selectedStepId={selectedStepId}
+                onSelectStep={setSelectedStepId}
+                runMemories={runMemories}
+                runFeedback={runFeedback}
+                memories={memories}
+                resources={resources}
+                onRefreshPulse={() => void refreshPulse()}
+                selection={selection}
+              />
+            ) : null}
+          </div>
+          <AtlasCommandBar
+            objective={objective}
+            onObjectiveChange={setObjective}
+            onRun={() => void start()}
+            onCancel={() => void cancel()}
+            running={running}
+            canCancel={Boolean(run) && !terminal.has(run?.plan.state ?? "")}
+          />
+        </div>
+      )}
+    </div>
+  );
 }
 
-function PlanTimeline({ run }: { run: AtlasRunResponse }) { return <section className="atlas-plan"><span className="eyebrow">PLAN · {run.plan.plan_id.slice(-8)}</span><h2>{run.plan.objective}</h2><ol>{(run.plan.steps ?? []).map((step) => <li key={step.step_id} data-state={step.state}><span className="plan-marker" /><div><strong>{step.title}</strong><small>{step.specialist} · {step.tool_name} · attempt {step.attempts}/{step.max_attempts}</small><p>{step.rationale}</p>{step.error ? <em>{step.error}</em> : null}</div></li>)}</ol></section>; }
-
-/** Real roster (`GET /specialists`) crossed with this run's own steps -- a
- * specialist this run never assigned is shown idle, never hidden or
- * animated as if it were working. */
-function SpecialistRail({ run, roster }: { run: AtlasRunResponse; roster: AtlasSpecialistIdentity[] }) {
-  const entries = buildSpecialistActivity(run, roster);
-  return <aside className="atlas-specialists"><span className="eyebrow">SPECIALISTS</span>{entries.map((entry) => <div key={entry.specialist} data-state={entry.state}><span className={`specialist-signal ${entry.state}`} /><strong>{entry.displayName}</strong><small>{entry.state}{entry.steps.length ? ` · ${entry.steps[entry.steps.length - 1]!.title}` : ""}</small></div>)}</aside>;
+/** The primary ATLAS input as a bottom command surface: objective entry,
+ * Enter-to-submit (Shift+Enter for a newline), Run/Cancel, and a truthfully
+ * disabled microphone -- voice input has no backend in this phase, so the
+ * control is never wired to fake recording. */
+function AtlasCommandBar({ objective, onObjectiveChange, onRun, onCancel, running, canCancel }: { objective: string; onObjectiveChange(value: string): void; onRun(): void; onCancel(): void; running: boolean; canCancel: boolean }) {
+  function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      if (!running) onRun();
+    }
+  }
+  return (
+    <section className="atlas-command atlas-command-bar" aria-label="Atlas investigation">
+      <label htmlFor="atlas-objective">Investigation objective</label>
+      <div className="atlas-command-row">
+        <button type="button" className="atlas-mic-button" disabled aria-disabled="true" title="Voice input is not available in this phase.">
+          <Icon name="mic-off" />
+          <span className="acc-visually-hidden">Microphone input is unavailable in this phase</span>
+        </button>
+        <textarea id="atlas-objective" value={objective} onChange={(event) => onObjectiveChange(event.target.value)} onKeyDown={onKeyDown} maxLength={2000} rows={1} placeholder="What should Atlas investigate? (Enter to run, Shift+Enter for a new line)" />
+        <div className="atlas-command-actions">
+          <button onClick={onRun} disabled={running}>Run investigation</button>
+          {canCancel ? <button className="secondary" onClick={onCancel}>Cancel run</button> : null}
+        </div>
+      </div>
+    </section>
+  );
 }
 
-function CouncilInspector({ run }: { run: AtlasRunResponse }) { const council = run.council ?? []; return <aside className="atlas-council"><span className="eyebrow">COUNCIL · EVIDENCE</span>{council.length ? council.map((item) => <article key={`${item.specialist}-${item.conclusion}`}><strong>{item.specialist}</strong><p>{item.conclusion}</p>{(item.objections ?? []).map((objection) => <small key={objection}>Objection: {objection}</small>)}{(item.evidence ?? []).map((evidence) => <code key={evidence.evidence_id}>{evidence.evidence_id}</code>)}</article>) : <p>Conclusions will appear only after a real tool records evidence.</p>}</aside>; }
-function AtlasPulse({ memories, resources, onRefresh }: { memories: AtlasMemoryRecord[]; resources: AtlasResourceSnapshot | null; onRefresh: () => void }) { return <section className="atlas-run-grid" aria-label="Atlas memory and resource pulse"><aside className="atlas-council"><span className="eyebrow">MEMORY · INSPECTOR</span>{memories.length ? memories.map((memory) => <article key={memory.memory_id}><strong>{memory.scope} · {memory.confidence}</strong><p>{memory.content}</p><small>{memory.source}</small></article>) : <p>No memories loaded. Atlas memory is durable, scoped, and user-reviewable.</p>}</aside><aside className="atlas-specialists"><span className="eyebrow">ATLAS PULSE</span>{resources ? <><strong>{resources.cpu_count} CPU threads</strong><small>{resources.memory_available_mb ?? "Unknown"} MB RAM available</small><small>{resources.gpu_available ? `${resources.gpu_name ?? "GPU"} · ${resources.vram_total_mb ?? "unknown"} MB VRAM` : resources.gpu_telemetry_detail}</small></> : <p>Refresh to inspect real host capability and active workloads.</p>}<button className="secondary" onClick={onRefresh}>Refresh Atlas Pulse</button></aside><aside className="atlas-council"><span className="eyebrow">RESEARCH · CITATIONS</span><p>Researcher only accepts specific allowlisted HTTPS sources. Web material stays untrusted and is kept distinct from local evidence.</p></aside></section>; }
+/** The grounded answer, collapsed to a one-line preview by default so the
+ * Cortex stays the visual focus -- expand on demand for the full answer,
+ * uncertainty, and a real evidence/feedback count. Never a generic chat
+ * bubble: this is a single durable run's result, not a conversation. */
+function AtlasResultPanel({ run, expanded, onToggle }: { run: AtlasRunResponse; expanded: boolean; onToggle(): void }) {
+  const evidenceCount = new Set([...(run.evidence ?? []).map((item) => item.evidence_id), ...(run.council ?? []).flatMap((item) => (item.evidence ?? []).map((evidence) => evidence.evidence_id))]).size;
+  const hasAnswer = Boolean(run.answer);
+  return (
+    <section className={`atlas-result-panel${expanded ? " is-expanded" : ""}`} aria-label="Atlas result">
+      <button type="button" className="atlas-result-toggle" aria-expanded={expanded} onClick={onToggle}>
+        <Icon name="expand" />
+        <span>{hasAnswer ? "Grounded answer ready" : "Atlas is collecting durable evidence"}</span>
+        <small>{evidenceCount} evidence · {expanded ? "collapse" : "expand"}</small>
+      </button>
+      <div className="atlas-answer" aria-live="polite">
+        <span className="eyebrow">ATLAS · GROUNDED ANSWER</span>
+        <h2>{run.answer ?? "Atlas is collecting durable evidence."}</h2>
+        {run.uncertainty ? <p><strong>Uncertainty:</strong> {run.uncertainty}</p> : null}
+      </div>
+    </section>
+  );
+}
 
-/** Cortex V2: the same real, durable graph -- extended, never replaced --
- * with a kind filter (derived only from kinds actually present) and a
- * detail panel for whatever node is currently focused. */
-function CortexV1({ graph }: { graph: CortexGraphState }) {
-  const [focus, setFocus] = useState<string | null>(null); const [zoom, setZoom] = useState(1);
-  const nodes = useMemo(() => graph.nodes ?? [], [graph]); const edges = graph.edges ?? [];
-  const kinds = useMemo(() => [...new Set(nodes.map((node) => node.kind))].sort(), [nodes]);
-  const [hiddenKinds, setHiddenKinds] = useState<Set<string>>(new Set());
-  const positions = useMemo(() => Object.fromEntries(nodes.map((node, index) => [node.node_id, positionFor(node, index, nodes.length)])), [nodes]);
-  const visible = (node: CortexNode) => !hiddenKinds.has(node.kind) && (!focus || node.node_id === focus || edges.some((edge) => (edge.source_node_id === focus && edge.target_node_id === node.node_id) || (edge.target_node_id === focus && edge.source_node_id === node.node_id)));
-  const focusedNode = focus ? nodes.find((node) => node.node_id === focus) ?? null : null;
-  function toggleKind(kind: string) { setHiddenKinds((prev) => { const next = new Set(prev); if (next.has(kind)) next.delete(kind); else next.add(kind); return next; }); }
-  return <section className="cortex-v1" aria-label="Cortex real-state graph">
-    <header><div><span className="eyebrow">CORTEX V1 · DURABLE STATE ONLY</span><h2>Run topology</h2><p>{nodes.length} real nodes · {edges.length} real relations · select a node to focus.</p></div><div className="cortex-controls"><button onClick={() => setZoom((value) => Math.min(1.5, value + 0.1))} aria-label="Zoom in Cortex">+</button><button onClick={() => setZoom((value) => Math.max(0.7, value - 0.1))} aria-label="Zoom out Cortex">−</button><button onClick={() => setFocus(null)} disabled={!focus}>Reset focus</button></div></header>
-    <div className="cortex-filters" role="group" aria-label="Filter Cortex by node kind">{kinds.map((kind) => <button key={kind} type="button" className={`migration-chip ${hiddenKinds.has(kind) ? "" : "ready"}`} aria-pressed={!hiddenKinds.has(kind)} onClick={() => toggleKind(kind)}>{kind.replaceAll("_", " ")}</button>)}</div>
-    <svg viewBox="0 0 800 420" role="img" aria-label="Cortex graph of this Atlas run" className="cortex-canvas"><g transform={`translate(400 210) scale(${zoom}) translate(-400 -210)`}>{edges.map((edge) => { const a = positions[edge.source_node_id]!, b = positions[edge.target_node_id]!; return <path key={edge.edge_id} className={focus && edge.source_node_id !== focus && edge.target_node_id !== focus ? "is-muted" : ""} d={`M ${a.x} ${a.y} Q ${(a.x + b.x) / 2} ${Math.min(a.y, b.y) - 36} ${b.x} ${b.y}`} />; })}{nodes.map((node) => { const point = positions[node.node_id]!; return <g key={node.node_id} className={`${visible(node) ? "" : "is-muted"} state-${node.state}${node.label.startsWith("Memory:") ? " is-memory" : ""}`} transform={`translate(${point.x} ${point.y})`} tabIndex={0} role="button" aria-label={`Focus ${node.label}`} onClick={() => setFocus(node.node_id)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") setFocus(node.node_id); }}><circle r={node.kind === "run" ? 24 : 14} /><text y={node.kind === "run" ? 43 : 32}>{node.label.slice(0, 28)}</text></g>; })}</g></svg>
-    {focusedNode ? <dl className="cortex-detail" aria-label="Selected Cortex node"><dt>Kind</dt><dd>{focusedNode.kind.replaceAll("_", " ")}</dd><dt>Label</dt><dd>{focusedNode.label}</dd><dt>State</dt><dd>{focusedNode.state}</dd><dt>Source ID</dt><dd className="acc-mono">{focusedNode.source_id}</dd></dl> : null}
-    <ul className="cortex-legend"><li>Running / current</li><li>Recorded evidence</li><li>Blocked or cancelled</li></ul>
+function RunJourney({ run, selectedStepId, onSelectStep }: { run: AtlasRunResponse; selectedStepId: string | null; onSelectStep(stepId: string): void }) {
+  const steps = run.plan.steps ?? [];
+  if (!steps.length) return null;
+  return <section className="atlas-run-journey" aria-label="Atlas active investigation journey">
+    <header><div><span className="eyebrow">LIVE INVESTIGATION · DURABLE RUN</span><h2>Follow the declared route.</h2></div><span className="acc-mono">{run.run_id}</span></header>
+    <ol>{steps.map((step, index) => <li key={step.step_id} data-state={step.state} className={step.step_id === selectedStepId ? "is-selected" : ""}><button type="button" onClick={() => onSelectStep(step.step_id)} aria-pressed={step.step_id === selectedStepId}><span className="journey-index">{String(index + 1).padStart(2, "0")}</span><strong>{step.title}</strong><small>{step.specialist} · {step.tool_name}</small><span className="migration-chip">{(step.state ?? "pending").replaceAll("_", " ")}</span></button></li>)}</ol>
+    <p>Selection links the declared plan step to its specialist, tool, and Cortex records. It does not imply activity beyond the persisted run state.</p>
   </section>;
 }
-function positionFor(node: CortexNode, index: number, total: number) { if (node.kind === "run") return { x: 400, y: 210 }; const angle = (index / Math.max(1, total - 1)) * Math.PI * 2; const radius = node.kind === "evidence" ? 170 : 110; return { x: 400 + Math.cos(angle) * radius, y: 210 + Math.sin(angle) * radius }; }

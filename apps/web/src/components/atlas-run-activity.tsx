@@ -364,7 +364,7 @@ export function SpecialistActivity({ run, roster }: { run: AtlasRunResponse | nu
 // --- Command Core pipeline stage --------------------------------------------
 
 export type PipelineStage = "request" | "plan" | "guardrails" | "specialists" | "tools" | "evidence" | "result";
-const PIPELINE_STAGES: { id: PipelineStage; label: string }[] = [
+export const PIPELINE_STAGES: { id: PipelineStage; label: string }[] = [
   { id: "request", label: "Request" },
   { id: "plan", label: "Plan" },
   { id: "guardrails", label: "Guardrails" },
@@ -395,7 +395,7 @@ export function pipelineStageIndex(run: AtlasRunResponse | null): number {
   return 1;
 }
 
-export function PipelineStepper({ run }: { run: AtlasRunResponse | null }) {
+export function PipelineStepper({ run, onSelectStage }: { run: AtlasRunResponse | null; onSelectStage?: (stage: PipelineStage) => void }) {
   const reached = pipelineStageIndex(run);
   const blockedAtGuardrail = run ? guardrailDecisionFor(run)?.state !== "checked" && guardrailDecisionFor(run) !== null : false;
   return (
@@ -404,11 +404,14 @@ export function PipelineStepper({ run }: { run: AtlasRunResponse | null }) {
         const isReached = index <= reached;
         const isCurrent = index === reached && index < PIPELINE_STAGES.length - 1;
         const held = blockedAtGuardrail && index > 2;
+        const content = <>
+          <span className="atlas-pipeline-dot" aria-hidden="true" />
+          {stage.label}
+          {held ? <small> held</small> : null}
+        </>;
         return (
           <li key={stage.id} className={isReached && !held ? "is-reached" : ""} data-current={isCurrent} aria-current={isCurrent ? "step" : undefined}>
-            <span className="atlas-pipeline-dot" aria-hidden="true" />
-            {stage.label}
-            {held ? <small> held</small> : null}
+            {onSelectStage ? <button type="button" onClick={() => onSelectStage(stage.id)}>{content}</button> : content}
           </li>
         );
       })}
