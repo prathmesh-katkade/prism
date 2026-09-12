@@ -4,10 +4,16 @@
  * Cortex V3: the same durable graph CortexV1 rendered as flat SVG, now as an
  * immersive 3D scene. This file owns presentation only -- every fact it
  * draws (which nodes exist, their kind/state, which plan step a node maps
- * to) comes from `atlas-cortex-shared`, unchanged from the SVG version. The
- * scene never fabricates activity: the core "breathes" ambiently at rest and
- * only glows/pulses faster when `run.plan.state === "running"`, exactly the
- * one real signal CortexV1 used for its own `data-active` flag.
+ * to, how far the real pipeline has progressed) comes from
+ * `atlas-cortex-shared` / `atlas-run-activity`, unchanged from the SVG
+ * version. The scene never fabricates activity: the core "breathes"
+ * ambiently at rest and only glows/pulses faster when
+ * `run.plan.state === "running"`, exactly the one real signal CortexV1 used
+ * for its own `data-active` flag.
+ *
+ * With no run at all yet, the scene still renders -- just the breathing
+ * core, no invented nodes -- so ATLAS's idle screen has a real presence
+ * rather than an empty box.
  *
  * WebGL is optional, not assumed: a browser without it (and every unit test
  * running under jsdom, which has no WebGL context at all) gets a static CSS
@@ -21,7 +27,8 @@ import { Canvas, useFrame } from "@react-three/fiber";
 import { Line, OrbitControls } from "@react-three/drei";
 import type { Group, Mesh } from "three";
 import type { AtlasRunResponse, CortexGraphState, CortexNode } from "@prism/api-contracts";
-import { connectedStepIdForNode, cortexPositions3D, cortexTone, type CortexTone, type Vec3 } from "./atlas-cortex-shared";
+import { PIPELINE_STAGES, guardrailDecisionFor, pipelineStageIndex } from "./atlas-run-activity";
+import { PIPELINE_RING_RADIUS, connectedStepIdForNode, cortexPositions3D, cortexTone, isMemoryNode, type CortexSelection, type CortexTone, type Vec3 } from "./atlas-cortex-shared";
 
 const TONE_COLOR: Record<CortexTone, string> = { idle: "#5b6b74", active: "#22d3ee", good: "#34d399", danger: "#f87171" };
 
@@ -55,26 +62,48 @@ function useWebglSupported(): boolean | null {
   return supported;
 }
 
-export function AtlasCortex3D({ graph, run, selectedStepId, onSelectStep }: { graph: CortexGraphState; run: AtlasRunResponse; selectedStepId: string | null; onSelectStep(stepId: string): void }) {
+export function AtlasCortex3D({
+  graph,
+  run,
+  selectedStepId,
+  onSelectStep,
+  onSelectNode,
+}: {
+  graph: CortexGraphState | null;
+  run: AtlasRunResponse | null;
+  selectedStepId: string | null;
+  onSelectStep(stepId: string): void;
+  onSelectNode?(selection: CortexSelection): void;
+}) {
   const [focus, setFocus] = useState<string | null>(null);
   const [distance, setDistance] = useState(7);
-  const nodes = useMemo(() => graph.nodes ?? [], [graph]);
-  const edges = graph.edges ?? [];
+  const nodes = useMemo(() => graph?.nodes ?? [], [graph]);
+  const edges = graph?.edges ?? [];
   const kinds = useMemo(() => [...new Set(nodes.map((node) => node.kind))].sort(), [nodes]);
   const [hiddenKinds, setHiddenKinds] = useState<Set<string>>(new Set());
   const positions = useMemo(() => cortexPositions3D(nodes), [nodes]);
   const reducedMotion = useReducedMotion();
   const webglSupported = useWebglSupported();
   const runNode = nodes.find((node) => node.kind === "run") ?? null;
-  const active = run.plan.state === "running";
+  const active = run?.plan.state === "running";
 
   function isVisible(node: CortexNode) {
     return !hiddenKinds.has(node.kind) && (!focus || node.node_id === focus || edges.some((edge) => (edge.source_node_id === focus && edge.target_node_id === node.node_id) || (edge.target_node_id === focus && edge.source_node_id === node.node_id)));
   }
   function selectNode(node: CortexNode) {
     setFocus(node.node_id);
+    onSelectNode?.({ kind: "node", node });
+    if (!run) return;
     const stepId = connectedStepIdForNode(node, run);
     if (stepId) onSelectStep(stepId);
+  }
+  function selectCore() {
+    setFocus(runNode?.node_id ?? null);
+    onSelectNode?.({ kind: "core" });
+    if (run && runNode) {
+      const stepId = connectedStepIdForNode(runNode, run);
+      if (stepId) onSelectStep(stepId);
+    }
   }
   function toggleKind(kind: string) {
     setHiddenKinds((previous) => {
@@ -92,7 +121,7 @@ export function AtlasCortex3D({ graph, run, selectedStepId, onSelectStep }: { gr
         <div>
           <span className="eyebrow">CORTEX · DURABLE STATE ONLY</span>
           <h2>Run topology</h2>
-          <p>{nodes.length} real nodes · {edges.length} real relations · {active ? "the core and its active step are glowing from this run's real, persisted state." : "ambient layout only; no event flow is implied."}</p>
+          <p>{run ? <>{nodes.length} real nodes · {edges.length} real relations · {active ? "the core and its active step are glowing from this run's real, persisted state." : "ambient layout only; no event flow is implied."}</> : "No investigation has run yet. The core is idle -- ambient only, never implying reasoning."}</p>
         </div>
         <div className="cortex-controls">
           <button onClick={() => setDistance((value) => Math.max(4, value - 0.8))} aria-label="Zoom in Cortex">+</button>
@@ -100,9 +129,11 @@ export function AtlasCortex3D({ graph, run, selectedStepId, onSelectStep }: { gr
           <button onClick={() => setFocus(null)} disabled={!focus}>Reset focus</button>
         </div>
       </header>
-      <div className="cortex-filters" role="group" aria-label="Filter Cortex by node kind">
-        {kinds.map((kind) => <button key={kind} type="button" className={`migration-chip ${hiddenKinds.has(kind) ? "" : "ready"}`} aria-pressed={!hiddenKinds.has(kind)} onClick={() => toggleKind(kind)}>{kind.replaceAll("_", " ")}</button>)}
-      </div>
+      {kinds.length ? (
+        <div className="cortex-filters" role="group" aria-label="Filter Cortex by node kind">
+          {kinds.map((kind) => <button key={kind} type="button" className={`migration-chip ${hiddenKinds.has(kind) ? "" : "ready"}`} aria-pressed={!hiddenKinds.has(kind)} onClick={() => toggleKind(kind)}>{kind.replaceAll("_", " ")}</button>)}
+        </div>
+      ) : null}
       <div className="cortex-stage" data-active={active}>
         {webglSupported ? (
           <Canvas
@@ -115,7 +146,8 @@ export function AtlasCortex3D({ graph, run, selectedStepId, onSelectStep }: { gr
             <ambientLight intensity={0.55} />
             <pointLight position={[4, 5, 4]} intensity={30} color="#7dd3fc" />
             <pointLight position={[-4, -3, -4]} intensity={12} color="#22d3ee" />
-            <CortexCore active={active} reducedMotion={reducedMotion} onClick={() => runNode && selectNode(runNode)} selected={runNode ? connectedStepIdForNode(runNode, run) === selectedStepId : false} />
+            <CortexCore active={active} reducedMotion={reducedMotion} onClick={selectCore} selected={Boolean(runNode) && focus === runNode?.node_id} />
+            {run ? <CortexPipelineRing run={run} reducedMotion={reducedMotion} /> : null}
             {edges.map((edge) => {
               const a = positions[edge.source_node_id];
               const b = positions[edge.target_node_id];
@@ -126,14 +158,14 @@ export function AtlasCortex3D({ graph, run, selectedStepId, onSelectStep }: { gr
             {nodes.filter((node) => node.kind !== "run").map((node) => {
               const position = positions[node.node_id];
               if (!position) return null;
-              const connectedStepId = connectedStepIdForNode(node, run);
+              const connectedStepId = run ? connectedStepIdForNode(node, run) : null;
               return (
                 <CortexNodeMesh
                   key={node.node_id}
                   node={node}
                   position={position}
                   muted={!isVisible(node)}
-                  selected={connectedStepId === selectedStepId}
+                  selected={connectedStepId !== null && connectedStepId === selectedStepId}
                   reducedMotion={reducedMotion}
                   onClick={() => selectNode(node)}
                 />
@@ -152,18 +184,20 @@ export function AtlasCortex3D({ graph, run, selectedStepId, onSelectStep }: { gr
           have, so keyboard and screen-reader use never depends on canvas
           hit-testing -- a compact, always-visible chip row rather than an
           off-screen duplicate, so it stays genuinely clickable too. */}
-      <ul className="cortex-node-list" aria-label="Cortex nodes">
-        {nodes.map((node) => (
-          <li key={node.node_id}>
-            <button type="button" data-tone={cortexTone(node.state)} data-muted={!isVisible(node)} aria-pressed={node.node_id === focus} onClick={() => selectNode(node)} aria-label={`Focus ${node.label}`}>
-              {node.label} <small>{node.kind.replaceAll("_", " ")} · {node.state}</small>
-            </button>
-          </li>
-        ))}
-      </ul>
+      {nodes.length ? (
+        <ul className="cortex-node-list" aria-label="Cortex nodes">
+          {nodes.map((node) => (
+            <li key={node.node_id}>
+              <button type="button" data-tone={cortexTone(node.state)} data-memory={isMemoryNode(node)} data-muted={!isVisible(node)} aria-pressed={node.node_id === focus} onClick={() => selectNode(node)} aria-label={`Focus ${node.label}`}>
+                {node.label} <small>{isMemoryNode(node) ? "memory" : node.kind.replaceAll("_", " ")} · {node.state}</small>
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
       {focusedNode ? (
         <dl className="cortex-detail" aria-label="Selected Cortex node">
-          <dt>Kind</dt><dd>{focusedNode.kind.replaceAll("_", " ")}</dd>
+          <dt>Kind</dt><dd>{isMemoryNode(focusedNode) ? "memory" : focusedNode.kind.replaceAll("_", " ")}</dd>
           <dt>Label</dt><dd>{focusedNode.label}</dd>
           <dt>State</dt><dd>{focusedNode.state}</dd>
           <dt>Source ID</dt><dd className="acc-mono">{focusedNode.source_id}</dd>
@@ -202,10 +236,54 @@ function CortexCore({ active, reducedMotion, selected, onClick }: { active: bool
   );
 }
 
+/** Decorative-only reinforcement of the real, accessible `<PipelineStepper>`
+ * strip: seven arc segments, one per REQUEST->RESULT stage, colored and lit
+ * by the exact same `pipelineStageIndex`/`guardrailDecisionFor` real state
+ * that strip uses -- never a second, independent notion of progress. Purely
+ * `aria-hidden` (inside the canvas), so it adds nothing a keyboard or
+ * screen-reader user could miss. */
+function CortexPipelineRing({ run, reducedMotion }: { run: AtlasRunResponse; reducedMotion: boolean }) {
+  const reached = pipelineStageIndex(run);
+  const decision = guardrailDecisionFor(run);
+  const blockedAtGuardrail = decision !== null && decision.state !== "checked";
+  const total = PIPELINE_STAGES.length;
+  return (
+    <group rotation={[-Math.PI / 2, 0, 0]}>
+      {PIPELINE_STAGES.map((stage, index) => {
+        const isReached = index <= reached;
+        const isCurrent = index === reached && index < total - 1;
+        const held = blockedAtGuardrail && index > 2;
+        const tone: CortexTone = held ? "danger" : isCurrent ? "active" : isReached ? "good" : "idle";
+        const span = (Math.PI * 2) / total;
+        return <PipelineRingSegment key={stage.id} thetaStart={index * span + 0.05} thetaLength={span * 0.82} tone={tone} pulsing={isCurrent} reducedMotion={reducedMotion} />;
+      })}
+    </group>
+  );
+}
+
+function PipelineRingSegment({ thetaStart, thetaLength, tone, pulsing, reducedMotion }: { thetaStart: number; thetaLength: number; tone: CortexTone; pulsing: boolean; reducedMotion: boolean }) {
+  const mesh = useRef<Mesh>(null);
+  const clock = useRef(0);
+  const color = TONE_COLOR[tone];
+  const baseOpacity = tone === "idle" ? 0.16 : tone === "active" ? 0.85 : 0.5;
+  useFrame((_, delta) => {
+    if (reducedMotion || !pulsing || !mesh.current) return;
+    clock.current += delta;
+    const material = mesh.current.material as unknown as { opacity: number };
+    material.opacity = baseOpacity + Math.sin(clock.current * 3) * 0.15;
+  });
+  return (
+    <mesh ref={mesh}>
+      <ringGeometry args={[PIPELINE_RING_RADIUS - 0.04, PIPELINE_RING_RADIUS + 0.04, 32, 1, thetaStart, thetaLength]} />
+      <meshBasicMaterial color={color} transparent opacity={baseOpacity} side={2} />
+    </mesh>
+  );
+}
+
 function CortexNodeMesh({ node, position, muted, selected, reducedMotion, onClick }: { node: CortexNode; position: Vec3; muted: boolean; selected: boolean; reducedMotion: boolean; onClick(): void }) {
   const mesh = useRef<Mesh>(null);
   const tone = cortexTone(node.state);
-  const color = TONE_COLOR[tone];
+  const color = isMemoryNode(node) ? "#a78bfa" : TONE_COLOR[tone];
   const clock = useRef(Math.random() * Math.PI * 2); // phase offset only, never affects position -- purely visual desync so nodes don't pulse in lockstep
   useFrame((_, delta) => {
     if (reducedMotion || tone !== "active") return;

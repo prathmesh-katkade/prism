@@ -16,6 +16,19 @@ test("ATLAS First Light: honest system state, a real investigation, and the rece
   await page.goto("/");
   await page.getByRole("button", { name: /Atlas native/i }).click();
 
+  // Immersive shell: entering Atlas gets a dedicated identity/status strip
+  // and a "Back to PRISM" escape -- real navigation, not a dead end.
+  await expect(page.getByText("Immersive Cortex")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Back to PRISM" })).toBeVisible();
+
+  // System status (Command Center: recent runs, model trust, certification)
+  // is real but secondary -- collapsed by default so the Cortex stays the
+  // default screen, expanded on demand via a real, keyboard-operable toggle.
+  const systemToggle = page.getByRole("button", { name: "System status" });
+  await expect(systemToggle).toHaveAttribute("aria-expanded", "false");
+  await systemToggle.click();
+  await expect(systemToggle).toHaveAttribute("aria-expanded", "true");
+
   // The isolated suite database has no production pointer. An explicit
   // external-stack run instead uses whatever the local backend actually
   // reports; both paths verify rendered state rather than inventing model or
@@ -44,14 +57,29 @@ test("ATLAS First Light: honest system state, a real investigation, and the rece
   await expect(page.getByLabel("Central tabbed workspace").getByRole("heading", { name: "atlas-live.csv" })).toBeVisible({ timeout: 10_000 });
 
   await page.getByRole("button", { name: /Atlas native/i }).click();
-  const runButton = page.getByRole("button", { name: "Run investigation" });
-  await expect(runButton).toBeEnabled();
-  await runButton.click();
+
+  // Bottom command bar: the primary input, Enter-to-submit, and a
+  // truthfully disabled microphone -- voice input has no backend in this
+  // phase, so it must be visibly unavailable, never fake recording.
+  const micButton = page.getByRole("button", { name: /Microphone input is unavailable/ });
+  await expect(micButton).toBeDisabled();
+  const objectiveInput = page.getByLabel("Investigation objective");
+  await objectiveInput.focus();
+  await page.keyboard.press("Enter");
   await expect(page.getByText(/deterministic first-pass assessment/)).toBeVisible({ timeout: 15_000 });
 
+  // The result panel starts collapsed (the Cortex is the default screen)
+  // and expands on demand to reveal the same real answer.
+  const resultToggle = page.getByRole("button", { name: /Grounded answer ready/ });
+  await expect(resultToggle).toHaveAttribute("aria-expanded", "false");
+  await resultToggle.click();
+  await expect(resultToggle).toHaveAttribute("aria-expanded", "true");
+
   // Command Core pipeline reflects this real run's own persisted state.
+  // Real stage buttons (each now clickable, wired to the unified inspector)
+  // still carry the same "is-reached" class on their <li>, not the button.
   const pipeline = page.getByLabel("Atlas request pipeline");
-  await expect(pipeline.getByText("Result")).toHaveClass(/is-reached/);
+  await expect(pipeline.locator("li", { hasText: "Result" })).toHaveClass(/is-reached/);
 
   // The new central journey is sourced from this run's declared plan steps.
   // Selecting its real specialist keeps the plan and the Cortex projection
@@ -115,6 +143,7 @@ test("ATLAS First Light: honest system state, a real investigation, and the rece
   // workspace instance that created it.
   await page.reload();
   await page.getByRole("button", { name: /Atlas native/i }).click();
+  await page.getByRole("button", { name: "System status" }).click();
   const reloadedActivity = page.getByLabel("Atlas command center").getByText("Run activity").locator("..");
   // Newest-first: the run this test just created is the top row. Other
   // live-suite specs run sequentially in this same shared backend and may

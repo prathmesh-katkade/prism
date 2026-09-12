@@ -104,10 +104,6 @@
 .cortex-orb-static { width:120px;height:120px;border-radius:50%;background:radial-gradient(circle at 38% 32%,color-mix(in srgb,var(--muted) 55%,transparent),transparent 60%),var(--surface-raised);border:2px solid var(--faint);box-shadow:0 0 40px -6px color-mix(in srgb,var(--faint) 45%,transparent);animation:cortex-orb-breathe 4.5s ease-in-out infinite; }
 .cortex-orb-static.is-active { border-color:var(--accent);box-shadow:0 0 46px -4px color-mix(in srgb,var(--accent) 65%,transparent);animation-duration:1.4s; }
 @keyframes cortex-orb-breathe { 50% { transform:scale(1.06); } }
-/* A real, keyboard-focusable mirror of every node the canvas draws -- kept
-   off-screen until focused so pointer users see the 3D scene while keyboard
-   and screen-reader users get identical facts and actions via native
-   buttons, never depending on canvas hit-testing. */
 /* A real, keyboard-operable mirror of every node the canvas draws: pointer
    users get the 3D scene, keyboard and screen-reader users get the same
    facts and actions as an ordinary chip row, never depending on canvas
@@ -122,3 +118,39 @@
 .cortex-node-list small { display:block;color:var(--faint);font:9px var(--mono);text-transform:uppercase;margin-top:2px; }
 @media (max-width:1000px) { .cortex-3d .cortex-stage { height:44vh; } }
 @media (prefers-reduced-motion:reduce) { .cortex-orb-static { animation:none; } }
+/* Phase 11A immersive shell: a dedicated ATLAS environment -- top identity,
+   a dominant Cortex, a bottom command bar, a side context inspector --
+   instead of another flat stack of panels in the ordinary tab body. */
+.atlas-immersive { max-width:1520px;margin:0 auto;display:flex;flex-direction:column;gap:12px;min-height:calc(100vh - 190px); }
+.atlas-immersive-top { display:flex;align-items:center;gap:14px;padding:10px 14px;border:1px solid var(--line);background:var(--surface); }
+.atlas-immersive-identity { display:flex;align-items:baseline;gap:9px; }
+.atlas-immersive-identity .eyebrow { margin:0; }
+.atlas-immersive-identity strong { font:500 15px var(--sans); }
+.atlas-immersive-system-toggle,.atlas-immersive-exit { margin-left:auto;padding:7px 11px;border:1px solid var(--line);border-radius:4px;background:transparent;color:var(--text);font-size:12px;cursor:pointer; }
+.atlas-immersive-system-toggle[aria-expanded="true"] { border-color:var(--accent);color:var(--accent); }
+.atlas-immersive-exit { margin-left:0;font-weight:600; }
+.atlas-immersive-system { border:1px solid var(--line);border-top:2px solid var(--accent);background:var(--canvas);padding:14px;max-height:70vh;overflow:auto; }
+.atlas-immersive-body { flex:1;min-height:0;display:flex;flex-direction:column;gap:12px; }
+.atlas-immersive-main { flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,340px);gap:14px; }
+.atlas-immersive-stage-wrap { position:relative;min-width:0; }
+.atlas-inspector-drawer { display:flex;flex-direction:column;gap:1px;background:var(--line);border:1px solid var(--line);max-height:calc(56vh + 96px);overflow:auto; }
+.atlas-inspector-drawer > * { background:var(--surface); }
+.atlas-inspector-focus { position:sticky;top:0;z-index:1;padding:10px 14px;background:var(--surface-raised);border-bottom:1px solid var(--line); }
+.atlas-inspector-focus .eyebrow { margin:0 0 2px; }
+.atlas-inspector-focus strong { font-size:13px; }
+.atlas-command-bar { margin-top:0;border-top:2px solid var(--accent); }
+.atlas-command-row { display:flex;align-items:flex-end;gap:9px; }
+.atlas-command-row textarea { flex:1;min-height:44px; }
+.atlas-mic-button { display:grid;place-items:center;width:38px;height:38px;flex-shrink:0;border:1px solid var(--line);border-radius:4px;background:var(--surface-raised);color:var(--faint);cursor:not-allowed; }
+.atlas-command-actions { display:flex;gap:8px;flex-shrink:0; }
+.atlas-result-panel { position:absolute;right:12px;bottom:12px;left:12px;max-width:420px;margin-left:auto;background:var(--surface-raised);border:1px solid var(--line);box-shadow:0 14px 36px rgba(0,0,0,.24);overflow:hidden; }
+.atlas-result-toggle { display:flex;align-items:center;gap:8px;width:100%;padding:10px 12px;border:0;background:transparent;color:var(--text);text-align:left;cursor:pointer;font-size:12px; }
+.atlas-result-toggle svg { width:15px;flex-shrink:0;color:var(--accent); }
+.atlas-result-toggle span { flex:1;font-weight:600; }
+.atlas-result-toggle small { color:var(--faint);font:10px var(--mono);white-space:nowrap; }
+.atlas-result-panel .atlas-answer { margin:0;padding:0 12px 12px;border:0;background:transparent;max-height:0;opacity:0;overflow:hidden;transition:max-height 200ms ease,opacity 150ms ease; }
+.atlas-result-panel.is-expanded .atlas-answer { max-height:340px;opacity:1;overflow:auto; }
+.acc-visually-hidden { position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0; }
+@media (max-width:1050px) { .atlas-immersive-main { grid-template-columns:1fr; }.atlas-inspector-drawer { max-height:60vh; }.atlas-result-panel { position:static;max-width:none;margin-top:10px;box-shadow:none; } }
+@media (max-width:620px) { .atlas-immersive-top { flex-wrap:wrap;gap:8px; }.atlas-command-row { flex-wrap:wrap; }.atlas-command-row textarea { min-width:100%;order:1; }.atlas-mic-button { order:2; }.atlas-command-actions { order:3;margin-left:auto; } }
+@media (prefers-reduced-motion:reduce) { .atlas-result-panel .atlas-answer { transition:none; } }

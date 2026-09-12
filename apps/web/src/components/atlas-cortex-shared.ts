@@ -6,6 +6,7 @@
  * touching the truthfulness or determinism rules that live here.
  */
 import type { AtlasRunResponse, CortexNode } from "@prism/api-contracts";
+import type { PipelineStage } from "./atlas-run-activity";
 
 /** Maps a Cortex node back to the plan step it is really connected to, by
  * the exact rule the backend's own graph builder uses -- never a guess. */
@@ -32,7 +33,25 @@ export function cortexTone(state: string): CortexTone {
   return "idle";
 }
 
+/** The backend's Cortex graph has no dedicated "memory" node kind: a
+ * persisted memory record surfaces as an EVIDENCE node whose label the
+ * graph builder prefixes with "Memory:" -- the one real signal that
+ * distinguishes it, carried over unchanged from the original SVG Cortex. */
+export function isMemoryNode(node: CortexNode): boolean {
+  return node.label.startsWith("Memory:");
+}
+
+/** What the unified context inspector is currently showing -- driven only
+ * by a real click on the core, a real node, or a real pipeline stage,
+ * never a fabricated selection. */
+export type CortexSelection = { kind: "core" } | { kind: "node"; node: CortexNode } | { kind: "pipeline"; stage: PipelineStage };
+
 export type Vec3 = readonly [number, number, number];
+
+/** Radius of the decorative pipeline ring, sized to sit between the core
+ * and the innermost real-node ring (plan_step, at 1.7) without overlapping
+ * either. */
+export const PIPELINE_RING_RADIUS = 1.25;
 
 const RING_RADIUS: Record<string, number> = { plan_step: 1.7, specialist: 2.4, tool: 3.1, evidence: 3.9, dataset: 2.9, analytical_object: 3.4, artifact: 3.6 };
 const RING_TILT_SEED: Record<string, number> = { plan_step: 0, specialist: 1.3, tool: 2.6, evidence: 3.9, dataset: 5.2, analytical_object: 0.7, artifact: 1.9 };
