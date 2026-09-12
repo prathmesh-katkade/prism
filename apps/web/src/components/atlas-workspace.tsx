@@ -7,7 +7,7 @@ import { buildSpecialistActivity, EvidencePanel, GuardrailPanel, PipelineStepper
 
 const terminal = new Set(["completed", "failed", "cancelled"]);
 
-export function AtlasWorkspace({ datasetId }: { datasetId: string | undefined }) {
+export function AtlasWorkspace({ datasetId, initialRunId }: { datasetId: string | undefined; initialRunId?: string | undefined }) {
   const [objective, setObjective] = useState("Profile this dataset and identify the evidence needed for the next decision.");
   const [run, setRun] = useState<AtlasRunResponse | null>(null);
   const [graph, setGraph] = useState<CortexGraphState | null>(null);
@@ -52,9 +52,16 @@ export function AtlasWorkspace({ datasetId }: { datasetId: string | undefined })
   }, [run?.run_id, run?.plan.state]);
   async function refresh(id: string) {
     const [runResponse, graphResponse] = await Promise.all([fetch(apiUrl(`/api/v1/atlas/runs/${id}`)), fetch(apiUrl(`/api/v1/atlas/runs/${id}/cortex`))]);
-    if (runResponse.ok) setRun(await runResponse.json() as AtlasRunResponse);
-    if (graphResponse.ok) setGraph(await graphResponse.json() as CortexGraphState);
+    if (runResponse.ok) {
+      const nextRun = await runResponse.json() as AtlasRunResponse;
+      if (nextRun.plan.dataset_id !== datasetId) return;
+      setRun(nextRun);
+      if (graphResponse.ok) setGraph(await graphResponse.json() as CortexGraphState);
+    }
   }
+  useEffect(() => {
+    if (datasetId && initialRunId) void refresh(initialRunId);
+  }, [datasetId, initialRunId]);
   async function watch(id: string) {
     cancelStream.current?.abort(); const controller = new AbortController(); cancelStream.current = controller;
     try {
