@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
-import type { AtlasFeedbackEvent, AtlasMemoryRecord, AtlasResourceSnapshot, AtlasRunResponse, AtlasSpecialistIdentity, CortexGraphState } from "@prism/api-contracts";
+import type { AtlasFeedbackEvent, AtlasMemoryRecord, AtlasResourceSnapshot, AtlasRunResponse, AtlasSpecialistIdentity, CortexGraphState, OverviewProfileResponse } from "@prism/api-contracts";
 import { apiUrl } from "../config/api";
 import { PipelineStepper } from "./atlas-run-activity";
 import { AtlasCortex3D } from "./atlas-cortex-3d";
@@ -39,6 +39,7 @@ export function AtlasWorkspace({
   onBackToProject?: () => void;
 }) {
   const [objective, setObjective] = useState("Profile this dataset and identify the evidence needed for the next decision.");
+  const [datasetProfile, setDatasetProfile] = useState<OverviewProfileResponse | null>(null);
   const [run, setRun] = useState<AtlasRunResponse | null>(null);
   const [graph, setGraph] = useState<CortexGraphState | null>(null);
   const [memories, setMemories] = useState<AtlasMemoryRecord[]>([]);
@@ -50,6 +51,7 @@ export function AtlasWorkspace({
   const [selection, setSelection] = useState<CortexSelection>({ kind: "core" });
   const [systemOpen, setSystemOpen] = useState(false);
   const [resultExpanded, setResultExpanded] = useState(false);
+  const [inspectorOpenNarrow, setInspectorOpenNarrow] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const cancelStream = useRef<AbortController | null>(null);
   useEffect(() => () => cancelStream.current?.abort(), []);
@@ -74,6 +76,21 @@ export function AtlasWorkspace({
       .catch(() => undefined);
     return () => { cancelled = true; };
   }, []);
+  // Real dataset stats (rows/columns/health/missing) for the inspector
+  // Summary tab, from the same Overview profile endpoint the native
+  // Overview workspace itself uses -- never derived from a run's evidence
+  // summary text. Cleared immediately on dataset change so a slow response
+  // for the previous dataset can never render against the new one.
+  useEffect(() => {
+    setDatasetProfile(null);
+    if (!datasetId) return;
+    let cancelled = false;
+    fetch(apiUrl(`/api/v1/overview/datasets/${datasetId}/profile`))
+      .then((response) => (response.ok ? (response.json() as Promise<OverviewProfileResponse>) : null))
+      .then((profile) => { if (!cancelled) setDatasetProfile(profile); })
+      .catch(() => { if (!cancelled) setDatasetProfile(null); });
+    return () => { cancelled = true; };
+  }, [datasetId]);
   // Real per-run memory trace: memories bounded to a recent window (no
   // dedicated run_id filter exists on GET /memories yet, so a bounded
   // fetch is filtered client-side by source_ref === run_id -- the exact
@@ -181,10 +198,12 @@ export function AtlasWorkspace({
             <div className="atlas-immersive-stage-wrap">
               <AtlasCortex3D graph={graph} run={run} selectedStepId={selectedStepId} onSelectStep={setSelectedStepId} onSelectNode={setSelection} />
               {run ? <AtlasResultPanel run={run} expanded={resultExpanded} onToggle={() => setResultExpanded((value) => !value)} /> : null}
+              {run ? <button type="button" className="atlas-inspector-open" onClick={() => setInspectorOpenNarrow(true)}>Inspector</button> : null}
             </div>
             {run ? (
               <AtlasInspectorDrawer
                 run={run}
+                datasetProfile={datasetProfile}
                 roster={roster}
                 selectedStepId={selectedStepId}
                 onSelectStep={setSelectedStepId}
@@ -194,6 +213,8 @@ export function AtlasWorkspace({
                 resources={resources}
                 onRefreshPulse={() => void refreshPulse()}
                 selection={selection}
+                openNarrow={inspectorOpenNarrow}
+                onCloseNarrow={() => setInspectorOpenNarrow(false)}
               />
             ) : null}
           </div>
