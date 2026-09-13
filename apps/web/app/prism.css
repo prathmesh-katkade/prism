@@ -188,7 +188,19 @@
 /* Phase 11A immersive shell: a dedicated ATLAS environment -- top identity,
    a dominant Cortex, a bottom command bar, a side context inspector --
    instead of another flat stack of panels in the ordinary tab body. */
-.atlas-immersive { max-width:1520px;margin:0 auto;display:flex;flex-direction:column;gap:12px;min-height:calc(100vh - 190px); }
+/* Atlas's one deliberate spectral exception to PRISM's shared warm/amber
+   chrome (see design brief): redefining the same custom properties every
+   existing Atlas rule already reads (--accent/--good/--canvas/--surface/
+   --line/--focus) retints the whole immersive subtree to the reference's
+   near-black blue graphite + cyan identity in one scoped block, rather
+   than editing each rule -- normal PRISM workspaces never see these
+   values since they live outside .atlas-immersive. --danger is left as
+   the shared red so a real failed/cancelled step stays visually distinct
+   from a merely blocked one; the 3D scene's own TONE_COLOR map already
+   renders "blocked" in amber (atlas-cortex-3d.tsx), matching the
+   reference for the one state it actually depicts. */
+.atlas-immersive { --accent:#57ddf5;--accent-soft:#12313c;--good:#6fe3b4;--focus:#8fe9fb;--canvas:#080d12;--surface:#0d161d;--surface-raised:#101923;--line:#25333e;--line-soft:#1a2831; }
+.atlas-immersive { max-width:1520px;margin:0 auto;display:flex;flex-direction:column;gap:12px;min-height:calc(100vh - 190px);background:var(--canvas); }
 .atlas-immersive-top { display:flex;align-items:center;gap:14px;padding:10px 14px;border:1px solid var(--line);background:var(--surface); }
 .atlas-immersive-identity { display:flex;align-items:baseline;gap:9px; }
 .atlas-immersive-identity .eyebrow { margin:0; }
