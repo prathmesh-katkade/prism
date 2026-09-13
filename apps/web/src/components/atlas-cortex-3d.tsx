@@ -87,12 +87,19 @@ export function AtlasCortex3D({
   selectedStepId,
   onSelectStep,
   onSelectNode,
+  stageOverlay,
 }: {
   graph: CortexGraphState | null;
   run: AtlasRunResponse | null;
   selectedStepId: string | null;
   onSelectStep(stepId: string): void;
   onSelectNode?(selection: CortexSelection): void;
+  // Rendered inside `.cortex-stage` (the canvas box itself, not the whole
+  // section with its header and the real accessible content below the
+  // canvas) so a caller's floating overlay -- the result panel -- stays
+  // anchored to the canvas regardless of how tall the header or the
+  // group-list/run-focus/disclosure content below it grows.
+  stageOverlay?: ReactNode;
 }) {
   const [focus, setFocus] = useState<string | null>(null);
   const [distance, setDistance] = useState(7.5);
@@ -187,6 +194,7 @@ export function AtlasCortex3D({
         </div>
       ) : null}
       <div className="cortex-stage" data-active={active}>
+        {stageOverlay}
         {webglSupported && !contextLost ? (
           <CortexBoundary fallback={fallback}>
             <Canvas

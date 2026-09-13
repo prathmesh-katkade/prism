@@ -196,8 +196,14 @@ export function AtlasWorkspace({
           {error ? <p className="query-error" role="alert">{error}</p> : null}
           <div className="atlas-immersive-main">
             <div className="atlas-immersive-stage-wrap">
-              <AtlasCortex3D graph={graph} run={run} selectedStepId={selectedStepId} onSelectStep={setSelectedStepId} onSelectNode={setSelection} />
-              {run ? <AtlasResultPanel run={run} expanded={resultExpanded} onToggle={() => setResultExpanded((value) => !value)} /> : null}
+              <AtlasCortex3D
+                graph={graph}
+                run={run}
+                selectedStepId={selectedStepId}
+                onSelectStep={setSelectedStepId}
+                onSelectNode={setSelection}
+                stageOverlay={run ? <AtlasResultPanel run={run} expanded={resultExpanded} onToggle={() => setResultExpanded((value) => !value)} /> : null}
+              />
               {run ? <button type="button" className="atlas-inspector-open" onClick={() => setInspectorOpenNarrow(true)}>Inspector</button> : null}
             </div>
             {run ? (

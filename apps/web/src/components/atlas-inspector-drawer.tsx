@@ -139,12 +139,19 @@ export function AtlasInspectorDrawer({
   );
 
   if (narrow) {
+    // The scrim is a sibling of the dialog, not its wrapper: `aria-hidden`
+    // on a container also hides every descendant, which would take the
+    // dialog itself out of the accessibility tree along with it. As a
+    // sibling, it can be a purely decorative, pointer-only backdrop
+    // (Escape and the explicit close button already cover the keyboard/
+    // screen-reader path) without touching the dialog's own accessibility.
     return (
-      <div className="atlas-inspector-scrim" role="presentation" onClick={closeNarrow}>
-        <aside ref={containerRef as React.RefObject<HTMLElement>} className="atlas-inspector-drawer is-modal" role="dialog" aria-modal="true" aria-label="Atlas context inspector" onClick={(event) => event.stopPropagation()}>
+      <>
+        <div className="atlas-inspector-scrim" aria-hidden="true" onClick={closeNarrow} />
+        <aside ref={containerRef as React.RefObject<HTMLElement>} className="atlas-inspector-drawer is-modal" role="dialog" aria-modal="true" aria-label="Atlas context inspector">
           {content}
         </aside>
-      </div>
+      </>
     );
   }
   return (

@@ -117,20 +117,26 @@ test("ATLAS First Light: honest system state, a real investigation, and the rece
   await page.keyboard.press("Enter");
   await expect(firstEvidenceDetail.getByText("Summary")).toBeVisible();
 
-  // Cortex: the real durable graph, now a 3D scene in a real browser (never
-  // the jsdom/no-WebGL fallback), plus its accessible node chip row --
-  // clicking a real node updates the detail panel with that node's actual
-  // persisted facts, never an invented one.
+  // Cortex: the real durable graph, now a grouped 3D scene in a real
+  // browser (never the jsdom/no-WebGL fallback). The dedicated run-focus
+  // button (its own real-state label, e.g. "Focus Investigation complete")
+  // updates the detail panel with that node's actual persisted facts.
   const cortex = page.getByLabel("Cortex real-state graph");
   await expect(cortex).toBeVisible();
   await expect(cortex.locator(".cortex-stage canvas")).toBeVisible();
-  const cortexNodes = page.getByLabel("Cortex nodes");
-  const runNodeButton = cortexNodes.getByRole("button", { name: "Focus Atlas run" });
-  await expect(runNodeButton).toBeVisible();
-  await runNodeButton.click();
+  const runFocusButton = cortex.locator(".cortex-run-focus");
+  await expect(runFocusButton).toBeVisible();
+  await runFocusButton.click();
   const cortexDetail = page.getByLabel("Selected Cortex node");
   await expect(cortexDetail).toBeVisible();
   await expect(cortexDetail.getByText("run", { exact: true })).toBeVisible();
+
+  // The full atomic node graph stays real and reachable one disclosure
+  // away, for provenance -- not deleted, just not the default view.
+  const nodeDisclosure = cortex.locator(".cortex-atomic-disclosure");
+  await nodeDisclosure.locator("summary").click();
+  const cortexNodes = page.getByLabel("Cortex nodes");
+  await expect(cortexNodes.getByRole("button", { name: /Focus/ }).first()).toBeVisible();
 
   // Memory/RAG: a brand-new run cites no prior memory and has received no
   // feedback -- the truthful empty state, not a hidden or broken panel.
