@@ -194,8 +194,13 @@ export function cortexGroupPositions3D(groups: readonly CortexGroup[]): Record<s
   const evidence = groups.filter((group) => group.kind === "evidence");
   const ordered = [...dataset, ...specialists, ...evidence];
   const radius = 2.7;
-  const startAngle = Math.PI * 0.82; // upper-left
-  const sweep = -Math.PI * 1.55; // arcs across the top/right down toward the bottom
+  const startAngle = Math.PI * 0.85; // upper-left (dataset)
+  // A sweep of exactly -PI keeps the two fixed endpoints (dataset, evidence)
+  // genuinely opposite (180 degrees apart, the maximum possible separation)
+  // rather than wrapping past halfway and landing them back near each
+  // other -- the earlier -1.55*PI sweep did exactly that, which is why the
+  // dataset and evidence labels visibly overlapped on screen.
+  const sweep = -Math.PI;
   const total = ordered.length;
   ordered.forEach((group, index) => {
     const t = total <= 1 ? 0 : index / (total - 1);
