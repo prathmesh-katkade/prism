@@ -216,7 +216,7 @@ export function AtlasCortex3D({
               <pointLight position={[-4, -3, -4]} intensity={10} color="#57ddf5" />
               <CortexCore active={active} reducedMotion={reducedMotion} onClick={selectCore} selected={Boolean(runNode) && focus === runNode?.node_id} />
               <CortexRing radius={2.15} tiltX={0.55} tiltZ={0.12} opacity={0.4} reducedMotion={reducedMotion} speed={0.05} />
-              <CortexRing radius={1.7} tiltX={-0.4} tiltZ={-0.28} opacity={0.26} reducedMotion={reducedMotion} speed={-0.035} />
+              <CortexRing radius={1.7} tiltX={-0.4} tiltZ={-0.28} opacity={0.38} reducedMotion={reducedMotion} speed={-0.035} />
               <CortexParticles reducedMotion={reducedMotion} active={active} />
               {groups.map((group) => {
                 const position = groupPositions[group.groupId];
@@ -286,8 +286,14 @@ export function AtlasCortex3D({
           <dt>Detail</dt><dd className="acc-mono">{selectionDetail.detail}</dd>
         </dl>
       ) : null}
+      {/* Open by default: a closed <details> removes its content from the
+          accessibility tree entirely (not just visually collapsed), which
+          would make every atomic node -- including the one and only
+          keyboard-equivalent path to the run/core itself -- unreachable
+          until a sighted pointer user thought to expand it first. Users can
+          still collapse it; it just never starts that way. */}
       {nodes.length ? (
-        <details className="cortex-atomic-disclosure">
+        <details className="cortex-atomic-disclosure" open>
           <summary>All graph nodes ({nodes.length})</summary>
           <ul className="cortex-node-list" aria-label="Cortex nodes">
             {nodes.map((node) => {
@@ -357,7 +363,7 @@ function CortexCore({ active, reducedMotion, selected, onClick }: { active: bool
   const rim = useRef<Mesh>(null);
   const clock = useRef(0);
   const rimMaterial = useMemo(() => new ShaderMaterial({
-    uniforms: { uColor: { value: new Color(CORE_COLOR) }, uIntensity: { value: 0.55 } },
+    uniforms: { uColor: { value: new Color(CORE_COLOR) }, uIntensity: { value: 0.7 } },
     vertexShader: RIM_VERTEX,
     fragmentShader: RIM_FRAGMENT,
     transparent: true,
@@ -380,7 +386,7 @@ function CortexCore({ active, reducedMotion, selected, onClick }: { active: bool
     <group onClick={(event) => { event.stopPropagation(); onClick(); }}>
       <mesh ref={wireframe}>
         <sphereGeometry args={[0.95, 40, 28]} />
-        <meshBasicMaterial color={color} wireframe transparent opacity={active ? 0.55 : 0.32} />
+        <meshBasicMaterial color={color} wireframe transparent opacity={active ? 0.65 : 0.44} />
       </mesh>
       <mesh>
         <sphereGeometry args={[0.9, 24, 18]} />
