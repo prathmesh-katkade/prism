@@ -140,8 +140,9 @@ export function AtlasInspectorDrawer({
 
   if (narrow) {
     return (
-      <div className="atlas-inspector-scrim" role="presentation" onClick={closeNarrow}>
-        <aside ref={containerRef as React.RefObject<HTMLElement>} className="atlas-inspector-drawer is-modal" role="dialog" aria-modal="true" aria-label="Atlas context inspector" onClick={(event) => event.stopPropagation()}>
+      <div className="atlas-inspector-scrim">
+        <button type="button" className="atlas-inspector-backdrop" onClick={closeNarrow} aria-label="Close inspector" tabIndex={-1} />
+        <aside ref={containerRef as React.RefObject<HTMLElement>} className="atlas-inspector-drawer is-modal" role="dialog" aria-modal="true" aria-label="Atlas context inspector">
           {content}
         </aside>
       </div>
