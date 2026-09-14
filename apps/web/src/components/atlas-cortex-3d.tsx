@@ -559,7 +559,7 @@ function CortexGroupSatellite({ group, position, muted, selected, reducedMotion,
         <meshStandardMaterial color={color} emissive={color} emissiveIntensity={muted ? 0.08 : selected ? 0.95 : 0.45} transparent opacity={muted ? 0.22 : 1} roughness={0.35} metalness={0.15} wireframe={group.kind === "dataset"} />
       </mesh>
       {selected ? <mesh scale={1.55}>{GROUP_GEOMETRY[group.kind]}<meshBasicMaterial color={color} wireframe transparent opacity={0.5} /></mesh> : null}
-      <Html center distanceFactor={8} occlude={false} className="cortex-label-anchor" style={{ pointerEvents: "none" }}>
+      <Html center distanceFactor={8} occlude={false} zIndexRange={[20, 0]} className="cortex-label-anchor" style={{ pointerEvents: "none" }}>
         <div className={`cortex-group-label${muted ? " is-muted" : ""}${selected ? " is-selected" : ""}`} data-tone={group.tone}>
           <strong>{group.label}</strong>
           <small>{group.status}</small>

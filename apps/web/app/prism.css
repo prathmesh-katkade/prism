@@ -60,7 +60,7 @@
 .atlas-tool-timeline { margin-top:16px;padding:14px 16px;border:1px solid var(--line);background:var(--surface); }.atlas-tool-timeline > ol { list-style:none;margin:12px 0 0;padding:0;display:flex;flex-direction:column;gap:10px; }
 .atlas-tool-timeline li { display:grid;grid-template-columns:96px minmax(0,1fr);gap:10px;align-items:start;border-left:2px solid var(--line-soft);padding:2px 0 2px 10px; }.atlas-tool-timeline li[data-status="completed"] { border-left-color:var(--good); }.atlas-tool-timeline li[data-status="running"] { border-left-color:var(--accent); }.atlas-tool-timeline li[data-status="blocked"],.atlas-tool-timeline li[data-status="failed"],.atlas-tool-timeline li[data-status="cancelled"] { border-left-color:var(--danger); }
 .atlas-tool-timeline li > div { display:grid;gap:2px;min-width:0; }.atlas-tool-timeline li strong { font-size:12px;overflow-wrap:anywhere; }.atlas-tool-timeline li small,.atlas-tool-timeline li p { color:var(--faint);font-size:11px;margin:0;overflow-wrap:anywhere;word-break:break-word; }
-.atlas-pipeline { list-style:none;display:flex;flex-wrap:wrap;gap:0;margin:14px 0 0;padding:0; }.atlas-pipeline li { position:relative;display:flex;align-items:center;gap:6px;padding:6px 14px 6px 0;color:var(--faint);font:11px var(--mono);text-transform:uppercase;letter-spacing:.05em; }
+.atlas-pipeline { list-style:none;display:flex;flex-wrap:wrap;gap:0;margin:14px 0 0;padding:0; }.atlas-pipeline li { position:relative;display:flex;align-items:center;gap:6px;padding:6px 14px 6px 0;color:var(--faint);font:11px var(--mono);text-transform:uppercase;letter-spacing:.05em; }.atlas-pipeline li > button { display:flex;align-items:center;gap:6px;padding:0;border:0;background:transparent;color:inherit;font:inherit;text-transform:inherit;letter-spacing:inherit;cursor:pointer; }
 .atlas-pipeline li:not(:last-child)::after { content:"";width:20px;height:1px;background:var(--line);margin:0 6px; }.atlas-pipeline-dot { width:7px;height:7px;border-radius:50%;background:var(--line-soft);flex-shrink:0; }
 .atlas-pipeline li.is-reached { color:var(--text); }.atlas-pipeline li.is-reached .atlas-pipeline-dot { background:var(--good); }.atlas-pipeline li[data-current="true"] .atlas-pipeline-dot { background:var(--accent);animation:atlas-pulse 1.2s ease-in-out infinite; }.atlas-pipeline li small { color:var(--danger);text-transform:none; }
 .cortex-filters { display:flex;flex-wrap:wrap;gap:6px;margin-top:10px; }.cortex-filters .migration-chip { cursor:pointer;border:none;font:10px var(--mono); }
@@ -146,7 +146,7 @@
 .cortex-group-label[data-tone="good"] small { color:var(--good); }
 .cortex-group-label[data-tone="danger"] { border-color:var(--danger); }
 .cortex-group-label[data-tone="danger"] small { color:var(--danger); }
-.cortex-group-label.is-muted { opacity:.22; }
+.cortex-group-label.is-muted { border-style:dashed;background:var(--surface); }
 .cortex-group-label.is-selected { border-color:var(--accent);box-shadow:0 0 0 1px var(--accent); }
 @media (max-width:780px) { .cortex-label-anchor { display:none !important; } }
 
@@ -157,7 +157,7 @@
 .cortex-group-list button[data-tone="active"] { border-color:var(--accent); }
 .cortex-group-list button[data-tone="good"] small { color:var(--good); }
 .cortex-group-list button[data-tone="danger"] { border-color:var(--danger); }
-.cortex-group-list button[data-muted="true"] { opacity:.4; }
+.cortex-group-list button[data-muted="true"] { border-style:dashed;background:var(--surface); }
 .cortex-group-list button[aria-pressed="true"] { box-shadow:inset 0 0 0 2px var(--accent); }
 .cortex-run-focus { margin:10px 0 0;padding:6px 10px;border:1px solid var(--line);border-radius:4px;background:transparent;color:var(--muted);font-size:11px;cursor:pointer; }
 .cortex-run-focus[aria-pressed="true"] { border-color:var(--accent);color:var(--accent); }
@@ -185,7 +185,7 @@
 .cortex-node-list button[data-tone="active"] { border-color:var(--accent);color:var(--accent); }
 .cortex-node-list button[data-tone="good"] { border-color:var(--good); }
 .cortex-node-list button[data-tone="danger"] { border-color:var(--danger); }
-.cortex-node-list button[data-muted="true"] { opacity:.4; }
+.cortex-node-list button[data-muted="true"] { border-style:dashed;background:var(--surface); }
 .cortex-node-list button[aria-pressed="true"] { background:var(--surface-muted);box-shadow:inset 0 0 0 2px var(--accent); }
 .cortex-node-list small { display:block;color:var(--faint);font:9px var(--mono);text-transform:uppercase;margin-top:2px; }
 @media (max-width:1000px) { .cortex-3d .cortex-stage { height:44vh; } }
@@ -199,12 +199,26 @@
    --line/--focus) retints the whole immersive subtree to the reference's
    near-black blue graphite + cyan identity in one scoped block, rather
    than editing each rule -- normal PRISM workspaces never see these
-   values since they live outside .atlas-immersive. --danger is left as
+   values since they live outside .atlas-immersive. --danger is pinned to
    the shared red so a real failed/cancelled step stays visually distinct
    from a merely blocked one; the 3D scene's own TONE_COLOR map already
    renders "blocked" in amber (atlas-cortex-3d.tsx), matching the
-   reference for the one state it actually depicts. */
-.atlas-immersive { --accent:#57ddf5;--accent-soft:#12313c;--good:#6fe3b4;--focus:#8fe9fb;--canvas:#080d12;--surface:#0d161d;--surface-raised:#101923;--line:#25333e;--line-soft:#1a2831; }
+   reference for the one state it actually depicts.
+
+   Fixed defect: this block used to redefine only the surface/accent
+   tokens and silently inherit --text/--muted/--faint from whichever
+   ambient theme wrapped it. With .theme-light active those resolve to
+   near-black (correct for .theme-light's own near-white canvas), but
+   .atlas-immersive's canvas/surface stay this fixed near-black navy --
+   producing near-black text on a near-black background. Atlas is always
+   this dark identity by design, in both app-wide themes, so the fix is
+   to make every text/status token this block relies on complete and
+   self-contained here too, never left to fall through from .theme-light
+   or any other ambient scope. Values are chosen for >=4.5:1 contrast
+   against --canvas/--surface/--surface-raised (verified against WCAG 2.1
+   relative-luminance contrast, not eyeballed); #e78175 also clears ~6.8:1
+   against this palette. */
+.atlas-immersive { --accent:#57ddf5;--accent-soft:#12313c;--good:#6fe3b4;--focus:#8fe9fb;--danger:#e78175;--canvas:#080d12;--surface:#0d161d;--surface-raised:#101923;--surface-muted:#15232e;--line:#25333e;--line-soft:#1a2831;--text:#edf6f9;--muted:#9fb8c2;--faint:#7f97a1;color-scheme:dark; }
 .atlas-immersive { max-width:1520px;margin:0 auto;display:flex;flex-direction:column;gap:12px;min-height:calc(100vh - 190px);background:var(--canvas); }
 .atlas-immersive-top { display:flex;align-items:center;gap:14px;padding:10px 14px;border:1px solid var(--line);background:var(--surface); }
 .atlas-immersive-identity { display:flex;align-items:baseline;gap:9px; }
@@ -245,12 +259,9 @@
    controls once expanded. `max-height` + its own scroll (rather than the
    stage's `overflow:hidden` silently clipping it) keeps a long real answer
    readable on a short canvas instead of cut off. */
-/* z-index near the CSS maximum, not a small number: @react-three/drei's
-   <Html> satellite labels assign their own inline z-index from a very high
-   default range (zIndexRange, for 3D depth-occlusion sorting among labels)
-   that outranks any ordinary overlay value and would otherwise paint the
-   3D labels through this panel regardless of DOM order. */
-.atlas-result-panel { position:absolute;top:12px;right:12px;left:12px;max-width:420px;max-height:calc(100% - 24px);margin-left:auto;background:var(--surface-raised);border:1px solid var(--line);box-shadow:0 14px 36px rgba(0,0,0,.24);overflow-x:hidden;overflow-y:auto;z-index:2147483000; }
+/* The scene constrains Drei Html labels to zIndexRange 20..0, so real DOM
+   controls can sit above them without competing near the browser maximum. */
+.atlas-result-panel { position:absolute;top:12px;right:12px;left:12px;max-width:420px;max-height:calc(100% - 24px);margin-left:auto;background:var(--surface-raised);border:1px solid var(--line);box-shadow:0 14px 36px rgba(0,0,0,.24);overflow-x:hidden;overflow-y:auto;z-index:30; }
 .atlas-result-toggle { display:flex;align-items:center;gap:8px;width:100%;padding:10px 12px;border:0;background:transparent;color:var(--text);text-align:left;cursor:pointer;font-size:12px; }
 .atlas-result-toggle svg { width:15px;flex-shrink:0;color:var(--accent); }
 .atlas-result-toggle span { flex:1;font-weight:600; }

@@ -655,9 +655,8 @@ function CopyInvestigationLink({ runId, focusNodeId }: { runId: string; focusNod
 
 const TRUST_STAGE_LABELS: Record<string, string> = { registered: "Registered", verified: "Verified", runtime_bound: "Runtime bound", benchmarked: "Benchmarked", opcert: "Operational Certification", production: "Production", rollback: "Restored via rollback" };
 
-/** A real lifecycle read off already-established facts -- nothing here
- * decides eligibility; it mirrors the same `critical == 0 && pass rate >=
- * 90%` rule the server's own promotion gate enforces, purely for display. */
+/** A real lifecycle read off already-established facts. Eligibility and the
+ * threshold come from the server-owned promotion contract. */
 function TrustPanel({
   status,
   failed,
@@ -682,10 +681,9 @@ function TrustPanel({
     );
   }
   const critical = status?.latest_operational_cert_critical_failures ?? 0;
-  const passed = status?.latest_operational_cert_total_passed ?? 0;
-  const total = status?.latest_operational_cert_total_scenarios ?? 0;
   const opcertRun = Boolean(status?.latest_operational_cert_run_id);
-  const eligible = opcertRun && critical === 0 && total > 0 && passed / total >= 0.9;
+  const eligible = opcertRun && status?.latest_operational_cert_passed === true;
+  const requiredRate = status?.operational_cert_min_pass_rate;
   const stages = status?.production
     ? [
         { id: "registered", reached: Boolean(status.candidate_kind) },
@@ -709,7 +707,7 @@ function TrustPanel({
             ))}
             <li className={opcertRun ? (eligible ? "is-reached" : "is-blocked") : ""}>
               {opcertRun ? (eligible ? "Promotion eligible" : "Promotion blocked") : "Promotion pending"}
-              {opcertRun && !eligible ? <small>{critical > 0 ? `${critical} critical` : "below 90%"}</small> : null}
+              {opcertRun && !eligible ? <small>{critical > 0 ? `${critical} critical` : requiredRate == null ? "server threshold unavailable" : `below ${(requiredRate * 100).toFixed(0)}%`}</small> : null}
             </li>
             {status.production.is_rollback ? <li className="is-current">{TRUST_STAGE_LABELS.rollback}<small>{status.production.reason}</small></li> : null}
           </ol>
@@ -901,7 +899,7 @@ function OperationalCertPanel({
   const critical = status.latest_operational_cert_critical_failures ?? 0;
   const passed = status.latest_operational_cert_total_passed ?? 0;
   const total = status.latest_operational_cert_total_scenarios ?? 0;
-  const certified = critical === 0 && total > 0 && passed / total >= 0.9;
+  const certified = status.latest_operational_cert_passed === true;
   const failedScenarios: AtlasOperationalScenarioResult[] = (run?.scenario_results ?? []).filter((item) => !item.passed);
   return (
     <article className={`acc-panel ${certified ? "acc-tone-native" : "acc-tone-bridged"}`}>

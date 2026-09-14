@@ -88,6 +88,8 @@ describe("Atlas command center", () => {
             latest_operational_cert_total_passed: 19,
             latest_operational_cert_total_scenarios: 23,
             latest_operational_cert_critical_failures: 0,
+            operational_cert_min_pass_rate: 0.9,
+            latest_operational_cert_passed: false,
           });
         }
         if (path.endsWith(`/base-model-candidates/${candidateId}`)) {

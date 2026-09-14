@@ -139,3 +139,5 @@ def test_current_status_surfaces_real_verified_base_model_production(monkeypatch
     assert body["latest_v1_total_tasks"] == 90
     assert body["latest_operational_cert_run_id"] == opcert_run.run_id
     assert body["latest_operational_cert_critical_failures"] == 0
+    assert body["operational_cert_min_pass_rate"] == 0.9
+    assert body["latest_operational_cert_passed"] is True

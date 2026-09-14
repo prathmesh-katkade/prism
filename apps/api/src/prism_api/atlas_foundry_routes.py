@@ -578,9 +578,17 @@ def current_production_trust_status() -> AtlasProductionTrustStatus:
     Certification stores already durably recorded, so the panel can never
     show a status this server did not already establish elsewhere.
     """
+    from .atlas_operational_cert import (
+        OPERATIONAL_CERT_MIN_PASS_RATE,
+        DurableAtlasOperationalCertStore,
+        operational_certification_failure_reason,
+    )
+
     production = _promotion_store.current_production()
     if production is None:
-        return AtlasProductionTrustStatus()
+        return AtlasProductionTrustStatus(
+            operational_cert_min_pass_rate=OPERATIONAL_CERT_MIN_PASS_RATE
+        )
 
     candidate_id = production.candidate_id
     candidate_kind: Optional[AtlasCandidateKind] = None
@@ -604,10 +612,18 @@ def current_production_trust_status() -> AtlasProductionTrustStatus:
             )
             break  # already ordered newest-first
 
-    from .atlas_operational_cert import DurableAtlasOperationalCertStore
-
     opcert_runs = DurableAtlasOperationalCertStore().list_for_candidate(candidate_id, limit=1)
     opcert = opcert_runs[0] if opcert_runs else None
+    opcert_passed = (
+        operational_certification_failure_reason(
+            opcert,
+            candidate_id=candidate_id,
+            runtime_model_digest=binding.runtime_model_digest if binding else None,
+        )
+        is None
+        if opcert is not None
+        else None
+    )
 
     return AtlasProductionTrustStatus(
         production=production,
@@ -622,6 +638,8 @@ def current_production_trust_status() -> AtlasProductionTrustStatus:
         latest_operational_cert_total_passed=opcert.total_passed if opcert else None,
         latest_operational_cert_total_scenarios=opcert.total_scenarios if opcert else None,
         latest_operational_cert_critical_failures=opcert.critical_failure_count if opcert else None,
+        operational_cert_min_pass_rate=OPERATIONAL_CERT_MIN_PASS_RATE,
+        latest_operational_cert_passed=opcert_passed,
     )
 
 
