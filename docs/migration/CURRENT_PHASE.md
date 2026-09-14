@@ -1,5 +1,39 @@
 # Current migration phase
 
+## Superseding: Phase 11 experience slices exist; enterprise release remains blocked — 2026-09-14
+
+Phase 10's physical closeout below completed the model promotion, inference,
+rollback, restoration, and final verification gates. The later explicit Atlas
+experience scope therefore proceeded without changing the frozen benchmarks,
+certification policy, production pointer, or rollback history.
+
+The current Phase 11 branch now contains three bounded product slices:
+
+- **11A:** the Atlas immersive investigation workspace and live 3D Cortex,
+  backed by durable run evidence rather than simulated specialists or activity.
+- **11B:** the expanded historical-run Cortex projection, with real stored node
+  and relation identities available from the run-scoped API.
+- **11C:** additive, shareable history links using `atlas_panel=history`,
+  `run_id`, and optional validated `atlas_focus`; commit `46b8962` is the
+  isolated implementation checkpoint before this hardening wave.
+
+The Titan Wave 0 hardening change adds a bounded Atlas worker pool, atomic
+failure/restart reconciliation, fail-closed removal of DuckDB from user sandbox
+imports, complete Atlas theme tokens, browser accessibility coverage, and a
+server-owned operational-certification display contract. Public deployment is
+deliberately blocked: PRISM still has no OIDC/session/RBAC or tenant boundary,
+and a shared bearer token is not accepted as a substitute.
+
+This is repository truth, not a release declaration. Phase 11 remains incomplete
+until the branch passes review and CI and the remaining product, authorization,
+resource-isolation, observability, and enterprise-operation waves are delivered.
+No benchmark, certification, production-model, or deployment claim is created by
+the experience layer.
+
+`PHASE_10_COMPLETE = YES`; `PHASE_11_UNLOCKED = YES`;
+`PHASE_11_IN_PROGRESS = YES`; `PHASE_11_COMPLETE = NO`;
+`NON_LOCAL_DEPLOYMENT = BLOCKED_AUTHORIZATION_BOUNDARY`.
+
 ## Superseding: physical Phase 10 complete — 2026-09-11
 
 Live certification on `a9e65d6223a49025c9560525defc8d113c308df3`: **22/23, zero critical failures**,

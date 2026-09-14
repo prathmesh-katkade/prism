@@ -26,8 +26,10 @@ from .atlas_foundry_routes import promotion_router as atlas_promotion_router
 from .atlas_foundry_routes import router as atlas_foundry_router
 from .atlas_model_arena import router as atlas_model_arena_router
 from .atlas_operational_cert import router as atlas_operational_cert_router
+from .atlas_runtime import reconcile_stale_in_flight_runs_once
 from .atlas_runtime import runs as atlas_runs
 from .clean import router as clean_router
+from .deployment_security import resolve_deployment_security
 from .durable_registry import DurableAnalyticalObjectRegistry
 from .forecasting import router as forecasting_router
 from .lineage import router as lineage_router
@@ -60,6 +62,14 @@ def _configure_logging() -> None:
 def create_app() -> FastAPI:
     _configure_logging()
     settings = get_settings()
+    # PRISM currently has no user identity/RBAC boundary. Any declared
+    # staging/production deployment fails here instead of exposing privileged
+    # analytical and model-management routes behind a misleading shared token.
+    security = resolve_deployment_security()
+    # Runs exactly once per process (see the function's own docstring): any
+    # run still DRAFT/RUNNING from before this process started cannot have a
+    # live worker and is durably marked FAILED with an explicit reason.
+    reconcile_stale_in_flight_runs_once()
     app = FastAPI(
         title=settings.api_title,
         version=settings.api_version,
@@ -173,6 +183,14 @@ def create_app() -> FastAPI:
             ),
             ProviderReadiness(name="analytical_history", status=history_status, detail=history_detail),
             ProviderReadiness(name="atlas_persistence", status=atlas_status, detail=atlas_detail),
+            ProviderReadiness(
+                name="external_auth_boundary",
+                status="not_configured",
+                detail=(
+                    f"PRISM_DEPLOYMENT_MODE={security.mode}: the API is supported only on a "
+                    "127.0.0.1-bound desktop process until OIDC/session/RBAC is implemented."
+                ),
+            ),
         )
         return ReadinessResponse(generated_at=datetime.now(timezone.utc), providers=providers)
 

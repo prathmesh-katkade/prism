@@ -32,7 +32,6 @@ _ALLOWED_TOP_LEVEL = {
     "scipy",
     "statsmodels",
     "sklearn",
-    "duckdb",
     "matplotlib",
     "shap",
     "math",
@@ -42,6 +41,17 @@ _ALLOWED_TOP_LEVEL = {
     "datetime",
     "collections",
 }
+# ``duckdb`` is deliberately excluded from the user sandbox import allowlist.
+# DuckDB does its own file and network I/O in native code -- it never calls
+# through ``builtins.open``/``pathlib.Path.open`` or Python's ``socket``
+# module, so the bootstrap's containment and network shims (below) cannot see
+# or block it. A sandboxed script could otherwise do
+# ``duckdb.sql("COPY t TO '/etc/passwd'")`` or load the ``httpfs``/other
+# native extensions to read arbitrary host paths or reach the network,
+# bypassing every policy this module enforces. This is a fail-closed removal:
+# there is currently no server-owned adapter that runs DuckDB in a truly
+# isolated process/container with its own filesystem and network boundary.
+# Re-enable it only behind such an adapter, never by re-adding it here.
 _ARTIFACT_TYPES = {
     ".csv": "text/csv",
     ".json": "application/json",
