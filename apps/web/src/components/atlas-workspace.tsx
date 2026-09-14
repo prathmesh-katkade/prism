@@ -28,12 +28,19 @@ const terminal = new Set(["completed", "failed", "cancelled"]);
 export function AtlasWorkspace({
   datasetId,
   initialRunId,
+  initialHistoryRunId,
+  initialHistoryFocusId,
   onEnterImmersive,
   onExitImmersive,
   onBackToProject,
 }: {
   datasetId: string | undefined;
   initialRunId?: string | undefined;
+  // A history deep link (see `atlas-history-link.ts`): addresses a run
+  // inside the Command Center's system-wide Run activity list below,
+  // independent of `initialRunId`'s live, dataset-scoped restore above.
+  initialHistoryRunId?: string | undefined;
+  initialHistoryFocusId?: string | undefined;
   onEnterImmersive?: () => void;
   onExitImmersive?: () => void;
   onBackToProject?: () => void;
@@ -124,6 +131,13 @@ export function AtlasWorkspace({
     }
     return null;
   }
+  // A history deep link opens the Command Center itself -- the one real
+  // surface `initialHistoryRunId` can actually be expanded inside -- rather
+  // than leaving the operator to find and click "System status" themselves
+  // after already following a link built to land exactly here.
+  useEffect(() => {
+    if (initialHistoryRunId) setSystemOpen(true);
+  }, [initialHistoryRunId]);
   useEffect(() => {
     if (!datasetId || !initialRunId) return;
     // A restored run may still be executing: a one-time snapshot alone would
@@ -182,7 +196,11 @@ export function AtlasWorkspace({
         </button>
         {onBackToProject ? <button type="button" className="atlas-immersive-exit" onClick={onBackToProject}>Back to PRISM</button> : null}
       </header>
-      {systemOpen ? <div className="atlas-immersive-system"><AtlasCommandCenter /></div> : null}
+      {systemOpen ? (
+        <div className="atlas-immersive-system">
+          <AtlasCommandCenter deepLinkRunId={initialHistoryRunId ?? null} deepLinkFocusId={initialHistoryFocusId ?? null} />
+        </div>
+      ) : null}
       {!datasetId ? (
         <section className="atlas-state empty-state">
           <span className="eyebrow">ATLAS · LOCAL ORCHESTRATION</span>

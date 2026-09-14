@@ -1,10 +1,13 @@
 import React from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { PrismShell } from "./prism-shell";
 
 describe("PRISM shell", () => {
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => {
+    vi.restoreAllMocks();
+    window.history.pushState({}, "", "/");
+  });
 
   it("opens the universal command surface with the keyboard", async () => {
     render(<PrismShell />);
@@ -83,6 +86,47 @@ describe("PRISM shell", () => {
     fireEvent.click(screen.getAllByRole("button", { name: /Overview native/i })[0]!);
     await waitFor(() => expect(screen.getByRole("heading", { name: "sales.csv" })).toBeInTheDocument());
     expect(screen.queryByText("Start with the dataset, then follow the evidence.")).not.toBeInTheDocument();
+  });
+
+  // Phase 11C: `atlas_panel=history` is the new, explicit, additive query
+  // key -- see `atlas-history-link.ts`. A plain `dataset_id`/`run_id` link
+  // (every existing link) is covered by the dataset-restore tests above and
+  // must keep requiring a manual click into Atlas; only this new key lands
+  // directly on the Atlas tab with its Command Center already open.
+  it("lands directly on the Atlas tab with the Command Center open when the URL carries a history deep link", async () => {
+    window.history.pushState({}, "", "/?atlas_panel=history&run_id=atlas_hist_1");
+    const historicalRun = {
+      run_id: "atlas_hist_1",
+      plan: { plan_id: "plan_hist_1", objective: "Investigate churn drivers", dataset_id: "ds_hist", provider: "deterministic", state: "completed", created_at: "2026-01-03T00:00:00Z", steps: [] },
+      answer: "Churn correlates with support-ticket volume.",
+      council: [],
+      evidence: [],
+      events: [],
+      created_at: "2026-01-03T00:00:00Z",
+    };
+    vi.stubGlobal("fetch", vi.fn(async (input: string | URL) => {
+      const path = String(input);
+      if (path.includes("/promotion/current-status")) return json({ production: null, candidate_kind: null, runtime_model: null });
+      if (path.includes("/specialists") || path.includes("/atlas/runs?limit=8")) return json([]);
+      if (path.endsWith("/atlas/runs/atlas_hist_1/cortex")) return json({ run_id: "atlas_hist_1", generated_at: "2026-01-03T00:00:00Z", nodes: [], edges: [] });
+      if (path.endsWith("/atlas/runs/atlas_hist_1")) return json(historicalRun);
+      if (path.includes("/feedback/runs/") || path.includes("/feedback/recent") || path.includes("/promotion/history") || path.includes("/memories")) return json([]);
+      if (path.includes("/retrieval/capability")) return json({ provider: "lexical", model: "none", revision: "v1", available: false, detail: "not configured" });
+      if (path.includes("/foundry/")) return json([]);
+      if (path.includes("training-datasets:combined-summary")) return json(null, 404);
+      return json({});
+    }));
+
+    render(<PrismShell />);
+
+    // No manual "Atlas" nav click, and no manual "System status" click --
+    // the deep link alone puts the operator on the Cortex with the Command
+    // Center's Run activity already showing the linked run expanded.
+    await waitFor(() => expect(screen.getByText("Immersive Cortex")).toBeInTheDocument());
+    const systemToggle = screen.getByRole("button", { name: /System status|Hide system status/ });
+    expect(systemToggle).toHaveAttribute("aria-expanded", "true");
+    const commandCenter = screen.getByLabelText("Atlas command center");
+    await within(commandCenter).findByText("Investigate churn drivers");
   });
 });
 

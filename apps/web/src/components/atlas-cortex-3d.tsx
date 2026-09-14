@@ -105,6 +105,7 @@ export function AtlasCortex3D({
   onSelectStep,
   onSelectNode,
   stageOverlay,
+  initialFocusNodeId,
 }: {
   graph: CortexGraphState | null;
   run: AtlasRunResponse | null;
@@ -117,6 +118,13 @@ export function AtlasCortex3D({
   // anchored to the canvas regardless of how tall the header or the
   // group-list/run-focus/disclosure content below it grows.
   stageOverlay?: ReactNode;
+  // A deep-link's requested focus (see `atlas-history-link.ts`): a real
+  // `node_id`, or a plan `step_id` (matched against a `plan_step` node's
+  // `source_id`). Applied exactly like a real click on that same node
+  // would, and silently ignored if no such node exists in this run's
+  // actual fetched graph, so a stale or mistyped link can never fabricate
+  // a selection.
+  initialFocusNodeId?: string | null;
 }) {
   const compactScene = useCompactCortexScene();
   const homeDistance = compactScene ? 9.2 : 7.5;
@@ -177,6 +185,19 @@ export function AtlasCortex3D({
     setDistance(homeDistance);
     controlsRef.current?.reset();
   }
+  useEffect(() => {
+    if (!initialFocusNodeId) return;
+    const matched = nodes.find((node) => node.node_id === initialFocusNodeId) ?? nodes.find((node) => node.kind === "plan_step" && node.source_id === initialFocusNodeId);
+    if (!matched) return; // Not a real node in this graph -- ignored, never synthesized.
+    selectNode(matched);
+    // No "applied once" guard: for the one caller that passes this prop
+    // (a historical run's Cortex, fetched exactly once), `nodes` only ever
+    // changes when the graph first loads, from empty to real -- so this
+    // never re-fires after a later manual click moves `focus` elsewhere.
+    // A one-shot ref guard was tried here and removed: it could win the
+    // race against React's dev-only Strict Mode effect replay (mount,
+    // cleanup, remount) and end up permanently skipping the real match.
+  }, [initialFocusNodeId, nodes, run?.run_id]);
   const focusedGroup = focus ? groups.find((group) => group.groupId === focus) ?? null : null;
   // One unified selection-detail contract regardless of *what* was focused
   // (the core, an atomic node from the disclosure list, or a grouped

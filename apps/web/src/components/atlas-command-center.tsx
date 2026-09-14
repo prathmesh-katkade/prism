@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type {
   AtlasBaseModelVerification,
   AtlasBenchSuiteRun,
@@ -21,8 +21,10 @@ import type {
   CortexGraphState,
 } from "@prism/api-contracts";
 import { apiUrl } from "../config/api";
+import { buildAtlasHistoryLink } from "../state/atlas-history-link";
 import { EvidencePanel, FeedbackItem, groupMemoriesByClass, MEMORY_CLASS_LABELS, MemoryRecordItem, PipelineStepper, RunMemoryTrace, SpecialistActivity, ToolTimeline, GuardrailPanel as RunGuardrailPanel } from "./atlas-run-activity";
 import { AtlasCortex3D } from "./atlas-cortex-3d";
+import type { CortexSelection } from "./atlas-cortex-shared";
 
 type CorpusState = {
   systemSeed: AtlasSystemSeedManifest | null;
@@ -42,7 +44,17 @@ const emptyCorpus: CorpusState = { systemSeed: null, syntheticTeacher: null, com
  * new, and nothing is hardcoded: if production is still the legacy pointer,
  * this honestly says so instead of claiming Qwen is production.
  */
-export function AtlasCommandCenter() {
+export function AtlasCommandCenter({
+  deepLinkRunId = null,
+  deepLinkFocusId = null,
+}: {
+  // See `atlas-history-link.ts`: a run addressed by `atlas_panel=history`
+  // (system-wide -- never required to already be in the "last 8" recent
+  // list this panel fetches by default) and an optional node/step within
+  // its real Cortex graph to focus once it loads.
+  deepLinkRunId?: string | null;
+  deepLinkFocusId?: string | null;
+} = {}) {
   const [status, setStatus] = useState<AtlasProductionTrustStatus | null>(null);
   const [statusFailed, setStatusFailed] = useState(false);
   const [candidate, setCandidate] = useState<AtlasVerifiedBaseModelCandidate | null>(null);
@@ -61,6 +73,45 @@ export function AtlasCommandCenter() {
   const [ragCapability, setRagCapability] = useState<AtlasEmbeddingCapability | null>(null);
   const [memoryFailed, setMemoryFailed] = useState(false);
   const [corpusFailed, setCorpusFailed] = useState(false);
+  const [deepLinkRun, setDeepLinkRun] = useState<AtlasRunResponse | null>(null);
+  const [deepLinkRunLoading, setDeepLinkRunLoading] = useState(false);
+  const [deepLinkRunFailed, setDeepLinkRunFailed] = useState(false);
+
+  // A history deep link addresses one specific run by id, independent of
+  // the "last 8" window `loadActivity` below fetches -- an older run can be
+  // linked to and must still resolve. Fetched separately, by exact id, and
+  // merged into the real run list `RunActivityPanel` renders (never a
+  // second, parallel notion of "the runs") rather than replacing it.
+  useEffect(() => {
+    setDeepLinkRun(null);
+    setDeepLinkRunFailed(false);
+    if (!deepLinkRunId) return;
+    let cancelled = false;
+    setDeepLinkRunLoading(true);
+    fetch(apiUrl(`/api/v1/atlas/runs/${deepLinkRunId}`))
+      .then((response) => {
+        if (!response.ok) throw new Error(String(response.status));
+        return response.json() as Promise<AtlasRunResponse>;
+      })
+      .then((body) => {
+        if (cancelled) return;
+        setDeepLinkRun(body);
+        return fetch(apiUrl(`/api/v1/atlas/feedback/runs/${body.run_id}`))
+          .then((response) => (response.ok ? (response.json() as Promise<AtlasFeedbackEvent[]>) : []))
+          .then((events) => {
+            if (!cancelled) setRunFeedbackByRun((previous) => ({ ...previous, [body.run_id]: events }));
+          });
+      })
+      .catch(() => {
+        if (!cancelled) setDeepLinkRunFailed(true);
+      })
+      .finally(() => {
+        if (!cancelled) setDeepLinkRunLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [deepLinkRunId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -195,7 +246,18 @@ export function AtlasCommandCenter() {
       <Hero status={status} failed={statusFailed} />
       <div className="acc-grid">
         <SystemCortexPanel status={status} failed={statusFailed} candidate={candidate} verification={verification} v1Run={v1Run} opcertRun={opcertRun} corpus={corpus} />
-        <RunActivityPanel runs={recentRuns} failed={recentRunsFailed} roster={roster} memories={systemMemories} feedbackByRun={runFeedbackByRun} />
+        <RunActivityPanel
+          runs={recentRuns}
+          failed={recentRunsFailed}
+          roster={roster}
+          memories={systemMemories}
+          feedbackByRun={runFeedbackByRun}
+          focusRunId={deepLinkRunId}
+          focusNodeId={deepLinkFocusId}
+          linkedRun={deepLinkRun}
+          linkedRunLoading={deepLinkRunLoading}
+          linkedRunFailed={deepLinkRunFailed}
+        />
         <TrustPanel status={status} failed={statusFailed} candidate={candidate} verification={verification} history={promotionHistory} benchRuns={benchByCandidate} />
         <BenchPanel status={status} failed={statusFailed} run={v1Run} candidateRuns={benchByCandidate} />
         <OperationalCertPanel status={status} failed={statusFailed} run={opcertRun} />
@@ -385,53 +447,90 @@ function RunActivityPanel({
   roster,
   memories,
   feedbackByRun,
+  focusRunId,
+  focusNodeId,
+  linkedRun,
+  linkedRunLoading,
+  linkedRunFailed,
 }: {
   runs: AtlasRunResponse[];
   failed: boolean;
   roster: AtlasSpecialistIdentity[];
   memories: AtlasMemoryRecord[];
   feedbackByRun: Record<string, AtlasFeedbackEvent[]>;
+  // A history deep link (see `atlas-history-link.ts`): the run it names,
+  // fetched independently since it may fall outside the "last 8" `runs`
+  // this panel is otherwise given, plus the optional node/step within it.
+  focusRunId?: string | null;
+  focusNodeId?: string | null;
+  linkedRun?: AtlasRunResponse | null;
+  linkedRunLoading?: boolean;
+  linkedRunFailed?: boolean;
 }) {
   const [openRunId, setOpenRunId] = useState<string | null>(null);
+  // Guards the auto-expand below to a single application: once the operator
+  // has manually collapsed or switched runs, a later re-render (for example
+  // the linked run's own fetch resolving) must never force it back open.
+  const appliedFocusRunId = useRef<string | null>(null);
+  const displayRuns = useMemo(() => {
+    if (!linkedRun || runs.some((run) => run.run_id === linkedRun.run_id)) return runs;
+    return [linkedRun, ...runs];
+  }, [runs, linkedRun]);
+  useEffect(() => {
+    if (!focusRunId || appliedFocusRunId.current === focusRunId) return;
+    if (!displayRuns.some((run) => run.run_id === focusRunId)) return;
+    setOpenRunId(focusRunId);
+    appliedFocusRunId.current = focusRunId;
+  }, [focusRunId, displayRuns]);
   return (
     <article className="acc-panel acc-panel-wide">
       <h2>Run activity</h2>
       {failed ? (
         <p className="acc-empty">Could not reach the Atlas run history endpoint.</p>
-      ) : !runs.length ? (
-        <p className="acc-empty">
-          No Atlas investigation has been recorded yet. Real specialist, tool, and guardrail activity for any run will appear here as soon
-          as one exists -- this panel never simulates activity that isn&apos;t actually happening.
-        </p>
       ) : (
-        <ul className="acc-run-list">
-          {runs.map((run) => {
-            const open = openRunId === run.run_id;
-            return (
-              <li key={run.run_id}>
-                <button type="button" className="acc-run-summary" aria-expanded={open} onClick={() => setOpenRunId(open ? null : run.run_id)}>
-                  <strong>{run.plan.objective}</strong>
-                  <span className={`migration-chip ${run.plan.state === "completed" ? "ready" : run.plan.state === "failed" ? "unavailable" : "bridged"}`}>
-                    {(run.plan.state ?? "unknown").replaceAll("_", " ")}
-                  </span>
-                  <span className="acc-mono">{run.plan.dataset_id}</span>
-                  <span className="acc-mono">{run.created_at ? new Date(run.created_at).toLocaleString() : ""}</span>
-                </button>
-                {open ? (
-                  <div className="acc-run-detail">
-                    <HistoricalRunCortex run={run} />
-                    <PipelineStepper run={run} />
-                    <SpecialistActivity run={run} roster={roster} />
-                    <ToolTimeline run={run} />
-                    <RunGuardrailPanel run={run} />
-                    <EvidencePanel run={run} />
-                    <RunMemoryTrace run={run} memories={memories} feedback={feedbackByRun[run.run_id] ?? []} />
-                  </div>
-                ) : null}
-              </li>
-            );
-          })}
-        </ul>
+        <>
+          {focusRunId && linkedRunLoading ? <p className="acc-empty" aria-live="polite">Loading the linked investigation…</p> : null}
+          {focusRunId && linkedRunFailed ? (
+            <p className="acc-empty" role="alert">
+              The linked investigation (<span className="acc-mono">{focusRunId}</span>) could not be found.
+            </p>
+          ) : null}
+          {!displayRuns.length ? (
+            <p className="acc-empty">
+              No Atlas investigation has been recorded yet. Real specialist, tool, and guardrail activity for any run will appear here as soon
+              as one exists -- this panel never simulates activity that isn&apos;t actually happening.
+            </p>
+          ) : (
+            <ul className="acc-run-list">
+              {displayRuns.map((run) => {
+                const open = openRunId === run.run_id;
+                return (
+                  <li key={run.run_id}>
+                    <button type="button" className="acc-run-summary" aria-expanded={open} onClick={() => setOpenRunId(open ? null : run.run_id)}>
+                      <strong>{run.plan.objective}</strong>
+                      <span className={`migration-chip ${run.plan.state === "completed" ? "ready" : run.plan.state === "failed" ? "unavailable" : "bridged"}`}>
+                        {(run.plan.state ?? "unknown").replaceAll("_", " ")}
+                      </span>
+                      <span className="acc-mono">{run.plan.dataset_id}</span>
+                      <span className="acc-mono">{run.created_at ? new Date(run.created_at).toLocaleString() : ""}</span>
+                    </button>
+                    {open ? (
+                      <div className="acc-run-detail">
+                        <HistoricalRunCortex run={run} initialFocusId={run.run_id === focusRunId ? (focusNodeId ?? null) : null} />
+                        <PipelineStepper run={run} />
+                        <SpecialistActivity run={run} roster={roster} />
+                        <ToolTimeline run={run} />
+                        <RunGuardrailPanel run={run} />
+                        <EvidencePanel run={run} />
+                        <RunMemoryTrace run={run} memories={memories} feedback={feedbackByRun[run.run_id] ?? []} />
+                      </div>
+                    ) : null}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </>
       )}
     </article>
   );
@@ -446,7 +545,7 @@ function RunActivityPanel({
  * deliberately deferred to the moment the operator actually expands that
  * exact run rather than eagerly loading a graph for every row in the list.
  */
-function HistoricalRunCortex({ run }: { run: AtlasRunResponse }) {
+function HistoricalRunCortex({ run, initialFocusId }: { run: AtlasRunResponse; initialFocusId?: string | null }) {
   const [graph, setGraph] = useState<CortexGraphState | null>(null);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
@@ -454,6 +553,11 @@ function HistoricalRunCortex({ run }: { run: AtlasRunResponse }) {
   // live AtlasWorkspace's own selection state, which is a different
   // component instance over a different (possibly still-running) run.
   const [selectedStepId, setSelectedStepId] = useState<string | null>(null);
+  // The exact same real selection AtlasCortex3D's own click handlers report
+  // (a real node, group, or the core) -- tracked here only so the copy-link
+  // action below can embed *this* run's currently focused node/step,
+  // whether that focus came from a click or from `initialFocusId`.
+  const [selection, setSelection] = useState<CortexSelection>({ kind: "core" });
 
   useEffect(() => {
     let cancelled = false;
@@ -481,7 +585,72 @@ function HistoricalRunCortex({ run }: { run: AtlasRunResponse }) {
 
   if (failed) return <p className="acc-empty" role="alert">Could not reach this run&apos;s persisted Cortex graph.</p>;
   if (loading) return <p className="acc-empty" aria-live="polite">Loading this run&apos;s persisted Cortex graph…</p>;
-  return <AtlasCortex3D graph={graph} run={run} selectedStepId={selectedStepId} onSelectStep={setSelectedStepId} />;
+  const focusedNodeId = selection.kind === "node" ? selection.node.node_id : null;
+  return (
+    <>
+      <AtlasCortex3D
+        graph={graph}
+        run={run}
+        selectedStepId={selectedStepId}
+        onSelectStep={setSelectedStepId}
+        onSelectNode={setSelection}
+        initialFocusNodeId={initialFocusId ?? null}
+      />
+      <CopyInvestigationLink runId={run.run_id} focusNodeId={focusedNodeId} />
+    </>
+  );
+}
+
+/**
+ * An accessible, honest "copy investigation link" for one expanded
+ * historical run -- browser clipboard when it is actually available, a
+ * truthful status either way, and a manual-copy fallback (never a silent
+ * no-op, and never a claimed success the browser didn't grant). Pure
+ * client-side string construction (`buildAtlasHistoryLink`): no network
+ * request, and no data leaves the browser.
+ */
+function CopyInvestigationLink({ runId, focusNodeId }: { runId: string; focusNodeId: string | null }) {
+  const [status, setStatus] = useState<"idle" | "copied" | "manual" | "unsupported">("idle");
+  const fallbackRef = useRef<HTMLInputElement>(null);
+  const link = useMemo(
+    () => (typeof window === "undefined" ? "" : buildAtlasHistoryLink(window.location.href, runId, focusNodeId)),
+    [runId, focusNodeId]
+  );
+  useEffect(() => {
+    if (status === "manual" || status === "unsupported") {
+      fallbackRef.current?.focus();
+      fallbackRef.current?.select();
+    }
+  }, [status]);
+
+  async function copyLink() {
+    if (typeof navigator === "undefined" || !navigator.clipboard?.writeText) {
+      setStatus("unsupported");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(link);
+      setStatus("copied");
+    } catch {
+      setStatus("manual");
+    }
+  }
+
+  return (
+    <div className="acc-copy-link">
+      <button type="button" onClick={() => void copyLink()}>
+        Copy investigation link
+      </button>
+      <p className="acc-copy-link-status" aria-live="polite">
+        {status === "copied" ? "Link copied to your clipboard." : null}
+        {status === "manual" ? "Couldn't copy automatically -- the link is selected below; copy it manually." : null}
+        {status === "unsupported" ? "Clipboard access isn't available here -- the link is selected below; copy it manually." : null}
+      </p>
+      {status === "manual" || status === "unsupported" ? (
+        <input ref={fallbackRef} className="acc-copy-link-fallback" type="text" readOnly aria-label="Investigation link" value={link} onFocus={(event) => event.currentTarget.select()} />
+      ) : null}
+    </div>
+  );
 }
 
 const TRUST_STAGE_LABELS: Record<string, string> = { registered: "Registered", verified: "Verified", runtime_bound: "Runtime bound", benchmarked: "Benchmarked", opcert: "Operational Certification", production: "Production", rollback: "Restored via rollback" };
