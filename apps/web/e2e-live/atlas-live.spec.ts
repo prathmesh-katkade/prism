@@ -131,10 +131,10 @@ test("ATLAS First Light: honest system state, a real investigation, and the rece
   await expect(cortexDetail).toBeVisible();
   await expect(cortexDetail.getByText("run", { exact: true })).toBeVisible();
 
-  // The full atomic node graph stays real and reachable one disclosure
-  // away, for provenance -- not deleted, just not the default view.
-  const nodeDisclosure = cortex.locator(".cortex-atomic-disclosure");
-  await nodeDisclosure.locator("summary").click();
+  // The full atomic node graph stays real and reachable in its own
+  // disclosure -- open by default (a closed <details> would remove its
+  // content from the accessibility tree entirely, not just visually), so
+  // it's already visible without needing to expand it first.
   const cortexNodes = page.getByLabel("Cortex nodes");
   await expect(cortexNodes.getByRole("button", { name: /Focus/ }).first()).toBeVisible();
 
