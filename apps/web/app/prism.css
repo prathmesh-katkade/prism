@@ -124,8 +124,9 @@
 /* Narrow-viewport modal drawer: a real role=dialog overlay rather than the
    always-in-flow column above 780px. */
 .atlas-inspector-open { display:none; }
-.atlas-inspector-scrim { position:fixed;inset:0;z-index:40;background:rgba(3,7,10,.55); }
-.atlas-inspector-drawer.is-modal { position:fixed;top:0;right:0;bottom:0;z-index:41;width:min(92vw,380px);max-height:none;height:100%;border-left:1px solid var(--line);box-shadow:-18px 0 40px rgba(0,0,0,.35); }
+.atlas-inspector-scrim { position:fixed;inset:0;z-index:40;display:flex;justify-content:flex-end; }
+.atlas-inspector-backdrop { position:absolute;inset:0;border:0;background:rgba(3,7,10,.55);cursor:default; }
+.atlas-inspector-drawer.is-modal { position:relative;z-index:1;width:min(92vw,380px);max-height:none;height:100%;border-left:1px solid var(--line);box-shadow:-18px 0 40px rgba(0,0,0,.35); }
 @media (max-width:780px) {
   .atlas-inspector-open { display:inline-flex;align-items:center;gap:6px;align-self:flex-start;margin-top:10px;padding:7px 12px;border:1px solid var(--line);border-radius:4px;background:var(--surface-raised);color:var(--text);font-size:12px;cursor:pointer; }
 }

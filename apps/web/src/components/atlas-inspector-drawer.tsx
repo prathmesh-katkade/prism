@@ -139,19 +139,19 @@ export function AtlasInspectorDrawer({
   );
 
   if (narrow) {
-    // The scrim is a sibling of the dialog, not its wrapper: `aria-hidden`
-    // on a container also hides every descendant, which would take the
-    // dialog itself out of the accessibility tree along with it. As a
-    // sibling, it can be a purely decorative, pointer-only backdrop
-    // (Escape and the explicit close button already cover the keyboard/
-    // screen-reader path) without touching the dialog's own accessibility.
+    // The backdrop is a real <button>, not a <div onClick> -- the a11y
+    // baseline check (tools/check-a11y-baseline.mjs) flags a non-semantic
+    // click target, and a plain div with role="presentation" alone doesn't
+    // satisfy it. `tabIndex={-1}` keeps it out of the tab order: Escape and
+    // the explicit close button already cover the keyboard/screen-reader
+    // path, so it exists purely as a pointer-only dismiss affordance.
     return (
-      <>
-        <div className="atlas-inspector-scrim" aria-hidden="true" onClick={closeNarrow} />
+      <div className="atlas-inspector-scrim">
+        <button type="button" className="atlas-inspector-backdrop" onClick={closeNarrow} aria-label="Close inspector" tabIndex={-1} />
         <aside ref={containerRef as React.RefObject<HTMLElement>} className="atlas-inspector-drawer is-modal" role="dialog" aria-modal="true" aria-label="Atlas context inspector">
           {content}
         </aside>
-      </>
+      </div>
     );
   }
   return (

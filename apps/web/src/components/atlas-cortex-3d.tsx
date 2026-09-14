@@ -53,6 +53,10 @@ function useReducedMotion(): boolean {
 function useWebglSupported(): boolean | null {
   const [supported, setSupported] = useState<boolean | null>(null);
   useEffect(() => {
+    if (typeof WebGLRenderingContext === "undefined" && typeof WebGL2RenderingContext === "undefined") {
+      setSupported(false);
+      return;
+    }
     try {
       const probe = document.createElement("canvas");
       const context = probe.getContext("webgl2") ?? probe.getContext("webgl");
