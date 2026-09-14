@@ -170,7 +170,7 @@ export function PrismShell() {
   ], [layout.density, layout.inspectorOpen, layout.splitView]);
 
   return (
-    <main className={`prism-shell theme-${layout.theme} density-${layout.density}`} data-ready={ready} style={{ "--rail-size": `${layout.railCollapsed ? 62 : layout.railWidth}px`, "--inspector-size": `${layout.inspectorWidth}px` } as React.CSSProperties}>
+    <main className={`prism-shell theme-${layout.theme} density-${layout.density}`} data-ready={ready} style={{ "--rail-size": `${layout.railCollapsed ? 62 : layout.railWidth}px`, "--inspector-size": `${layout.inspectorOpen ? layout.inspectorWidth : 0}px` } as React.CSSProperties}>
       <a className="skip-link" href="#workspace">Skip to workspace</a>
       <header className="topbar">
         <div className="wordmark" aria-label="PRISM workspace"><span className="prism-mark" />PRISM <small>RESEARCH SYSTEM</small></div>

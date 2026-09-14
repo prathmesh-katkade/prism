@@ -39,10 +39,13 @@ describe("PRISM shell", () => {
   });
 
   it("keeps the inspector available as contextual shell state", () => {
-    render(<PrismShell />);
+    const { container } = render(<PrismShell />);
+    const shell = container.querySelector<HTMLElement>(".prism-shell")!;
     expect(screen.getByRole("complementary", { name: "Contextual inspector" })).toBeInTheDocument();
+    expect(shell.style.getPropertyValue("--inspector-size")).toBe("292px");
     fireEvent.click(screen.getByRole("button", { name: "Hide inspector" }));
     expect(screen.getByRole("button", { name: "Show inspector" })).toBeInTheDocument();
+    expect(shell.style.getPropertyValue("--inspector-size")).toBe("0px");
   });
 
   it("keeps the native Overview upload action available to keyboard users", () => {

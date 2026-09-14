@@ -47,6 +47,19 @@ function useReducedMotion(): boolean {
   return reduced;
 }
 
+function useCompactCortexScene(): boolean {
+  const [compact, setCompact] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const query = window.matchMedia("(max-width: 520px)");
+    setCompact(query.matches);
+    const onChange = () => setCompact(query.matches);
+    query.addEventListener("change", onChange);
+    return () => query.removeEventListener("change", onChange);
+  }, []);
+  return compact;
+}
+
 /** Real WebGL support, probed once on mount rather than assumed -- jsdom
  * (every unit test) and a locked-down browser both report `false` here,
  * and both get the same honest static fallback rather than a thrown error. */
@@ -105,6 +118,8 @@ export function AtlasCortex3D({
   // group-list/run-focus/disclosure content below it grows.
   stageOverlay?: ReactNode;
 }) {
+  const compactScene = useCompactCortexScene();
+  const homeDistance = compactScene ? 9.2 : 7.5;
   const [focus, setFocus] = useState<string | null>(null);
   const [distance, setDistance] = useState(7.5);
   const [contextLost, setContextLost] = useState(false);
@@ -115,6 +130,7 @@ export function AtlasCortex3D({
   // every satellite in the new graph or point the parent's selection at the
   // wrong step.
   useEffect(() => { setFocus(null); }, [run?.run_id]);
+  useEffect(() => { setDistance(homeDistance); }, [homeDistance]);
   const nodes = useMemo(() => graph?.nodes ?? [], [graph]);
   const groups = useMemo(() => buildCortexGroups(graph, run), [graph, run]);
   const groupPositions = useMemo(() => cortexGroupPositions3D(groups), [groups]);
@@ -158,7 +174,7 @@ export function AtlasCortex3D({
   }
   function resetView() {
     setFocus(null);
-    setDistance(7.5);
+    setDistance(homeDistance);
     controlsRef.current?.reset();
   }
   const focusedGroup = focus ? groups.find((group) => group.groupId === focus) ?? null : null;
@@ -188,8 +204,8 @@ export function AtlasCortex3D({
         </div>
         <div className="cortex-controls">
           <button type="button" onClick={() => setDistance((value) => Math.max(4.5, value - 0.9))} aria-label="Zoom in Cortex">+</button>
-          <button type="button" onClick={() => setDistance((value) => Math.min(12, value + 0.9))} aria-label="Zoom out Cortex">−</button>
-          <button type="button" onClick={resetView} disabled={!focus && distance === 7.5}>Reset focus</button>
+          <button type="button" onClick={() => setDistance((value) => Math.min(compactScene ? 14 : 12, value + 0.9))} aria-label="Zoom out Cortex">−</button>
+          <button type="button" onClick={resetView} disabled={!focus && distance === homeDistance}>Reset focus</button>
         </div>
       </header>
       {groupKinds.length ? (
@@ -203,7 +219,7 @@ export function AtlasCortex3D({
           <CortexBoundary fallback={fallback}>
             <Canvas
               dpr={[1, 1.5]}
-              camera={{ position: [0, 2.1, distance], fov: 46 }}
+              camera={{ position: [0, compactScene ? 1.7 : 2.1, distance], fov: compactScene ? 50 : 46 }}
               gl={{ antialias: true, alpha: true, powerPreference: "low-power" }}
               frameloop={reducedMotion ? "demand" : "always"}
               aria-hidden="true"
@@ -254,7 +270,7 @@ export function AtlasCortex3D({
                   />
                 );
               })}
-              <OrbitControls ref={controlsRef} enablePan={false} minDistance={4.5} maxDistance={12} target={[0, 0, 0]} autoRotate={!reducedMotion && !focus} autoRotateSpeed={0.4} />
+              <OrbitControls ref={controlsRef} enablePan={false} minDistance={4.5} maxDistance={compactScene ? 14 : 12} target={[0, 0, 0]} autoRotate={!reducedMotion && !focus} autoRotateSpeed={0.4} />
             </Canvas>
           </CortexBoundary>
         ) : fallback}
