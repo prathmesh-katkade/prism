@@ -18,9 +18,11 @@ import type {
   AtlasSyntheticTeacherManifest,
   AtlasSystemSeedManifest,
   AtlasVerifiedBaseModelCandidate,
+  CortexGraphState,
 } from "@prism/api-contracts";
 import { apiUrl } from "../config/api";
 import { EvidencePanel, FeedbackItem, groupMemoriesByClass, MEMORY_CLASS_LABELS, MemoryRecordItem, PipelineStepper, RunMemoryTrace, SpecialistActivity, ToolTimeline, GuardrailPanel as RunGuardrailPanel } from "./atlas-run-activity";
+import { AtlasCortex3D } from "./atlas-cortex-3d";
 
 type CorpusState = {
   systemSeed: AtlasSystemSeedManifest | null;
@@ -417,6 +419,7 @@ function RunActivityPanel({
                 </button>
                 {open ? (
                   <div className="acc-run-detail">
+                    <HistoricalRunCortex run={run} />
                     <PipelineStepper run={run} />
                     <SpecialistActivity run={run} roster={roster} />
                     <ToolTimeline run={run} />
@@ -432,6 +435,53 @@ function RunActivityPanel({
       )}
     </article>
   );
+}
+
+/**
+ * A historical run's Cortex reuses the exact same server-owned graph and 3D
+ * projection the live per-run workspace uses (`AtlasCortex3D` over
+ * `GET /runs/{id}/cortex`) -- never a second, simplified graph presentation
+ * for "old" runs. This component only ever mounts inside an already-open
+ * run's detail block (see `RunActivityPanel` above), so the fetch is
+ * deliberately deferred to the moment the operator actually expands that
+ * exact run rather than eagerly loading a graph for every row in the list.
+ */
+function HistoricalRunCortex({ run }: { run: AtlasRunResponse }) {
+  const [graph, setGraph] = useState<CortexGraphState | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
+  // Selection is scoped to this one expanded run -- never shared with the
+  // live AtlasWorkspace's own selection state, which is a different
+  // component instance over a different (possibly still-running) run.
+  const [selectedStepId, setSelectedStepId] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setGraph(null);
+    setFailed(false);
+    setLoading(true);
+    fetch(apiUrl(`/api/v1/atlas/runs/${run.run_id}/cortex`))
+      .then((response) => {
+        if (!response.ok) throw new Error(String(response.status));
+        return response.json() as Promise<CortexGraphState>;
+      })
+      .then((body) => {
+        if (!cancelled) setGraph(body);
+      })
+      .catch(() => {
+        if (!cancelled) setFailed(true);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [run.run_id]);
+
+  if (failed) return <p className="acc-empty" role="alert">Could not reach this run&apos;s persisted Cortex graph.</p>;
+  if (loading) return <p className="acc-empty" aria-live="polite">Loading this run&apos;s persisted Cortex graph…</p>;
+  return <AtlasCortex3D graph={graph} run={run} selectedStepId={selectedStepId} onSelectStep={setSelectedStepId} />;
 }
 
 const TRUST_STAGE_LABELS: Record<string, string> = { registered: "Registered", verified: "Verified", runtime_bound: "Runtime bound", benchmarked: "Benchmarked", opcert: "Operational Certification", production: "Production", rollback: "Restored via rollback" };

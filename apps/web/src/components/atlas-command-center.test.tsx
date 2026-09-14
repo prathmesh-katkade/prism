@@ -273,4 +273,92 @@ describe("Atlas command center", () => {
     expect(within(memoryPanel).getByText("not configured")).toBeInTheDocument();
     expect(within(memoryPanel).getByText(/no real project context to supply/)).toBeInTheDocument();
   });
+
+  describe("Historical run Cortex", () => {
+    const historicalRun = {
+      run_id: "atlas_hist_1",
+      plan: { plan_id: "plan_hist_1", objective: "Investigate churn drivers", dataset_id: "ds_hist", provider: "deterministic", state: "completed", created_at: "2026-01-03T00:00:00Z", steps: [] },
+      answer: "Churn correlates with support-ticket volume.",
+      council: [],
+      evidence: [],
+      events: [],
+      created_at: "2026-01-03T00:00:00Z",
+    };
+    const historicalCortex = {
+      run_id: "atlas_hist_1",
+      generated_at: "2026-01-03T00:00:00Z",
+      nodes: [
+        { node_id: "run:atlas_hist_1", kind: "run", label: "Atlas run", state: "completed", source_id: "atlas_hist_1" },
+        { node_id: "dataset:ds_hist", kind: "dataset", label: "Dataset", state: "recorded", source_id: "ds_hist" },
+        { node_id: "specialist:scout", kind: "specialist", label: "Scout", state: "visible", source_id: "scout" },
+      ],
+      edges: [{ edge_id: "uses", source_node_id: "run:atlas_hist_1", target_node_id: "dataset:ds_hist", relation: "uses" }],
+    };
+
+    function mockRunListing(cortexResponse: () => Response | Promise<Response>) {
+      return vi.fn(async (input: string | URL) => {
+        const path = String(input);
+        if (path.includes("/promotion/current-status")) return json({ production: null, candidate_kind: null, runtime_model: null });
+        if (path.includes("/specialists")) return json([]);
+        if (path.includes("/atlas/runs?limit=8")) return json(["atlas_hist_1"]);
+        if (path.endsWith("/atlas/runs/atlas_hist_1/cortex")) return cortexResponse();
+        if (path.endsWith("/atlas/runs/atlas_hist_1")) return json(historicalRun);
+        if (path.includes("/feedback/runs/atlas_hist_1") || path.includes("/promotion/history")) return json([]);
+        return notFound();
+      });
+    }
+
+    async function expandHistoricalRun(): Promise<HTMLElement> {
+      render(<AtlasCommandCenter />);
+      const activityPanel = screen.getByText("Run activity").closest("article") as HTMLElement;
+      await waitFor(() => expect(within(activityPanel).getByText("Investigate churn drivers")).toBeInTheDocument());
+      fireEvent.click(within(activityPanel).getByText("Investigate churn drivers"));
+      return activityPanel;
+    }
+
+    it("fetches and renders the real persisted Cortex graph on expand, with truthful counts and keyboard-reachable node selection", async () => {
+      vi.stubGlobal("fetch", mockRunListing(() => json(historicalCortex)));
+      const activityPanel = await expandHistoricalRun();
+
+      const cortex = await within(activityPanel).findByLabelText("Cortex real-state graph");
+      // Counts read straight off the fetched graph -- 3 real nodes, 1 real
+      // relation -- never a fabricated topology or a hardcoded number.
+      expect(within(cortex).getByText(/3 real nodes/)).toBeInTheDocument();
+      expect(within(cortex).getByText(/1 real relation/)).toBeInTheDocument();
+
+      // Every satellite is a real, focusable <button> in the accessible
+      // mirror list -- keyboard-reachable by construction, never dependent
+      // on canvas hit-testing.
+      const datasetButton = within(cortex).getByRole("button", { name: "Focus Dataset" });
+      datasetButton.focus();
+      expect(datasetButton).toHaveFocus();
+      fireEvent.click(datasetButton);
+
+      // Selecting it surfaces real selected-node detail, not placeholder text.
+      const detail = await within(cortex).findByLabelText("Selected Cortex node");
+      expect(within(detail).getByText("dataset")).toBeInTheDocument();
+      expect(within(detail).getByText("Dataset")).toBeInTheDocument();
+    });
+
+    it("shows a loading state before the historical run's Cortex graph arrives", async () => {
+      let resolveCortex!: (response: Response) => void;
+      const pending = new Promise<Response>((resolve) => { resolveCortex = resolve; });
+      vi.stubGlobal("fetch", mockRunListing(() => pending));
+      const activityPanel = await expandHistoricalRun();
+
+      expect(await within(activityPanel).findByText(/Loading this run.s persisted Cortex graph/)).toBeInTheDocument();
+      resolveCortex(json(historicalCortex));
+      await waitFor(() => expect(within(activityPanel).getByLabelText("Cortex real-state graph")).toBeInTheDocument());
+    });
+
+    it("shows an honest unavailable message, without breaking the rest of the run's detail, when the Cortex fetch fails", async () => {
+      vi.stubGlobal("fetch", mockRunListing(() => notFound()));
+      const activityPanel = await expandHistoricalRun();
+
+      await waitFor(() => expect(within(activityPanel).getByRole("alert")).toHaveTextContent("Could not reach this run's persisted Cortex graph."));
+      // The rest of the expanded run's detail still renders -- one failed
+      // fetch never takes down the panels that don't depend on it.
+      expect(within(activityPanel).getByLabelText("Atlas request pipeline")).toBeInTheDocument();
+    });
+  });
 });
