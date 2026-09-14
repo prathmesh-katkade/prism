@@ -47,6 +47,11 @@ services:
       # the frontend's fetches already handle a non-2xx/degraded response without crashing.
       - key: PRISM_ALLOWED_ORIGINS
         value: '["https://prism-native-web-staging.onrender.com"]'
+      # This service binds 0.0.0.0, so it must declare itself non-local. The API intentionally
+      # refuses to start in this mode until a real OIDC/session/RBAC boundary is implemented.
+      # This preserves the manifest as deployment documentation without exposing privileged routes.
+      - key: PRISM_DEPLOYMENT_MODE
+        value: staging
       # Deterministic by default — no AI provider is required for PRISM to work. Set to "ollama"
       # only if a private, non-public Ollama endpoint you control is reachable from this service;
       # never point it at a publicly exposed tunnel of a local machine.
