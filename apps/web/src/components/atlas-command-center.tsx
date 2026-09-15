@@ -26,6 +26,7 @@ import { AtlasCortex3D } from "./atlas-cortex-3d";
 import type { CortexSelection } from "./atlas-cortex-shared";
 import { AccountabilityPanel } from "./atlas-accountability";
 import { AttentionPanel } from "./atlas-attention";
+import { MissionControlPanel } from "./atlas-mission-control";
 
 type CorpusState = {
   systemSeed: AtlasSystemSeedManifest | null;
@@ -237,8 +238,18 @@ export function AtlasCommandCenter({
     void loadTrustHistory();
     void loadActivity();
     void loadMemory();
+    // Mission Control's whole point is showing what's active *right now*;
+    // a one-shot fetch on mount would go stale the moment a second run
+    // starts elsewhere. Poll only the run-activity fetch (cheap: up to 8
+    // run details + their feedback), paused while the tab is hidden --
+    // Accountability and Attention read the same state, so they benefit
+    // too, but this isn't a general "keep everything live" mechanism.
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible") void loadActivity();
+    }, 20_000);
     return () => {
       cancelled = true;
+      window.clearInterval(interval);
     };
   }, []);
 
@@ -246,6 +257,7 @@ export function AtlasCommandCenter({
     <section className="atlas-command-center" aria-label="Atlas command center">
       <Hero status={status} failed={statusFailed} />
       <AttentionPanel status={status} statusFailed={statusFailed} runs={recentRuns} runsFailed={recentRunsFailed} />
+      <MissionControlPanel runs={recentRuns} failed={recentRunsFailed} />
       <div className="acc-grid">
         <SystemCortexPanel status={status} failed={statusFailed} candidate={candidate} verification={verification} v1Run={v1Run} opcertRun={opcertRun} corpus={corpus} />
         <RunActivityPanel
