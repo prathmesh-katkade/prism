@@ -543,13 +543,20 @@ function CortexParticles({ reducedMotion, active }: { reducedMotion: boolean; ac
 }
 
 const GROUP_GEOMETRY: Record<CortexGroup["kind"], ReactNode> = {
-  dataset: <boxGeometry args={[0.42, 0.42, 0.42]} />,
-  specialist: <octahedronGeometry args={[0.3, 0]} />,
-  evidence: <cylinderGeometry args={[0.26, 0.26, 0.14, 20]} />,
+  dataset: <boxGeometry args={[0.36, 0.36, 0.36]} />,
+  // A plain octahedron (0 subdivisions) is eight flat triangular faces --
+  // the classic "game gem" silhouette. One subdivision level turns it into
+  // an 80-face icosahedron, the same faceted-but-smooth geometry the core
+  // already uses for its own selected-state ring (see CortexCore below),
+  // so a specialist reads as a small instance of the core's own language
+  // instead of a different, simpler shape bolted on next to it.
+  specialist: <icosahedronGeometry args={[0.28, 1]} />,
+  evidence: <cylinderGeometry args={[0.24, 0.24, 0.13, 24]} />,
 };
 
 function CortexGroupSatellite({ group, position, muted, selected, reducedMotion, onClick }: { group: CortexGroup; position: Vec3; muted: boolean; selected: boolean; reducedMotion: boolean; onClick(): void }) {
   const mesh = useRef<Mesh>(null);
+  const wire = useRef<Mesh>(null);
   const color = TONE_COLOR[group.tone];
   const clock = useRef(Math.random() * Math.PI * 2); // phase offset only, never affects position -- purely visual desync so satellites don't pulse in lockstep
   useFrame((_, delta) => {
@@ -557,12 +564,22 @@ function CortexGroupSatellite({ group, position, muted, selected, reducedMotion,
     clock.current += delta;
     const scale = 1 + Math.sin(clock.current * 3) * 0.14;
     if (mesh.current) mesh.current.scale.setScalar(scale);
+    if (wire.current) wire.current.scale.setScalar(scale);
   });
   return (
     <group position={position as unknown as [number, number, number]}>
+      {/* Same dual-layer treatment as CortexCore -- a low-opacity translucent
+          fill plus a crisp wireframe shell -- at satellite scale, rather
+          than one flat, fully opaque primitive. A solid low-poly shape at
+          full opacity reads as a flat game icon; this makes a satellite
+          read as a small instance of the same instrument the core is. */}
       <mesh ref={mesh} onClick={(event) => { event.stopPropagation(); onClick(); }}>
         {GROUP_GEOMETRY[group.kind]}
-        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={muted ? 0.08 : selected ? 0.95 : 0.45} transparent opacity={muted ? 0.22 : 1} roughness={0.35} metalness={0.15} wireframe={group.kind === "dataset"} />
+        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={muted ? 0.05 : selected ? 0.55 : 0.22} transparent opacity={muted ? 0.12 : 0.32} roughness={0.5} metalness={0.05} />
+      </mesh>
+      <mesh ref={wire} scale={1.002}>
+        {GROUP_GEOMETRY[group.kind]}
+        <meshBasicMaterial color={color} wireframe transparent opacity={muted ? 0.16 : selected ? 0.9 : 0.55} />
       </mesh>
       {selected ? <mesh scale={1.55}>{GROUP_GEOMETRY[group.kind]}<meshBasicMaterial color={color} wireframe transparent opacity={0.5} /></mesh> : null}
       <Html center distanceFactor={8} occlude={false} zIndexRange={[20, 0]} className="cortex-label-anchor" style={{ pointerEvents: "none" }}>
