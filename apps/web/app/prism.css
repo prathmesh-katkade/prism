@@ -251,8 +251,23 @@
 .atlas-command-bar { margin-top:0;border-top:2px solid var(--accent); }
 .atlas-command-row { display:flex;align-items:flex-end;gap:9px; }
 .atlas-command-row textarea { flex:1;min-height:44px; }
-.atlas-mic-button { display:grid;place-items:center;width:38px;height:38px;flex-shrink:0;border:1px solid var(--line);border-radius:4px;background:var(--surface-raised);color:var(--faint);cursor:not-allowed; }
+.atlas-mic-button { display:grid;place-items:center;width:38px;height:38px;flex-shrink:0;border:1px solid var(--line);border-radius:4px;background:var(--surface-raised);color:var(--faint);cursor:pointer; }
+.atlas-mic-button:disabled { cursor:not-allowed; }
+.atlas-mic-button:not(:disabled):hover { color:var(--text);background:var(--surface); }
+.atlas-mic-button.is-listening { color:var(--accent);border-color:var(--accent);background:var(--accent-soft);animation:atlas-pulse 1.2s ease-in-out infinite; }
+.atlas-mic-button.is-speaking { color:var(--good);border-color:var(--good); }
 .atlas-command-actions { display:flex;gap:8px;flex-shrink:0; }
+.atlas-voice-controls { position:relative;display:flex;gap:6px;flex-shrink:0; }
+.atlas-wake-button,.atlas-voice-settings-toggle { display:grid;place-items:center;height:38px;padding:0 10px;flex-shrink:0;border:1px solid var(--line);border-radius:4px;background:var(--surface-raised);color:var(--faint);font-size:11px;font-weight:600;cursor:pointer; }
+.atlas-voice-settings-toggle { width:38px;padding:0; }
+.atlas-wake-button:hover,.atlas-voice-settings-toggle:hover { color:var(--text);background:var(--surface); }
+.atlas-wake-button.is-armed { color:var(--accent);border-color:var(--accent);background:var(--accent-soft); }
+.atlas-voice-popover { position:absolute;bottom:46px;left:0;width:min(300px,80vw);padding:14px;background:var(--surface-raised);border:1px solid var(--line);border-top:2px solid var(--accent);box-shadow:0 14px 36px rgba(0,0,0,.24);z-index:5; }
+.atlas-voice-popover p { margin:0 0 10px;font-size:12px;color:var(--muted); }
+.atlas-voice-popover-actions { display:flex;gap:8px; }
+.atlas-voice-popover label { display:block;color:var(--faint);font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px; }
+.atlas-voice-popover select { width:100%;padding:7px 9px;margin-bottom:10px;border:1px solid var(--line);border-radius:4px;background:var(--surface);color:var(--text);font:12px var(--sans); }
+@media (prefers-reduced-motion:reduce) { .atlas-mic-button.is-listening { animation:none; } }
 /* Anchored to the top-right corner of the canvas (this is now rendered
    inside `.cortex-stage` itself via AtlasCortex3D's `stageOverlay` prop),
    never the bottom: the Cortex's real accessible content (grouped

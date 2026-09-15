@@ -11,6 +11,7 @@ import { AtlasCommandCenter } from "./atlas-command-center";
 import { AtlasStatusBadge } from "./atlas-status-badge";
 import { Icon } from "./icons";
 import type { CortexSelection } from "./atlas-cortex-shared";
+import { useVoiceLayer, type VoiceLayer, type VoiceVerbosity } from "../state/use-voice";
 
 export { connectedStepIdForNode } from "./atlas-cortex-shared";
 
@@ -158,9 +159,9 @@ export function AtlasWorkspace({
       await refresh(id);
     } catch (reason) { if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : "Atlas stream failed."); }
   }
-  async function start() {
+  async function start(overrideObjective?: string) {
     if (!datasetId) return; setError(null); setRun(null); setGraph(null); setRunMemories([]); setRunFeedback([]); setSelectedStepId(null); setSelection({ kind: "core" }); setResultExpanded(false);
-    const response = await fetch(apiUrl("/api/v1/atlas/runs"), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ dataset_id: datasetId, objective, idempotency_key: crypto.randomUUID() }) });
+    const response = await fetch(apiUrl("/api/v1/atlas/runs"), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ dataset_id: datasetId, objective: overrideObjective ?? objective, idempotency_key: crypto.randomUUID() }) });
     if (!response.ok) { setError((await response.json() as { detail?: string }).detail ?? "Atlas run could not start."); return; }
     const created = await response.json() as AtlasRunResponse; setRun(created); await refresh(created.run_id); void watch(created.run_id);
   }
@@ -182,6 +183,31 @@ export function AtlasWorkspace({
 
   const state = run?.plan.state ?? "ready";
   const running = state === "running";
+
+  const voice = useVoiceLayer((command) => {
+    setObjective(command);
+    if (!running) void start(command);
+  });
+  // Live dictation: the objective field fills as the interim transcript
+  // arrives, not only once the utterance is final, so speaking feels the
+  // same as typing rather than a silent black box until you stop talking.
+  useEffect(() => {
+    if (voice.mode === "listening" && voice.transcript) setObjective(voice.transcript);
+  }, [voice.transcript, voice.mode]);
+  // Spoken read-back: exactly once per real terminal transition, using the
+  // run's own answer (completed) or the same error text already shown
+  // on-screen (failed/cancelled) -- never a paraphrase this layer invents.
+  const spokenRunId = useRef<string | null>(null);
+  useEffect(() => {
+    if (!run || !terminal.has(state) || spokenRunId.current === run.run_id) return;
+    spokenRunId.current = run.run_id;
+    if (state === "completed" && run.answer) voice.speak(run.answer);
+    else if (state === "failed") voice.speak(error ?? "The investigation failed.");
+    else if (state === "cancelled") voice.speak("The investigation was cancelled.");
+    // Deliberately keyed only on the run identity/state transition, not
+    // `voice`/`error` (both change more often than the terminal state does)
+    // -- `spokenRunId` above is the real guard against re-speaking.
+  }, [run?.run_id, state]);
 
   return (
     <div className="atlas-immersive">
@@ -249,6 +275,7 @@ export function AtlasWorkspace({
             onCancel={() => void cancel()}
             running={running}
             canCancel={Boolean(run) && !terminal.has(run?.plan.state ?? "")}
+            voice={voice}
           />
         </div>
       )}
@@ -257,10 +284,9 @@ export function AtlasWorkspace({
 }
 
 /** The primary ATLAS input as a bottom command surface: objective entry,
- * Enter-to-submit (Shift+Enter for a newline), Run/Cancel, and a truthfully
- * disabled microphone -- voice input has no backend in this phase, so the
- * control is never wired to fake recording. */
-function AtlasCommandBar({ objective, onObjectiveChange, onRun, onCancel, running, canCancel }: { objective: string; onObjectiveChange(value: string): void; onRun(): void; onCancel(): void; running: boolean; canCancel: boolean }) {
+ * Enter-to-submit (Shift+Enter for a newline), Run/Cancel, and real voice
+ * input wherever the browser actually supports it (see `use-voice.ts`). */
+function AtlasCommandBar({ objective, onObjectiveChange, onRun, onCancel, running, canCancel, voice }: { objective: string; onObjectiveChange(value: string): void; onRun(): void; onCancel(): void; running: boolean; canCancel: boolean; voice: VoiceLayer }) {
   function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
@@ -271,10 +297,7 @@ function AtlasCommandBar({ objective, onObjectiveChange, onRun, onCancel, runnin
     <section className="atlas-command atlas-command-bar" aria-label="Atlas investigation">
       <label htmlFor="atlas-objective">Investigation objective</label>
       <div className="atlas-command-row">
-        <button type="button" className="atlas-mic-button" disabled aria-disabled="true" title="Voice input is not available in this phase.">
-          <Icon name="mic-off" />
-          <span className="acc-visually-hidden">Microphone input is unavailable in this phase</span>
-        </button>
+        <VoiceControls voice={voice} />
         <textarea id="atlas-objective" value={objective} onChange={(event) => onObjectiveChange(event.target.value)} onKeyDown={onKeyDown} maxLength={2000} rows={1} placeholder="What should Atlas investigate? (Enter to run, Shift+Enter for a new line)" />
         <div className="atlas-command-actions">
           <button onClick={onRun} disabled={running}>Run investigation</button>
@@ -282,6 +305,82 @@ function AtlasCommandBar({ objective, onObjectiveChange, onRun, onCancel, runnin
         </div>
       </div>
     </section>
+  );
+}
+
+/** Voice's whole surface: capability-gated (a real "not supported" state,
+ * never a button that pretends to work), consent-gated (voice starts
+ * disabled; enabling it is one explicit click with a plain-language
+ * explanation of exactly when it listens), then push-to-talk, wake mode,
+ * and spoken-response verbosity once enabled. */
+function VoiceControls({ voice }: { voice: VoiceLayer }) {
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
+  if (!voice.supported) {
+    return (
+      <button type="button" className="atlas-mic-button" disabled aria-disabled="true" title="Voice input isn't supported in this browser.">
+        <Icon name="mic-off" />
+        <span className="acc-visually-hidden">Voice input isn't supported in this browser</span>
+      </button>
+    );
+  }
+
+  if (!voice.enabled) {
+    return (
+      <div className="atlas-voice-controls">
+        <button type="button" className="atlas-mic-button" onClick={() => setSettingsOpen((value) => !value)} aria-expanded={settingsOpen} title="Enable voice input">
+          <Icon name="mic-off" />
+          <span className="acc-visually-hidden">Enable voice input</span>
+        </button>
+        {settingsOpen ? (
+          <div className="atlas-voice-popover" role="dialog" aria-label="Enable voice input">
+            <p>PRISM only listens while you're holding this button or wake mode is armed. Nothing is sent to Atlas until you speak.</p>
+            <div className="atlas-voice-popover-actions">
+              <button type="button" onClick={() => { voice.enable(); setSettingsOpen(false); }}>Enable voice</button>
+              <button type="button" className="secondary" onClick={() => setSettingsOpen(false)}>Not now</button>
+            </div>
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+
+  return (
+    <div className="atlas-voice-controls">
+      <button
+        type="button"
+        className={`atlas-mic-button${voice.mode === "listening" ? " is-listening" : ""}${voice.mode === "speaking" ? " is-speaking" : ""}`}
+        onClick={voice.pushToTalk}
+        aria-pressed={voice.mode === "listening"}
+        title={voice.mode === "listening" ? 'Listening -- click to stop' : "Push to talk"}
+      >
+        <Icon name="mic" />
+        <span className="acc-visually-hidden">{voice.mode === "listening" ? "Listening" : "Push to talk"}</span>
+      </button>
+      <button
+        type="button"
+        className={voice.wakeArmed ? "atlas-wake-button is-armed" : "atlas-wake-button"}
+        onClick={voice.toggleWake}
+        aria-pressed={voice.wakeArmed}
+        title={voice.wakeArmed ? 'Wake mode armed -- say "Atlas" then your request' : "Arm hands-free wake mode"}
+      >
+        Wake {voice.wakeArmed ? "on" : "off"}
+      </button>
+      <button type="button" className="atlas-voice-settings-toggle" onClick={() => setSettingsOpen((value) => !value)} aria-expanded={settingsOpen} aria-label="Voice settings">
+        <Icon name="settings" />
+      </button>
+      {settingsOpen ? (
+        <div className="atlas-voice-popover" role="dialog" aria-label="Voice settings">
+          <label htmlFor="atlas-voice-verbosity">Spoken responses</label>
+          <select id="atlas-voice-verbosity" value={voice.verbosity} onChange={(event) => voice.setVerbosity(event.target.value as VoiceVerbosity)}>
+            <option value="concise">Concise</option>
+            <option value="full">Full answer</option>
+            <option value="off">Off</option>
+          </select>
+          <button type="button" className="secondary" onClick={() => { voice.disable(); setSettingsOpen(false); }}>Disable voice</button>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
