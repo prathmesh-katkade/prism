@@ -17,6 +17,7 @@ import { HistoryWorkspace } from "./history-workspace";
 import { AtlasWorkspace } from "./atlas-workspace";
 import { AtlasStatusBadge } from "./atlas-status-badge";
 import { AiProviderBadge } from "./ai-provider-badge";
+import { activeLeaseCount, AtlasSystemPanel, pulseSubtitle, useAtlasResourceSnapshot } from "./atlas-pulse";
 import { parseAtlasHistoryQuery, type AtlasHistoryQuery } from "../state/atlas-history-link";
 import { EvolutionWorkspace } from "./evolution-workspace";
 import { migrationPresentation, phaseTwoMigrations, type InspectorObjectState, type ShellStatus, type WorkspaceTab } from "../state/shell-model";
@@ -69,6 +70,7 @@ function workflowTab(workflow: string): WorkspaceTab {
 
 export function PrismShell() {
   const { layout, updateLayout, ready } = useLayoutState();
+  const resourceState = useAtlasResourceSnapshot();
   const [tabs, setTabs] = useState<readonly WorkspaceTab[]>([baseTab]);
   const [activeTabId, setActiveTabId] = useState(baseTab.id);
   const [status, setStatus] = useState<ShellStatus>("project-loaded");
@@ -229,8 +231,8 @@ export function PrismShell() {
             <WorkspaceSurface tab={activeTab} status={status} onStatusChange={setStatus} onOpenCommand={() => setCommandOpen(true)} onSelectContext={setSelectedContext} onOpenWorkflow={openWorkflow} sqlDraft={sqlDraft} analystResultRunId={analystResultRunId} activeDatasetId={activeDatasetId} initialAtlasRunId={activeAtlasRunId} initialAtlasHistoryRunId={atlasHistory.runId ?? undefined} initialAtlasHistoryFocusId={atlasHistory.focusId ?? undefined} onDatasetReady={setActiveDatasetId} onSqlDraft={(draft) => { setSqlDraft(draft); openWorkflow("sql-lab"); }} onUseAsEvidence={(runId) => { setAnalystResultRunId(runId); openWorkflow("ai-analyst"); }} onEnterAtlasImmersive={() => updateLayout({ railCollapsed: true, inspectorOpen: false })} onExitAtlasImmersive={() => updateLayout({ railCollapsed: false, inspectorOpen: true })} onBackToProject={() => { setActiveTabId(baseTab.id); setStatus("project-loaded"); }} />
             {layout.splitView ? <aside className="split-foundation" aria-label="Secondary tab group foundation"><p>SECONDARY TAB GROUP</p><strong>Drop a tab here</strong><span>Split-view layout is saved locally. Analytical content does not duplicate here until its migration phase.</span></aside> : null}
           </section>
-          <button className={layout.atlasExpanded ? "atlas-presence is-expanded" : "atlas-presence"} onClick={() => updateLayout({ atlasExpanded: !layout.atlasExpanded })} aria-expanded={layout.atlasExpanded} aria-label="Expand Atlas workspace"><span className="atlas-signal"><i /><i /><i /></span><span><strong>Atlas</strong><small>{layout.atlasExpanded ? "Context workspace ready" : "Watching workspace context"}</small></span><Icon name="arrow" /></button>
-          {layout.atlasExpanded ? <section className="atlas-drawer" aria-label="Atlas contextual workspace"><div><span className="eyebrow">ATLAS · AMBIENT OPERATING PRESENCE</span><h2>What should we investigate?</h2><p>Run Atlas from durable data context, inspect each declared tool, and keep executable SQL in SQL Lab.</p></div><button onClick={() => openWorkflow("atlas")}>Open Atlas <kbd>⌘ K</kbd></button></section> : null}
+          <button className={layout.atlasExpanded ? "atlas-presence is-expanded" : "atlas-presence"} data-active={activeLeaseCount(resourceState) > 0} onClick={() => updateLayout({ atlasExpanded: !layout.atlasExpanded })} aria-expanded={layout.atlasExpanded} aria-label="Expand Atlas workspace"><span className="atlas-signal"><i /><i /><i /></span><span><strong>Atlas</strong><small>{pulseSubtitle(resourceState, layout.atlasExpanded)}</small></span><Icon name="arrow" /></button>
+          {layout.atlasExpanded ? <section className="atlas-drawer" aria-label="Atlas contextual workspace"><div><span className="eyebrow">ATLAS · AMBIENT OPERATING PRESENCE</span><h2>What should we investigate?</h2><p>Run Atlas from durable data context, inspect each declared tool, and keep executable SQL in SQL Lab.</p></div><AtlasSystemPanel state={resourceState} /><button onClick={() => openWorkflow("atlas")}>Open Atlas <kbd>⌘ K</kbd></button></section> : null}
         </section>
         {layout.inspectorOpen ? <><ResizeHandle panel="inspector" value={layout.inspectorWidth} onPointerDown={startResize} onKeyboardResize={(delta) => updateLayout({ inspectorWidth: Math.max(240, Math.min(420, layout.inspectorWidth + delta)) })} /><Inspector state={inspector} onClose={() => updateLayout({ inspectorOpen: false })} /></> : <><div className="resize-spacer" /><button className="inspector-restore" onClick={() => updateLayout({ inspectorOpen: true })} aria-label="Show inspector"><Icon name="panel" /></button></>}
       </div>
