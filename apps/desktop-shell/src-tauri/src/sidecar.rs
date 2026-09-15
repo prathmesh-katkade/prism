@@ -36,11 +36,33 @@ pub struct SidecarState(pub Mutex<Option<tauri_plugin_shell::process::CommandChi
 /// startup race into a logged, bounded, diagnosable one instead of a
 /// silent one, and is worth fixing at the frontend's fetch-retry layer
 /// separately if it proves to matter in practice on real hardware.
-pub fn spawn(app: &AppHandle) -> tauri::Result<()> {
+pub fn spawn(app: &AppHandle) -> tauri::Result<bool> {
+    // Checked fresh on every launch (not cached/persisted) so starting or
+    // stopping Ollama between runs is picked up automatically, per the
+    // plan's own requirement -- see ollama.rs for why this is a real
+    // HTTP probe of Ollama's API, not just a port check.
+    let ollama_ready = crate::ollama::is_reachable();
+    log::info!(
+        "[ollama] {}",
+        if ollama_ready {
+            "reachable -- enabling Ollama-backed Atlas features"
+        } else {
+            "not reachable -- Atlas uses its deterministic fallback"
+        }
+    );
+
     let shell = app.shell();
-    let (mut rx, child) = shell
+    let mut command = shell
         .sidecar("prism-api")
-        .map_err(|e| tauri::Error::Anyhow(anyhow::anyhow!(e)))?
+        .map_err(|e| tauri::Error::Anyhow(anyhow::anyhow!(e)))?;
+    if ollama_ready {
+        // Flips a switch apps/api already has (PRISM_AI_PROVIDER, see
+        // ai_analyst.py / atlas_candidate_runtime.py) rather than adding a
+        // second, parallel notion of "local-first" -- unset, it already
+        // defaults to the same deterministic path this falls back to.
+        command = command.env("PRISM_AI_PROVIDER", "ollama");
+    }
+    let (mut rx, child) = command
         .spawn()
         .map_err(|e| tauri::Error::Anyhow(anyhow::anyhow!(e)))?;
 
@@ -65,7 +87,7 @@ pub fn spawn(app: &AppHandle) -> tauri::Result<()> {
 
     *app.state::<SidecarState>().0.lock().unwrap() = Some(child);
     wait_until_ready();
-    Ok(())
+    Ok(ollama_ready)
 }
 
 fn wait_until_ready() {

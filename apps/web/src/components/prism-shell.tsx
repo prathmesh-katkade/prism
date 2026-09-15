@@ -16,6 +16,7 @@ import { EvidenceInspector } from "./evidence-inspector";
 import { HistoryWorkspace } from "./history-workspace";
 import { AtlasWorkspace } from "./atlas-workspace";
 import { AtlasStatusBadge } from "./atlas-status-badge";
+import { AiProviderBadge } from "./ai-provider-badge";
 import { parseAtlasHistoryQuery, type AtlasHistoryQuery } from "../state/atlas-history-link";
 import { EvolutionWorkspace } from "./evolution-workspace";
 import { migrationPresentation, phaseTwoMigrations, type InspectorObjectState, type ShellStatus, type WorkspaceTab } from "../state/shell-model";
@@ -198,6 +199,7 @@ export function PrismShell() {
         <div className="project-crumb"><span className="status-dot" /> <strong>Untitled research</strong><span>Local workspace</span></div>
         <div className="top-actions">
           <AtlasStatusBadge />
+          <AiProviderBadge />
           <button className="command-trigger" ref={commandTrigger} onClick={() => setCommandOpen(true)} aria-haspopup="dialog"><Icon name="command" /> <span>Command surface</span><kbd>⌘ K</kbd></button>
           <button className="icon-button" aria-label={`Switch to ${layout.theme === "dark" ? "light" : "dark"} theme`} onClick={() => updateLayout({ theme: layout.theme === "dark" ? "light" : "dark" })}><Icon name={layout.theme === "dark" ? "sun" : "moon"} /></button>
         </div>
