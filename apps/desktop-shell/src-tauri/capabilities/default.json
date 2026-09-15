@@ -10,6 +10,10 @@
     "core:tray:default",
     "core:menu:default",
     "global-shortcut:default",
-    "notification:default"
+    "notification:default",
+    {
+      "identifier": "shell:allow-execute",
+      "allow": [{ "name": "prism-api", "sidecar": true }]
+    }
   ]
 }

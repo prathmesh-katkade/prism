@@ -35,6 +35,7 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
+    "externalBin": ["binaries/prism-api"],
     "android": {
       "debugApplicationIdSuffix": ".debug"
     }

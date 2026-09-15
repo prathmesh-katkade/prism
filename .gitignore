@@ -7,6 +7,7 @@ __pycache__/
 *.egg-info/
 .venv/
 .venv311/
+.venv_api/
 node_modules/
 .next/
 .turbo/
@@ -14,6 +15,12 @@ node_modules/
 # frontendDist straight at this (`npm run build:desktop --workspace=@prism/web`
 # rebuilds it); never committed.
 apps/web/out/
+# apps/api's PyInstaller sidecar binary (apps/api/build_sidecar.py rebuilds
+# it, ~150-500MB) -- never committed.
+apps/desktop-shell/src-tauri/binaries/
+apps/api/build/
+apps/api/dist/
+apps/api/*.spec
 .prism/work/
 .prism/runtime/
 **/.prism/work/

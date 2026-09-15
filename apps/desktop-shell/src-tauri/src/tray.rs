@@ -67,9 +67,14 @@ pub fn setup(app: &AppHandle) -> tauri::Result<()> {
             })
             .build(),
     )?;
-    app.global_shortcut()
-        .register(summon_shortcut())
-        .map_err(|e| tauri::Error::Anyhow(anyhow::anyhow!(e)))?;
+    // Registration can genuinely fail on a real machine -- another app may
+    // already own Ctrl+Shift+P -- and that's not worth taking the whole
+    // app down for (hit this directly: a leftover instance from this same
+    // app holding the hotkey turned into an unhandled-panic crash via `?`
+    // here). The tray menu's Show/Hide item still works either way.
+    if let Err(e) = app.global_shortcut().register(summon_shortcut()) {
+        log::warn!("summon hotkey (Ctrl+Shift+P) not registered, already in use: {e}");
+    }
 
     // Prove the notification plumbing works without requiring the user to
     // touch anything — fires once, right after the tray/hotkey are live.
