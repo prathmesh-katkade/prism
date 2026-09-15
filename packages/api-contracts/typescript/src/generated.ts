@@ -622,6 +622,8 @@ export interface AtlasProductionTrustStatus {
   latest_operational_cert_total_passed?: number;
   latest_operational_cert_total_scenarios?: number;
   latest_operational_cert_critical_failures?: number;
+  operational_cert_min_pass_rate: number;
+  latest_operational_cert_passed?: boolean;
 }
 
 export interface AtlasPromotionDecision {
