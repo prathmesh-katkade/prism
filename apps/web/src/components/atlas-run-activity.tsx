@@ -21,7 +21,9 @@
  * same real transform and the same presentational components back both.
  */
 
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { AtlasFeedbackEvent, AtlasMemoryRecord, AtlasRunEvent, AtlasRunResponse, AtlasSpecialistId, AtlasSpecialistIdentity } from "@prism/api-contracts";
+import { buildAtlasHistoryLink } from "../state/atlas-history-link";
 
 // --- Evidence lineage --------------------------------------------------------
 
@@ -575,5 +577,57 @@ export function RunMemoryTrace({ run, memories, feedback }: { run: AtlasRunRespo
       ) : null}
       {!linked.length && !feedback.length ? <p>No persisted ATLAS memory or feedback is linked to this run yet.</p> : null}
     </section>
+  );
+}
+
+/**
+ * An accessible, honest "copy investigation link" for one expanded
+ * historical run -- browser clipboard when it is actually available, a
+ * truthful status either way, and a manual-copy fallback (never a silent
+ * no-op, and never a claimed success the browser didn't grant). Pure
+ * client-side string construction (`buildAtlasHistoryLink`): no network
+ * request, and no data leaves the browser.
+ */
+export function CopyInvestigationLink({ runId, focusNodeId }: { runId: string; focusNodeId: string | null }) {
+  const [status, setStatus] = useState<"idle" | "copied" | "manual" | "unsupported">("idle");
+  const fallbackRef = useRef<HTMLInputElement>(null);
+  const link = useMemo(
+    () => (typeof window === "undefined" ? "" : buildAtlasHistoryLink(window.location.href, runId, focusNodeId)),
+    [runId, focusNodeId]
+  );
+  useEffect(() => {
+    if (status === "manual" || status === "unsupported") {
+      fallbackRef.current?.focus();
+      fallbackRef.current?.select();
+    }
+  }, [status]);
+
+  async function copyLink() {
+    if (typeof navigator === "undefined" || !navigator.clipboard?.writeText) {
+      setStatus("unsupported");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(link);
+      setStatus("copied");
+    } catch {
+      setStatus("manual");
+    }
+  }
+
+  return (
+    <div className="acc-copy-link">
+      <button type="button" onClick={() => void copyLink()}>
+        Copy investigation link
+      </button>
+      <p className="acc-copy-link-status" aria-live="polite">
+        {status === "copied" ? "Link copied to your clipboard." : null}
+        {status === "manual" ? "Couldn't copy automatically -- the link is selected below; copy it manually." : null}
+        {status === "unsupported" ? "Clipboard access isn't available here -- the link is selected below; copy it manually." : null}
+      </p>
+      {status === "manual" || status === "unsupported" ? (
+        <input ref={fallbackRef} className="acc-copy-link-fallback" type="text" readOnly aria-label="Investigation link" value={link} onFocus={(event) => event.currentTarget.select()} />
+      ) : null}
+    </div>
   );
 }

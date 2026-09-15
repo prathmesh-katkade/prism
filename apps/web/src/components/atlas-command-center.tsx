@@ -21,10 +21,10 @@ import type {
   CortexGraphState,
 } from "@prism/api-contracts";
 import { apiUrl } from "../config/api";
-import { buildAtlasHistoryLink } from "../state/atlas-history-link";
-import { EvidencePanel, FeedbackItem, groupMemoriesByClass, MEMORY_CLASS_LABELS, MemoryRecordItem, PipelineStepper, RunMemoryTrace, SpecialistActivity, ToolTimeline, GuardrailPanel as RunGuardrailPanel } from "./atlas-run-activity";
+import { CopyInvestigationLink, EvidencePanel, FeedbackItem, groupMemoriesByClass, MEMORY_CLASS_LABELS, MemoryRecordItem, PipelineStepper, RunMemoryTrace, SpecialistActivity, ToolTimeline, GuardrailPanel as RunGuardrailPanel } from "./atlas-run-activity";
 import { AtlasCortex3D } from "./atlas-cortex-3d";
 import type { CortexSelection } from "./atlas-cortex-shared";
+import { AccountabilityPanel } from "./atlas-accountability";
 
 type CorpusState = {
   systemSeed: AtlasSystemSeedManifest | null;
@@ -263,6 +263,7 @@ export function AtlasCommandCenter({
         <OperationalCertPanel status={status} failed={statusFailed} run={opcertRun} />
         <CorpusPanel corpus={corpus} failed={corpusFailed} />
         <SystemMemoryPanel memories={systemMemories} feedback={recentFeedback} rag={ragCapability} failed={memoryFailed} />
+        <AccountabilityPanel runs={recentRuns} failed={recentRunsFailed} promotions={promotionHistory} />
       </div>
     </section>
   );
@@ -598,58 +599,6 @@ function HistoricalRunCortex({ run, initialFocusId }: { run: AtlasRunResponse; i
       />
       <CopyInvestigationLink runId={run.run_id} focusNodeId={focusedNodeId} />
     </>
-  );
-}
-
-/**
- * An accessible, honest "copy investigation link" for one expanded
- * historical run -- browser clipboard when it is actually available, a
- * truthful status either way, and a manual-copy fallback (never a silent
- * no-op, and never a claimed success the browser didn't grant). Pure
- * client-side string construction (`buildAtlasHistoryLink`): no network
- * request, and no data leaves the browser.
- */
-function CopyInvestigationLink({ runId, focusNodeId }: { runId: string; focusNodeId: string | null }) {
-  const [status, setStatus] = useState<"idle" | "copied" | "manual" | "unsupported">("idle");
-  const fallbackRef = useRef<HTMLInputElement>(null);
-  const link = useMemo(
-    () => (typeof window === "undefined" ? "" : buildAtlasHistoryLink(window.location.href, runId, focusNodeId)),
-    [runId, focusNodeId]
-  );
-  useEffect(() => {
-    if (status === "manual" || status === "unsupported") {
-      fallbackRef.current?.focus();
-      fallbackRef.current?.select();
-    }
-  }, [status]);
-
-  async function copyLink() {
-    if (typeof navigator === "undefined" || !navigator.clipboard?.writeText) {
-      setStatus("unsupported");
-      return;
-    }
-    try {
-      await navigator.clipboard.writeText(link);
-      setStatus("copied");
-    } catch {
-      setStatus("manual");
-    }
-  }
-
-  return (
-    <div className="acc-copy-link">
-      <button type="button" onClick={() => void copyLink()}>
-        Copy investigation link
-      </button>
-      <p className="acc-copy-link-status" aria-live="polite">
-        {status === "copied" ? "Link copied to your clipboard." : null}
-        {status === "manual" ? "Couldn't copy automatically -- the link is selected below; copy it manually." : null}
-        {status === "unsupported" ? "Clipboard access isn't available here -- the link is selected below; copy it manually." : null}
-      </p>
-      {status === "manual" || status === "unsupported" ? (
-        <input ref={fallbackRef} className="acc-copy-link-fallback" type="text" readOnly aria-label="Investigation link" value={link} onFocus={(event) => event.currentTarget.select()} />
-      ) : null}
-    </div>
   );
 }
 
