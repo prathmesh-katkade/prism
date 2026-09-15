@@ -25,6 +25,7 @@ import { CopyInvestigationLink, EvidencePanel, FeedbackItem, groupMemoriesByClas
 import { AtlasCortex3D } from "./atlas-cortex-3d";
 import type { CortexSelection } from "./atlas-cortex-shared";
 import { AccountabilityPanel } from "./atlas-accountability";
+import { AttentionPanel } from "./atlas-attention";
 
 type CorpusState = {
   systemSeed: AtlasSystemSeedManifest | null;
@@ -244,6 +245,7 @@ export function AtlasCommandCenter({
   return (
     <section className="atlas-command-center" aria-label="Atlas command center">
       <Hero status={status} failed={statusFailed} />
+      <AttentionPanel status={status} statusFailed={statusFailed} runs={recentRuns} runsFailed={recentRunsFailed} />
       <div className="acc-grid">
         <SystemCortexPanel status={status} failed={statusFailed} candidate={candidate} verification={verification} v1Run={v1Run} opcertRun={opcertRun} corpus={corpus} />
         <RunActivityPanel

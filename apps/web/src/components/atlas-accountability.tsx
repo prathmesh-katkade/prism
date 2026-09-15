@@ -73,7 +73,7 @@ function toneFor(entry: AccountabilityEntry): string {
     case "rollback":
       return "unavailable";
     case "guardrail":
-      return entry.state === "allowed" ? "legacy" : "bridged";
+      return entry.state === "blocked" ? "unavailable" : entry.state === "verification_required" ? "bridged" : "ready";
     case "run_completed":
     case "promotion":
       return "native";

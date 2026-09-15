@@ -23,14 +23,14 @@ describe("Accountability ledger", () => {
       run_id: "atlas_run_1",
       events: [
         { event_id: "e1", run_id: "atlas_run_1", sequence: 1, type: "run_created", occurred_at: "2026-01-03T00:00:00Z", payload: {} },
-        { event_id: "e2", run_id: "atlas_run_1", sequence: 2, type: "plan_created", occurred_at: "2026-01-03T00:00:01Z", payload: { guardrail_decision: { state: "allowed", policy_version: "v3", authority: "server", decision_id: "dec_1", findings: [] } } },
+        { event_id: "e2", run_id: "atlas_run_1", sequence: 2, type: "plan_created", occurred_at: "2026-01-03T00:00:01Z", payload: { guardrail_decision: { state: "checked", policy_version: "v3", authority: "server", decision_id: "dec_1", findings: [] } } },
         { event_id: "e3", run_id: "atlas_run_1", sequence: 3, type: "run_completed", occurred_at: "2026-01-03T00:00:05Z", payload: { answer_grounded: true } },
       ] as AtlasRunEvent[],
     });
     const entries = buildAccountabilityLedger([completedRun], []);
     expect(entries.map((entry) => entry.kind)).toEqual(["run_completed", "guardrail", "run_started"]);
     expect(entries[0]).toMatchObject({ kind: "run_completed", runId: "atlas_run_1", summary: "Churn correlates with support-ticket volume." });
-    expect(entries[1]).toMatchObject({ kind: "guardrail", state: "allowed", policyVersion: "v3" });
+    expect(entries[1]).toMatchObject({ kind: "guardrail", state: "checked", policyVersion: "v3" });
   });
 
   it("uses the run_failed event's real detail, never a generic guess, when one is recorded", () => {
