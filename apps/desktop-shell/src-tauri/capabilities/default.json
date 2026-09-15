@@ -11,6 +11,9 @@
     "core:menu:default",
     "global-shortcut:default",
     "notification:default",
+    "dialog:default",
+    "fs:default",
+    "fs:allow-read-file",
     {
       "identifier": "shell:allow-execute",
       "allow": [{ "name": "prism-api", "sidecar": true }]

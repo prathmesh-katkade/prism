@@ -1,5 +1,9 @@
 # Secrets
 .env
+# Tauri updater signing keypair -- never generate/keep this inside the repo
+# (see apps/desktop-shell/README.md), but ignore it here defensively anyway.
+apps/desktop-shell/**/*.key
+apps/desktop-shell/**/*.key.pub
 
 # Python
 __pycache__/

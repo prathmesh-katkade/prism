@@ -1,6 +1,7 @@
 mod ollama;
 mod sidecar;
 mod tray;
+mod updater;
 
 use tauri_plugin_notification::NotificationExt;
 
@@ -9,6 +10,9 @@ pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(sidecar::SidecarState::default())
         .setup(|app| {
             if cfg!(debug_assertions) {
@@ -19,6 +23,7 @@ pub fn run() {
                 )?;
             }
             tray::setup(app.handle())?;
+            updater::check(app.handle());
             let ollama_ready = sidecar::spawn(app.handle())?;
             // Don't fail silently on which mode the user is in (the
             // plan's own bar for this): a native notification, not

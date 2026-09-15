@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import type { AtlasOverviewAction, AtlasOverviewResponse, DatasetRowsResponse, OverviewColumn, OverviewProfileResponse } from "@prism/api-contracts";
 import { apiUrl } from "../config/api";
+import { isTauriRuntime } from "../config/runtime";
 import type { InspectorObjectState } from "../state/shell-model";
 
 type OverviewState = "empty" | "uploading" | "ready" | "degraded" | "error";
@@ -75,6 +76,27 @@ export function OverviewWorkspace({ activeDatasetId, onSelectContext, onOpenWork
     }
   }
 
+  // Inside the desktop shell, a plain <input type="file"> still opens *a*
+  // native picker (every webview does that for free), but it hands back an
+  // opaque File the renderer can't get a real filesystem path from -- so
+  // there's no way to later reopen the same dataset off disk. Tauri's own
+  // dialog + fs plugins return a real path and let us read those exact
+  // bytes, which is what the migration plan's "off disk" phrase is after;
+  // dynamic-imported so the plain web/Render build never has to load or
+  // resolve these Tauri-only packages.
+  async function uploadFromNativeDialog() {
+    const { open } = await import("@tauri-apps/plugin-dialog");
+    const { readFile } = await import("@tauri-apps/plugin-fs");
+    const selected = await open({
+      multiple: false,
+      filters: [{ name: "Dataset", extensions: ["csv", "txt", "xls", "xlsx"] }],
+    });
+    if (!selected || Array.isArray(selected)) return;
+    const bytes = await readFile(selected);
+    const name = selected.split(/[\\/]/).pop() ?? "dataset";
+    void upload(new File([bytes], name));
+  }
+
   async function askAtlas(action: AtlasOverviewAction, column?: string, comparisonColumn?: string) {
     if (!datasetId) return;
     try {
@@ -87,7 +109,7 @@ export function OverviewWorkspace({ activeDatasetId, onSelectContext, onOpenWork
   const riskColumns = useMemo(() => profile?.columns.filter((column) => column.health !== "good") ?? [], [profile]);
   useEffect(() => { if (state === "degraded" && profile) setState("ready"); }, [profile, state]);
 
-  if (state === "empty") return <section className="overview-state empty-state"><span className="overview-prism" /><span className="eyebrow">OVERVIEW · NATIVE WORKSPACE</span><h1>Start with the dataset, then follow the evidence.</h1><p>Upload a CSV or Excel file. PRISM profiles it server-side; the browser receives only summaries and a paginated preview.</p><input id="overview-upload" className="upload-input" aria-label="Choose dataset" type="file" accept=".csv,.txt,.xls,.xlsx" onChange={(event) => { const file = event.target.files?.[0]; if (file) void upload(file); }} /><label className="upload-control" htmlFor="overview-upload">Choose dataset</label><small>Phase 3 limit: 64 MB / 500,000 rows. The legacy Streamlit Overview remains available for parity.</small></section>;
+  if (state === "empty") return <section className="overview-state empty-state"><span className="overview-prism" /><span className="eyebrow">OVERVIEW · NATIVE WORKSPACE</span><h1>Start with the dataset, then follow the evidence.</h1><p>Upload a CSV or Excel file. PRISM profiles it server-side; the browser receives only summaries and a paginated preview.</p>{isTauriRuntime() ? <button className="upload-control" onClick={() => void uploadFromNativeDialog()}>Choose dataset</button> : <><input id="overview-upload" className="upload-input" aria-label="Choose dataset" type="file" accept=".csv,.txt,.xls,.xlsx" onChange={(event) => { const file = event.target.files?.[0]; if (file) void upload(file); }} /><label className="upload-control" htmlFor="overview-upload">Choose dataset</label></>}<small>Phase 3 limit: 64 MB / 500,000 rows. The legacy Streamlit Overview remains available for parity.</small></section>;
   if (state === "uploading") return <section className="overview-state loading-state" aria-live="polite"><span className="loading-bar" /><h2>Establishing the dataset profile</h2><p>Computing schema, quality, distributions, relationships, and provenance on the server.</p></section>;
   if (state === "error" || !profile) return <section className="overview-state error-state" role="alert"><h2>Overview could not establish a profile.</h2><p>{error}</p><button onClick={() => setState("empty")}>Choose another dataset</button><button className="secondary" onClick={() => setState("degraded")}>Show recovery guidance</button></section>;
 
