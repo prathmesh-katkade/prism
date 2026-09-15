@@ -269,9 +269,15 @@ export function AtlasCortex3D({
                     b={position}
                     tone={group.tone}
                     muted={isGroupMuted(group)}
-                    active={active}
+                    // Per-group, not the whole-run `active` flag: only the
+                    // specialist actually mid-step right now (its own real
+                    // `group.tone`, from buildCortexGroups' per-specialist
+                    // step states) animates -- so movement reads as "who is
+                    // working right now," not "something in this run is."
+                    active={group.tone === "active"}
                     reducedMotion={reducedMotion}
                     weight={group.memberEdgeIds.length}
+                    showSignature={group.kind === "specialist"}
                   />
                 );
               })}
@@ -569,14 +575,25 @@ function CortexGroupSatellite({ group, position, muted, selected, reducedMotion,
   );
 }
 
-function CortexGroupConnection({ a, b, tone, muted, active, reducedMotion, weight }: { a: Vec3; b: Vec3; tone: CortexTone; muted: boolean; active: boolean; reducedMotion: boolean; weight: number }) {
+function CortexGroupConnection({ a, b, tone, muted, active, reducedMotion, weight, showSignature }: { a: Vec3; b: Vec3; tone: CortexTone; muted: boolean; active: boolean; reducedMotion: boolean; weight: number; showSignature: boolean }) {
   const group = useRef<Group>(null);
+  const signature = useRef<Mesh>(null);
   const points = useMemo(() => [a, b] as [Vec3, Vec3], [a, b]);
   const color = TONE_COLOR[tone];
+  const showTravel = showSignature && active && !muted && !reducedMotion;
   useFrame(({ clock: sceneClock }) => {
-    if (reducedMotion || !active || muted || !group.current) return;
-    const material = (group.current.children[0] as unknown as { material?: { dashOffset: number } })?.material;
-    if (material) material.dashOffset = -sceneClock.getElapsedTime() * 1.1;
+    if (!reducedMotion && active && !muted && group.current) {
+      const material = (group.current.children[0] as unknown as { material?: { dashOffset: number } })?.material;
+      if (material) material.dashOffset = -sceneClock.getElapsedTime() * 1.1;
+    }
+    if (showTravel && signature.current) {
+      // The one real signal driving this: `active` is this specialist's own
+      // `group.tone === "active"` from a real running step, passed in by the
+      // caller -- never a scene-wide "something is happening" flag, and
+      // never motion for a specialist that isn't actually doing anything.
+      const t = (Math.sin(sceneClock.getElapsedTime() * 1.6) + 1) / 2;
+      signature.current.position.set(a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t);
+    }
   });
   // More real aggregated relations behind this one drawn line read as a
   // very slightly heavier stroke -- a truthful nuance, not a fabricated
@@ -585,6 +602,12 @@ function CortexGroupConnection({ a, b, tone, muted, active, reducedMotion, weigh
   return (
     <group ref={group}>
       <Line points={points as unknown as [number, number, number][]} color={color} transparent opacity={muted ? 0.08 : active ? 0.6 : 0.32} lineWidth={lineWidth} dashed={active} dashSize={0.18} gapSize={0.12} />
+      {showTravel ? (
+        <mesh ref={signature}>
+          <sphereGeometry args={[0.055, 12, 12]} />
+          <meshStandardMaterial color={color} emissive={color} emissiveIntensity={1.5} />
+        </mesh>
+      ) : null}
     </group>
   );
 }
