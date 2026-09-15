@@ -10,6 +10,10 @@ __pycache__/
 node_modules/
 .next/
 .turbo/
+# apps/web's static export -- apps/desktop-shell's Tauri config points
+# frontendDist straight at this (`npm run build:desktop --workspace=@prism/web`
+# rebuilds it); never committed.
+apps/web/out/
 .prism/work/
 .prism/runtime/
 **/.prism/work/

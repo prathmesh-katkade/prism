@@ -4,7 +4,7 @@ import globals from "globals";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["**/node_modules/**", "**/.next/**", "**/dist/**", "apps/web/next-env.d.ts", "packages/api-contracts/typescript/src/generated.ts"] },
+  { ignores: ["**/node_modules/**", "**/.next/**", "**/dist/**", "apps/web/out/**", "apps/desktop-shell/src-tauri/target/**", "apps/web/next-env.d.ts", "packages/api-contracts/typescript/src/generated.ts"] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
