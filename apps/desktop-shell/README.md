@@ -6,7 +6,7 @@ See `DESKTOP_MIGRATION_PLAN.md` at the repo root for the phased plan this
 workspace is built against; the architecture note below supersedes that
 plan's original "Atlas shell + Prism panel" split.
 
-## Status: Phase 1-4 complete — local-first AI detection, no fake cloud fallback.
+## Status: Phase 1-5 complete — native file dialog, real-event notifications, updater plugin wired to a placeholder feed.
 
 ### The actual architecture (corrected from the original plan)
 
@@ -154,3 +154,50 @@ sets the env var that switches between the two.
   `http://tauri.localhost` (documented as WebView2's origin) is in
   `desktop_entry.py`'s CORS allowlist defensively but unverified; only
   `tauri://localhost` (Linux) has actually been confirmed.
+- Phase 5 (native polish):
+  - **Native file dialog.** `overview-workspace.tsx` used to always render a
+    plain `<input type="file">`; every webview already shows *a* real OS
+    picker for that, but it hands the renderer an opaque `File` with no
+    real filesystem path, so there was no way to reopen the same dataset
+    off disk later. Inside the desktop shell (`isTauriRuntime()`, a new
+    `src/config/runtime.ts` checking for Tauri's own `__TAURI_INTERNALS__`
+    marker — absent from the plain web/Render build, so this can't be
+    spoofed by a bundle-time flag) the "Choose dataset" control now calls
+    `@tauri-apps/plugin-dialog`'s `open()` and reads the chosen path with
+    `@tauri-apps/plugin-fs`'s `readFile()`, then hands the same `upload()`
+    function a `File` built from those bytes — the backend contract is
+    untouched. Verified for real, not assumed: screenshotted the actual
+    GTK "Open File" dialog (with the configured "Dataset" extension
+    filter) opening from a real click, typed a real path into it, and
+    watched Overview profile that exact file through the running sidecar.
+    The plain `<input type="file">` remains the path for the normal web
+    build, which has no dialog/fs plugin to call.
+  - **Real-event notifications.** Rather than invent a synthetic
+    "cleaning certificate" event, `ai-analyst.tsx`'s `atlas.complete` /
+    `atlas.failure` SSE events — the one genuinely long-running background
+    operation in the app, one a user could plausibly switch tabs away
+    from while it streams — now fire a native notification
+    (`src/config/notify.ts`, dynamic-imports `@tauri-apps/plugin-notification`
+    and requests permission lazily, a no-op on the web build). Clean's
+    `apply()` was considered and rejected as a second integration point:
+    it's a synchronous button-click round trip the user is already
+    watching, so a native notification for it would just be redundant
+    chrome, not a real background-completion signal.
+  - **Auto-updater.** `tauri-plugin-updater` is registered
+    (`src/updater.rs`) and checks once per launch against
+    `tauri.conf.json`'s `plugins.updater.endpoints` — currently a
+    placeholder GitHub Releases `latest.json` URL, since no release
+    pipeline publishes there yet — and only fires a notification if a
+    real update is actually announced; `Ok(None)` and network errors stay
+    silent rather than nag on every launch. The plugin requires a real
+    signature-verification public key at config-parse time (not an
+    optional field), so a genuine Ed25519 keypair was generated with
+    `npx tauri signer generate`; only the public half is committed here
+    (`plugins.updater.pubkey`) — **the private half was handed to the
+    user directly and must never be committed**; a real release pipeline
+    needs it (or a freshly generated replacement, updating `pubkey` to
+    match) supplied as `TAURI_SIGNING_PRIVATE_KEY`/`_PASSWORD` at build
+    time to actually sign release artifacts. `bundle.createUpdaterArtifacts`
+    is on, but only matters for a full `tauri build` (not the
+    `--no-bundle` verification builds this README documents), so it
+    doesn't block local testing without the signing key present.
