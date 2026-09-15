@@ -6,7 +6,7 @@ See `DESKTOP_MIGRATION_PLAN.md` at the repo root for the phased plan this
 workspace is built against; the architecture note below supersedes that
 plan's original "Atlas shell + Prism panel" split.
 
-## Status: Phase 1, 2 & 3 complete — sidecar spawns, works, and cleans up.
+## Status: Phase 1-4 complete — local-first AI detection, no fake cloud fallback.
 
 ### The actual architecture (corrected from the original plan)
 
@@ -75,8 +75,21 @@ from `dist/`.)
   server ports) — that default is correct for that context and deliberately
   left alone; the desktop-specific origins are additive, set only by this
   entry point.
-- `ollama.rs` (Phase 4) doesn't exist yet — intentionally not scaffolded
-  ahead of its phase.
+- `src/ollama.rs` — pings Ollama's real `/api/tags` (not just the port) on
+  every launch, before spawning the sidecar. **The plan's "cloud (Gemini)
+  fallback" doesn't exist in this codebase and was never built here**:
+  `apps/api` has no cloud LLM integration anywhere — `ai_analyst.py`'s own
+  docstring says its deterministic, evidence-first path is "deliberately
+  useful without a model credential," and Ollama, even when configured,
+  only enriches routing telemetry there rather than generating the answer.
+  So the real desktop-native interpretation of "local-first with fallback"
+  is: opt into the Ollama-backed Atlas code paths that already exist
+  (`PRISM_AI_PROVIDER=ollama`, see `atlas_candidate_runtime.py`) when
+  Ollama answers, and leave that env var unset otherwise — which is
+  already `apps/api`'s own safe, working default, not a fallback bolted on
+  from outside. `GET /api/v1/platform/ready` already reported an `ollama`
+  provider entry keyed off that exact env var before this phase touched
+  anything; wiring the env var was the only backend gap.
 
 ### Run it
 
@@ -125,6 +138,17 @@ sets the env var that switches between the two.
   forwarded by anything. `sidecar::kill()` now sends SIGTERM first (which
   the bootloader *does* forward, confirmed both ways with a live process
   tree and manual `kill -9` vs `kill -TERM`), SIGKILL only as a fallback.
+- Phase 4: end-to-end with a real HTTP server standing in for Ollama on
+  `127.0.0.1:11434` (this container has no real Ollama to install), tested
+  both directions in one continuous session, not two isolated runs: started
+  the stand-in → launched → `AI · LOCAL (OLLAMA)` badge, `PRISM_AI_PROVIDER
+  =ollama` confirmed via `/api/v1/platform/ready` on the real running
+  sidecar → quit → confirmed no orphan (same SIGTERM path as Phase 3) →
+  killed the stand-in → relaunched → `AI · DETERMINISTIC`, proving the
+  check re-runs per launch rather than caching the first result, per the
+  plan's own requirement. Native notification announces which mode on
+  every launch. `ai-provider-badge.tsx` (+ its own test file, 4 tests)
+  renders exactly what the backend reports and never guesses.
 - **Not yet verified**: voice activation, and real Windows (WebView2)/macOS
   (WKWebView) builds — this container is Linux-only for all of the above.
   `http://tauri.localhost` (documented as WebView2's origin) is in

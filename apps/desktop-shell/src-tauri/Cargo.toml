@@ -27,6 +27,7 @@ tauri-plugin-global-shortcut = "2.3.2"
 tauri-plugin-notification = "2.4.0"
 anyhow = "1.0.104"
 tauri-plugin-shell = "2.3.6"
+ureq = "3.2.1"
 
 [target."cfg(unix)".dependencies]
 libc = "0.2.189"
