@@ -1,0 +1,15 @@
+{
+  "name": "ATLAS — Personal AI",
+  "short_name": "Atlas",
+  "description": "Prathmesh's personal AI — voice, chat, and connected wires.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#030711",
+  "theme_color": "#030711",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}
