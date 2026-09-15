@@ -6,7 +6,41 @@ import { PrismShell } from "./prism-shell";
 describe("PRISM shell", () => {
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
     window.history.pushState({}, "", "/");
+  });
+
+  // Adaptive workspace orchestration: entering Atlas immersive mode used to
+  // hardcode the exit layout back to "rail expanded, inspector open" no
+  // matter what the user had before -- silently un-collapsing a rail the
+  // user had deliberately collapsed themselves. It must restore exactly
+  // what was true beforehand instead.
+  it("restores the exact pre-immersive layout on exit, not a hardcoded guess", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: string | URL) => {
+      const path = String(input);
+      if (path.includes("/promotion/current-status")) return json({ production: null, candidate_kind: null, runtime_model: null });
+      if (path.includes("/specialists") || path.includes("/atlas/runs?limit=8")) return json([]);
+      if (path.includes("/feedback/runs/") || path.includes("/feedback/recent") || path.includes("/promotion/history") || path.includes("/memories")) return json([]);
+      if (path.includes("/retrieval/capability")) return json({ provider: "lexical", model: "none", revision: "v1", available: false, detail: "not configured" });
+      if (path.includes("/foundry/")) return json([]);
+      if (path.includes("training-datasets:combined-summary")) return json(null, 404);
+      return json({});
+    }));
+
+    render(<PrismShell />);
+
+    // The user collapses the rail themselves, before ever touching Atlas.
+    fireEvent.click(screen.getByRole("button", { name: "Collapse navigation" }));
+    expect(screen.getByRole("button", { name: "Expand navigation" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByRole("button", { name: /Atlas native/i })[0]!);
+    await waitFor(() => expect(screen.getByText("Immersive Cortex")).toBeInTheDocument());
+
+    // Leaving Atlas must restore the rail to collapsed (what the user
+    // actually had), not force it back open.
+    fireEvent.click(screen.getAllByRole("button", { name: /Overview native/i })[0]!);
+    expect(screen.getByRole("button", { name: "Expand navigation" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Collapse navigation" })).not.toBeInTheDocument();
   });
 
   it("opens the universal command surface with the keyboard", async () => {

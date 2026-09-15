@@ -108,6 +108,12 @@ export function PrismShell() {
     // `activeDatasetId`/`activeAtlasRunId` above, not on every render.
   }, []);
   const commandTrigger = useRef<HTMLButtonElement>(null);
+  // Adaptive workspace orchestration: entering Atlas immersive mode collapses
+  // the rail and closes the inspector to give the Cortex room, but exiting
+  // must restore whatever the user actually had -- not a hardcoded guess --
+  // otherwise a user who had already collapsed the rail themselves gets it
+  // silently un-collapsed the moment they leave Atlas.
+  const preImmersiveLayout = useRef<{ railCollapsed: boolean; inspectorOpen: boolean } | null>(null);
   const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? baseTab;
   const activeMigration = activeTab.workflow ? findMigration(activeTab.workflow) : null;
   const inspector = selectedContext ?? inspectorFor(activeTab, activeMigration);
@@ -228,7 +234,7 @@ export function PrismShell() {
             <div className="workspace-tab-actions"><button className="tab-add" aria-label="Open command surface" onClick={() => setCommandOpen(true)}>+</button><button className={layout.splitView ? "tab-tool is-active" : "tab-tool"} aria-label="Toggle split view" aria-pressed={layout.splitView} onClick={() => updateLayout({ splitView: !layout.splitView })}><Icon name="split" /></button></div>
           </div>
           <section id={`panel-${activeTab.id}`} role="tabpanel" aria-labelledby={`tab-${activeTab.id}`} className={layout.splitView ? "workspace-content split-enabled" : "workspace-content"}>
-            <WorkspaceSurface tab={activeTab} status={status} onStatusChange={setStatus} onOpenCommand={() => setCommandOpen(true)} onSelectContext={setSelectedContext} onOpenWorkflow={openWorkflow} sqlDraft={sqlDraft} analystResultRunId={analystResultRunId} activeDatasetId={activeDatasetId} initialAtlasRunId={activeAtlasRunId} initialAtlasHistoryRunId={atlasHistory.runId ?? undefined} initialAtlasHistoryFocusId={atlasHistory.focusId ?? undefined} onDatasetReady={setActiveDatasetId} onSqlDraft={(draft) => { setSqlDraft(draft); openWorkflow("sql-lab"); }} onUseAsEvidence={(runId) => { setAnalystResultRunId(runId); openWorkflow("ai-analyst"); }} onEnterAtlasImmersive={() => updateLayout({ railCollapsed: true, inspectorOpen: false })} onExitAtlasImmersive={() => updateLayout({ railCollapsed: false, inspectorOpen: true })} onBackToProject={() => { setActiveTabId(baseTab.id); setStatus("project-loaded"); }} />
+            <WorkspaceSurface tab={activeTab} status={status} onStatusChange={setStatus} onOpenCommand={() => setCommandOpen(true)} onSelectContext={setSelectedContext} onOpenWorkflow={openWorkflow} sqlDraft={sqlDraft} analystResultRunId={analystResultRunId} activeDatasetId={activeDatasetId} initialAtlasRunId={activeAtlasRunId} initialAtlasHistoryRunId={atlasHistory.runId ?? undefined} initialAtlasHistoryFocusId={atlasHistory.focusId ?? undefined} onDatasetReady={setActiveDatasetId} onSqlDraft={(draft) => { setSqlDraft(draft); openWorkflow("sql-lab"); }} onUseAsEvidence={(runId) => { setAnalystResultRunId(runId); openWorkflow("ai-analyst"); }} onEnterAtlasImmersive={() => { preImmersiveLayout.current = { railCollapsed: layout.railCollapsed, inspectorOpen: layout.inspectorOpen }; updateLayout({ railCollapsed: true, inspectorOpen: false }); }} onExitAtlasImmersive={() => { if (preImmersiveLayout.current) { updateLayout(preImmersiveLayout.current); preImmersiveLayout.current = null; } }} onBackToProject={() => { setActiveTabId(baseTab.id); setStatus("project-loaded"); }} />
             {layout.splitView ? <aside className="split-foundation" aria-label="Secondary tab group foundation"><p>SECONDARY TAB GROUP</p><strong>Drop a tab here</strong><span>Split-view layout is saved locally. Analytical content does not duplicate here until its migration phase.</span></aside> : null}
           </section>
           <button className={layout.atlasExpanded ? "atlas-presence is-expanded" : "atlas-presence"} data-active={activeLeaseCount(resourceState) > 0} onClick={() => updateLayout({ atlasExpanded: !layout.atlasExpanded })} aria-expanded={layout.atlasExpanded} aria-label="Expand Atlas workspace"><span className="atlas-signal"><i /><i /><i /></span><span><strong>Atlas</strong><small>{pulseSubtitle(resourceState, layout.atlasExpanded)}</small></span><Icon name="arrow" /></button>
