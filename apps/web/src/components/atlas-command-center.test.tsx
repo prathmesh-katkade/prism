@@ -11,11 +11,45 @@ function notFound(): Response {
   return new Response(JSON.stringify({ detail: "not found" }), { status: 404, headers: { "content-type": "application/json" } });
 }
 
+// Preserve the established panel evidence fixtures while migrating their transport
+// to the aggregate contract. This helper runs only in unit tests.
+function stubDashboardFetch(_name: string, source: (input: string | URL) => Promise<Response>) {
+  async function read<T>(path: string, fallback: T): Promise<T> {
+    const response = await source(`/api/v1/atlas/${path}`);
+    return response.ok ? await response.json() as T : fallback;
+  }
+  vi.stubGlobal("fetch", async (input: string | URL) => {
+    if (!String(input).includes("/command-center")) return source(input);
+    const status = await read<import("@prism/api-contracts").AtlasProductionTrustStatus | null>("promotion/current-status", null);
+    const id = status?.production?.candidate_id;
+    const runs = await read<string[]>("runs?limit=8", []);
+    const details = await Promise.all(runs.map((runId) => read<import("@prism/api-contracts").AtlasRunResponse | null>(`runs/${runId}`, null)));
+    const bench = id ? await read<import("@prism/api-contracts").AtlasBenchSuiteRun[]>(`bench/runs-by-candidate/${id}`, []) : [];
+    if (status?.latest_v1_run_id && !bench.length) {
+      const primary = await read<import("@prism/api-contracts").AtlasBenchSuiteRun | null>(`bench/runs/detail/${status.latest_v1_run_id}`, null);
+      if (primary) bench.push(primary);
+    }
+    return json({
+      generated_at: "2026-09-15T00:00:00Z", sections: {}, status,
+      candidate: id ? await read(`base-model-candidates/${id}`, null) : null,
+      verification: id ? (await read<unknown[]>(`base-model-candidates/${id}/verification`, []))[0] ?? null : null,
+      operational_run: status?.latest_operational_cert_run_id ? await read(`operational-cert/runs/${status.latest_operational_cert_run_id}`, null) : null,
+      bench_runs: bench, promotion_history: await read("promotion/history", []),
+      system_seed: (await read<unknown[]>("foundry/system-seed", []))[0],
+      synthetic_teacher: (await read<unknown[]>("foundry/synthetic-teacher", []))[0],
+      combined_sft: (await read<unknown[]>("foundry/combined-sft-datasets", []))[0],
+      recent_runs: details.filter((run) => run !== null).map((run) => ({ run_id: run.run_id, dataset_id: run.plan.dataset_id, objective: run.plan.objective, state: run.plan.state, created_at: run.created_at, updated_at: run.updated_at })),
+      specialists: await read("specialists", []), memories: await read("memories?limit=50", []),
+      feedback: await read("feedback/recent?limit=20", []), retrieval: await read("retrieval/capability", null),
+    });
+  });
+}
+
 describe("Atlas command center", () => {
   afterEach(() => vi.restoreAllMocks());
 
   it("reports status unknown honestly when the endpoint cannot be reached", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("offline"); }));
+    stubDashboardFetch("fetch", vi.fn(async () => { throw new Error("offline"); }));
     render(<AtlasCommandCenter />);
     await waitFor(() => expect(screen.getByText("STATUS UNKNOWN")).toBeInTheDocument());
     // A total network failure must read as "failed" everywhere it affects --
@@ -33,7 +67,7 @@ describe("Atlas command center", () => {
   });
 
   it("shows no production model rather than fabricating one when none has ever been promoted", async () => {
-    vi.stubGlobal("fetch", vi.fn(async (input: string | URL) => {
+    stubDashboardFetch("fetch", vi.fn(async (input: string | URL) => {
       const path = String(input);
       if (path.includes("/promotion/current-status")) return json({ production: null, candidate_kind: null, runtime_model: null });
       if (path.includes("/specialists") || path.includes("/atlas/runs?limit=8") || path.includes("/promotion/history")) return json([]);
@@ -46,7 +80,7 @@ describe("Atlas command center", () => {
   });
 
   it("never labels a legacy production pointer as verified, and offers no fake live activity", async () => {
-    vi.stubGlobal("fetch", vi.fn(async (input: string | URL) => {
+    stubDashboardFetch("fetch", vi.fn(async (input: string | URL) => {
       const path = String(input);
       if (path.includes("/promotion/current-status")) {
         return json({
@@ -71,7 +105,7 @@ describe("Atlas command center", () => {
 
   it("renders real verified-production evidence pulled from the existing backend routes, never fabricated", async () => {
     const candidateId = "basemodel_test";
-    vi.stubGlobal(
+    stubDashboardFetch(
       "fetch",
       vi.fn(async (input: string | URL) => {
         const path = String(input);
@@ -257,7 +291,7 @@ describe("Atlas command center", () => {
     const activityPanel = screen.getByText("Run activity").closest("article") as HTMLElement;
     const runRow = within(activityPanel).getByText("Profile the quarterly dataset");
     fireEvent.click(runRow);
-    expect(within(activityPanel).getByLabelText("Atlas request pipeline")).toBeInTheDocument();
+    expect(await within(activityPanel).findByLabelText("Atlas request pipeline")).toBeInTheDocument();
     expect(within(activityPanel).getByLabelText("Atlas specialist activity")).toBeInTheDocument();
 
     // Per-run memory trace inside the expanded run: the real memory linked
@@ -319,7 +353,7 @@ describe("Atlas command center", () => {
     }
 
     it("fetches and renders the real persisted Cortex graph on expand, with truthful counts and keyboard-reachable node selection", async () => {
-      vi.stubGlobal("fetch", mockRunListing(() => json(historicalCortex)));
+      stubDashboardFetch("fetch", mockRunListing(() => json(historicalCortex)));
       const activityPanel = await expandHistoricalRun();
 
       const cortex = await within(activityPanel).findByLabelText("Cortex real-state graph");
@@ -345,7 +379,7 @@ describe("Atlas command center", () => {
     it("shows a loading state before the historical run's Cortex graph arrives", async () => {
       let resolveCortex!: (response: Response) => void;
       const pending = new Promise<Response>((resolve) => { resolveCortex = resolve; });
-      vi.stubGlobal("fetch", mockRunListing(() => pending));
+      stubDashboardFetch("fetch", mockRunListing(() => pending));
       const activityPanel = await expandHistoricalRun();
 
       expect(await within(activityPanel).findByText(/Loading this run.s persisted Cortex graph/)).toBeInTheDocument();
@@ -354,18 +388,18 @@ describe("Atlas command center", () => {
     });
 
     it("shows an honest unavailable message, without breaking the rest of the run's detail, when the Cortex fetch fails", async () => {
-      vi.stubGlobal("fetch", mockRunListing(() => notFound()));
+      stubDashboardFetch("fetch", mockRunListing(() => notFound()));
       const activityPanel = await expandHistoricalRun();
 
       await waitFor(() => expect(within(activityPanel).getByRole("alert")).toHaveTextContent("Could not reach this run's persisted Cortex graph."));
       // The rest of the expanded run's detail still renders -- one failed
       // fetch never takes down the panels that don't depend on it.
-      expect(within(activityPanel).getByLabelText("Atlas request pipeline")).toBeInTheDocument();
+      expect(await within(activityPanel).findByLabelText("Atlas request pipeline")).toBeInTheDocument();
     });
 
     describe("history deep link (Phase 11C)", () => {
       it("auto-expands the linked run already present in the recent list, fetches its real Cortex graph, and focuses a real requested node", async () => {
-        vi.stubGlobal("fetch", mockRunListing(() => json(historicalCortex)));
+        stubDashboardFetch("fetch", mockRunListing(() => json(historicalCortex)));
         render(<AtlasCommandCenter deepLinkRunId="atlas_hist_1" deepLinkFocusId="specialist:scout" />);
 
         // No manual click on the run row: the deep link alone expands it.
@@ -379,7 +413,7 @@ describe("Atlas command center", () => {
       });
 
       it("never fabricates a selection when the requested focus id does not exist in the real fetched graph", async () => {
-        vi.stubGlobal("fetch", mockRunListing(() => json(historicalCortex)));
+        stubDashboardFetch("fetch", mockRunListing(() => json(historicalCortex)));
         render(<AtlasCommandCenter deepLinkRunId="atlas_hist_1" deepLinkFocusId="specialist:does_not_exist" />);
 
         const cortex = await screen.findByLabelText("Cortex real-state graph");
@@ -391,7 +425,7 @@ describe("Atlas command center", () => {
 
       it("resolves a linked run that falls outside the recent-8 list by fetching it directly and merging it into the real list", async () => {
         const olderRun = { ...historicalRun, run_id: "atlas_hist_older", plan: { ...historicalRun.plan, objective: "Investigate an older churn spike" } };
-        vi.stubGlobal("fetch", vi.fn(async (input: string | URL) => {
+        stubDashboardFetch("fetch", vi.fn(async (input: string | URL) => {
           const path = String(input);
           if (path.includes("/promotion/current-status")) return json({ production: null, candidate_kind: null, runtime_model: null });
           if (path.includes("/specialists")) return json([]);
@@ -416,7 +450,7 @@ describe("Atlas command center", () => {
       });
 
       it("shows an honest failure, not a fabricated run, when the linked run truly does not exist", async () => {
-        vi.stubGlobal("fetch", vi.fn(async (input: string | URL) => {
+        stubDashboardFetch("fetch", vi.fn(async (input: string | URL) => {
           const path = String(input);
           if (path.includes("/promotion/current-status")) return json({ production: null, candidate_kind: null, runtime_model: null });
           if (path.includes("/specialists") || path.includes("/atlas/runs?limit=8")) return json([]);
@@ -431,7 +465,7 @@ describe("Atlas command center", () => {
 
     describe("copy investigation link (Phase 11C)", () => {
       async function expandAndFindCopyButton() {
-        vi.stubGlobal("fetch", mockRunListing(() => json(historicalCortex)));
+        stubDashboardFetch("fetch", mockRunListing(() => json(historicalCortex)));
         const activityPanel = await expandHistoricalRun();
         await within(activityPanel).findByLabelText("Cortex real-state graph");
         return within(activityPanel).getByRole("button", { name: "Copy investigation link" });
@@ -481,4 +515,19 @@ describe("Atlas command center", () => {
       });
     });
   });
+});
+
+
+it("renders partial summary availability with one initial request and recovers", async () => {
+  const fetcher = vi.fn().mockResolvedValueOnce(json({ generated_at: "2026-09-15T00:00:00Z", sections: { trust: { state: "error", detail: "Trust unavailable", observed_at: "2026-09-15T00:00:00Z" }, runs: { state: "available", detail: "Read from records", observed_at: "2026-09-15T00:00:00Z" } }, recent_runs: [] }))
+    .mockResolvedValueOnce(json({ generated_at: "2026-09-15T00:00:00Z", sections: {}, status: { production: null }, recent_runs: [] }));
+  vi.stubGlobal("fetch", fetcher);
+  render(<AtlasCommandCenter />);
+  await screen.findByText("STATUS UNKNOWN");
+  expect(fetcher).toHaveBeenCalledTimes(1);
+  fireEvent.click(screen.getByText("Section availability and freshness"));
+  expect(screen.getByText(/Trust unavailable/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Refresh Command Center" }));
+  await screen.findByText("NO PRODUCTION MODEL");
+  expect(fetcher).toHaveBeenCalledTimes(2);
 });

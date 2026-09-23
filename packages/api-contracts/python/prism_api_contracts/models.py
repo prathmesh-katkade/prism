@@ -2488,3 +2488,61 @@ class AtlasProductionTrustStatus(ContractModel):
     latest_operational_cert_critical_failures: Optional[int] = Field(default=None, ge=0)
     operational_cert_min_pass_rate: float = Field(ge=0.0, le=1.0)
     latest_operational_cert_passed: Optional[bool] = None
+
+
+class AtlasSectionAvailability(ContractModel):
+    state: Literal["available", "partial", "unavailable", "error"]
+    observed_at: datetime
+    detail: str
+
+
+class AtlasRecentRunSummary(ContractModel):
+    run_id: str
+    dataset_id: str
+    objective: str
+    state: AtlasPlanState
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+
+class AtlasCommandCenterSummary(ContractModel):
+    schema_version: str = "atlas-command-center-v1"
+    generated_at: datetime
+    sections: dict[str, AtlasSectionAvailability]
+    status: Optional[AtlasProductionTrustStatus] = None
+    candidate: Optional[AtlasVerifiedBaseModelCandidate] = None
+    verification: Optional[AtlasBaseModelVerification] = None
+    bench_runs: list[AtlasBenchSuiteRun] = Field(default_factory=list)
+    operational_run: Optional[AtlasOperationalSuiteRun] = None
+    promotion_history: list[AtlasProductionPointer] = Field(default_factory=list)
+    system_seed: Optional[AtlasSystemSeedManifest] = None
+    synthetic_teacher: Optional[AtlasSyntheticTeacherManifest] = None
+    combined_sft: Optional[AtlasCombinedSftDatasetVersion] = None
+    recent_runs: list[AtlasRecentRunSummary] = Field(default_factory=list)
+    specialists: list[AtlasSpecialistIdentity] = Field(default_factory=list)
+    memories: list[AtlasMemoryRecord] = Field(default_factory=list)
+    feedback: list[AtlasFeedbackEvent] = Field(default_factory=list)
+    retrieval: Optional[AtlasEmbeddingCapability] = None
+    dataset_id: Optional[str] = None
+    project_id: Optional[str] = None
+    remote_sharing_enabled: bool = False
+
+
+class AtlasInvestigationLinkRequest(ContractModel):
+    run_id: str = Field(min_length=1, max_length=120)
+    expires_in_seconds: int = Field(default=3600, ge=60, le=86400)
+
+
+class AtlasInvestigationLink(ContractModel):
+    link_id: str
+    expires_at: datetime
+    revoked: bool = False
+
+
+class AtlasInvestigationLinkIssued(AtlasInvestigationLink):
+    bearer_secret: str
+
+
+class AtlasInvestigationLinkResolve(ContractModel):
+    link_id: str = Field(min_length=1, max_length=120)
+    bearer_secret: str = Field(min_length=1, max_length=128)

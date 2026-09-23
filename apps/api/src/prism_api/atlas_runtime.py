@@ -21,6 +21,7 @@ from prism_api_contracts import (
     AtlasPlanState,
     AtlasPlanStep,
     AtlasProviderCapability,
+    AtlasRecentRunSummary,
     AtlasRunEvent,
     AtlasRunEventType,
     AtlasRunRequest,
@@ -458,6 +459,9 @@ class AtlasRunStore:
 
     def list_recent_run_ids(self, *, limit: int = 20) -> list[str]:
         return self._store.list_recent_run_ids(limit=limit)
+
+    def recent_summaries(self, *, dataset_id: Optional[str] = None, limit: int = 8) -> list[AtlasRecentRunSummary]:
+        return self._store.recent_summaries(dataset_id=dataset_id, limit=limit)
 
     def ping(self) -> bool:
         return self._store.ping()

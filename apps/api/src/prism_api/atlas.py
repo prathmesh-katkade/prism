@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from prism_api_contracts import (
     AtlasEmbeddingCapability,
     AtlasKnowledgeChunk,
@@ -32,6 +32,7 @@ from prism_api_contracts import (
     CortexGraphState,
 )
 
+from .atlas_authorization import require_run_access
 from .atlas_event_stream import durable_stream_events
 from .atlas_memory import DurableAtlasMemoryStore
 from .atlas_research import researcher
@@ -99,12 +100,12 @@ def start_run(request: AtlasRunRequest) -> AtlasRunResponse:
     return run
 
 
-@router.get("/runs/{run_id}", response_model=AtlasRunResponse)
+@router.get("/runs/{run_id}", response_model=AtlasRunResponse, dependencies=[Depends(require_run_access)])
 def get_run(run_id: str) -> AtlasRunResponse:
     return runs.get(run_id)
 
 
-@router.post("/runs/{run_id}/cancel", response_model=AtlasRunResponse)
+@router.post("/runs/{run_id}/cancel", response_model=AtlasRunResponse, dependencies=[Depends(require_run_access)])
 def cancel_run(run_id: str) -> AtlasRunResponse:
     return runs.request_cancel(run_id)
 
@@ -219,11 +220,11 @@ def resource_snapshot() -> AtlasResourceSnapshot:
     return governor.snapshot()
 
 
-@router.get("/runs/{run_id}/events")
+@router.get("/runs/{run_id}/events", dependencies=[Depends(require_run_access)])
 async def events(run_id: str):  # type: ignore[no-untyped-def]
     return sse_response(durable_stream_events(runs, run_id))
 
 
-@router.get("/runs/{run_id}/cortex", response_model=CortexGraphState)
+@router.get("/runs/{run_id}/cortex", response_model=CortexGraphState, dependencies=[Depends(require_run_access)])
 def get_cortex_graph(run_id: str) -> CortexGraphState:
     return cortex_graph(run_id)

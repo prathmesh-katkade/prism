@@ -235,6 +235,29 @@ export interface AtlasCombinedTrainingSourceSummary {
   computed_at: string;
 }
 
+export interface AtlasCommandCenterSummary {
+  schema_version?: string;
+  generated_at: string;
+  sections: Record<string, AtlasSectionAvailability>;
+  status?: AtlasProductionTrustStatus;
+  candidate?: AtlasVerifiedBaseModelCandidate;
+  verification?: AtlasBaseModelVerification;
+  bench_runs?: AtlasBenchSuiteRun[];
+  operational_run?: AtlasOperationalSuiteRun;
+  promotion_history?: AtlasProductionPointer[];
+  system_seed?: AtlasSystemSeedManifest;
+  synthetic_teacher?: AtlasSyntheticTeacherManifest;
+  combined_sft?: AtlasCombinedSftDatasetVersion;
+  recent_runs?: AtlasRecentRunSummary[];
+  specialists?: AtlasSpecialistIdentity[];
+  memories?: AtlasMemoryRecord[];
+  feedback?: AtlasFeedbackEvent[];
+  retrieval?: AtlasEmbeddingCapability;
+  dataset_id?: string;
+  project_id?: string;
+  remote_sharing_enabled?: boolean;
+}
+
 export interface AtlasCouncilConclusion {
   specialist: AtlasSpecialistId;
   conclusion: string;
@@ -349,6 +372,29 @@ export interface AtlasGuardrailContext {
   features?: AtlasFeatureDeclaration[];
   evidence_object_ids?: string[];
   evidence_metric?: string;
+}
+
+export interface AtlasInvestigationLink {
+  link_id: string;
+  expires_at: string;
+  revoked?: boolean;
+}
+
+export interface AtlasInvestigationLinkIssued {
+  link_id: string;
+  expires_at: string;
+  revoked?: boolean;
+  bearer_secret: string;
+}
+
+export interface AtlasInvestigationLinkRequest {
+  run_id: string;
+  expires_in_seconds?: number;
+}
+
+export interface AtlasInvestigationLinkResolve {
+  link_id: string;
+  bearer_secret: string;
 }
 
 export interface AtlasKnowledgeChunk {
@@ -642,6 +688,15 @@ export type AtlasPromotionVerdict = "promote_eligible" | "hold" | "reject";
 
 export type AtlasProviderCapability = "structured_planning" | "local_inference" | "streaming";
 
+export interface AtlasRecentRunSummary {
+  run_id: string;
+  dataset_id: string;
+  objective: string;
+  state: AtlasPlanState;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface AtlasResearchRequest {
   query: string;
   url?: string;
@@ -840,6 +895,12 @@ export interface AtlasSandboxWorkerHealth {
   cpu_quota_enforced: boolean;
   memory_quota_enforced: boolean;
   container_available: boolean;
+  detail: string;
+}
+
+export interface AtlasSectionAvailability {
+  state: "available" | "partial" | "unavailable" | "error";
+  observed_at: string;
   detail: string;
 }
 

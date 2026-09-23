@@ -198,7 +198,7 @@ export function AtlasWorkspace({
       </header>
       {systemOpen ? (
         <div className="atlas-immersive-system">
-          <AtlasCommandCenter deepLinkRunId={initialHistoryRunId ?? null} deepLinkFocusId={initialHistoryFocusId ?? null} />
+          <AtlasCommandCenter datasetId={datasetId ?? null} deepLinkRunId={initialHistoryRunId ?? null} deepLinkFocusId={initialHistoryFocusId ?? null} />
         </div>
       ) : null}
       {!datasetId ? (

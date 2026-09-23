@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type {
+  AtlasCommandCenterSummary,
+  AtlasRecentRunSummary,
   AtlasBaseModelVerification,
   AtlasBenchSuiteRun,
   AtlasCombinedSftDatasetVersion,
@@ -14,13 +16,14 @@ import type {
   AtlasProductionPointer,
   AtlasProductionTrustStatus,
   AtlasRunResponse,
+  AtlasSectionAvailability,
   AtlasSpecialistIdentity,
   AtlasSyntheticTeacherManifest,
   AtlasSystemSeedManifest,
   AtlasVerifiedBaseModelCandidate,
   CortexGraphState,
 } from "@prism/api-contracts";
-import { apiUrl } from "../config/api";
+import { useAtlasResource } from "../state/use-atlas-resource";
 import { buildAtlasHistoryLink } from "../state/atlas-history-link";
 import { EvidencePanel, FeedbackItem, groupMemoriesByClass, MEMORY_CLASS_LABELS, MemoryRecordItem, PipelineStepper, RunMemoryTrace, SpecialistActivity, ToolTimeline, GuardrailPanel as RunGuardrailPanel } from "./atlas-run-activity";
 import { AtlasCortex3D } from "./atlas-cortex-3d";
@@ -47,211 +50,54 @@ const emptyCorpus: CorpusState = { systemSeed: null, syntheticTeacher: null, com
 export function AtlasCommandCenter({
   deepLinkRunId = null,
   deepLinkFocusId = null,
+  datasetId = null,
 }: {
   // See `atlas-history-link.ts`: a run addressed by `atlas_panel=history`
   // (system-wide -- never required to already be in the "last 8" recent
   // list this panel fetches by default) and an optional node/step within
   // its real Cortex graph to focus once it loads.
+  datasetId?: string | null;
   deepLinkRunId?: string | null;
   deepLinkFocusId?: string | null;
 } = {}) {
-  const [status, setStatus] = useState<AtlasProductionTrustStatus | null>(null);
-  const [statusFailed, setStatusFailed] = useState(false);
-  const [candidate, setCandidate] = useState<AtlasVerifiedBaseModelCandidate | null>(null);
-  const [verification, setVerification] = useState<AtlasBaseModelVerification | null>(null);
-  const [v1Run, setV1Run] = useState<AtlasBenchSuiteRun | null>(null);
-  const [opcertRun, setOpcertRun] = useState<AtlasOperationalSuiteRun | null>(null);
-  const [corpus, setCorpus] = useState<CorpusState>(emptyCorpus);
-  const [benchByCandidate, setBenchByCandidate] = useState<AtlasBenchSuiteRun[]>([]);
-  const [promotionHistory, setPromotionHistory] = useState<AtlasProductionPointer[]>([]);
-  const [roster, setRoster] = useState<AtlasSpecialistIdentity[]>([]);
-  const [recentRuns, setRecentRuns] = useState<AtlasRunResponse[]>([]);
-  const [recentRunsFailed, setRecentRunsFailed] = useState(false);
-  const [runFeedbackByRun, setRunFeedbackByRun] = useState<Record<string, AtlasFeedbackEvent[]>>({});
-  const [systemMemories, setSystemMemories] = useState<AtlasMemoryRecord[]>([]);
-  const [recentFeedback, setRecentFeedback] = useState<AtlasFeedbackEvent[]>([]);
-  const [ragCapability, setRagCapability] = useState<AtlasEmbeddingCapability | null>(null);
-  const [memoryFailed, setMemoryFailed] = useState(false);
-  const [corpusFailed, setCorpusFailed] = useState(false);
-  const [deepLinkRun, setDeepLinkRun] = useState<AtlasRunResponse | null>(null);
-  const [deepLinkRunLoading, setDeepLinkRunLoading] = useState(false);
-  const [deepLinkRunFailed, setDeepLinkRunFailed] = useState(false);
-
-  // A history deep link addresses one specific run by id, independent of
-  // the "last 8" window `loadActivity` below fetches -- an older run can be
-  // linked to and must still resolve. Fetched separately, by exact id, and
-  // merged into the real run list `RunActivityPanel` renders (never a
-  // second, parallel notion of "the runs") rather than replacing it.
-  useEffect(() => {
-    setDeepLinkRun(null);
-    setDeepLinkRunFailed(false);
-    if (!deepLinkRunId) return;
-    let cancelled = false;
-    setDeepLinkRunLoading(true);
-    fetch(apiUrl(`/api/v1/atlas/runs/${deepLinkRunId}`))
-      .then((response) => {
-        if (!response.ok) throw new Error(String(response.status));
-        return response.json() as Promise<AtlasRunResponse>;
-      })
-      .then((body) => {
-        if (cancelled) return;
-        setDeepLinkRun(body);
-        return fetch(apiUrl(`/api/v1/atlas/feedback/runs/${body.run_id}`))
-          .then((response) => (response.ok ? (response.json() as Promise<AtlasFeedbackEvent[]>) : []))
-          .then((events) => {
-            if (!cancelled) setRunFeedbackByRun((previous) => ({ ...previous, [body.run_id]: events }));
-          });
-      })
-      .catch(() => {
-        if (!cancelled) setDeepLinkRunFailed(true);
-      })
-      .finally(() => {
-        if (!cancelled) setDeepLinkRunLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [deepLinkRunId]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadStatus() {
-      try {
-        const response = await fetch(apiUrl("/api/v1/atlas/promotion/current-status"));
-        if (!response.ok) throw new Error(String(response.status));
-        const body = (await response.json()) as AtlasProductionTrustStatus;
-        if (cancelled) return;
-        setStatus(body);
-
-        const candidateId = body.production?.candidate_id;
-        if (body.candidate_kind === "verified_base_model" && candidateId) {
-          const [candidateResponse, verificationResponse] = await Promise.all([
-            fetch(apiUrl(`/api/v1/atlas/base-model-candidates/${candidateId}`)),
-            fetch(apiUrl(`/api/v1/atlas/base-model-candidates/${candidateId}/verification`)),
-          ]);
-          if (!cancelled && candidateResponse.ok) setCandidate((await candidateResponse.json()) as AtlasVerifiedBaseModelCandidate);
-          if (!cancelled && verificationResponse.ok) {
-            const history = (await verificationResponse.json()) as AtlasBaseModelVerification[];
-            setVerification(history[0] ?? null);
-          }
-        }
-
-        if (body.latest_v1_run_id) {
-          const runResponse = await fetch(apiUrl(`/api/v1/atlas/bench/runs/detail/${body.latest_v1_run_id}`));
-          if (!cancelled && runResponse.ok) setV1Run((await runResponse.json()) as AtlasBenchSuiteRun);
-        }
-
-        if (body.latest_operational_cert_run_id) {
-          const opcertResponse = await fetch(apiUrl(`/api/v1/atlas/operational-cert/runs/${body.latest_operational_cert_run_id}`));
-          if (!cancelled && opcertResponse.ok) setOpcertRun((await opcertResponse.json()) as AtlasOperationalSuiteRun);
-        }
-
-        // Every recorded bench run for the current production candidate,
-        // any corpus -- this is the whole AtlasBench V2 discovery path: no
-        // run id or candidate id is ever hardcoded into this component.
-        if (candidateId) {
-          const benchResponse = await fetch(apiUrl(`/api/v1/atlas/bench/runs-by-candidate/${candidateId}`));
-          if (!cancelled && benchResponse.ok) setBenchByCandidate((await benchResponse.json()) as AtlasBenchSuiteRun[]);
-        }
-      } catch {
-        if (!cancelled) setStatusFailed(true);
-      }
-    }
-
-    async function loadCorpus() {
-      // Each fetch's own network failure is caught individually (one
-      // unreleased corpus section must not blank the others), but if ALL
-      // FOUR fail together -- the real signature of "the API is
-      // unreachable" rather than "nothing has been released yet" -- that
-      // is surfaced distinctly rather than silently read as empty.
-      const [seedResponse, teacherResponse, sftResponse, summaryResponse] = await Promise.all([
-        fetch(apiUrl("/api/v1/atlas/foundry/system-seed")).catch(() => null),
-        fetch(apiUrl("/api/v1/atlas/foundry/synthetic-teacher")).catch(() => null),
-        fetch(apiUrl("/api/v1/atlas/foundry/combined-sft-datasets")).catch(() => null),
-        fetch(apiUrl("/api/v1/atlas/foundry/training-datasets:combined-summary")).catch(() => null),
-      ]);
-      if (cancelled) return;
-      if (!seedResponse && !teacherResponse && !sftResponse && !summaryResponse) {
-        setCorpusFailed(true);
-        return;
-      }
-      const seed = seedResponse?.ok ? ((await seedResponse.json()) as AtlasSystemSeedManifest[]) : [];
-      const teacher = teacherResponse?.ok ? ((await teacherResponse.json()) as AtlasSyntheticTeacherManifest[]) : [];
-      const sft = sftResponse?.ok ? ((await sftResponse.json()) as AtlasCombinedSftDatasetVersion[]) : [];
-      const summary = summaryResponse?.ok ? ((await summaryResponse.json()) as AtlasCombinedTrainingSourceSummary) : null;
-      if (!cancelled) setCorpus({ systemSeed: seed[0] ?? null, syntheticTeacher: teacher[0] ?? null, combinedSft: sft[0] ?? null, summary });
-    }
-
-    async function loadTrustHistory() {
-      const response = await fetch(apiUrl("/api/v1/atlas/promotion/history")).catch(() => null);
-      if (!cancelled && response?.ok) setPromotionHistory((await response.json()) as AtlasProductionPointer[]);
-    }
-
-    async function loadActivity() {
-      const rosterResponse = await fetch(apiUrl("/api/v1/atlas/specialists")).catch(() => null);
-      if (!cancelled && rosterResponse?.ok) setRoster((await rosterResponse.json()) as AtlasSpecialistIdentity[]);
-
-      try {
-        const idsResponse = await fetch(apiUrl("/api/v1/atlas/runs?limit=8"));
-        if (!idsResponse.ok) throw new Error(String(idsResponse.status));
-        const ids = (await idsResponse.json()) as string[];
-        const runs = await Promise.all(
-          ids.map((id) => fetch(apiUrl(`/api/v1/atlas/runs/${id}`)).then((response) => (response.ok ? (response.json() as Promise<AtlasRunResponse>) : null)))
-        );
-        const realRuns = runs.filter((item): item is AtlasRunResponse => item !== null);
-        if (!cancelled) setRecentRuns(realRuns);
-
-        // Real per-run corrections via the dedicated GET /feedback/runs/{id}
-        // route (an exact match) -- fetched alongside each recent run's own
-        // detail so the run browser's expanded view can show them without a
-        // second round trip per expansion.
-        const feedbackEntries = await Promise.all(
-          realRuns.map((run) => fetch(apiUrl(`/api/v1/atlas/feedback/runs/${run.run_id}`)).then((response) => (response.ok ? (response.json() as Promise<AtlasFeedbackEvent[]>) : [])).then((events) => [run.run_id, events] as const))
-        );
-        if (!cancelled) setRunFeedbackByRun(Object.fromEntries(feedbackEntries));
-      } catch {
-        if (!cancelled) setRecentRunsFailed(true);
-      }
-    }
-
-    async function loadMemory() {
-      try {
-        const [memoryResponse, feedbackResponse, ragResponse] = await Promise.all([
-          fetch(apiUrl("/api/v1/atlas/memories?limit=50")),
-          fetch(apiUrl("/api/v1/atlas/feedback/recent?limit=20")),
-          fetch(apiUrl("/api/v1/atlas/retrieval/capability")),
-        ]);
-        if (cancelled) return;
-        if (memoryResponse.ok) setSystemMemories((await memoryResponse.json()) as AtlasMemoryRecord[]);
-        if (feedbackResponse.ok) setRecentFeedback((await feedbackResponse.json()) as AtlasFeedbackEvent[]);
-        if (ragResponse.ok) setRagCapability((await ragResponse.json()) as AtlasEmbeddingCapability);
-      } catch {
-        if (!cancelled) setMemoryFailed(true);
-      }
-    }
-
-    void loadStatus();
-    void loadCorpus();
-    void loadTrustHistory();
-    void loadActivity();
-    void loadMemory();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const [revision, setRevision] = useState(0);
+  const resource = useAtlasResource<AtlasCommandCenterSummary>(`/api/v1/atlas/command-center${datasetId ? `?dataset_id=${encodeURIComponent(datasetId)}` : ""}`, revision);
+  const summary = resource.data;
+  const sections: Record<string, AtlasSectionAvailability> = summary?.sections ?? {};
+  const status = summary?.status ?? null;
+  const failed = (section: string) => Boolean((resource.error && !summary) || sections[section]?.state === "error");
+  const statusFailed = failed("trust");
+  const candidate = summary?.candidate ?? null;
+  const verification = summary?.verification ?? null;
+  const benchByCandidate = summary?.bench_runs ?? [];
+  const v1Run = benchByCandidate.find((run) => run.run_id === status?.latest_v1_run_id) ?? null;
+  const opcertRun = summary?.operational_run ?? null;
+  const corpus: CorpusState = { ...emptyCorpus, systemSeed: summary?.system_seed ?? null, syntheticTeacher: summary?.synthetic_teacher ?? null, combinedSft: summary?.combined_sft ?? null };
+  const promotionHistory = summary?.promotion_history ?? [];
+  const roster = summary?.specialists ?? [];
+  const recentRuns = summary?.recent_runs ?? [];
+  const systemMemories = summary?.memories ?? [];
+  const recentFeedback = summary?.feedback ?? [];
+  const ragCapability = summary?.retrieval ?? null;
+  const linked = useAtlasResource<AtlasRunResponse>(deepLinkRunId ? `/api/v1/atlas/runs/${encodeURIComponent(deepLinkRunId)}` : null);
+  const deepLinkRun = linked.data;
+  const deepLinkRunLoading = linked.loading;
+  const deepLinkRunFailed = Boolean(linked.error);
 
   return (
-    <section className="atlas-command-center" aria-label="Atlas command center">
+    <section className="atlas-command-center" aria-label="Atlas command center" aria-busy={resource.loading}>
+      <p role="status">{resource.stale ? "Stale snapshot — refreshing or unavailable. " : ""}{resource.loading ? "Loading Command Center…" : resource.error ?? "Command Center snapshot loaded."}</p>
+      <button type="button" className="ghost-button" onClick={() => setRevision((value) => value + 1)}>Refresh Command Center</button>
+      {summary ? <details className="acc-details"><summary>Section availability and freshness</summary><ul>{Object.entries(sections).map(([name, section]) => <li key={name}>{name.replaceAll("_", " ")}: {section.state} — {section.detail} Observed {new Date(section.observed_at).toLocaleString()}</li>)}</ul></details> : null}
+      <p className="acc-cortex-caption">Local workspace links only. Remote sharing is unavailable until identity and project access are integrated.</p>
       <Hero status={status} failed={statusFailed} />
       <div className="acc-grid">
         <SystemCortexPanel status={status} failed={statusFailed} candidate={candidate} verification={verification} v1Run={v1Run} opcertRun={opcertRun} corpus={corpus} />
         <RunActivityPanel
           runs={recentRuns}
-          failed={recentRunsFailed}
+          failed={failed("runs")}
           roster={roster}
           memories={systemMemories}
-          feedbackByRun={runFeedbackByRun}
           focusRunId={deepLinkRunId}
           focusNodeId={deepLinkFocusId}
           linkedRun={deepLinkRun}
@@ -261,8 +107,8 @@ export function AtlasCommandCenter({
         <TrustPanel status={status} failed={statusFailed} candidate={candidate} verification={verification} history={promotionHistory} benchRuns={benchByCandidate} />
         <BenchPanel status={status} failed={statusFailed} run={v1Run} candidateRuns={benchByCandidate} />
         <OperationalCertPanel status={status} failed={statusFailed} run={opcertRun} />
-        <CorpusPanel corpus={corpus} failed={corpusFailed} />
-        <SystemMemoryPanel memories={systemMemories} feedback={recentFeedback} rag={ragCapability} failed={memoryFailed} />
+        <CorpusPanel corpus={corpus} failed={failed("system_seed") && failed("synthetic_teacher") && failed("combined_sft")} />
+        <SystemMemoryPanel memories={systemMemories} feedback={recentFeedback} rag={ragCapability} failed={failed("memory")} />
       </div>
     </section>
   );
@@ -446,18 +292,16 @@ function RunActivityPanel({
   failed,
   roster,
   memories,
-  feedbackByRun,
   focusRunId,
   focusNodeId,
   linkedRun,
   linkedRunLoading,
   linkedRunFailed,
 }: {
-  runs: AtlasRunResponse[];
+  runs: AtlasRecentRunSummary[];
   failed: boolean;
   roster: AtlasSpecialistIdentity[];
   memories: AtlasMemoryRecord[];
-  feedbackByRun: Record<string, AtlasFeedbackEvent[]>;
   // A history deep link (see `atlas-history-link.ts`): the run it names,
   // fetched independently since it may fall outside the "last 8" `runs`
   // this panel is otherwise given, plus the optional node/step within it.
@@ -474,7 +318,7 @@ function RunActivityPanel({
   const appliedFocusRunId = useRef<string | null>(null);
   const displayRuns = useMemo(() => {
     if (!linkedRun || runs.some((run) => run.run_id === linkedRun.run_id)) return runs;
-    return [linkedRun, ...runs];
+    return [{ run_id: linkedRun.run_id, dataset_id: linkedRun.plan.dataset_id, objective: linkedRun.plan.objective, state: linkedRun.plan.state, created_at: linkedRun.created_at, updated_at: linkedRun.updated_at }, ...runs];
   }, [runs, linkedRun]);
   useEffect(() => {
     if (!focusRunId || appliedFocusRunId.current === focusRunId) return;
@@ -507,23 +351,15 @@ function RunActivityPanel({
                 return (
                   <li key={run.run_id}>
                     <button type="button" className="acc-run-summary" aria-expanded={open} onClick={() => setOpenRunId(open ? null : run.run_id)}>
-                      <strong>{run.plan.objective}</strong>
-                      <span className={`migration-chip ${run.plan.state === "completed" ? "ready" : run.plan.state === "failed" ? "unavailable" : "bridged"}`}>
-                        {(run.plan.state ?? "unknown").replaceAll("_", " ")}
+                      <strong>{run.objective}</strong>
+                      <span className={`migration-chip ${run.state === "completed" ? "ready" : run.state === "failed" ? "unavailable" : "bridged"}`}>
+                        {(run.state ?? "unknown").replaceAll("_", " ")}
                       </span>
-                      <span className="acc-mono">{run.plan.dataset_id}</span>
+                      <span className="acc-mono">{run.dataset_id}</span>
                       <span className="acc-mono">{run.created_at ? new Date(run.created_at).toLocaleString() : ""}</span>
                     </button>
                     {open ? (
-                      <div className="acc-run-detail">
-                        <HistoricalRunCortex run={run} initialFocusId={run.run_id === focusRunId ? (focusNodeId ?? null) : null} />
-                        <PipelineStepper run={run} />
-                        <SpecialistActivity run={run} roster={roster} />
-                        <ToolTimeline run={run} />
-                        <RunGuardrailPanel run={run} />
-                        <EvidencePanel run={run} />
-                        <RunMemoryTrace run={run} memories={memories} feedback={feedbackByRun[run.run_id] ?? []} />
-                      </div>
+                      <RunDetails key={run.run_id} runId={run.run_id} linkedRun={linkedRun?.run_id === run.run_id ? linkedRun : null} roster={roster} memories={memories} focusNodeId={run.run_id === focusRunId ? (focusNodeId ?? null) : null} />
                     ) : null}
                   </li>
                 );
@@ -545,10 +381,23 @@ function RunActivityPanel({
  * deliberately deferred to the moment the operator actually expands that
  * exact run rather than eagerly loading a graph for every row in the list.
  */
+function RunDetails({ runId, linkedRun, roster, memories, focusNodeId }: { runId: string; linkedRun?: AtlasRunResponse | null; roster: AtlasSpecialistIdentity[]; memories: AtlasMemoryRecord[]; focusNodeId?: string | null }) {
+  const detail = useAtlasResource<AtlasRunResponse>(linkedRun ? null : `/api/v1/atlas/runs/${encodeURIComponent(runId)}`);
+  const feedback = useAtlasResource<AtlasFeedbackEvent[]>(`/api/v1/atlas/feedback/runs/${encodeURIComponent(runId)}`);
+  const run = linkedRun ?? detail.data;
+  if (!run) return <p role="status">{detail.error ?? "Loading investigation…"}</p>;
+  return <div className="acc-run-detail">
+    <HistoricalRunCortex run={run} initialFocusId={focusNodeId ?? null} />
+    <PipelineStepper run={run} /><SpecialistActivity run={run} roster={roster} /><ToolTimeline run={run} />
+    <RunGuardrailPanel run={run} /><EvidencePanel run={run} />
+    {feedback.error ? <p role="status">Feedback unavailable.</p> : null}
+    <RunMemoryTrace run={run} memories={memories} feedback={feedback.data ?? []} />
+  </div>;
+}
+
 function HistoricalRunCortex({ run, initialFocusId }: { run: AtlasRunResponse; initialFocusId?: string | null }) {
-  const [graph, setGraph] = useState<CortexGraphState | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [failed, setFailed] = useState(false);
+  const { data: graph, loading, error } = useAtlasResource<CortexGraphState>(`/api/v1/atlas/runs/${encodeURIComponent(run.run_id)}/cortex`);
+  const failed = Boolean(error);
   // Selection is scoped to this one expanded run -- never shared with the
   // live AtlasWorkspace's own selection state, which is a different
   // component instance over a different (possibly still-running) run.
@@ -559,29 +408,6 @@ function HistoricalRunCortex({ run, initialFocusId }: { run: AtlasRunResponse; i
   // whether that focus came from a click or from `initialFocusId`.
   const [selection, setSelection] = useState<CortexSelection>({ kind: "core" });
 
-  useEffect(() => {
-    let cancelled = false;
-    setGraph(null);
-    setFailed(false);
-    setLoading(true);
-    fetch(apiUrl(`/api/v1/atlas/runs/${run.run_id}/cortex`))
-      .then((response) => {
-        if (!response.ok) throw new Error(String(response.status));
-        return response.json() as Promise<CortexGraphState>;
-      })
-      .then((body) => {
-        if (!cancelled) setGraph(body);
-      })
-      .catch(() => {
-        if (!cancelled) setFailed(true);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [run.run_id]);
 
   if (failed) return <p className="acc-empty" role="alert">Could not reach this run&apos;s persisted Cortex graph.</p>;
   if (loading) return <p className="acc-empty" aria-live="polite">Loading this run&apos;s persisted Cortex graph…</p>;
