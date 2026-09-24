@@ -91,6 +91,7 @@ from prism_api.atlas_candidate_runtime import (  # noqa: E402
 from prism_api.atlas_foundry_routes import compute_promotion_decision  # noqa: E402
 from prism_api.atlas_promotion import DurableAtlasPromotionStore  # noqa: E402
 from prism_api.atlas_runtime import (  # noqa: E402
+    TOOL_REGISTRY,
     AtlasPlanProposal,
     DynamicAtlasPlanner,
     OllamaAtlasProvider,
@@ -98,6 +99,7 @@ from prism_api.atlas_runtime import (  # noqa: E402
 from prism_api_contracts import (  # noqa: E402
     AtlasModelProviderName,
     AtlasPromotionVerdict,
+    AtlasStepKind,
     AtlasVerifiedBaseModelCandidate,
 )
 
@@ -176,11 +178,21 @@ PLANNER_OBJECTIVES: list[str] = json.loads(
 )
 assert len(PLANNER_OBJECTIVES) == 20, "planner objective fixture must stay a fixed set of 20"
 
+# Round 3: 20 more objectives covering kinds the core-20 under-exercises
+# (forecast, machine_learning, explain_history, research, python_analysis).
+# The core-20 stays a fixed, unmodified set so its own numbers remain
+# comparable to rounds 1-2; these only ever get appended after it, in the
+# same continuous per-candidate run, never mixed into the core set itself.
+EXTRA_PLANNER_OBJECTIVES: list[str] = json.loads(
+    (ROOT / "tools" / "atlas_arena_planner_objectives_round3_extra.json").read_text(encoding="utf-8")
+)
+assert len(EXTRA_PLANNER_OBJECTIVES) == 20, "round 3 extra objective fixture must stay a fixed set of 20"
+
 # --- Phase-3 qualification gates (reporting only; see module docstring) -----
 GATE_MIN_GPU_PERCENT = 100.0
 GATE_MAX_WARM_P95_SECONDS = 12.0
 GATE_MIN_VALID_JSON_RATE = 0.95
-GATE_MIN_ACCEPTANCE_RATE = 0.90
+GATE_MIN_ACCEPTANCE_RATE_FLOOR = 0.90
 WARM_PLANNER_TIMEOUT_SECONDS = 30.0
 
 
@@ -268,33 +280,88 @@ def warm_up_and_measure_gpu(tag: str) -> Optional[float]:
     return ollama_ps_gpu_percent(tag)
 
 
+_REJECTION_CAUSES = (
+    "invalid_json",
+    "empty_steps",
+    "unknown_kind",
+    "excluded_kind",
+    "unknown_tool",
+    "kind_tool_mismatch",
+)
+
+
+def _classify_step(item: object) -> str:
+    """Diagnostic-only mirror of DynamicAtlasPlanner._validated_proposal's own
+    checks, in a fixed priority order, so a rejected proposal's *cause* can be
+    reported. This never itself decides acceptance -- only the real
+    _validated_proposal (called separately, unmodified) does that."""
+    if not isinstance(item, dict):
+        return "invalid_json"
+    try:
+        kind_raw = item["kind"]
+        tool_raw = item["tool_name"]
+    except (KeyError, TypeError):
+        return "invalid_json"
+    try:
+        kind = AtlasStepKind(str(kind_raw))
+    except ValueError:
+        return "unknown_kind"
+    if kind in {AtlasStepKind.PROFILE_DATASET, AtlasStepKind.AUDIT_EVIDENCE}:
+        return "excluded_kind"
+    tool_name = str(tool_raw)
+    if tool_name not in TOOL_REGISTRY:
+        return "unknown_tool"
+    if kind not in TOOL_REGISTRY[tool_name]:
+        return "kind_tool_mismatch"
+    return "accepted"
+
+
+@dataclass
+class PlannerSample:
+    objective: str
+    group: str  # "core" | "extra"
+    status: str  # AtlasPlanProposal.status: "ok" | "timed_out" | "invalid" | "not_requested"
+    elapsed_seconds: float
+    raw_steps: Optional[list[dict[str, object]]]
+    accepted: bool  # True iff >=1 raw step survived the real _validated_proposal
+    rejection_causes: list[str]  # one entry per raw step that did NOT survive
+
+
 @dataclass
 class PlannerMeasurement:
     cold_start_seconds: Optional[float]
-    warm_latencies_seconds: list[float] = field(default_factory=list)
-    warm_valid_json_count: int = 0
-    warm_accepted_count: int = 0
-    warm_total: int = 0
+    samples: list[PlannerSample] = field(default_factory=list)
 
-    @property
-    def p50(self) -> Optional[float]:
-        return _percentile(self.warm_latencies_seconds, 50)
+    def _group(self, group: Optional[str]) -> list[PlannerSample]:
+        return self.samples if group is None else [s for s in self.samples if s.group == group]
 
-    @property
-    def p95(self) -> Optional[float]:
-        return _percentile(self.warm_latencies_seconds, 95)
+    def sample_size(self, group: Optional[str] = None) -> int:
+        return len(self._group(group))
 
-    @property
-    def max_seconds(self) -> Optional[float]:
-        return max(self.warm_latencies_seconds) if self.warm_latencies_seconds else None
+    def p50(self, group: Optional[str] = None) -> Optional[float]:
+        return _percentile([s.elapsed_seconds for s in self._group(group)], 50)
 
-    @property
-    def valid_json_rate(self) -> float:
-        return self.warm_valid_json_count / self.warm_total if self.warm_total else 0.0
+    def p95(self, group: Optional[str] = None) -> Optional[float]:
+        return _percentile([s.elapsed_seconds for s in self._group(group)], 95)
 
-    @property
-    def acceptance_rate(self) -> float:
-        return self.warm_accepted_count / self.warm_total if self.warm_total else 0.0
+    def max_seconds(self, group: Optional[str] = None) -> Optional[float]:
+        values = [s.elapsed_seconds for s in self._group(group)]
+        return max(values) if values else None
+
+    def valid_json_rate(self, group: Optional[str] = None) -> float:
+        samples = self._group(group)
+        return sum(1 for s in samples if s.status == "ok") / len(samples) if samples else 0.0
+
+    def acceptance_rate(self, group: Optional[str] = None) -> float:
+        samples = self._group(group)
+        return sum(1 for s in samples if s.accepted) / len(samples) if samples else 0.0
+
+    def rejection_cause_counts(self, group: Optional[str] = None) -> dict[str, int]:
+        counts = {cause: 0 for cause in _REJECTION_CAUSES}
+        for sample in self._group(group):
+            for cause in sample.rejection_causes:
+                counts[cause] = counts.get(cause, 0) + 1
+        return counts
 
 
 def _percentile(values: list[float], pct: float) -> Optional[float]:
@@ -306,6 +373,9 @@ def _percentile(values: list[float], pct: float) -> Optional[float]:
 
 
 def measure_planner(tag: str) -> PlannerMeasurement:
+    """Run the core-20 objectives immediately followed by the extra-20 (one
+    continuous per-candidate sequence, so the model only ever cold-loads
+    once); only the very first request is excluded as the cold start."""
     previous_model = os.environ.get("PRISM_ATLAS_OLLAMA_MODEL")
     previous_timeout = os.environ.get("PRISM_ATLAS_PLANNER_TIMEOUT_SECONDS")
     os.environ["PRISM_ATLAS_OLLAMA_MODEL"] = tag
@@ -318,22 +388,36 @@ def measure_planner(tag: str) -> PlannerMeasurement:
         "health": 0.9,
         "column_names": ["segment", "revenue", "signup_date", "region"],
     }
+    objectives = [("core", obj) for obj in PLANNER_OBJECTIVES] + [("extra", obj) for obj in EXTRA_PLANNER_OBJECTIVES]
     try:
         measurement = PlannerMeasurement(cold_start_seconds=None)
-        for index, objective in enumerate(PLANNER_OBJECTIVES):
+        for index, (group, objective) in enumerate(objectives):
             started = time.perf_counter()
             result: AtlasPlanProposal = provider.propose_plan_detailed(objective, metadata)
             elapsed = time.perf_counter() - started
             if index == 0:
                 measurement.cold_start_seconds = elapsed
                 continue
-            measurement.warm_total += 1
-            measurement.warm_latencies_seconds.append(elapsed)
-            if result.status == "ok":
-                measurement.warm_valid_json_count += 1
-                accepted = DynamicAtlasPlanner._validated_proposal(result.steps or [])  # noqa: SLF001
-                if accepted:
-                    measurement.warm_accepted_count += 1
+            steps = result.steps
+            if result.status != "ok":
+                causes, accepted = ["invalid_json"], False
+            elif not steps:
+                causes, accepted = ["empty_steps"], False
+            else:
+                accepted_steps = DynamicAtlasPlanner._validated_proposal(steps)  # noqa: SLF001
+                accepted = bool(accepted_steps)
+                causes = [cause for item in steps if (cause := _classify_step(item)) != "accepted"]
+            measurement.samples.append(
+                PlannerSample(
+                    objective=objective,
+                    group=group,
+                    status=result.status,
+                    elapsed_seconds=elapsed,
+                    raw_steps=steps,
+                    accepted=accepted,
+                    rejection_causes=causes,
+                )
+            )
         return measurement
     finally:
         if previous_model is None:
@@ -403,7 +487,9 @@ def establish_comparable_production_run(context_tokens: int) -> str:
             os.environ["PRISM_ATLAS_OLLAMA_MODEL"] = previous_model
 
 
-def evaluate_candidate(tag: str, *, production_run_id: str, context_tokens: int) -> dict[str, object]:
+def evaluate_candidate(
+    tag: str, *, production_run_id: str, context_tokens: int, min_acceptance_rate: float
+) -> dict[str, object]:
     entry: dict[str, object] = {"tag": tag, "started_at": datetime.now(timezone.utc).isoformat()}
 
     metadata = CANDIDATE_METADATA.get(tag)
@@ -494,24 +580,37 @@ def evaluate_candidate(tag: str, *, production_run_id: str, context_tokens: int)
     entry["critical_regressions"] = [item.category.value for item in decision.critical_regressions]
     print(f"[arena]   {tag}: verdict={decision.verdict.value}", flush=True)
 
-    print(f"[arena]   {tag}: measuring planner latency (20 objectives, 30s cap)...", flush=True)
+    print(f"[arena]   {tag}: measuring planner latency (40 objectives: core-20 + extra-20, 30s cap)...", flush=True)
     planner = measure_planner(tag)
+
+    def _group_stats(group: Optional[str]) -> dict[str, object]:
+        return {
+            "sample_size": planner.sample_size(group),
+            "p50_seconds": planner.p50(group),
+            "p95_seconds": planner.p95(group),
+            "max_seconds": planner.max_seconds(group),
+            "valid_json_rate": planner.valid_json_rate(group),
+            "acceptance_rate": planner.acceptance_rate(group),
+        }
+
     entry["planner"] = {
         "cold_start_seconds": planner.cold_start_seconds,
-        "warm_p50_seconds": planner.p50,
-        "warm_p95_seconds": planner.p95,
-        "warm_max_seconds": planner.max_seconds,
-        "warm_valid_json_rate": planner.valid_json_rate,
-        "warm_acceptance_rate": planner.acceptance_rate,
-        "warm_sample_size": planner.warm_total,
+        "core": _group_stats("core"),  # comparable to rounds 1-2's 19-warm-sample measurement
+        "full": _group_stats(None),  # core-20 + extra-20, 39 warm samples -- gated on this
+        "rejection_cause_counts_full": planner.rejection_cause_counts(),
+        "rejection_cause_counts_core": planner.rejection_cause_counts("core"),
     }
 
+    full_p95 = planner.p95()
+    full_valid_json_rate = planner.valid_json_rate()
+    full_acceptance_rate = planner.acceptance_rate()
+    entry["acceptance_gate_threshold"] = min_acceptance_rate
     gates = {
         "atlasbench_promote_eligible": decision.verdict is AtlasPromotionVerdict.PROMOTE_ELIGIBLE,
         "gpu_100_percent": gpu_percent is not None and gpu_percent >= GATE_MIN_GPU_PERCENT,
-        "warm_p95_under_12s": planner.p95 is not None and planner.p95 <= GATE_MAX_WARM_P95_SECONDS,
-        "valid_json_rate_ge_95pct": planner.valid_json_rate >= GATE_MIN_VALID_JSON_RATE,
-        "acceptance_rate_ge_90pct": planner.acceptance_rate >= GATE_MIN_ACCEPTANCE_RATE,
+        "warm_p95_under_12s": full_p95 is not None and full_p95 <= GATE_MAX_WARM_P95_SECONDS,
+        "valid_json_rate_ge_95pct": full_valid_json_rate >= GATE_MIN_VALID_JSON_RATE,
+        "acceptance_rate_ge_gate": full_acceptance_rate >= min_acceptance_rate,
     }
     entry["gates"] = gates
     entry["qualifies"] = all(gates.values())
@@ -527,6 +626,7 @@ def render_readme_section(
     hardware: str,
     production_run_id: str,
     candidates: list[dict[str, object]],
+    acceptance_gate_note: Optional[str] = None,
 ) -> str:
     lines = [
         f"## Round {round_number} -- {completed_at}",
@@ -534,14 +634,20 @@ def render_readme_section(
         f"- Commit: `{git_commit}`",
         f"- Hardware: {hardware}",
         f"- Production run for comparison: `{production_run_id}`",
+    ]
+    if acceptance_gate_note:
+        lines.append(f"- {acceptance_gate_note}")
+    lines += [
         "",
-        "| Tag | License | Outcome | GPU % | Verdict | Pass rate (cand/prod) | Planner p95 | Valid-JSON | Acceptance | Failing gates |",
+        "| Tag | License | Outcome | GPU % | Verdict | Pass rate (cand/prod) | Planner p95 (full) | Valid-JSON (full) | Acceptance core/full | Failing gates |",
         "|---|---|---|---|---|---|---|---|---|---|",
     ]
     for entry in candidates:
         planner = entry.get("planner") or {}
         if not isinstance(planner, dict):
             planner = {}
+        full = planner.get("full") or {}
+        core = planner.get("core") or {}
         failing_gates = entry.get("failing_gates") or []
         failing = ", ".join(str(item) for item in failing_gates) if isinstance(failing_gates, list) else ""
         lines.append(
@@ -556,9 +662,13 @@ def render_readme_section(
                     if "overall_candidate_pass_rate" in entry
                     else "-"
                 ),
-                p95=f"{planner.get('warm_p95_seconds'):.2f}s" if planner.get("warm_p95_seconds") is not None else "-",
-                json_rate=f"{planner.get('warm_valid_json_rate'):.0%}" if planner.get("warm_valid_json_rate") is not None else "-",
-                accept=f"{planner.get('warm_acceptance_rate'):.0%}" if planner.get("warm_acceptance_rate") is not None else "-",
+                p95=f"{full.get('p95_seconds'):.2f}s" if full.get("p95_seconds") is not None else "-",
+                json_rate=f"{full.get('valid_json_rate'):.0%}" if full.get("valid_json_rate") is not None else "-",
+                accept=(
+                    f"{core.get('acceptance_rate', 0):.0%}/{full.get('acceptance_rate', 0):.0%}"
+                    if full.get("acceptance_rate") is not None
+                    else "-"
+                ),
                 failing=failing or str(entry.get("reason") or "-"),
             )
         )
@@ -587,6 +697,17 @@ def main() -> int:
     parser.add_argument("--round", type=int, required=True)
     parser.add_argument("--context-tokens", type=int, default=CONTEXT_TOKENS)
     parser.add_argument("--out-dir", default=str(ROOT / "docs" / "atlas" / "arena"))
+    parser.add_argument(
+        "--baseline-tag",
+        default="qwen2.5:3b",
+        help="Model to measure the planner-acceptance gate floor against: "
+        "gate = max(90%%, this model's measured full-40 acceptance rate).",
+    )
+    parser.add_argument(
+        "--skip-baseline-measurement",
+        action="store_true",
+        help="Skip re-measuring --baseline-tag and use the fixed 90%% floor as the acceptance gate.",
+    )
     args = parser.parse_args()
 
     out_dir = Path(args.out_dir)
@@ -603,13 +724,38 @@ def main() -> int:
     production_run_id = establish_comparable_production_run(args.context_tokens)
     print(f"[arena] production run: {production_run_id}", flush=True)
 
+    baseline_acceptance_full: Optional[float] = None
+    if args.skip_baseline_measurement:
+        min_acceptance_rate = GATE_MIN_ACCEPTANCE_RATE_FLOOR
+        acceptance_gate_note = f"Acceptance gate: fixed {GATE_MIN_ACCEPTANCE_RATE_FLOOR:.0%} floor (baseline measurement skipped)."
+    else:
+        print(f"[arena] measuring planner acceptance baseline on {args.baseline_tag}...", flush=True)
+        baseline_planner = measure_planner(args.baseline_tag)
+        ollama_stop(args.baseline_tag)
+        baseline_acceptance_full = baseline_planner.acceptance_rate()
+        min_acceptance_rate = max(GATE_MIN_ACCEPTANCE_RATE_FLOOR, baseline_acceptance_full)
+        print(
+            f"[arena] baseline acceptance (full-40, {args.baseline_tag}): {baseline_acceptance_full:.0%} "
+            f"-> acceptance gate = max(90%, baseline) = {min_acceptance_rate:.0%}",
+            flush=True,
+        )
+        acceptance_gate_note = (
+            f"Acceptance gate: max(90%, {args.baseline_tag} measured full-40 acceptance "
+            f"{baseline_acceptance_full:.0%}) = {min_acceptance_rate:.0%}."
+        )
+
     candidates: list[dict[str, object]] = []
     previous_tag: Optional[str] = None
     for tag in args.tags:
         if previous_tag is not None:
             ollama_stop(previous_tag)
         print(f"[arena] evaluating {tag}...", flush=True)
-        entry = evaluate_candidate(tag, production_run_id=production_run_id, context_tokens=args.context_tokens)
+        entry = evaluate_candidate(
+            tag,
+            production_run_id=production_run_id,
+            context_tokens=args.context_tokens,
+            min_acceptance_rate=min_acceptance_rate,
+        )
         print(f"[arena] {tag}: outcome={entry.get('outcome')}", flush=True)
         candidates.append(entry)
         previous_tag = tag
@@ -626,6 +772,9 @@ def main() -> int:
         "hardware_line": hardware,
         "context_tokens": args.context_tokens,
         "production_run_id": production_run_id,
+        "baseline_tag": args.baseline_tag,
+        "baseline_acceptance_full_40": baseline_acceptance_full,
+        "acceptance_gate_threshold": min_acceptance_rate,
         "candidates": candidates,
         "qualifying_tags": [entry["tag"] for entry in candidates if entry.get("qualifies")],
     }
@@ -634,7 +783,9 @@ def main() -> int:
     out_path.write_text(json.dumps(report, indent=2, sort_keys=True, default=str), encoding="utf-8")
 
     readme_path = out_dir / "README.md"
-    section = render_readme_section(args.round, completed_at, commit, hardware, production_run_id, candidates)
+    section = render_readme_section(
+        args.round, completed_at, commit, hardware, production_run_id, candidates, acceptance_gate_note
+    )
     if readme_path.exists():
         readme_path.write_text(readme_path.read_text(encoding="utf-8") + "\n" + section, encoding="utf-8")
     else:

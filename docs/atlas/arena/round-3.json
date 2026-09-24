@@ -1,0 +1,286 @@
+{
+  "acceptance_gate_threshold": 1.0,
+  "baseline_acceptance_full_40": 1.0,
+  "baseline_tag": "qwen2.5:3b",
+  "candidates": [
+    {
+      "acceptance_gate_threshold": 1.0,
+      "atlasbench_run_id": "benchrun_d5aa20b182aa46098cb3a94acdea5258",
+      "atlasbench_total_passed": 90,
+      "atlasbench_total_tasks": 90,
+      "candidate_id": "basemodel_8e8cdb04478756156aa517b4",
+      "critical_regressions": [],
+      "decision_id": "promodecision_e626127b0fb448199f864be9a6ebb2c5",
+      "failing_gates": [
+        "gpu_100_percent",
+        "valid_json_rate_ge_95pct",
+        "acceptance_rate_ge_gate"
+      ],
+      "gates": {
+        "acceptance_rate_ge_gate": false,
+        "atlasbench_promote_eligible": true,
+        "gpu_100_percent": false,
+        "valid_json_rate_ge_95pct": false,
+        "warm_p95_under_12s": true
+      },
+      "gpu_percent": 92.0,
+      "license": "Apache-2.0",
+      "license_check": "confirmed Apache-2.0 via ollama show --license and Hugging Face license tag",
+      "outcome": "evaluated_not_qualified",
+      "overall_candidate_pass_rate": 1.0,
+      "overall_production_pass_rate": 0.9444444444444444,
+      "planner": {
+        "cold_start_seconds": 8.615532200004964,
+        "core": {
+          "acceptance_rate": 1.0,
+          "max_seconds": 9.162316900001315,
+          "p50_seconds": 5.129970100002538,
+          "p95_seconds": 8.99136880000151,
+          "sample_size": 19,
+          "valid_json_rate": 1.0
+        },
+        "full": {
+          "acceptance_rate": 0.9487179487179487,
+          "max_seconds": 12.571803200000431,
+          "p50_seconds": 4.711936299994704,
+          "p95_seconds": 10.255751299999247,
+          "sample_size": 39,
+          "valid_json_rate": 0.9487179487179487
+        },
+        "rejection_cause_counts_core": {
+          "empty_steps": 0,
+          "excluded_kind": 0,
+          "invalid_json": 0,
+          "kind_tool_mismatch": 0,
+          "unknown_kind": 0,
+          "unknown_tool": 0
+        },
+        "rejection_cause_counts_full": {
+          "empty_steps": 0,
+          "excluded_kind": 0,
+          "invalid_json": 2,
+          "kind_tool_mismatch": 0,
+          "unknown_kind": 0,
+          "unknown_tool": 0
+        }
+      },
+      "pull_detail": "nifest \u001b[K\npulling 3ea32f882c99: 100% \u2595\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258f 6.0 GB                         \u001b[K\npulling 5b74c26b9e0b: 100% \u2595\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258f 3.4 KB                         \u001b[K\npulling 43070e2d4e53: 100% \u2595\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258f  11 KB                         \u001b[K\npulling e0daf17ff83e: 100% \u2595\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258f   21 B                         \u001b[K\npulling 22eb5c960e5f: 100% \u2595\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258f  514 B                         \u001b[K\nverifying sha256 digest \u001b[K\nwriting manifest \u001b[K\nsuccess \u001b[K\u001b[?25h\u001b[?2026l",
+      "qualifies": false,
+      "started_at": "2026-09-24T04:22:34.322050+00:00",
+      "tag": "ministral-3:8b",
+      "verdict": "promote_eligible",
+      "verification_state": "verified"
+    },
+    {
+      "acceptance_gate_threshold": 1.0,
+      "atlasbench_run_id": "benchrun_b52ca46d1b8a4ea19005d0affed5d642",
+      "atlasbench_total_passed": 89,
+      "atlasbench_total_tasks": 90,
+      "candidate_id": "basemodel_585b7e79e9f195024a57dc9a",
+      "critical_regressions": [],
+      "decision_id": "promodecision_e0471628988143daad432fed09719ebb",
+      "failing_gates": [
+        "acceptance_rate_ge_gate"
+      ],
+      "gates": {
+        "acceptance_rate_ge_gate": false,
+        "atlasbench_promote_eligible": true,
+        "gpu_100_percent": true,
+        "valid_json_rate_ge_95pct": true,
+        "warm_p95_under_12s": true
+      },
+      "gpu_percent": 100.0,
+      "license": "Apache-2.0",
+      "license_check": "confirmed Apache-2.0 via ollama show --license and Hugging Face license tag",
+      "outcome": "evaluated_not_qualified",
+      "overall_candidate_pass_rate": 0.9888888888888889,
+      "overall_production_pass_rate": 0.9444444444444444,
+      "planner": {
+        "cold_start_seconds": 1.666243100000429,
+        "core": {
+          "acceptance_rate": 0.2631578947368421,
+          "max_seconds": 1.1342870000007679,
+          "p50_seconds": 0.2480716999998549,
+          "p95_seconds": 0.8053567999959341,
+          "sample_size": 19,
+          "valid_json_rate": 1.0
+        },
+        "full": {
+          "acceptance_rate": 0.20512820512820512,
+          "max_seconds": 1.1342870000007679,
+          "p50_seconds": 0.24070790000405395,
+          "p95_seconds": 0.7399191000004066,
+          "sample_size": 39,
+          "valid_json_rate": 1.0
+        },
+        "rejection_cause_counts_core": {
+          "empty_steps": 14,
+          "excluded_kind": 0,
+          "invalid_json": 0,
+          "kind_tool_mismatch": 0,
+          "unknown_kind": 0,
+          "unknown_tool": 0
+        },
+        "rejection_cause_counts_full": {
+          "empty_steps": 31,
+          "excluded_kind": 0,
+          "invalid_json": 0,
+          "kind_tool_mismatch": 0,
+          "unknown_kind": 0,
+          "unknown_tool": 0
+        }
+      },
+      "pull_detail": "nifest \u001b[K\npulling 85e4a5b7b8ef: 100% \u2595\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258f 2.5 GB                         \u001b[K\npulling eade0a07cac7: 100% \u2595\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258f 1.4 KB                         \u001b[K\npulling d18a5cc71b84: 100% \u2595\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258f  11 KB                         \u001b[K\npulling 0914c7781e00: 100% \u2595\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258f  119 B                         \u001b[K\npulling b72accf9724e: 100% \u2595\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258f  487 B                         \u001b[K\nverifying sha256 digest \u001b[K\nwriting manifest \u001b[K\nsuccess \u001b[K\u001b[?25h\u001b[?2026l",
+      "qualifies": false,
+      "started_at": "2026-09-24T04:26:47.447329+00:00",
+      "tag": "qwen3:4b-instruct-2507-q4_K_M",
+      "verdict": "promote_eligible",
+      "verification_state": "verified"
+    },
+    {
+      "acceptance_gate_threshold": 1.0,
+      "atlasbench_run_id": "benchrun_a5b9c182ab304703bafe1937296cbe87",
+      "atlasbench_total_passed": 79,
+      "atlasbench_total_tasks": 90,
+      "candidate_id": "basemodel_7f954ac6cd03e892f225508c",
+      "critical_regressions": [
+        "agentic",
+        "machine_learning"
+      ],
+      "decision_id": "promodecision_0610cee8617e40d1a4318a23fc989264",
+      "failing_gates": [
+        "atlasbench_promote_eligible"
+      ],
+      "gates": {
+        "acceptance_rate_ge_gate": true,
+        "atlasbench_promote_eligible": false,
+        "gpu_100_percent": true,
+        "valid_json_rate_ge_95pct": true,
+        "warm_p95_under_12s": true
+      },
+      "gpu_percent": 100.0,
+      "license": "Apache-2.0",
+      "license_check": "confirmed Apache-2.0 via ollama show --license and Hugging Face license tag",
+      "outcome": "evaluated_not_qualified",
+      "overall_candidate_pass_rate": 0.8777777777777778,
+      "overall_production_pass_rate": 0.9444444444444444,
+      "planner": {
+        "cold_start_seconds": 3.873096399998758,
+        "core": {
+          "acceptance_rate": 1.0,
+          "max_seconds": 3.8869053999951575,
+          "p50_seconds": 3.74394900000334,
+          "p95_seconds": 3.883422099999734,
+          "sample_size": 19,
+          "valid_json_rate": 1.0
+        },
+        "full": {
+          "acceptance_rate": 1.0,
+          "max_seconds": 4.063332599995192,
+          "p50_seconds": 2.046220299998822,
+          "p95_seconds": 3.8869053999951575,
+          "sample_size": 39,
+          "valid_json_rate": 1.0
+        },
+        "rejection_cause_counts_core": {
+          "empty_steps": 0,
+          "excluded_kind": 0,
+          "invalid_json": 0,
+          "kind_tool_mismatch": 0,
+          "unknown_kind": 0,
+          "unknown_tool": 0
+        },
+        "rejection_cause_counts_full": {
+          "empty_steps": 0,
+          "excluded_kind": 0,
+          "invalid_json": 0,
+          "kind_tool_mismatch": 0,
+          "unknown_kind": 0,
+          "unknown_tool": 0
+        }
+      },
+      "pull_detail": "l\u001b[?2026h\u001b[?25l\u001b[1Gpulling manifest \u280f \u001b[K\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[?25l\u001b[1Gpulling manifest \u001b[K\npulling 6c02683809a8: 100% \u2595\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258f 2.1 GB                         \u001b[K\npulling 0f6ec9740c76: 100% \u2595\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258f 7.1 KB                         \u001b[K\npulling cfc7749b96f6: 100% \u2595\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258f  11 KB                         \u001b[K\npulling ba32b08db168: 100% \u2595\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258f  417 B                         \u001b[K\nverifying sha256 digest \u001b[K\nwriting manifest \u001b[K\nsuccess \u001b[K\u001b[?25h\u001b[?2026l",
+      "qualifies": false,
+      "started_at": "2026-09-24T04:27:29.174084+00:00",
+      "tag": "granite4:micro",
+      "verdict": "reject",
+      "verification_state": "verified"
+    },
+    {
+      "acceptance_gate_threshold": 1.0,
+      "atlasbench_run_id": "benchrun_c7b561453a214c5b8e4529142c30a743",
+      "atlasbench_total_passed": 83,
+      "atlasbench_total_tasks": 90,
+      "candidate_id": "basemodel_eb19928862d5c239ff4c5734",
+      "critical_regressions": [
+        "agentic",
+        "sql"
+      ],
+      "decision_id": "promodecision_e8e30a2b05cb4085b8c9230edfbf339a",
+      "failing_gates": [
+        "atlasbench_promote_eligible"
+      ],
+      "gates": {
+        "acceptance_rate_ge_gate": true,
+        "atlasbench_promote_eligible": false,
+        "gpu_100_percent": true,
+        "valid_json_rate_ge_95pct": true,
+        "warm_p95_under_12s": true
+      },
+      "gpu_percent": 100.0,
+      "license": "Apache-2.0",
+      "license_check": "confirmed Apache-2.0 via ollama show --license and Hugging Face license tag",
+      "outcome": "evaluated_not_qualified",
+      "overall_candidate_pass_rate": 0.9222222222222223,
+      "overall_production_pass_rate": 0.9444444444444444,
+      "planner": {
+        "cold_start_seconds": 0.9346425999974599,
+        "core": {
+          "acceptance_rate": 1.0,
+          "max_seconds": 1.5351620000001276,
+          "p50_seconds": 0.9160845000005793,
+          "p95_seconds": 1.330372600001283,
+          "sample_size": 19,
+          "valid_json_rate": 1.0
+        },
+        "full": {
+          "acceptance_rate": 1.0,
+          "max_seconds": 1.7759497000006377,
+          "p50_seconds": 0.9052563000004739,
+          "p95_seconds": 1.54310880000412,
+          "sample_size": 39,
+          "valid_json_rate": 1.0
+        },
+        "rejection_cause_counts_core": {
+          "empty_steps": 0,
+          "excluded_kind": 0,
+          "invalid_json": 0,
+          "kind_tool_mismatch": 0,
+          "unknown_kind": 0,
+          "unknown_tool": 0
+        },
+        "rejection_cause_counts_full": {
+          "empty_steps": 0,
+          "excluded_kind": 0,
+          "invalid_json": 0,
+          "kind_tool_mismatch": 0,
+          "unknown_kind": 0,
+          "unknown_tool": 0
+        }
+      },
+      "pull_detail": "nifest \u001b[K\npulling 910e4bf4e233: 100% \u2595\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258f 3.0 GB                         \u001b[K\npulling 24c6226aca35: 100% \u2595\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258f 3.4 KB                         \u001b[K\npulling 43070e2d4e53: 100% \u2595\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258f  11 KB                         \u001b[K\npulling e0daf17ff83e: 100% \u2595\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258f   21 B                         \u001b[K\npulling 12d848b3c47b: 100% \u2595\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258f  514 B                         \u001b[K\nverifying sha256 digest \u001b[K\nwriting manifest \u001b[K\nsuccess \u001b[K\u001b[?25h\u001b[?2026l",
+      "qualifies": false,
+      "started_at": "2026-09-24T04:29:35.393916+00:00",
+      "tag": "ministral-3:3b",
+      "verdict": "reject",
+      "verification_state": "verified"
+    }
+  ],
+  "completed_at": "2026-09-24T04:30:41.448573+00:00",
+  "context_tokens": 4096,
+  "git_commit": "8d0da8c",
+  "hardware_line": "NVIDIA GeForce RTX 5060, 8151 MB VRAM",
+  "production_run_id": "benchrun_cc784fb15dd54ea8b50558c04b298f94",
+  "qualifying_tags": [],
+  "round": 3
+}
