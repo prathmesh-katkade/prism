@@ -37,3 +37,17 @@
 | qwen3:4b-instruct-2507-q4_K_M | Apache-2.0 | evaluated_not_qualified | 100% | promote_eligible | 98.9%/94.4% | 0.74s | 100% | 26%/21% | acceptance_rate_ge_gate |
 | granite4:micro | Apache-2.0 | evaluated_not_qualified | 100% | reject | 87.8%/94.4% | 3.89s | 100% | 100%/100% | atlasbench_promote_eligible |
 | ministral-3:3b | Apache-2.0 | evaluated_not_qualified | 100% | reject | 92.2%/94.4% | 1.54s | 100% | 100%/100% | atlasbench_promote_eligible |
+
+## Round 4 -- 2026-09-24T05:16:21.673832+00:00
+
+- Commit: `79e26c1`
+- Hardware: NVIDIA GeForce RTX 5060, 8151 MB VRAM
+- Production run for comparison: `benchrun_2b6d9e14e9ad411f933d26a8cc76b2e0`
+- Acceptance gate: fixed 90% floor (the original product bar), not max(90%, measured baseline). Round 3 measured the baseline at exactly 100% (0/39 rejected), which made the gate a literal perfect score at n=39 -- a 100% point estimate's confidence interval reaches well below 90%, so requiring an exact tie to it fits noise, not a real requirement.
+
+| Tag | License | Outcome | GPU % | Verdict | Pass rate (cand/prod) | Planner p95 (full) | Valid-JSON (full) | Acceptance core/full | Failing gates |
+|---|---|---|---|---|---|---|---|---|---|
+| ministral-3:8b | Apache-2.0 | evaluated_not_qualified | 92% | promote_eligible | 100.0%/94.4% | 10.90s | 95% | 100%/95% | valid_json_rate_ge_95pct |
+| qwen3:4b-instruct-2507-q4_K_M | Apache-2.0 | qualified | 100% | promote_eligible | 98.9%/94.4% | 1.70s | 100% | 100%/100% | - |
+| granite4:micro | Apache-2.0 | evaluated_not_qualified | 100% | reject | 87.8%/94.4% | 4.19s | 100% | 100%/100% | atlasbench_promote_eligible |
+| ministral-3:3b | Apache-2.0 | evaluated_not_qualified | 100% | reject | 92.2%/94.4% | 1.58s | 100% | 100%/100% | atlasbench_promote_eligible |

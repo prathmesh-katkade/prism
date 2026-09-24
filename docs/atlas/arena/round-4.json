@@ -1,0 +1,300 @@
+{
+  "acceptance_gate_threshold": 0.9,
+  "baseline_acceptance_full_40": null,
+  "baseline_tag": "qwen2.5:3b",
+  "candidates": [
+    {
+      "acceptance_gate_threshold": 0.9,
+      "atlasbench_run_id": "benchrun_634f537beb304656acc1a1bf4269675d",
+      "atlasbench_total_passed": 90,
+      "atlasbench_total_tasks": 90,
+      "candidate_id": "basemodel_8e8cdb04478756156aa517b4",
+      "critical_regressions": [],
+      "decision_id": "promodecision_2c54062ae9eb4329a8912f3fb26460a1",
+      "failing_gates": [
+        "valid_json_rate_ge_95pct"
+      ],
+      "gates": {
+        "acceptance_rate_ge_gate": true,
+        "atlasbench_promote_eligible": true,
+        "gpu_not_thrashing": true,
+        "valid_json_rate_ge_95pct": false,
+        "warm_p95_under_12s": true
+      },
+      "gpu_percent": 92.0,
+      "license": "Apache-2.0",
+      "license_check": "confirmed Apache-2.0 via ollama show --license and Hugging Face license tag",
+      "outcome": "evaluated_not_qualified",
+      "overall_candidate_pass_rate": 1.0,
+      "overall_production_pass_rate": 0.9444444444444444,
+      "planner": {
+        "cold_start_seconds": 9.291216999998142,
+        "core": {
+          "acceptance_rate": 1.0,
+          "max_seconds": 9.810361299998476,
+          "p50_seconds": 5.424853399999847,
+          "p95_seconds": 9.455578300003253,
+          "sample_size": 19,
+          "valid_json_rate": 1.0
+        },
+        "full": {
+          "acceptance_rate": 0.9487179487179487,
+          "max_seconds": 13.421780199998466,
+          "p50_seconds": 5.082872999999381,
+          "p95_seconds": 10.900435099996685,
+          "sample_size": 39,
+          "valid_json_rate": 0.9487179487179487
+        },
+        "rejection_cause_counts_core": {
+          "empty_steps": 0,
+          "excluded_kind": 0,
+          "invalid_json": 0,
+          "kind_tool_mismatch": 0,
+          "not_requested": 0,
+          "timed_out": 0,
+          "unknown_kind": 0,
+          "unknown_tool": 0
+        },
+        "rejection_cause_counts_full": {
+          "empty_steps": 0,
+          "excluded_kind": 0,
+          "invalid_json": 2,
+          "kind_tool_mismatch": 0,
+          "not_requested": 0,
+          "timed_out": 0,
+          "unknown_kind": 0,
+          "unknown_tool": 0
+        }
+      },
+      "pull_detail": "nifest \u001b[K\npulling 3ea32f882c99: 100% \u2595\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258f 6.0 GB                         \u001b[K\npulling 5b74c26b9e0b: 100% \u2595\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258f 3.4 KB                         \u001b[K\npulling 43070e2d4e53: 100% \u2595\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258f  11 KB                         \u001b[K\npulling e0daf17ff83e: 100% \u2595\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258f   21 B                         \u001b[K\npulling 22eb5c960e5f: 100% \u2595\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258f  514 B                         \u001b[K\nverifying sha256 digest \u001b[K\nwriting manifest \u001b[K\nsuccess \u001b[K\u001b[?25h\u001b[?2026l",
+      "qualifies": false,
+      "started_at": "2026-09-24T05:07:28.606288+00:00",
+      "tag": "ministral-3:8b",
+      "verdict": "promote_eligible",
+      "verification_state": "verified"
+    },
+    {
+      "acceptance_gate_threshold": 0.9,
+      "atlasbench_run_id": "benchrun_584a8874cb654a63bd8cfae84a8134a0",
+      "atlasbench_total_passed": 89,
+      "atlasbench_total_tasks": 90,
+      "candidate_id": "basemodel_585b7e79e9f195024a57dc9a",
+      "critical_regressions": [],
+      "decision_id": "promodecision_f6d2cf373cc54059b4216601ace347af",
+      "failing_gates": [],
+      "gates": {
+        "acceptance_rate_ge_gate": true,
+        "atlasbench_promote_eligible": true,
+        "gpu_not_thrashing": true,
+        "valid_json_rate_ge_95pct": true,
+        "warm_p95_under_12s": true
+      },
+      "gpu_percent": 100.0,
+      "license": "Apache-2.0",
+      "license_check": "confirmed Apache-2.0 via ollama show --license and Hugging Face license tag",
+      "outcome": "qualified",
+      "overall_candidate_pass_rate": 0.9888888888888889,
+      "overall_production_pass_rate": 0.9444444444444444,
+      "planner": {
+        "cold_start_seconds": 1.6917068999973708,
+        "core": {
+          "acceptance_rate": 1.0,
+          "max_seconds": 1.9529221999982838,
+          "p50_seconds": 0.7679279999938444,
+          "p95_seconds": 1.7032662999990862,
+          "sample_size": 19,
+          "valid_json_rate": 1.0
+        },
+        "full": {
+          "acceptance_rate": 1.0,
+          "max_seconds": 1.9529221999982838,
+          "p50_seconds": 0.767123099998571,
+          "p95_seconds": 1.7032662999990862,
+          "sample_size": 39,
+          "valid_json_rate": 1.0
+        },
+        "rejection_cause_counts_core": {
+          "empty_steps": 0,
+          "excluded_kind": 0,
+          "invalid_json": 0,
+          "kind_tool_mismatch": 0,
+          "not_requested": 0,
+          "timed_out": 0,
+          "unknown_kind": 0,
+          "unknown_tool": 0
+        },
+        "rejection_cause_counts_full": {
+          "empty_steps": 0,
+          "excluded_kind": 0,
+          "invalid_json": 0,
+          "kind_tool_mismatch": 0,
+          "not_requested": 0,
+          "timed_out": 0,
+          "unknown_kind": 0,
+          "unknown_tool": 0
+        }
+      },
+      "pull_detail": "nifest \u001b[K\npulling 85e4a5b7b8ef: 100% \u2595\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258f 2.5 GB                         \u001b[K\npulling eade0a07cac7: 100% \u2595\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258f 1.4 KB                         \u001b[K\npulling d18a5cc71b84: 100% \u2595\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258f  11 KB                         \u001b[K\npulling 0914c7781e00: 100% \u2595\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258f  119 B                         \u001b[K\npulling b72accf9724e: 100% \u2595\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258f  487 B                         \u001b[K\nverifying sha256 digest \u001b[K\nwriting manifest \u001b[K\nsuccess \u001b[K\u001b[?25h\u001b[?2026l",
+      "qualifies": true,
+      "started_at": "2026-09-24T05:11:58.010454+00:00",
+      "tag": "qwen3:4b-instruct-2507-q4_K_M",
+      "verdict": "promote_eligible",
+      "verification_state": "verified"
+    },
+    {
+      "acceptance_gate_threshold": 0.9,
+      "atlasbench_run_id": "benchrun_46440e487c784779af87132010cf480b",
+      "atlasbench_total_passed": 79,
+      "atlasbench_total_tasks": 90,
+      "candidate_id": "basemodel_7f954ac6cd03e892f225508c",
+      "critical_regressions": [
+        "agentic",
+        "machine_learning"
+      ],
+      "decision_id": "promodecision_4c362eafa898471abe48633543bd404d",
+      "failing_gates": [
+        "atlasbench_promote_eligible"
+      ],
+      "gates": {
+        "acceptance_rate_ge_gate": true,
+        "atlasbench_promote_eligible": false,
+        "gpu_not_thrashing": true,
+        "valid_json_rate_ge_95pct": true,
+        "warm_p95_under_12s": true
+      },
+      "gpu_percent": 100.0,
+      "license": "Apache-2.0",
+      "license_check": "confirmed Apache-2.0 via ollama show --license and Hugging Face license tag",
+      "outcome": "evaluated_not_qualified",
+      "overall_candidate_pass_rate": 0.8777777777777778,
+      "overall_production_pass_rate": 0.9444444444444444,
+      "planner": {
+        "cold_start_seconds": 3.981391299996176,
+        "core": {
+          "acceptance_rate": 1.0,
+          "max_seconds": 4.144094600000244,
+          "p50_seconds": 3.843058200000087,
+          "p95_seconds": 4.004751700005727,
+          "sample_size": 19,
+          "valid_json_rate": 1.0
+        },
+        "full": {
+          "acceptance_rate": 1.0,
+          "max_seconds": 4.408567699996638,
+          "p50_seconds": 2.1340761999963433,
+          "p95_seconds": 4.1905523000023095,
+          "sample_size": 39,
+          "valid_json_rate": 1.0
+        },
+        "rejection_cause_counts_core": {
+          "empty_steps": 0,
+          "excluded_kind": 0,
+          "invalid_json": 0,
+          "kind_tool_mismatch": 0,
+          "not_requested": 0,
+          "timed_out": 0,
+          "unknown_kind": 0,
+          "unknown_tool": 0
+        },
+        "rejection_cause_counts_full": {
+          "empty_steps": 0,
+          "excluded_kind": 0,
+          "invalid_json": 0,
+          "kind_tool_mismatch": 0,
+          "not_requested": 0,
+          "timed_out": 0,
+          "unknown_kind": 0,
+          "unknown_tool": 0
+        }
+      },
+      "pull_detail": "l\u001b[?2026h\u001b[?25l\u001b[1Gpulling manifest \u280b \u001b[K\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[?25l\u001b[1Gpulling manifest \u001b[K\npulling 6c02683809a8: 100% \u2595\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258f 2.1 GB                         \u001b[K\npulling 0f6ec9740c76: 100% \u2595\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258f 7.1 KB                         \u001b[K\npulling cfc7749b96f6: 100% \u2595\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258f  11 KB                         \u001b[K\npulling ba32b08db168: 100% \u2595\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258f  417 B                         \u001b[K\nverifying sha256 digest \u001b[K\nwriting manifest \u001b[K\nsuccess \u001b[K\u001b[?25h\u001b[?2026l",
+      "qualifies": false,
+      "started_at": "2026-09-24T05:13:03.509246+00:00",
+      "tag": "granite4:micro",
+      "verdict": "reject",
+      "verification_state": "verified"
+    },
+    {
+      "acceptance_gate_threshold": 0.9,
+      "atlasbench_run_id": "benchrun_1a6eb9b25141453f9060ea34abe5b69e",
+      "atlasbench_total_passed": 83,
+      "atlasbench_total_tasks": 90,
+      "candidate_id": "basemodel_eb19928862d5c239ff4c5734",
+      "critical_regressions": [
+        "agentic",
+        "sql"
+      ],
+      "decision_id": "promodecision_f2dbd1fc6b9f475c8647652b9abdc14c",
+      "failing_gates": [
+        "atlasbench_promote_eligible"
+      ],
+      "gates": {
+        "acceptance_rate_ge_gate": true,
+        "atlasbench_promote_eligible": false,
+        "gpu_not_thrashing": true,
+        "valid_json_rate_ge_95pct": true,
+        "warm_p95_under_12s": true
+      },
+      "gpu_percent": 100.0,
+      "license": "Apache-2.0",
+      "license_check": "confirmed Apache-2.0 via ollama show --license and Hugging Face license tag",
+      "outcome": "evaluated_not_qualified",
+      "overall_candidate_pass_rate": 0.9222222222222223,
+      "overall_production_pass_rate": 0.9444444444444444,
+      "planner": {
+        "cold_start_seconds": 0.9556871999957366,
+        "core": {
+          "acceptance_rate": 1.0,
+          "max_seconds": 1.566880799997307,
+          "p50_seconds": 0.9245287000012468,
+          "p95_seconds": 1.3585029000023496,
+          "sample_size": 19,
+          "valid_json_rate": 1.0
+        },
+        "full": {
+          "acceptance_rate": 1.0,
+          "max_seconds": 1.825558300006378,
+          "p50_seconds": 0.9245287000012468,
+          "p95_seconds": 1.5787369999961811,
+          "sample_size": 39,
+          "valid_json_rate": 1.0
+        },
+        "rejection_cause_counts_core": {
+          "empty_steps": 0,
+          "excluded_kind": 0,
+          "invalid_json": 0,
+          "kind_tool_mismatch": 0,
+          "not_requested": 0,
+          "timed_out": 0,
+          "unknown_kind": 0,
+          "unknown_tool": 0
+        },
+        "rejection_cause_counts_full": {
+          "empty_steps": 0,
+          "excluded_kind": 0,
+          "invalid_json": 0,
+          "kind_tool_mismatch": 0,
+          "not_requested": 0,
+          "timed_out": 0,
+          "unknown_kind": 0,
+          "unknown_tool": 0
+        }
+      },
+      "pull_detail": "nifest \u001b[K\npulling 910e4bf4e233: 100% \u2595\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258f 3.0 GB                         \u001b[K\npulling 24c6226aca35: 100% \u2595\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258f 3.4 KB                         \u001b[K\npulling 43070e2d4e53: 100% \u2595\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258f  11 KB                         \u001b[K\npulling e0daf17ff83e: 100% \u2595\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258f   21 B                         \u001b[K\npulling 12d848b3c47b: 100% \u2595\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258f  514 B                         \u001b[K\nverifying sha256 digest \u001b[K\nwriting manifest \u001b[K\nsuccess \u001b[K\u001b[?25h\u001b[?2026l",
+      "qualifies": false,
+      "started_at": "2026-09-24T05:15:14.193218+00:00",
+      "tag": "ministral-3:3b",
+      "verdict": "reject",
+      "verification_state": "verified"
+    }
+  ],
+  "completed_at": "2026-09-24T05:16:21.673832+00:00",
+  "context_tokens": 4096,
+  "git_commit": "79e26c1",
+  "hardware_line": "NVIDIA GeForce RTX 5060, 8151 MB VRAM",
+  "production_run_id": "benchrun_2b6d9e14e9ad411f933d26a8cc76b2e0",
+  "qualifying_tags": [
+    "qwen3:4b-instruct-2507-q4_K_M"
+  ],
+  "round": 4
+}
