@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import time
 
 from fastapi.testclient import TestClient
@@ -158,3 +159,104 @@ def test_atlas_memory_delete_returns_204_with_no_body() -> None:
     deleted = client.delete(f"/api/v1/atlas/memories/{memory_id}")
     assert deleted.status_code == 204
     assert deleted.content == b""
+
+
+def test_planner_timeout_seconds_falls_back_to_default_on_missing_or_unparseable(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    from prism_api import atlas_runtime
+
+    monkeypatch.delenv("PRISM_ATLAS_PLANNER_TIMEOUT_SECONDS", raising=False)
+    assert atlas_runtime.planner_timeout_seconds() == 4.0
+
+    for raw in ("not-a-number", "", "NaN", "inf", "-inf"):
+        monkeypatch.setenv("PRISM_ATLAS_PLANNER_TIMEOUT_SECONDS", raw)
+        assert atlas_runtime.planner_timeout_seconds() == 4.0
+
+
+def test_planner_timeout_seconds_accepts_a_valid_value_within_range(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    from prism_api import atlas_runtime
+
+    monkeypatch.setenv("PRISM_ATLAS_PLANNER_TIMEOUT_SECONDS", "10.5")
+    assert atlas_runtime.planner_timeout_seconds() == 10.5
+
+
+def test_planner_timeout_seconds_clamps_out_of_range_values(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    from prism_api import atlas_runtime
+
+    monkeypatch.setenv("PRISM_ATLAS_PLANNER_TIMEOUT_SECONDS", "0.1")
+    assert atlas_runtime.planner_timeout_seconds() == 1.0
+
+    monkeypatch.setenv("PRISM_ATLAS_PLANNER_TIMEOUT_SECONDS", "999")
+    assert atlas_runtime.planner_timeout_seconds() == 30.0
+
+
+def _plan_created_payload(client: TestClient, run_id: str) -> dict[str, object]:
+    run = client.get(f"/api/v1/atlas/runs/{run_id}").json()
+    event = next(event for event in run["events"] if event["type"] == "plan_created")
+    return dict(event["payload"])
+
+
+def test_ollama_plan_proposal_timeout_is_distinguished_and_recorded(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    # No live Ollama involved: httpx.post is monkeypatched to simulate the
+    # exact failure mode a slow/unloaded local model produces under the
+    # configurable planner timeout.
+    from prism_api import atlas_runtime
+
+    monkeypatch.setenv("PRISM_AI_PROVIDER", "ollama")
+
+    def _raise_timeout(*_args, **_kwargs):  # type: ignore[no-untyped-def]
+        raise atlas_runtime.httpx.TimeoutException("simulated planner timeout")
+
+    monkeypatch.setattr(atlas_runtime.httpx, "post", _raise_timeout)
+
+    client = TestClient(create_app())
+    dataset_id = _dataset(client)
+    run_id = client.post(
+        "/api/v1/atlas/runs",
+        json={"dataset_id": dataset_id, "objective": "Profile this dataset."},
+    ).json()["run_id"]
+
+    payload = _plan_created_payload(client, run_id)
+    assert payload["model_proposal"] == "timed_out"
+    assert payload["model_proposal_steps_accepted"] == 0
+
+
+def test_ollama_plan_proposal_accepted_is_recorded_with_step_count(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    from prism_api import atlas_runtime
+
+    monkeypatch.setenv("PRISM_AI_PROVIDER", "ollama")
+
+    class _FakeResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict[str, object]:
+            return {
+                "response": json.dumps(
+                    {
+                        "steps": [
+                            {
+                                "kind": "data_quality",
+                                "tool_name": "overview.quality_review",
+                                "title": "Check data quality",
+                                "rationale": "Model-proposed step.",
+                            }
+                        ]
+                    }
+                )
+            }
+
+    def _fake_post(*_args, **_kwargs):  # type: ignore[no-untyped-def]
+        return _FakeResponse()
+
+    monkeypatch.setattr(atlas_runtime.httpx, "post", _fake_post)
+
+    client = TestClient(create_app())
+    dataset_id = _dataset(client)
+    run_id = client.post(
+        "/api/v1/atlas/runs",
+        json={"dataset_id": dataset_id, "objective": "Profile this dataset."},
+    ).json()["run_id"]
+
+    payload = _plan_created_payload(client, run_id)
+    assert payload["model_proposal"] == "accepted"
+    assert payload["model_proposal_steps_accepted"] == 1

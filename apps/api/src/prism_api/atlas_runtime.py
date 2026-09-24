@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import json
+import math
 import os
 import uuid
+from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import AsyncIterator, Optional, Protocol
+from typing import AsyncIterator, Optional, Protocol, cast
 
 import httpx
 from fastapi import HTTPException, status
@@ -86,6 +88,34 @@ class AtlasModelProvider(Protocol):
     def propose_plan(self, objective: str, metadata: dict[str, object]) -> Optional[list[dict[str, object]]]: ...
 
 
+_DEFAULT_PLANNER_TIMEOUT_SECONDS = 4.0
+_MIN_PLANNER_TIMEOUT_SECONDS = 1.0
+_MAX_PLANNER_TIMEOUT_SECONDS = 30.0
+
+
+def planner_timeout_seconds() -> float:
+    """Read PRISM_ATLAS_PLANNER_TIMEOUT_SECONDS, falling back to the default on any
+    unparseable value and clamping a valid one to [1.0, 30.0]."""
+    raw = os.environ.get("PRISM_ATLAS_PLANNER_TIMEOUT_SECONDS")
+    if raw is None:
+        return _DEFAULT_PLANNER_TIMEOUT_SECONDS
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return _DEFAULT_PLANNER_TIMEOUT_SECONDS
+    if not math.isfinite(value):
+        return _DEFAULT_PLANNER_TIMEOUT_SECONDS
+    return min(_MAX_PLANNER_TIMEOUT_SECONDS, max(_MIN_PLANNER_TIMEOUT_SECONDS, value))
+
+
+@dataclass(frozen=True)
+class AtlasPlanProposal:
+    """Raw provider output plus what happened to it, for PLAN_CREATED telemetry."""
+
+    steps: Optional[list[dict[str, object]]]
+    status: str  # "ok" | "timed_out" | "invalid" | "not_requested"
+
+
 class DeterministicAtlasProvider:
     def capabilities(self) -> AtlasModelProviderCapabilities:
         return AtlasModelProviderCapabilities(
@@ -119,8 +149,12 @@ class OllamaAtlasProvider:
 
     def propose_plan(self, objective: str, metadata: dict[str, object]) -> Optional[list[dict[str, object]]]:
         """Accept only a small typed proposal; an Ollama response never executes tools."""
+        return self.propose_plan_detailed(objective, metadata).steps
+
+    def propose_plan_detailed(self, objective: str, metadata: dict[str, object]) -> AtlasPlanProposal:
+        """Same request as propose_plan, but also reports what happened to it."""
         if not self.capabilities().available:
-            return None
+            return AtlasPlanProposal(None, "not_requested")
         payload = {
             "model": os.environ.get("PRISM_ATLAS_OLLAMA_MODEL", "qwen2.5:3b"),
             "stream": False,
@@ -136,13 +170,21 @@ class OllamaAtlasProvider:
             }, separators=(",", ":")),
         }
         try:
-            response = httpx.post(os.environ.get("PRISM_ATLAS_OLLAMA_URL", "http://127.0.0.1:11434/api/generate"), json=payload, timeout=4.0)
+            response = httpx.post(
+                os.environ.get("PRISM_ATLAS_OLLAMA_URL", "http://127.0.0.1:11434/api/generate"),
+                json=payload,
+                timeout=planner_timeout_seconds(),
+            )
             response.raise_for_status()
             value = json.loads(str(response.json().get("response", "")))
             steps = value.get("steps")
-            return steps if isinstance(steps, list) and len(steps) <= 12 else None
+            if isinstance(steps, list) and len(steps) <= 12:
+                return AtlasPlanProposal(steps, "ok")
+            return AtlasPlanProposal(None, "invalid")
+        except httpx.TimeoutException:
+            return AtlasPlanProposal(None, "timed_out")
         except (httpx.HTTPError, ValueError, TypeError, json.JSONDecodeError):
-            return None
+            return AtlasPlanProposal(None, "invalid")
 
 
 class AtlasProviderRegistry:
@@ -166,6 +208,11 @@ class AtlasProviderRegistry:
     def propose_plan(self, objective: str, metadata: dict[str, object]) -> Optional[list[dict[str, object]]]:
         provider = self._providers[1] if self.select() is AtlasModelProviderName.OLLAMA else self._providers[0]
         return provider.propose_plan(objective, metadata)
+
+    def propose_plan_detailed(self, objective: str, metadata: dict[str, object]) -> AtlasPlanProposal:
+        if self.select() is not AtlasModelProviderName.OLLAMA:
+            return AtlasPlanProposal(None, "not_requested")
+        return cast(OllamaAtlasProvider, self._providers[1]).propose_plan_detailed(objective, metadata)
 
 
 TOOL_REGISTRY: dict[str, set[AtlasStepKind]] = {
@@ -425,8 +472,12 @@ class AtlasRunStore:
             pass
         guardrail = evaluate_request(request)
         metadata["guardrail_decision"] = guardrail.metadata()
-        proposal = providers.propose_plan(request.objective, metadata) if guardrail.state == "checked" else None
-        plan = self._planner.create(request, provider, proposal)
+        proposal_result = (
+            providers.propose_plan_detailed(request.objective, metadata)
+            if guardrail.state == "checked"
+            else AtlasPlanProposal(None, "not_requested")
+        )
+        plan = self._planner.create(request, provider, proposal_result.steps)
         run = self._store.create(request, provider, plan)
         if not run.events:
             self.append_event(
@@ -434,6 +485,13 @@ class AtlasRunStore:
                 AtlasRunEventType.RUN_CREATED,
                 payload={"dataset_id": request.dataset_id},
             )
+            if proposal_result.status == "ok":
+                accepted_steps = DynamicAtlasPlanner._validated_proposal(proposal_result.steps or [])
+                model_proposal = "accepted" if accepted_steps else "rejected_by_validator"
+                model_proposal_steps_accepted = len(accepted_steps)
+            else:
+                model_proposal = proposal_result.status
+                model_proposal_steps_accepted = 0
             self.append_event(
                 run.run_id,
                 AtlasRunEventType.PLAN_CREATED,
@@ -444,6 +502,8 @@ class AtlasRunStore:
                     "prompt_schema_version": "atlas-plan-v1",
                     "raw_dataset_sent": False,
                     "guardrail_decision": guardrail.metadata(),
+                    "model_proposal": model_proposal,
+                    "model_proposal_steps_accepted": model_proposal_steps_accepted,
                 },
             )
         return self.get(run.run_id)
