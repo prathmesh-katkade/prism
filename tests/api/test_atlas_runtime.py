@@ -287,6 +287,24 @@ def test_plan_response_schema_covers_every_allowed_tool_registry_entry_and_exclu
         assert reserved.value not in {pair[0] for pair in schema_pairs}
 
 
+def test_plan_response_schema_rejects_an_empty_steps_array() -> None:
+    # Round 3 found the cheapest schema-legal answer: {"steps": []}, valid
+    # JSON and schema-conformant at 0% acceptance cost to the model. The
+    # schema itself must forbid it, not just discourage it in prose.
+    from prism_api import atlas_runtime
+
+    steps_schema = atlas_runtime.PLAN_RESPONSE_SCHEMA["properties"]["steps"]  # type: ignore[index]
+    assert steps_schema["minItems"] == 1  # type: ignore[index]
+
+    def _steps_array_is_schema_valid(steps: list[object]) -> bool:
+        min_items = steps_schema["minItems"]  # type: ignore[index]
+        max_items = steps_schema["maxItems"]  # type: ignore[index]
+        return min_items <= len(steps) <= max_items
+
+    assert not _steps_array_is_schema_valid([])
+    assert _steps_array_is_schema_valid([{"kind": "data_quality", "tool_name": "overview.quality_review"}])
+
+
 def test_schema_constrained_plan_response_parses_and_survives_validation(monkeypatch) -> None:  # type: ignore[no-untyped-def]
     from prism_api import atlas_runtime
 

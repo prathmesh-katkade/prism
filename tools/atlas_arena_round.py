@@ -188,8 +188,11 @@ EXTRA_PLANNER_OBJECTIVES: list[str] = json.loads(
 )
 assert len(EXTRA_PLANNER_OBJECTIVES) == 20, "round 3 extra objective fixture must stay a fixed set of 20"
 
-# --- Phase-3 qualification gates (reporting only; see module docstring) -----
-GATE_MIN_GPU_PERCENT = 100.0
+# --- Phase-3/4 qualification gates (reporting only; see module docstring) ---
+# Round 4: GPU residency below this genuinely indicates thrashing and fails;
+# between this and 100% it is reported only, not gating -- latency (p95,
+# below) is what's actually being protected, and it's measured directly.
+GATE_MIN_GPU_PERCENT_THRASHING = 85.0
 GATE_MAX_WARM_P95_SECONDS = 12.0
 GATE_MIN_VALID_JSON_RATE = 0.95
 GATE_MIN_ACCEPTANCE_RATE_FLOOR = 0.90
@@ -281,7 +284,9 @@ def warm_up_and_measure_gpu(tag: str) -> Optional[float]:
 
 
 _REJECTION_CAUSES = (
-    "invalid_json",
+    "timed_out",  # AtlasPlanProposal.status == "timed_out": httpx.TimeoutException
+    "invalid_json",  # status == "invalid": HTTP/JSON error, or truncated/malformed JSON (see status_code+elapsed to tell truncation from a real error)
+    "not_requested",  # status == "not_requested": guardrail blocked the call before it was made
     "empty_steps",
     "unknown_kind",
     "excluded_kind",
@@ -399,8 +404,14 @@ def measure_planner(tag: str) -> PlannerMeasurement:
                 measurement.cold_start_seconds = elapsed
                 continue
             steps = result.steps
-            if result.status != "ok":
-                causes, accepted = ["invalid_json"], False
+            if result.status in ("timed_out", "invalid", "not_requested"):
+                # AtlasPlanProposal.status already distinguishes a real
+                # httpx.TimeoutException ("timed_out") from an HTTP/JSON
+                # failure ("invalid", which also covers a response that hit
+                # num_predict mid-generation and truncated -- status_code
+                # 200 with a short elapsed time, not a timeout).
+                cause = "invalid_json" if result.status == "invalid" else result.status
+                causes, accepted = [cause], False
             elif not steps:
                 causes, accepted = ["empty_steps"], False
             else:
@@ -607,7 +618,7 @@ def evaluate_candidate(
     entry["acceptance_gate_threshold"] = min_acceptance_rate
     gates = {
         "atlasbench_promote_eligible": decision.verdict is AtlasPromotionVerdict.PROMOTE_ELIGIBLE,
-        "gpu_100_percent": gpu_percent is not None and gpu_percent >= GATE_MIN_GPU_PERCENT,
+        "gpu_not_thrashing": gpu_percent is not None and gpu_percent >= GATE_MIN_GPU_PERCENT_THRASHING,
         "warm_p95_under_12s": full_p95 is not None and full_p95 <= GATE_MAX_WARM_P95_SECONDS,
         "valid_json_rate_ge_95pct": full_valid_json_rate >= GATE_MIN_VALID_JSON_RATE,
         "acceptance_rate_ge_gate": full_acceptance_rate >= min_acceptance_rate,
@@ -727,7 +738,12 @@ def main() -> int:
     baseline_acceptance_full: Optional[float] = None
     if args.skip_baseline_measurement:
         min_acceptance_rate = GATE_MIN_ACCEPTANCE_RATE_FLOOR
-        acceptance_gate_note = f"Acceptance gate: fixed {GATE_MIN_ACCEPTANCE_RATE_FLOOR:.0%} floor (baseline measurement skipped)."
+        acceptance_gate_note = (
+            f"Acceptance gate: fixed {GATE_MIN_ACCEPTANCE_RATE_FLOOR:.0%} floor (the original product bar), "
+            "not max(90%, measured baseline). Round 3 measured the baseline at exactly 100% (0/39 rejected), "
+            "which made the gate a literal perfect score at n=39 -- a 100% point estimate's confidence interval "
+            "reaches well below 90%, so requiring an exact tie to it fits noise, not a real requirement."
+        )
     else:
         print(f"[arena] measuring planner acceptance baseline on {args.baseline_tag}...", flush=True)
         baseline_planner = measure_planner(args.baseline_tag)

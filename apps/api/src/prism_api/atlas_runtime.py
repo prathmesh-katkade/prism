@@ -314,7 +314,7 @@ def _build_plan_response_schema() -> dict[str, object]:
     return {
         "type": "object",
         "properties": {
-            "steps": {"type": "array", "maxItems": 12, "items": {"oneOf": variants}},
+            "steps": {"type": "array", "minItems": 1, "maxItems": 12, "items": {"oneOf": variants}},
         },
         "required": ["steps"],
         "additionalProperties": False,
