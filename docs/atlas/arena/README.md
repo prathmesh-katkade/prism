@@ -1,0 +1,25 @@
+# Atlas Model Arena rounds
+
+## Round 1 -- 2026-09-24T02:56:06.899618+00:00
+
+- Commit: `d4225b4`
+- Hardware: NVIDIA GeForce RTX 5060, 8151 MB VRAM
+- Production run for comparison: `benchrun_914cf836996e485b87eb69f69aa1d3e8`
+
+| Tag | License | Outcome | GPU % | Verdict | Pass rate (cand/prod) | Planner p95 | Valid-JSON | Acceptance | Failing gates |
+|---|---|---|---|---|---|---|---|---|---|
+| ministral-3:8b | Apache-2.0 | evaluated_not_qualified | 92% | promote_eligible | 100.0%/93.3% | 8.06s | 95% | 0% | gpu_100_percent, valid_json_rate_ge_95pct, acceptance_rate_ge_90pct |
+| ministral-3:3b | Apache-2.0 | evaluated_not_qualified | 100% | reject | 92.2%/93.3% | 2.55s | 100% | 0% | atlasbench_promote_eligible, acceptance_rate_ge_90pct |
+| qwen3:4b-instruct-2507-q4_K_M | Apache-2.0 | evaluated_not_qualified | 100% | promote_eligible | 98.9%/93.3% | 3.56s | 100% | 16% | acceptance_rate_ge_90pct |
+| phi4-mini:latest | MIT | evaluated_not_qualified | 100% | reject | 25.6%/93.3% | 4.51s | 100% | 26% | atlasbench_promote_eligible, acceptance_rate_ge_90pct |
+
+## Round 2 -- 2026-09-24T03:46:29.997404+00:00
+
+- Commit: `d4225b4`
+- Hardware: NVIDIA GeForce RTX 5060, 8151 MB VRAM
+- Production run for comparison: `benchrun_74f6d9fdea52478b918c5be3fdb6dd5b`
+
+| Tag | License | Outcome | GPU % | Verdict | Pass rate (cand/prod) | Planner p95 | Valid-JSON | Acceptance | Failing gates |
+|---|---|---|---|---|---|---|---|---|---|
+| olmo-3:7b-instruct | Apache-2.0 | evaluated_not_qualified | 89% | reject | 43.3%/93.3% | 11.57s | 100% | 47% | atlasbench_promote_eligible, gpu_100_percent, acceptance_rate_ge_90pct |
+| granite4:micro | Apache-2.0 | evaluated_not_qualified | 100% | reject | 87.8%/93.3% | 5.27s | 89% | 16% | atlasbench_promote_eligible, valid_json_rate_ge_95pct, acceptance_rate_ge_90pct |

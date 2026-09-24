@@ -1,0 +1,22 @@
+[
+  "Profile this dataset and identify the evidence needed for the next decision.",
+  "Clean the disguised nulls and mixed date formats before any analysis.",
+  "Review data quality and flag any columns that look like ID columns.",
+  "Write a SQL query counting rows by segment for the connected warehouse.",
+  "Forecast next quarter's revenue using the monthly time column.",
+  "Build a classification model to predict churn from the account features.",
+  "Run a regression to explain price using the numeric feature set.",
+  "Visualize the distribution of the revenue column as a histogram.",
+  "Chart monthly active users over the last twelve months.",
+  "Explain the history and lineage behind this dataset's current revision.",
+  "Summarize the evidence supporting the last statistical claim made here.",
+  "Test whether the correlation between spend and revenue is significant.",
+  "Compare the two customer segments on conversion rate with a hypothesis test.",
+  "Write custom Python to compute a rolling seven-day average.",
+  "Research the industry-standard definition of monthly active user.",
+  "Look up the allowlisted source for churn benchmark rates in SaaS.",
+  "Investigate causal safety concerns before recommending a pricing change.",
+  "Audit the machine learning pipeline for leakage between train and test.",
+  "Assess whether the sandboxed Python request is safe to approve.",
+  "Give a general overview of what this dataset can and cannot support."
+]
