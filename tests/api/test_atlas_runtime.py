@@ -165,11 +165,11 @@ def test_planner_timeout_seconds_falls_back_to_default_on_missing_or_unparseable
     from prism_api import atlas_runtime
 
     monkeypatch.delenv("PRISM_ATLAS_PLANNER_TIMEOUT_SECONDS", raising=False)
-    assert atlas_runtime.planner_timeout_seconds() == 4.0
+    assert atlas_runtime.planner_timeout_seconds() == atlas_runtime._DEFAULT_PLANNER_TIMEOUT_SECONDS  # noqa: SLF001
 
     for raw in ("not-a-number", "", "NaN", "inf", "-inf"):
         monkeypatch.setenv("PRISM_ATLAS_PLANNER_TIMEOUT_SECONDS", raw)
-        assert atlas_runtime.planner_timeout_seconds() == 4.0
+        assert atlas_runtime.planner_timeout_seconds() == atlas_runtime._DEFAULT_PLANNER_TIMEOUT_SECONDS  # noqa: SLF001
 
 
 def test_planner_timeout_seconds_accepts_a_valid_value_within_range(monkeypatch) -> None:  # type: ignore[no-untyped-def]

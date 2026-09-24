@@ -91,7 +91,7 @@ class AtlasModelProvider(Protocol):
     def propose_plan(self, objective: str, metadata: dict[str, object]) -> Optional[list[dict[str, object]]]: ...
 
 
-_DEFAULT_PLANNER_TIMEOUT_SECONDS = 4.0
+_DEFAULT_PLANNER_TIMEOUT_SECONDS = 3.0
 _MIN_PLANNER_TIMEOUT_SECONDS = 1.0
 _MAX_PLANNER_TIMEOUT_SECONDS = 30.0
 
