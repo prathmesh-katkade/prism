@@ -205,14 +205,15 @@ class AtlasProviderBenchSubject:
             count_value = envelope.get("eval_count")
             done_reason = reason_value if isinstance(reason_value, str) else None
             eval_count = count_value if type(count_value) is int and count_value >= 0 else None
-            metadata = {"raw_response": raw, "done_reason": done_reason, "eval_count": eval_count}
             parsed = json.loads(raw)
             if not isinstance(parsed, dict) or set(parsed) != {"choice"}:
-                return BenchAnswer(-1, **metadata)
+                return BenchAnswer(-1, raw_response=raw, done_reason=done_reason, eval_count=eval_count)
             choice_text = parsed.get("choice")
             if not isinstance(choice_text, str) or choice_text not in safe_choices:
-                return BenchAnswer(-1, **metadata)
-            return BenchAnswer(safe_choices.index(choice_text), **metadata)
+                return BenchAnswer(-1, raw_response=raw, done_reason=done_reason, eval_count=eval_count)
+            return BenchAnswer(
+                safe_choices.index(choice_text), raw_response=raw, done_reason=done_reason, eval_count=eval_count
+            )
         except (httpx.HTTPError, ValueError, TypeError, json.JSONDecodeError):
             return BenchAnswer(-1, raw_response=raw, done_reason=done_reason, eval_count=eval_count)
 
