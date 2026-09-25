@@ -51,3 +51,7 @@
 | qwen3:4b-instruct-2507-q4_K_M | Apache-2.0 | qualified | 100% | promote_eligible | 98.9%/94.4% | 1.70s | 100% | 100%/100% | - |
 | granite4:micro | Apache-2.0 | evaluated_not_qualified | 100% | reject | 87.8%/94.4% | 4.19s | 100% | 100%/100% | atlasbench_promote_eligible |
 | ministral-3:3b | Apache-2.0 | evaluated_not_qualified | 100% | reject | 92.2%/94.4% | 1.58s | 100% | 100%/100% | atlasbench_promote_eligible |
+
+## Harness boundary — 2026-09-25
+
+Rounds 1–4 used the former loose JSON output mode and 64-token AtlasBench cap. They are historical results and are not directly comparable with runs using the decoder schema, `think: false`, 256-token cap, and three-way outcome reporting. [Preflight controls](controls-2026-09-25.md) found a large, model-dependent prompt-envelope effect. Round 5 has not been run.

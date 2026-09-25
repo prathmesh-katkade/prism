@@ -134,6 +134,28 @@ def test_live_bench_keeps_truncated_response_and_generation_metadata(monkeypatch
     assert answer.eval_count == 256
 
 
+def test_prose_control_changes_only_prompt_envelope(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    monkeypatch.setenv("PRISM_AI_PROVIDER", "ollama")
+    monkeypatch.setattr(AtlasProviderBenchSubject, "_probe_model_digest", lambda self: "verified-digest")
+    requests = []
+
+    def generate(url, *, json, timeout):  # type: ignore[no-untyped-def]
+        requests.append(json)
+        return httpx.Response(200, json={"response": '{"choice_index": 1}'}, request=httpx.Request("POST", url))
+
+    monkeypatch.setattr("prism_api.atlas_bench_live.httpx.post", generate)
+    baseline = AtlasProviderBenchSubject(AtlasModelProviderName.OLLAMA)
+    prose = AtlasProviderBenchSubject(AtlasModelProviderName.OLLAMA, prompt_envelope="prose")
+    assert baseline.answer("Which join?", ["inner", "left", "right", "full"]) == 1
+    assert prose.answer("Which join?", ["inner", "left", "right", "full"]) == 1
+    assert {key: value for key, value in requests[0].items() if key != "prompt"} == {
+        key: value for key, value in requests[1].items() if key != "prompt"
+    }
+    assert "Question: Which join?" in requests[1]["prompt"]
+    assert "A) inner\nB) left\nC) right\nD) full" in requests[1]["prompt"]
+    assert baseline.evaluation_policy_id(corpus_version="v1", corpus_hash_value="a" * 64) != prose.evaluation_policy_id(corpus_version="v1", corpus_hash_value="a" * 64)
+
+
 def test_decision_route_rejects_unknown_candidate_before_evaluation() -> None:
     client = TestClient(create_app())
     response = client.post(
