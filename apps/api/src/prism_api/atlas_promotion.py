@@ -25,7 +25,7 @@ import random
 import time
 import uuid
 from datetime import datetime, timezone
-from typing import Optional, Sequence
+from typing import Literal, Optional, Sequence
 
 from prism_api_contracts import (
     AtlasBenchCategory,
@@ -161,6 +161,14 @@ def shadow_compare(
 
 
 _metadata = MetaData()
+AtlasModelTier = Literal["fast", "deep"]
+
+
+def _check_tier(tier: str) -> None:
+    if tier not in {"fast", "deep"}:
+        raise ValueError(f"Unknown Atlas model tier: {tier!r}")
+
+
 _events = Table(
     "prism_atlas_production_pointer_events",
     _metadata,
@@ -174,6 +182,7 @@ _events = Table(
     # candidate. `sequence` is allocated under a row lock in _append() and
     # is what ordering now relies on; promoted_at is kept for display only.
     Column("sequence", Integer, nullable=False),
+    Column("tier", String(8), nullable=False, server_default="fast"),
     Column("candidate_id", String(120), nullable=False, index=True),
     Column("previous_candidate_id", String(120), nullable=True),
     Column("decision_id", String(120), nullable=True),
@@ -213,6 +222,8 @@ class DurableAtlasPromotionStore:
                     connection.execute(
                         update(_events).where(_events.c.event_id == row.event_id).values(sequence=backfilled_sequence)
                     )
+            if "tier" not in existing:
+                connection.execute(text("ALTER TABLE prism_atlas_production_pointer_events ADD COLUMN tier VARCHAR(8) NOT NULL DEFAULT 'fast'"))
             # `sequence` has no legitimate duplicate the way a dataset
             # revision number can (branching after an undo intentionally
             # keeps an abandoned row at the same revision) -- a UNIQUE index
@@ -235,6 +246,7 @@ class DurableAtlasPromotionStore:
         connection: Connection,
         *,
         candidate_id: str,
+        tier: AtlasModelTier = "fast",
         previous_candidate_id: Optional[str],
         decision_id: Optional[str],
         is_rollback: bool,
@@ -259,6 +271,7 @@ class DurableAtlasPromotionStore:
                 event_id=f"promo_{uuid.uuid4().hex}",
                 sequence=next_sequence,
                 candidate_id=candidate_id,
+                tier=tier,
                 previous_candidate_id=previous_candidate_id,
                 decision_id=decision_id,
                 is_rollback=is_rollback,
@@ -279,63 +292,69 @@ class DurableAtlasPromotionStore:
                     raise
                 time.sleep(0.01 * (attempt + 1) + random.uniform(0, 0.01))
 
-    def bootstrap(self, candidate_id: str, *, reason: str) -> AtlasProductionPointer:
+    def bootstrap(self, candidate_id: str, *, reason: str, tier: AtlasModelTier = "fast") -> AtlasProductionPointer:
         """Persist the already-configured production model once.
 
         This is not a promotion and has no evaluator decision. It creates the
         immutable rollback anchor that existed before Atlas's first trained
         candidate can ever become production. Repeated calls are idempotent.
         """
-        current = self.current_production()
+        _check_tier(tier)
+        current = self.current_production(tier)
         if current is not None:
             return current
         self._append_with_retry(
             candidate_id=candidate_id,
+            tier=tier,
             previous_candidate_id=None,
             decision_id=None,
             is_rollback=False,
             reason=reason,
             now=datetime.now(timezone.utc),
         )
-        record = self.current_production()
+        record = self.current_production(tier)
         assert record is not None
         return record
 
-    def promote(self, decision: AtlasPromotionDecision, *, reason: str) -> AtlasProductionPointer:
+    def promote(self, decision: AtlasPromotionDecision, *, reason: str, tier: AtlasModelTier = "fast") -> AtlasProductionPointer:
         """Append an eligible candidate as production."""
         if decision.verdict is not AtlasPromotionVerdict.PROMOTE_ELIGIBLE:
             raise ValueError(
                 f"Refusing to promote candidate {decision.candidate_id!r}: "
                 f"its decision verdict was {decision.verdict.value}, not promote_eligible."
             )
-        current = self.current_production()
+        _check_tier(tier)
+        current = self.current_production(tier)
         self._append_with_retry(
             candidate_id=decision.candidate_id,
+            tier=tier,
             previous_candidate_id=current.candidate_id if current else None,
             decision_id=decision.decision_id,
             is_rollback=False,
             reason=reason,
             now=datetime.now(timezone.utc),
         )
-        record = self.current_production()
+        record = self.current_production(tier)
         assert record is not None
         return record
 
-    def rollback(self, *, reason: str) -> AtlasProductionPointer:
+    def rollback(self, *, reason: str, tier: AtlasModelTier = "fast") -> AtlasProductionPointer:
         """Restore the previous production candidate as a new explicit event."""
-        history = self.history(limit=2)
+        _check_tier(tier)
+        history = self.history(limit=2, tier=tier)
         if len(history) < 2:
             raise ValueError("No prior production candidate to roll back to.")
         current, previous = history[0], history[1]
         self._append_with_retry(
             candidate_id=previous.candidate_id,
+            tier=tier,
             previous_candidate_id=current.candidate_id,
             decision_id=None,
             is_rollback=True,
             reason=reason,
             now=datetime.now(timezone.utc),
         )
-        record = self.current_production()
+        record = self.current_production(tier)
         assert record is not None
         return record
 
@@ -343,6 +362,7 @@ class DurableAtlasPromotionStore:
     def _record(row: object) -> AtlasProductionPointer:
         return AtlasProductionPointer(
             event_id=row["event_id"],  # type: ignore[index]
+            tier=row["tier"],  # type: ignore[index]
             candidate_id=row["candidate_id"],  # type: ignore[index]
             previous_candidate_id=row["previous_candidate_id"],  # type: ignore[index]
             decision_id=row["decision_id"],  # type: ignore[index]
@@ -351,13 +371,17 @@ class DurableAtlasPromotionStore:
             promoted_at=row["promoted_at"],  # type: ignore[index]
         )
 
-    def current_production(self) -> Optional[AtlasProductionPointer]:
+    def current_production(self, tier: AtlasModelTier = "fast") -> Optional[AtlasProductionPointer]:
+        _check_tier(tier)
         with self.engine.connect() as connection:
-            row = connection.execute(select(_events).order_by(desc(_events.c.sequence)).limit(1)).mappings().first()
+            row = connection.execute(
+                select(_events).where(_events.c.tier == tier).order_by(desc(_events.c.sequence)).limit(1)
+            ).mappings().first()
         return None if row is None else self._record(row)
 
-    def history(self, *, limit: int = 100) -> list[AtlasProductionPointer]:
-        statement = select(_events).order_by(desc(_events.c.sequence)).limit(limit)
+    def history(self, *, limit: int = 100, tier: AtlasModelTier = "fast") -> list[AtlasProductionPointer]:
+        _check_tier(tier)
+        statement = select(_events).where(_events.c.tier == tier).order_by(desc(_events.c.sequence)).limit(limit)
         with self.engine.connect() as connection:
             rows = connection.execute(statement).mappings().all()
         return [self._record(row) for row in rows]

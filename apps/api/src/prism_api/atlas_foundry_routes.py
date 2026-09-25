@@ -14,7 +14,7 @@ import os
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Literal, Optional
 
 from fastapi import APIRouter, HTTPException, Query, status
 from prism_api_contracts import (
@@ -53,6 +53,7 @@ from prism_api_contracts import (
 )
 
 from .atlas_adapter_foundation import report_adapter_capability, report_all_adapter_capabilities
+from .atlas_arena_gates import arena_gate_failure
 from .atlas_base_model_trust import (
     DurableAtlasBaseModelVerificationStore,
     DurableAtlasVerifiedBaseModelRegistry,
@@ -64,6 +65,7 @@ from .atlas_bench_corpus import CORPUS_VERSION, all_tasks, corpus_hash
 from .atlas_bench_store import DurableAtlasBenchStore
 from .atlas_candidate_runtime import (
     DurableAtlasCandidateRuntimeStore,
+    activate_current_deep_ollama_model,
     activate_current_ollama_model,
     ensure_configured_production_baseline,
 )
@@ -560,13 +562,13 @@ def _latest_verification_identity(
 
 
 @promotion_router.get("/current", response_model=Optional[AtlasProductionPointer])
-def current_production() -> Optional[AtlasProductionPointer]:
-    return _promotion_store.current_production()
+def current_production(tier: Literal["fast", "deep"] = "fast") -> Optional[AtlasProductionPointer]:
+    return _promotion_store.current_production(tier)
 
 
 @promotion_router.get("/history", response_model=list[AtlasProductionPointer])
-def promotion_history(limit: int = Query(default=100, ge=1, le=500)) -> list[AtlasProductionPointer]:
-    return _promotion_store.history(limit=limit)
+def promotion_history(limit: int = Query(default=100, ge=1, le=500), tier: Literal["fast", "deep"] = "fast") -> list[AtlasProductionPointer]:
+    return _promotion_store.history(limit=limit, tier=tier)
 
 
 @promotion_router.get("/current-status", response_model=AtlasProductionTrustStatus)
@@ -726,7 +728,7 @@ def list_promotion_decisions(candidate_id: str, limit: int = Query(default=50, g
 
 
 @promotion_router.post("/promote", response_model=AtlasProductionPointer)
-def promote_candidate(decision_id: str, reason: str) -> AtlasProductionPointer:
+def promote_candidate(decision_id: str, reason: str, tier: Literal["fast", "deep"] = "fast") -> AtlasProductionPointer:
     """Promote only a benchmark-eligible candidate with a real runtime binding."""
     decision = _promotion_decision_store.get(decision_id)
     if decision is None:
@@ -753,6 +755,8 @@ def promote_candidate(decision_id: str, reason: str) -> AtlasProductionPointer:
             status_code=status.HTTP_409_CONFLICT,
             detail="Candidate has no verified Ollama runtime binding; promotion cannot change Atlas safely.",
         )
+    if binding.runtime_model_digest is None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Candidate runtime binding has no verified model digest.")
     from .atlas_operational_cert import (
         latest_candidate_operational_run,
         operational_certification_failure_reason,
@@ -768,17 +772,35 @@ def promote_candidate(decision_id: str, reason: str) -> AtlasProductionPointer:
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Operational Certification prerequisite not met: {operational_failure}",
         )
+    report_dir = os.environ.get("PRISM_ATLAS_ARENA_REPORT_DIR")
+    performance_failure = arena_gate_failure(
+        runtime_model=binding.runtime_model,
+        runtime_digest=binding.runtime_model_digest,
+        bench_run_id=decision.candidate_run_id,
+        tier=tier,
+        report_dir=Path(report_dir) if report_dir else None,
+    )
+    if performance_failure is not None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Arena performance gate: {performance_failure}")
     try:
-        pointer = _promotion_store.promote(decision, reason=reason)
-        activate_current_ollama_model()
+        if tier == "deep" and _promotion_store.current_production("deep") is None:
+            fast_anchor = _promotion_store.current_production("fast")
+            if fast_anchor is None or _candidate_runtime_store.latest(fast_anchor.candidate_id) is None:
+                raise ValueError("Deep tier needs a bound fast production rollback anchor.")
+            _promotion_store.bootstrap(fast_anchor.candidate_id, reason="deep tier rollback anchor", tier="deep")
+        pointer = _promotion_store.promote(decision, reason=reason, tier=tier)
+        if tier == "deep":
+            activate_current_deep_ollama_model()
+        else:
+            activate_current_ollama_model()
         return pointer
     except ValueError as error:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
 
 
 @promotion_router.post("/rollback", response_model=AtlasProductionPointer)
-def rollback_production(reason: str) -> AtlasProductionPointer:
-    history = _promotion_store.history(limit=2)
+def rollback_production(reason: str, tier: Literal["fast", "deep"] = "fast") -> AtlasProductionPointer:
+    history = _promotion_store.history(limit=2, tier=tier)
     if len(history) < 2:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="No prior production candidate to roll back to.")
     rollback_target = history[1].candidate_id
@@ -788,8 +810,11 @@ def rollback_production(reason: str) -> AtlasProductionPointer:
             detail="Rollback target has no durable runtime binding; production pointer was not changed.",
         )
     try:
-        pointer = _promotion_store.rollback(reason=reason)
-        activate_current_ollama_model()
+        pointer = _promotion_store.rollback(reason=reason, tier=tier)
+        if tier == "deep":
+            activate_current_deep_ollama_model()
+        else:
+            activate_current_ollama_model()
         return pointer
     except ValueError as error:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error

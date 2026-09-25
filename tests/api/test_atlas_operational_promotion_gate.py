@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import uuid
 from datetime import datetime, timezone
 
@@ -229,6 +230,16 @@ def test_promote_route_succeeds_once_a_fresh_clean_operational_run_is_on_record(
     stores = _wire_shared_stores(monkeypatch, database_url)
     unique = uuid.uuid4().hex
     candidate, production_run, candidate_run = _set_up_production_and_candidate_bench_runs(stores, unique)
+    arena_dir = tmp_path / "arena"
+    arena_dir.mkdir()
+    (arena_dir / "round-test.json").write_text(json.dumps({"models": [{
+        "tag": candidate.runtime_model,
+        "digest": f"sha256:cand-{unique}",
+        "bench": {"run_id": candidate_run.run_id},
+        "gpu_percent_min_observed": 92,
+        "planner": {"p95_seconds": 9.8, "valid_json_rate": 1.0, "acceptance_rate": 1.0},
+    }]}), encoding="utf-8")
+    monkeypatch.setenv("PRISM_ATLAS_ARENA_REPORT_DIR", str(arena_dir))
 
     good_run = _good_operational_run(candidate=candidate, digest=f"sha256:cand-{unique}")
     assert good_run.critical_failure_count == 0

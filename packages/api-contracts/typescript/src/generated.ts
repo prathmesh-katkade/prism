@@ -655,6 +655,7 @@ export type AtlasPreferencePairSource = "memory_supersession";
 
 export interface AtlasProductionPointer {
   event_id: string;
+  tier?: "fast" | "deep";
   candidate_id: string;
   previous_candidate_id?: string;
   decision_id?: string;

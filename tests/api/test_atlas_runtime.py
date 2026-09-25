@@ -221,6 +221,54 @@ def test_ollama_plan_proposal_timeout_is_distinguished_and_recorded(monkeypatch)
     assert payload["model_proposal_steps_accepted"] == 0
 
 
+def test_planning_tier_rule_is_deterministic_and_defaults_fast() -> None:
+    from prism_api.atlas_runtime import choose_planning_tier
+
+    assert choose_planning_tier("Profile the dataset.", {}) == ("fast", "default")
+    assert choose_planning_tier("Investigate causal claims.", {}) == ("deep", "causal_or_significance")
+    assert choose_planning_tier("Decide whether to deploy despite financial risk.", {}) == ("deep", "decision_with_consequences")
+    assert choose_planning_tier("Profile the dataset.", {"health": 69}) == ("deep", "dataset_health_below_70")
+    assert choose_planning_tier("Profile the dataset.", {"health": None}) == ("fast", "default")
+    assert choose_planning_tier("Profile the dataset.", {"previous_deterministic_fallback": True}) == ("deep", "previous_deterministic_fallback")
+
+
+def test_high_stakes_route_uses_only_a_promoted_deep_binding(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    from prism_api import atlas_runtime
+
+    monkeypatch.setenv("PRISM_AI_PROVIDER", "ollama")
+    monkeypatch.setenv("PRISM_ATLAS_OLLAMA_MODEL", "fast-model")
+    monkeypatch.setenv("PRISM_ATLAS_DEEP_OLLAMA_MODEL", "untrusted-env-model")
+    requested_models: list[str] = []
+
+    class _FakeResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict[str, object]:
+            return {"response": '{"steps": []}'}
+
+    def _fake_post(_url, *, json, timeout):  # type: ignore[no-untyped-def]
+        requested_models.append(json["model"])
+        return _FakeResponse()
+
+    monkeypatch.setattr(atlas_runtime.httpx, "post", _fake_post)
+    monkeypatch.setattr(atlas_runtime, "resolve_deep_ollama_model", lambda: None)
+    client = TestClient(create_app())
+    dataset_id = _dataset(client)
+    run_id = client.post("/api/v1/atlas/runs", json={"dataset_id": dataset_id, "objective": "Investigate a causal claim."}).json()["run_id"]
+    payload = _plan_created_payload(client, run_id)
+    assert requested_models[-1] == "fast-model"
+    assert payload["model_tier"] == "fast"
+    assert payload["model_tier_reason"] == "deep_unavailable:causal_or_significance"
+
+    monkeypatch.setattr(atlas_runtime, "resolve_deep_ollama_model", lambda: "verified-deep-model")
+    run_id = client.post("/api/v1/atlas/runs", json={"dataset_id": dataset_id, "objective": "Investigate a causal claim."}).json()["run_id"]
+    payload = _plan_created_payload(client, run_id)
+    assert requested_models[-1] == "verified-deep-model"
+    assert payload["model_tier"] == "deep"
+    assert payload["model_tier_reason"] == "causal_or_significance"
+
+
 def test_ollama_plan_proposal_accepted_is_recorded_with_step_count(monkeypatch) -> None:  # type: ignore[no-untyped-def]
     from prism_api import atlas_runtime
 

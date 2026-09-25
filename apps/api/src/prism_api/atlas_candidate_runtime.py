@@ -158,6 +158,25 @@ def activate_current_ollama_model() -> str:
     return model
 
 
+def resolve_deep_ollama_model() -> Optional[str]:
+    """A deep model exists only through a durable pointer and runtime binding."""
+    from .atlas_promotion import DurableAtlasPromotionStore
+
+    production = DurableAtlasPromotionStore().current_production("deep")
+    if production is None:
+        return None
+    binding = DurableAtlasCandidateRuntimeStore().latest(production.candidate_id)
+    return None if binding is None else binding.runtime_model
+
+
+def activate_current_deep_ollama_model() -> str:
+    model = resolve_deep_ollama_model()
+    if model is None:
+        raise ValueError("Deep production pointer has no verified Ollama runtime binding")
+    os.environ["PRISM_ATLAS_DEEP_OLLAMA_MODEL"] = model
+    return model
+
+
 def ensure_configured_production_baseline(*, runtime_model_digest: Optional[str] = None) -> str:
     """Create the rollback anchor for a *verified* pre-Foundry Ollama model.
 

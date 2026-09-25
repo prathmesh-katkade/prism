@@ -182,6 +182,28 @@ def test_promotion_is_atomic_auditable_and_never_overwrites_history(tmp_path) ->
     assert len(store.history()) == 3
 
 
+def test_fast_and_deep_histories_and_rollback_are_independent(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    tasks, production_run = _runs()
+    store = DurableAtlasPromotionStore(f"sqlite:///{(tmp_path / 'tiers.sqlite').as_posix()}")
+    candidate_run, _ = run_suite(PerfectReferenceSubject(tasks, subject_id="candidate"), tasks, corpus_version=CORPUS_VERSION, corpus_hash_value=corpus_hash())
+    decision = decide_promotion("candidate", production_run, candidate_run)
+
+    fast = store.bootstrap("fast_anchor", reason="existing production")
+    first_deep = store.promote(decision, reason="deep candidate", tier="deep")
+    second_deep = store.promote(decision, reason="deep replacement", tier="deep")
+    assert fast.tier == "fast"
+    assert first_deep.tier == second_deep.tier == "deep"
+    assert second_deep.previous_candidate_id == "candidate"
+    assert store.current_production().candidate_id == "fast_anchor"  # type: ignore[union-attr]
+    assert len(store.history()) == 1
+    assert len(store.history(tier="deep")) == 2
+
+    rolled_back = store.rollback(reason="deep only", tier="deep")
+    assert rolled_back.tier == "deep"
+    assert store.current_production().candidate_id == "fast_anchor"  # type: ignore[union-attr]
+    assert len(store.history(tier="deep")) == 3
+
+
 def test_rollback_without_prior_production_raises(tmp_path) -> None:  # type: ignore[no-untyped-def]
     store = DurableAtlasPromotionStore(f"sqlite:///{(tmp_path / 'promotion.sqlite').as_posix()}")
     try:
@@ -401,6 +423,8 @@ def test_promotion_store_migrates_a_pre_sequence_database_in_original_order(tmp_
     # (ADD COLUMN + backfill), not raise, and must preserve real order.
     store = DurableAtlasPromotionStore(database_url)
     assert [item.candidate_id for item in store.history()] == ["legacy_b", "legacy_a"]
+    assert [item.tier for item in store.history()] == ["fast", "fast"]
+    assert store.current_production("deep") is None
     assert store.current_production().candidate_id == "legacy_b"  # type: ignore[union-attr]
 
     # New writes against the migrated database keep working and sort after

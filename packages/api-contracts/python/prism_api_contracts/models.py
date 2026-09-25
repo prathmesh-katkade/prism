@@ -1634,6 +1634,7 @@ class AtlasProductionPointer(ContractModel):
     """
 
     event_id: str = Field(min_length=1, max_length=120)
+    tier: Literal["fast", "deep"] = "fast"
     candidate_id: str = Field(min_length=1, max_length=120)
     previous_candidate_id: Optional[str] = Field(default=None, max_length=120)
     decision_id: Optional[str] = Field(default=None, max_length=120)

@@ -7,6 +7,7 @@ import json
 import logging
 import math
 import os
+import re
 import threading
 import uuid
 from dataclasses import dataclass
@@ -39,6 +40,7 @@ from prism_api_contracts import (
     CortexNodeKind,
 )
 
+from .atlas_candidate_runtime import resolve_deep_ollama_model
 from .atlas_guardrail_context import evaluate_request
 from .atlas_run_admission import AtlasRunAdmission
 from .atlas_safety_policy import OPERATIONAL_SAFETY_POLICY
@@ -47,6 +49,25 @@ from .overview import get_profile
 from .transport import ServerSentEvent
 
 logger = logging.getLogger("prism_api.atlas_runtime")
+
+DEEP_HEALTH_THRESHOLD = 70.0
+_CAUSAL_OR_SIGNIFICANCE = re.compile(r"\b(causal|causality|cause|causes|caused|significance|significant|p[ -]?value|hypothesis test)\b", re.I)
+_DECISION = re.compile(r"\b(decide|decision|choose|recommend|should we)\b", re.I)
+_CONSEQUENCE = re.compile(r"\b(risk|harm|cost|loss|consequence|impact|safety|patient|financial)\b", re.I)
+
+
+def choose_planning_tier(objective: str, metadata: dict[str, object]) -> tuple[str, str]:
+    """Deterministic routing; missing or ambiguous evidence defaults to fast."""
+    if metadata.get("previous_deterministic_fallback") is True:
+        return "deep", "previous_deterministic_fallback"
+    health = metadata.get("health")
+    if isinstance(health, (int, float)) and not isinstance(health, bool) and 0 <= health < DEEP_HEALTH_THRESHOLD:
+        return "deep", "dataset_health_below_70"
+    if _CAUSAL_OR_SIGNIFICANCE.search(objective):
+        return "deep", "causal_or_significance"
+    if _DECISION.search(objective) and _CONSEQUENCE.search(objective):
+        return "deep", "decision_with_consequences"
+    return "fast", "default"
 
 SPECIALISTS: tuple[AtlasSpecialistIdentity, ...] = (
     AtlasSpecialistIdentity(
@@ -158,7 +179,7 @@ class OllamaAtlasProvider:
         return self.propose_plan_detailed(objective, metadata).steps
 
     @staticmethod
-    def _plan_payload(objective: str, metadata: dict[str, object], *, schema: bool) -> dict[str, object]:
+    def _plan_payload(objective: str, metadata: dict[str, object], *, schema: bool, model_override: Optional[str] = None) -> dict[str, object]:
         if schema:
             instruction = _PLAN_INSTRUCTION_V2
             prompt_schema_version = PLAN_PROMPT_SCHEMA_VERSION_V2
@@ -174,7 +195,7 @@ class OllamaAtlasProvider:
             }
             format_value = "json"
         return {
-            "model": os.environ.get("PRISM_ATLAS_OLLAMA_MODEL", "qwen2.5:3b"),
+            "model": model_override or os.environ.get("PRISM_ATLAS_OLLAMA_MODEL", "qwen2.5:3b"),
             "stream": False,
             "format": format_value,
             "think": False,
@@ -189,14 +210,14 @@ class OllamaAtlasProvider:
             }, separators=(",", ":")),
         }
 
-    def propose_plan_detailed(self, objective: str, metadata: dict[str, object]) -> AtlasPlanProposal:
+    def propose_plan_detailed(self, objective: str, metadata: dict[str, object], *, model_override: Optional[str] = None) -> AtlasPlanProposal:
         """Same request as propose_plan, but also reports what happened to it."""
         if not self.capabilities().available:
             return AtlasPlanProposal(None, "not_requested")
         url = os.environ.get("PRISM_ATLAS_OLLAMA_URL", "http://127.0.0.1:11434/api/generate")
         timeout = planner_timeout_seconds()
         try:
-            response = httpx.post(url, json=self._plan_payload(objective, metadata, schema=True), timeout=timeout)
+            response = httpx.post(url, json=self._plan_payload(objective, metadata, schema=True, model_override=model_override), timeout=timeout)
             response.raise_for_status()
             value = json.loads(str(response.json().get("response", "")))
             steps = value.get("steps")
@@ -231,10 +252,10 @@ class AtlasProviderRegistry:
         provider = self._providers[1] if self.select() is AtlasModelProviderName.OLLAMA else self._providers[0]
         return provider.propose_plan(objective, metadata)
 
-    def propose_plan_detailed(self, objective: str, metadata: dict[str, object]) -> AtlasPlanProposal:
+    def propose_plan_detailed(self, objective: str, metadata: dict[str, object], *, model_override: Optional[str] = None) -> AtlasPlanProposal:
         if self.select() is not AtlasModelProviderName.OLLAMA:
             return AtlasPlanProposal(None, "not_requested")
-        return cast(OllamaAtlasProvider, self._providers[1]).propose_plan_detailed(objective, metadata)
+        return cast(OllamaAtlasProvider, self._providers[1]).propose_plan_detailed(objective, metadata, model_override=model_override)
 
 
 TOOL_REGISTRY: dict[str, set[AtlasStepKind]] = {
@@ -576,8 +597,22 @@ class AtlasRunStore:
             pass
         guardrail = evaluate_request(request)
         metadata["guardrail_decision"] = guardrail.metadata()
+        requested_tier, tier_reason = choose_planning_tier(request.objective, metadata)
+        tier = requested_tier
+        model_override: Optional[str] = None
+        if provider is AtlasModelProviderName.OLLAMA and tier == "deep":
+            try:
+                model_override = resolve_deep_ollama_model()
+            except (OSError, ValueError):
+                model_override = None
+            if model_override is None:
+                tier = "fast"
+                tier_reason = f"deep_unavailable:{tier_reason}"
+        elif provider is not AtlasModelProviderName.OLLAMA:
+            tier = "fast"
+            tier_reason = "deterministic_provider"
         proposal_result = (
-            providers.propose_plan_detailed(request.objective, metadata)
+            providers.propose_plan_detailed(request.objective, metadata, model_override=model_override)
             if guardrail.state == "checked"
             else AtlasPlanProposal(None, "not_requested")
         )
@@ -602,7 +637,9 @@ class AtlasRunStore:
                 payload={
                     "plan_id": plan.plan_id,
                     "provider": provider.value,
-                    "model": os.environ.get("PRISM_ATLAS_OLLAMA_MODEL") if provider is AtlasModelProviderName.OLLAMA else "deterministic-v1",
+                    "model": (model_override or os.environ.get("PRISM_ATLAS_OLLAMA_MODEL")) if provider is AtlasModelProviderName.OLLAMA else "deterministic-v1",
+                    "model_tier": tier,
+                    "model_tier_reason": tier_reason,
                     "prompt_schema_version": "atlas-plan-v1",
                     "raw_dataset_sent": False,
                     "guardrail_decision": guardrail.metadata(),
