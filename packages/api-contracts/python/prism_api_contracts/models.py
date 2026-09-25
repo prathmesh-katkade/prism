@@ -2494,3 +2494,5 @@ class AtlasProductionTrustStatus(ContractModel):
     latest_operational_cert_total_passed: Optional[int] = Field(default=None, ge=0)
     latest_operational_cert_total_scenarios: Optional[int] = Field(default=None, ge=0)
     latest_operational_cert_critical_failures: Optional[int] = Field(default=None, ge=0)
+    operational_cert_min_pass_rate: float = Field(ge=0.0, le=1.0)
+    latest_operational_cert_passed: Optional[bool] = None

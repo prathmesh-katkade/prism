@@ -1,10 +1,11 @@
 import React from "react";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { AtlasWorkspace } from "./atlas-workspace";
+import type { AtlasRunResponse, CortexNode } from "@prism/api-contracts";
+import { AtlasWorkspace, connectedStepIdForNode } from "./atlas-workspace";
 
 const run = { run_id: "atlas_1", plan: { plan_id: "plan_1", objective: "Check quality", dataset_id: "ds_1", provider: "deterministic", state: "completed", created_at: "2026-09-04T00:00:00Z", steps: [{ step_id: "profile", title: "Profile the active dataset", kind: "profile_dataset", specialist: "scout", tool_name: "overview.profile", rationale: "Establish evidence.", state: "completed", attempts: 1, max_attempts: 3, evidence: [] }] }, answer: "Grounded answer", uncertainty: "Not a causal conclusion.", council: [{ specialist: "scout", conclusion: "Measured profile.", confidence: "high", objections: [], evidence: [{ evidence_id: "dataset:ds_1:r0", kind: "dataset_revision", summary: "Dataset revision", dataset_id: "ds_1", dataset_revision: 0, source_fingerprint: "a".repeat(64) }] }], evidence: [], events: [{ event_id: "evt_1", run_id: "atlas_1", sequence: 1, type: "step_started", occurred_at: "2026-09-04T00:00:01Z", step_id: "profile", payload: { tool: "overview.profile" } }, { event_id: "evt_2", run_id: "atlas_1", sequence: 2, type: "step_completed", occurred_at: "2026-09-04T00:00:02Z", step_id: "profile", payload: { evidence_ids: ["dataset:ds_1:r0"] } }] };
-const graph = { run_id: "atlas_1", generated_at: "2026-09-04T00:00:00Z", nodes: [{ node_id: "run:atlas_1", kind: "run", label: "Atlas run", state: "completed", source_id: "atlas_1" }, { node_id: "dataset:ds_1", kind: "dataset", label: "Dataset", state: "recorded", source_id: "ds_1" }], edges: [{ edge_id: "uses", source_node_id: "run:atlas_1", target_node_id: "dataset:ds_1", relation: "uses" }] };
+const graph = { run_id: "atlas_1", generated_at: "2026-09-04T00:00:00Z", nodes: [{ node_id: "run:atlas_1", kind: "run", label: "Atlas run", state: "completed", source_id: "atlas_1" }, { node_id: "dataset:ds_1", kind: "dataset", label: "Dataset", state: "recorded", source_id: "ds_1" }, { node_id: "step:profile", kind: "plan_step", label: "Profile the active dataset", state: "completed", source_id: "profile" }, { node_id: "specialist:scout", kind: "specialist", label: "Scout", state: "visible", source_id: "scout" }, { node_id: "tool:overview.profile", kind: "tool", label: "overview.profile", state: "executed", source_id: "overview.profile" }], edges: [{ edge_id: "uses", source_node_id: "run:atlas_1", target_node_id: "dataset:ds_1", relation: "uses" }, { edge_id: "contains", source_node_id: "run:atlas_1", target_node_id: "step:profile", relation: "contains" }, { edge_id: "executor", source_node_id: "step:profile", target_node_id: "specialist:scout", relation: "executed_by" }, { edge_id: "tool", source_node_id: "step:profile", target_node_id: "tool:overview.profile", relation: "uses" }] };
 const roster = [
   { specialist: "scout", display_name: "Scout", role: "Dataset reconnaissance and profiling", visible: true },
   { specialist: "curator", display_name: "Curator", role: "Data quality and cleaning readiness", visible: true },
@@ -33,6 +34,13 @@ function mockAtlas(runBody: unknown, options: { memories?: unknown[]; feedback?:
 describe("Atlas workspace", () => {
   afterEach(() => vi.restoreAllMocks());
   it("requires a durable dataset context", () => { render(<AtlasWorkspace datasetId={undefined} />); expect(screen.getByText("Load a dataset before opening an investigation.")).toBeInTheDocument(); });
+  it("maps only real Cortex step, specialist, and tool records back to a declared plan step", () => {
+    const typedRun = run as AtlasRunResponse;
+    expect(connectedStepIdForNode(graph.nodes[2]! as CortexNode, typedRun)).toBe("profile");
+    expect(connectedStepIdForNode(graph.nodes[3]! as CortexNode, typedRun)).toBe("profile");
+    expect(connectedStepIdForNode(graph.nodes[4]! as CortexNode, typedRun)).toBe("profile");
+    expect(connectedStepIdForNode(graph.nodes[0]! as CortexNode, typedRun)).toBeNull();
+  });
   it("renders durable plan, council evidence, real Cortex graph, specialist activity, tool timeline, pipeline stage, and memory trace", async () => {
     const linkedMemory = { memory_id: "memory_1", scope: "session", knowledge_class: "user_memory", content: "The user asked to focus on North region revenue.", source: "operator note", source_ref: "atlas_1", confidence: "medium", timestamp: "2026-09-04T00:00:00Z", sensitivity: "internal", created_at: "2026-09-04T00:00:00Z" };
     const privateMemory = { memory_id: "memory_2", scope: "global", knowledge_class: "model_knowledge", content: "SECRET RAW CONTENT SHOULD NEVER RENDER", source: "internal", source_ref: "atlas_1", confidence: "low", timestamp: "2026-09-04T00:00:00Z", sensitivity: "private", created_at: "2026-09-04T00:00:00Z" };
@@ -41,10 +49,14 @@ describe("Atlas workspace", () => {
     vi.stubGlobal("fetch", mockAtlas(run, { memories: [linkedMemory, privateMemory, unrelatedMemory], feedback: [correction] }));
     render(<AtlasWorkspace datasetId="ds_1" />); fireEvent.click(screen.getByRole("button", { name: "Run investigation" }));
     await waitFor(() => expect(screen.getByText("Grounded answer")).toBeInTheDocument());
+    const journey = screen.getByLabelText("Atlas active investigation journey");
+    await waitFor(() => expect(within(journey).getByRole("button", { name: /Profile the active dataset/ })).toHaveAttribute("aria-pressed", "true"));
     expect(screen.getByText("Measured profile.")).toBeInTheDocument(); expect(screen.getByLabelText("Cortex real-state graph")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Focus Atlas run" })); expect(screen.getByRole("button", { name: "Reset focus" })).not.toBeDisabled();
     expect(screen.getByLabelText("Selected Cortex node")).toBeInTheDocument();
     expect(within(screen.getByLabelText("Selected Cortex node")).getByText("run")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Focus Scout" }));
+    expect(within(journey).getByRole("button", { name: /Profile the active dataset/ })).toHaveAttribute("aria-pressed", "true");
     fireEvent.click(screen.getByRole("button", { name: "dataset" })); // node-kind filter chip
     expect(screen.queryByLabelText("Atlas server guardrails")).not.toBeInTheDocument();
 

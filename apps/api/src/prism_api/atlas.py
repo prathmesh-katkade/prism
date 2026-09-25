@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import threading
-
 from fastapi import APIRouter, HTTPException, Query, status
 from prism_api_contracts import (
     AtlasEmbeddingCapability,
@@ -39,7 +37,7 @@ from .atlas_memory import DurableAtlasMemoryStore
 from .atlas_research import researcher
 from .atlas_resources import governor
 from .atlas_retrieval import DurableAtlasRetrievalStore
-from .atlas_runtime import SPECIALISTS, cortex_graph, execute, providers, runs
+from .atlas_runtime import SPECIALISTS, cortex_graph, execute, providers, run_admission, runs
 from .atlas_sandbox import AtlasPythonSandbox
 from .transport import sse_response
 
@@ -72,11 +70,32 @@ def list_recent_runs(limit: int = Query(default=20, ge=1, le=100)) -> list[str]:
 
 @router.post("/runs", response_model=AtlasRunResponse, status_code=status.HTTP_202_ACCEPTED)
 def start_run(request: AtlasRunRequest) -> AtlasRunResponse:
-    run = runs.create(request, providers.select())
-    thread = threading.Thread(
-        target=execute, args=(run.run_id,), name=f"atlas-{run.run_id[-8:]}", daemon=True
-    )
-    thread.start()
+    """Reserve a bounded execution slot before doing anything durable: a
+    saturated boundary is rejected immediately (503), rather than accepting
+    unlimited runs onto an unbounded pile of daemon threads. See
+    atlas_run_admission.py."""
+    if not run_admission.try_reserve():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Atlas run capacity is saturated; retry shortly.",
+        )
+    try:
+        run = runs.create(request, providers.select())
+    except Exception:
+        run_admission.release_without_dispatch()
+        raise
+    try:
+        run_admission.dispatch(run.run_id, execute)
+    except Exception as error:
+        runs.fail_if_in_flight(
+            run.run_id,
+            reason="dispatch_failed",
+            detail="Atlas accepted this run but could not dispatch it to a worker.",
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Atlas could not dispatch the accepted run; retry shortly.",
+        ) from error
     return run
 
 

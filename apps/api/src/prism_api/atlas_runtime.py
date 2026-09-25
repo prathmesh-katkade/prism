@@ -7,6 +7,7 @@ import json
 import logging
 import math
 import os
+import threading
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -38,12 +39,13 @@ from prism_api_contracts import (
 )
 
 from .atlas_guardrail_context import evaluate_request
+from .atlas_run_admission import AtlasRunAdmission
 from .atlas_safety_policy import OPERATIONAL_SAFETY_POLICY
 from .durable_atlas_store import DurableAtlasRunStore
 from .overview import get_profile
 from .transport import ServerSentEvent
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("prism_api.atlas_runtime")
 
 SPECIALISTS: tuple[AtlasSpecialistIdentity, ...] = (
     AtlasSpecialistIdentity(
@@ -640,9 +642,103 @@ class AtlasRunStore:
             run_id, event_type, specialist=specialist, step_id=step_id, payload=payload
         )
 
+    def fail_if_in_flight(self, run_id: str, *, reason: str, detail: str) -> bool:
+        return self._store.fail_if_in_flight(run_id, reason=reason, detail=detail)
+
+    _STALE_IN_FLIGHT_STATES = ("draft", "running")
+
+    def reconcile_stale_in_flight_runs(self) -> int:
+        """Idempotent restart reconciliation.
+
+        Any run still DRAFT (accepted but never dispatched) or RUNNING
+        (dispatched but not yet terminal) cannot have a live worker if this
+        is being called because the process just (re)started: that worker's
+        thread no longer exists, and its outcome was never durably recorded.
+        Mark each one durably FAILED with an explicit reason rather than ever
+        leaving it silently stuck or fabricating a completion.
+
+        Safe to call repeatedly and concurrently: a run already reconciled --
+        or one that legitimately reached a terminal state some other way --
+        is no longer DRAFT/RUNNING and is never revisited or clobbered.
+        """
+        reconciled = 0
+        for state in self._STALE_IN_FLIGHT_STATES:
+            for run_id in self._store.list_run_ids(state=state, limit=10_000):
+                if self._reconcile_one_stale_run(run_id):
+                    reconciled += 1
+        return reconciled
+
+    def _reconcile_one_stale_run(self, run_id: str) -> bool:
+        try:
+            run = self.get(run_id)
+        except HTTPException:
+            return False
+        if run.plan.state not in {AtlasPlanState.DRAFT, AtlasPlanState.RUNNING}:
+            return False  # already reconciled, or finished through a real path
+        reason = (
+            "This run was in flight (draft/running) when the Atlas server "
+            "process (re)started and reconciled its durable run store; a "
+            "restarted process has no memory of the worker that was "
+            "executing it, so it cannot be honestly resumed or reported as "
+            "complete."
+        )
+        return self.fail_if_in_flight(
+            run_id,
+            reason="stale_in_flight_after_restart",
+            detail=reason,
+        )
+
+
+def handle_atlas_run_worker_crash(run_id: str, error: BaseException) -> None:
+    """Durable, idempotent, fail-closed terminal state for a run whose worker
+    raised something ``execute()`` did not already handle itself (i.e.
+    anything other than ``HTTPException``). An accepted run must never remain
+    silently RUNNING after its worker crashes.
+    """
+    try:
+        run = runs.get(run_id)
+    except HTTPException:
+        return  # the run vanished from durable storage; nothing to reconcile
+    if run.plan.state in {AtlasPlanState.COMPLETED, AtlasPlanState.FAILED, AtlasPlanState.CANCELLED}:
+        return  # already terminal through a real path -- never clobber it
+    logger.error(
+        "atlas_run_worker_terminal_failure run_id=%s error_type=%s",
+        run_id,
+        type(error).__name__,
+    )
+    runs.fail_if_in_flight(
+        run_id,
+        reason="worker_crashed",
+        detail="Atlas run worker exited unexpectedly. Inspect server logs using this run ID.",
+    )
+
 
 providers = AtlasProviderRegistry()
 runs = AtlasRunStore()
+run_admission = AtlasRunAdmission(on_worker_crash=handle_atlas_run_worker_crash)
+
+_startup_reconciliation_lock = threading.Lock()
+_startup_reconciliation_done = False
+
+
+def reconcile_stale_in_flight_runs_once() -> int:
+    """Run :meth:`AtlasRunStore.reconcile_stale_in_flight_runs` at most once per
+    process, no matter how many times this is called -- ``create_app()`` calls
+    it on every boot, including once per test process that constructs the
+    FastAPI app repeatedly against the same module-level ``runs`` store. The
+    reconciliation itself is idempotent; this guard exists so it runs exactly
+    at genuine process-startup time and never races a run this same live
+    process legitimately dispatched afterwards.
+    """
+    global _startup_reconciliation_done
+    with _startup_reconciliation_lock:
+        if _startup_reconciliation_done:
+            return 0
+        _startup_reconciliation_done = True
+    reconciled = runs.reconcile_stale_in_flight_runs()
+    if reconciled:
+        logger.warning("atlas_startup_reconciliation reconciled_runs=%s", reconciled)
+    return reconciled
 
 
 def _evidence(

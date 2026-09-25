@@ -88,6 +88,8 @@ describe("Atlas command center", () => {
             latest_operational_cert_total_passed: 19,
             latest_operational_cert_total_scenarios: 23,
             latest_operational_cert_critical_failures: 0,
+            operational_cert_min_pass_rate: 0.9,
+            latest_operational_cert_passed: false,
           });
         }
         if (path.endsWith(`/base-model-candidates/${candidateId}`)) {
@@ -272,5 +274,211 @@ describe("Atlas command center", () => {
     expect(within(memoryPanel).getByText("Recent corrections & feedback")).toBeInTheDocument();
     expect(within(memoryPanel).getByText("not configured")).toBeInTheDocument();
     expect(within(memoryPanel).getByText(/no real project context to supply/)).toBeInTheDocument();
+  });
+
+  describe("Historical run Cortex", () => {
+    const historicalRun = {
+      run_id: "atlas_hist_1",
+      plan: { plan_id: "plan_hist_1", objective: "Investigate churn drivers", dataset_id: "ds_hist", provider: "deterministic", state: "completed", created_at: "2026-01-03T00:00:00Z", steps: [] },
+      answer: "Churn correlates with support-ticket volume.",
+      council: [],
+      evidence: [],
+      events: [],
+      created_at: "2026-01-03T00:00:00Z",
+    };
+    const historicalCortex = {
+      run_id: "atlas_hist_1",
+      generated_at: "2026-01-03T00:00:00Z",
+      nodes: [
+        { node_id: "run:atlas_hist_1", kind: "run", label: "Atlas run", state: "completed", source_id: "atlas_hist_1" },
+        { node_id: "dataset:ds_hist", kind: "dataset", label: "Dataset", state: "recorded", source_id: "ds_hist" },
+        { node_id: "specialist:scout", kind: "specialist", label: "Scout", state: "visible", source_id: "scout" },
+      ],
+      edges: [{ edge_id: "uses", source_node_id: "run:atlas_hist_1", target_node_id: "dataset:ds_hist", relation: "uses" }],
+    };
+
+    function mockRunListing(cortexResponse: () => Response | Promise<Response>) {
+      return vi.fn(async (input: string | URL) => {
+        const path = String(input);
+        if (path.includes("/promotion/current-status")) return json({ production: null, candidate_kind: null, runtime_model: null });
+        if (path.includes("/specialists")) return json([]);
+        if (path.includes("/atlas/runs?limit=8")) return json(["atlas_hist_1"]);
+        if (path.endsWith("/atlas/runs/atlas_hist_1/cortex")) return cortexResponse();
+        if (path.endsWith("/atlas/runs/atlas_hist_1")) return json(historicalRun);
+        if (path.includes("/feedback/runs/atlas_hist_1") || path.includes("/promotion/history")) return json([]);
+        return notFound();
+      });
+    }
+
+    async function expandHistoricalRun(): Promise<HTMLElement> {
+      render(<AtlasCommandCenter />);
+      const activityPanel = screen.getByText("Run activity").closest("article") as HTMLElement;
+      await waitFor(() => expect(within(activityPanel).getByText("Investigate churn drivers")).toBeInTheDocument());
+      fireEvent.click(within(activityPanel).getByText("Investigate churn drivers"));
+      return activityPanel;
+    }
+
+    it("fetches and renders the real persisted Cortex graph on expand, with truthful counts and keyboard-reachable node selection", async () => {
+      vi.stubGlobal("fetch", mockRunListing(() => json(historicalCortex)));
+      const activityPanel = await expandHistoricalRun();
+
+      const cortex = await within(activityPanel).findByLabelText("Cortex real-state graph");
+      // Counts read straight off the fetched graph -- 3 real nodes, 1 real
+      // relation -- never a fabricated topology or a hardcoded number.
+      expect(within(cortex).getByText(/3 real nodes/)).toBeInTheDocument();
+      expect(within(cortex).getByText(/1 real relation/)).toBeInTheDocument();
+
+      // Every satellite is a real, focusable <button> in the accessible
+      // mirror list -- keyboard-reachable by construction, never dependent
+      // on canvas hit-testing.
+      const datasetButton = within(cortex).getByRole("button", { name: "Focus Dataset" });
+      datasetButton.focus();
+      expect(datasetButton).toHaveFocus();
+      fireEvent.click(datasetButton);
+
+      // Selecting it surfaces real selected-node detail, not placeholder text.
+      const detail = await within(cortex).findByLabelText("Selected Cortex node");
+      expect(within(detail).getByText("dataset")).toBeInTheDocument();
+      expect(within(detail).getByText("Dataset")).toBeInTheDocument();
+    });
+
+    it("shows a loading state before the historical run's Cortex graph arrives", async () => {
+      let resolveCortex!: (response: Response) => void;
+      const pending = new Promise<Response>((resolve) => { resolveCortex = resolve; });
+      vi.stubGlobal("fetch", mockRunListing(() => pending));
+      const activityPanel = await expandHistoricalRun();
+
+      expect(await within(activityPanel).findByText(/Loading this run.s persisted Cortex graph/)).toBeInTheDocument();
+      resolveCortex(json(historicalCortex));
+      await waitFor(() => expect(within(activityPanel).getByLabelText("Cortex real-state graph")).toBeInTheDocument());
+    });
+
+    it("shows an honest unavailable message, without breaking the rest of the run's detail, when the Cortex fetch fails", async () => {
+      vi.stubGlobal("fetch", mockRunListing(() => notFound()));
+      const activityPanel = await expandHistoricalRun();
+
+      await waitFor(() => expect(within(activityPanel).getByRole("alert")).toHaveTextContent("Could not reach this run's persisted Cortex graph."));
+      // The rest of the expanded run's detail still renders -- one failed
+      // fetch never takes down the panels that don't depend on it.
+      expect(within(activityPanel).getByLabelText("Atlas request pipeline")).toBeInTheDocument();
+    });
+
+    describe("history deep link (Phase 11C)", () => {
+      it("auto-expands the linked run already present in the recent list, fetches its real Cortex graph, and focuses a real requested node", async () => {
+        vi.stubGlobal("fetch", mockRunListing(() => json(historicalCortex)));
+        render(<AtlasCommandCenter deepLinkRunId="atlas_hist_1" deepLinkFocusId="specialist:scout" />);
+
+        // No manual click on the run row: the deep link alone expands it.
+        const cortex = await screen.findByLabelText("Cortex real-state graph");
+        // The requested id is a real node in this run's fetched graph, so it
+        // is selected exactly as a real click on it would select it --
+        // never a fabricated/invented selection.
+        const detail = await within(cortex).findByLabelText("Selected Cortex node");
+        expect(within(detail).getByText("specialist")).toBeInTheDocument();
+        expect(within(detail).getByText("Scout")).toBeInTheDocument();
+      });
+
+      it("never fabricates a selection when the requested focus id does not exist in the real fetched graph", async () => {
+        vi.stubGlobal("fetch", mockRunListing(() => json(historicalCortex)));
+        render(<AtlasCommandCenter deepLinkRunId="atlas_hist_1" deepLinkFocusId="specialist:does_not_exist" />);
+
+        const cortex = await screen.findByLabelText("Cortex real-state graph");
+        // Give the (absent) focus effect a tick to have run, then assert
+        // honestly that nothing got selected -- not even a fallback guess.
+        await waitFor(() => expect(within(cortex).getByText(/3 real nodes/)).toBeInTheDocument());
+        expect(within(cortex).queryByLabelText("Selected Cortex node")).not.toBeInTheDocument();
+      });
+
+      it("resolves a linked run that falls outside the recent-8 list by fetching it directly and merging it into the real list", async () => {
+        const olderRun = { ...historicalRun, run_id: "atlas_hist_older", plan: { ...historicalRun.plan, objective: "Investigate an older churn spike" } };
+        vi.stubGlobal("fetch", vi.fn(async (input: string | URL) => {
+          const path = String(input);
+          if (path.includes("/promotion/current-status")) return json({ production: null, candidate_kind: null, runtime_model: null });
+          if (path.includes("/specialists")) return json([]);
+          if (path.includes("/atlas/runs?limit=8")) return json(["atlas_hist_1"]);
+          if (path.endsWith("/atlas/runs/atlas_hist_1/cortex")) return json(historicalCortex);
+          if (path.endsWith("/atlas/runs/atlas_hist_1")) return json(historicalRun);
+          if (path.endsWith("/atlas/runs/atlas_hist_older/cortex")) return json({ ...historicalCortex, run_id: "atlas_hist_older" });
+          if (path.endsWith("/atlas/runs/atlas_hist_older")) return json(olderRun);
+          if (path.includes("/feedback/runs/") || path.includes("/promotion/history")) return json([]);
+          return notFound();
+        }));
+
+        render(<AtlasCommandCenter deepLinkRunId="atlas_hist_older" />);
+        const activityPanel = screen.getByText("Run activity").closest("article") as HTMLElement;
+        // Resolved by its own real GET /runs/{id} fetch, then merged into
+        // the same real list -- and auto-expanded, exactly like a run
+        // already in the recent-8 window would be.
+        await within(activityPanel).findByText("Investigate an older churn spike");
+        await within(activityPanel).findByLabelText("Cortex real-state graph");
+        // The recent-8 run is still shown too -- merging never replaces it.
+        expect(within(activityPanel).getByText("Investigate churn drivers")).toBeInTheDocument();
+      });
+
+      it("shows an honest failure, not a fabricated run, when the linked run truly does not exist", async () => {
+        vi.stubGlobal("fetch", vi.fn(async (input: string | URL) => {
+          const path = String(input);
+          if (path.includes("/promotion/current-status")) return json({ production: null, candidate_kind: null, runtime_model: null });
+          if (path.includes("/specialists") || path.includes("/atlas/runs?limit=8")) return json([]);
+          return notFound();
+        }));
+        render(<AtlasCommandCenter deepLinkRunId="atlas_hist_missing" />);
+        const activityPanel = screen.getByText("Run activity").closest("article") as HTMLElement;
+        await waitFor(() => expect(within(activityPanel).getByRole("alert")).toHaveTextContent("atlas_hist_missing"));
+        expect(within(activityPanel).getByRole("alert")).toHaveTextContent("could not be found");
+      });
+    });
+
+    describe("copy investigation link (Phase 11C)", () => {
+      async function expandAndFindCopyButton() {
+        vi.stubGlobal("fetch", mockRunListing(() => json(historicalCortex)));
+        const activityPanel = await expandHistoricalRun();
+        await within(activityPanel).findByLabelText("Cortex real-state graph");
+        return within(activityPanel).getByRole("button", { name: "Copy investigation link" });
+      }
+
+      it("copies a real shareable link via the browser clipboard when it is available, and truthfully reports success", async () => {
+        const writeText = vi.fn(async (_text: string) => undefined);
+        Object.defineProperty(window.navigator, "clipboard", { value: { writeText }, configurable: true });
+        try {
+          const copyButton = await expandAndFindCopyButton();
+          fireEvent.click(copyButton);
+          await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
+          const [copiedLink] = writeText.mock.calls[0]!;
+          const url = new URL(copiedLink);
+          expect(url.searchParams.get("run_id")).toBe("atlas_hist_1");
+          expect(url.searchParams.get("atlas_panel")).toBe("history");
+          await waitFor(() => expect(screen.getByText("Link copied to your clipboard.")).toBeInTheDocument());
+        } finally {
+          Reflect.deleteProperty(window.navigator, "clipboard");
+        }
+      });
+
+      it("never claims success when the clipboard write actually fails, and offers a real manual-copy fallback instead", async () => {
+        const writeText = vi.fn(async () => { throw new Error("denied"); });
+        Object.defineProperty(window.navigator, "clipboard", { value: { writeText }, configurable: true });
+        try {
+          const copyButton = await expandAndFindCopyButton();
+          fireEvent.click(copyButton);
+          await waitFor(() => expect(screen.getByText(/Couldn.t copy automatically/)).toBeInTheDocument());
+          const fallback = screen.getByLabelText("Investigation link") as HTMLInputElement;
+          expect(fallback.value).toContain("run_id=atlas_hist_1");
+          expect(fallback.value).toContain("atlas_panel=history");
+        } finally {
+          Reflect.deleteProperty(window.navigator, "clipboard");
+        }
+      });
+
+      it("never claims a clipboard attempt was made when no clipboard API exists, and still offers the real link to copy manually", async () => {
+        // jsdom provides no navigator.clipboard by default -- an honest
+        // stand-in for a non-secure-context or unsupported browser.
+        expect((window.navigator as { clipboard?: unknown }).clipboard).toBeUndefined();
+        const copyButton = await expandAndFindCopyButton();
+        fireEvent.click(copyButton);
+        await waitFor(() => expect(screen.getByText(/Clipboard access isn.t available here/)).toBeInTheDocument());
+        const fallback = screen.getByLabelText("Investigation link") as HTMLInputElement;
+        expect(fallback.value).toContain("run_id=atlas_hist_1");
+      });
+    });
   });
 });

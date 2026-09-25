@@ -18,6 +18,7 @@ from typing import Optional, cast
 from fastapi import HTTPException, status
 from prism_api_contracts import (
     AtlasModelProviderName,
+    AtlasPlanState,
     AtlasRunEvent,
     AtlasRunEventType,
     AtlasRunRequest,
@@ -304,6 +305,93 @@ class DurableAtlasRunStore:
                 status_code=status.HTTP_404_NOT_FOUND, detail="Atlas run was not found."
             )
         return self.get(response.run_id)
+
+    def fail_if_in_flight(
+        self,
+        run_id: str,
+        *,
+        reason: str,
+        detail: str,
+    ) -> bool:
+        """Atomically fail a DRAFT/RUNNING run and append its terminal event.
+
+        The state compare, event-sequence advance, snapshot update, and event
+        insert share one transaction. A completion/cancellation racing this
+        recovery path therefore wins cleanly instead of receiving a late
+        ``RUN_FAILED`` event or being overwritten by a stale snapshot.
+        """
+
+        max_attempts = 20
+        terminal_states = (AtlasPlanState.DRAFT.value, AtlasPlanState.RUNNING.value)
+        safe_detail = str(redact_atlas_payload(detail))[:2_000]
+        for attempt in range(max_attempts):
+            occurred_at = datetime.now(timezone.utc)
+            try:
+                with self.engine.begin() as connection:
+                    row = (
+                        connection.execute(
+                            select(
+                                _runs.c.state,
+                                _runs.c.event_sequence,
+                                _runs.c.snapshot,
+                            )
+                            .where(_runs.c.run_id == run_id)
+                            .with_for_update()
+                        )
+                        .mappings()
+                        .first()
+                    )
+                    if row is None:
+                        return False
+                    if str(row["state"]) not in terminal_states:
+                        return False
+
+                    current_sequence = int(row["event_sequence"])
+                    next_sequence = current_sequence + 1
+                    snapshot = json.loads(str(row["snapshot"]))
+                    snapshot["plan"]["state"] = AtlasPlanState.FAILED.value
+                    snapshot["uncertainty"] = safe_detail
+                    snapshot["updated_at"] = occurred_at.isoformat()
+                    advanced = connection.execute(
+                        update(_runs)
+                        .where(
+                            (_runs.c.run_id == run_id)
+                            & (_runs.c.state.in_(terminal_states))
+                            & (_runs.c.event_sequence == current_sequence)
+                        )
+                        .values(
+                            state=AtlasPlanState.FAILED.value,
+                            event_sequence=next_sequence,
+                            updated_at=occurred_at,
+                            snapshot=json.dumps(snapshot, separators=(",", ":"), sort_keys=True),
+                        )
+                    )
+                    if advanced.rowcount != 1:
+                        raise OperationalError(
+                            "terminal transition race", {}, RuntimeError("terminal transition race")
+                        )
+                    connection.execute(
+                        insert(_events).values(
+                            event_id=f"evt_{uuid.uuid4().hex}",
+                            run_id=run_id,
+                            sequence=next_sequence,
+                            event_type=AtlasRunEventType.RUN_FAILED.value,
+                            step_id=None,
+                            specialist=None,
+                            occurred_at=occurred_at,
+                            payload=json.dumps(
+                                redact_atlas_payload({"reason": reason, "detail": safe_detail}),
+                                separators=(",", ":"),
+                                sort_keys=True,
+                            ),
+                        )
+                    )
+                return True
+            except (IntegrityError, OperationalError):
+                if attempt == max_attempts - 1:
+                    raise
+                time.sleep(0.01 * (attempt + 1) + random.uniform(0, 0.01))
+        raise AssertionError("unreachable")
 
     def cancellation_requested(self, run_id: str) -> bool:
         with self.engine.connect() as connection:
