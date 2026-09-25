@@ -1,0 +1,104 @@
+{
+  "candidates": [
+    {
+      "atlasbench_run_id": "benchrun_4c10704b0d5c46cc83975862565bbeb5",
+      "atlasbench_total_passed": 39,
+      "atlasbench_total_tasks": 90,
+      "candidate_id": "basemodel_5afebf1902be086cd6c0ab53",
+      "critical_regressions": [
+        "agentic",
+        "causal_safety",
+        "evidence",
+        "machine_learning",
+        "python_sandbox",
+        "sql",
+        "statistics"
+      ],
+      "decision_id": "promodecision_7364c89bd51f481987bb4f74eff0e825",
+      "failing_gates": [
+        "atlasbench_promote_eligible",
+        "gpu_100_percent",
+        "acceptance_rate_ge_90pct"
+      ],
+      "gates": {
+        "acceptance_rate_ge_90pct": false,
+        "atlasbench_promote_eligible": false,
+        "gpu_100_percent": false,
+        "valid_json_rate_ge_95pct": true,
+        "warm_p95_under_12s": true
+      },
+      "gpu_percent": 89.0,
+      "license": "Apache-2.0",
+      "license_check": "confirmed Apache-2.0 via ollama show --license and Hugging Face license tag",
+      "outcome": "evaluated_not_qualified",
+      "overall_candidate_pass_rate": 0.43333333333333335,
+      "overall_production_pass_rate": 0.9333333333333333,
+      "planner": {
+        "cold_start_seconds": 15.117393400003493,
+        "warm_acceptance_rate": 0.47368421052631576,
+        "warm_max_seconds": 12.930703800004267,
+        "warm_p50_seconds": 8.024509399998351,
+        "warm_p95_seconds": 11.566531600001326,
+        "warm_sample_size": 19,
+        "warm_valid_json_rate": 1.0
+      },
+      "pull_detail": "l\u001b[?2026h\u001b[?25l\u001b[1Gpulling manifest \u280b \u001b[K\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[?25l\u001b[1Gpulling manifest \u001b[K\npulling c50c55bd9d0d: 100% \u2595\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258f 4.5 GB                         \u001b[K\npulling cfc7749b96f6: 100% \u2595\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258f  11 KB                         \u001b[K\npulling ceaa5f78afb8: 100% \u2595\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258f   33 B                         \u001b[K\npulling f635759f3b4e: 100% \u2595\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258f  449 B                         \u001b[K\nverifying sha256 digest \u001b[K\nwriting manifest \u001b[K\nsuccess \u001b[K\u001b[?25h\u001b[?2026l",
+      "qualifies": false,
+      "started_at": "2026-09-24T03:42:00.229512+00:00",
+      "tag": "olmo-3:7b-instruct",
+      "verdict": "reject",
+      "verification_state": "verified"
+    },
+    {
+      "atlasbench_run_id": "benchrun_a1c3a1ab32d844c0a5871cbf1d9a3a1f",
+      "atlasbench_total_passed": 79,
+      "atlasbench_total_tasks": 90,
+      "candidate_id": "basemodel_7f954ac6cd03e892f225508c",
+      "critical_regressions": [
+        "agentic",
+        "machine_learning"
+      ],
+      "decision_id": "promodecision_d18980b03513449699f31d73b1dc1085",
+      "failing_gates": [
+        "atlasbench_promote_eligible",
+        "valid_json_rate_ge_95pct",
+        "acceptance_rate_ge_90pct"
+      ],
+      "gates": {
+        "acceptance_rate_ge_90pct": false,
+        "atlasbench_promote_eligible": false,
+        "gpu_100_percent": true,
+        "valid_json_rate_ge_95pct": false,
+        "warm_p95_under_12s": true
+      },
+      "gpu_percent": 100.0,
+      "license": "Apache-2.0",
+      "license_check": "confirmed Apache-2.0 via ollama show --license and Hugging Face license tag",
+      "outcome": "evaluated_not_qualified",
+      "overall_candidate_pass_rate": 0.8777777777777778,
+      "overall_production_pass_rate": 0.9333333333333333,
+      "planner": {
+        "cold_start_seconds": 3.4986360000038985,
+        "warm_acceptance_rate": 0.15789473684210525,
+        "warm_max_seconds": 5.302104299997154,
+        "warm_p50_seconds": 3.3501402999972925,
+        "warm_p95_seconds": 5.273601599998074,
+        "warm_sample_size": 19,
+        "warm_valid_json_rate": 0.8947368421052632
+      },
+      "pull_detail": "l\u001b[?2026h\u001b[?25l\u001b[1Gpulling manifest \u2807 \u001b[K\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[?25l\u001b[1Gpulling manifest \u001b[K\npulling 6c02683809a8: 100% \u2595\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258f 2.1 GB                         \u001b[K\npulling 0f6ec9740c76: 100% \u2595\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258f 7.1 KB                         \u001b[K\npulling cfc7749b96f6: 100% \u2595\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258f  11 KB                         \u001b[K\npulling ba32b08db168: 100% \u2595\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258f  417 B                         \u001b[K\nverifying sha256 digest \u001b[K\nwriting manifest \u001b[K\nsuccess \u001b[K\u001b[?25h\u001b[?2026l",
+      "qualifies": false,
+      "started_at": "2026-09-24T03:45:04.958739+00:00",
+      "tag": "granite4:micro",
+      "verdict": "reject",
+      "verification_state": "verified"
+    }
+  ],
+  "completed_at": "2026-09-24T03:46:29.997404+00:00",
+  "context_tokens": 4096,
+  "git_commit": "d4225b4",
+  "hardware_line": "NVIDIA GeForce RTX 5060, 8151 MB VRAM",
+  "production_run_id": "benchrun_74f6d9fdea52478b918c5be3fdb6dd5b",
+  "qualifying_tags": [],
+  "round": 2
+}

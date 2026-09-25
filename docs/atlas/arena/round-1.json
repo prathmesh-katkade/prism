@@ -1,0 +1,182 @@
+{
+  "candidates": [
+    {
+      "atlasbench_run_id": "benchrun_35cb51d6c89e482fb2d139d2641c65f1",
+      "atlasbench_total_passed": 90,
+      "atlasbench_total_tasks": 90,
+      "candidate_id": "basemodel_8e8cdb04478756156aa517b4",
+      "critical_regressions": [],
+      "decision_id": "promodecision_6fe53d8861664d75bf347693c20c9a83",
+      "failing_gates": [
+        "gpu_100_percent",
+        "valid_json_rate_ge_95pct",
+        "acceptance_rate_ge_90pct"
+      ],
+      "gates": {
+        "acceptance_rate_ge_90pct": false,
+        "atlasbench_promote_eligible": true,
+        "gpu_100_percent": false,
+        "valid_json_rate_ge_95pct": false,
+        "warm_p95_under_12s": true
+      },
+      "gpu_percent": 92.0,
+      "license": "Apache-2.0",
+      "license_check": "confirmed Apache-2.0 via ollama show --license and Hugging Face license tag",
+      "outcome": "evaluated_not_qualified",
+      "overall_candidate_pass_rate": 1.0,
+      "overall_production_pass_rate": 0.9333333333333333,
+      "planner": {
+        "cold_start_seconds": 6.529596000000311,
+        "warm_acceptance_rate": 0.0,
+        "warm_max_seconds": 14.037046500001452,
+        "warm_p50_seconds": 5.543891399996937,
+        "warm_p95_seconds": 8.064854999996896,
+        "warm_sample_size": 19,
+        "warm_valid_json_rate": 0.9473684210526315
+      },
+      "pull_detail": "nifest \u001b[K\npulling 3ea32f882c99: 100% \u2595\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258f 6.0 GB                         \u001b[K\npulling 5b74c26b9e0b: 100% \u2595\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258f 3.4 KB                         \u001b[K\npulling 43070e2d4e53: 100% \u2595\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258f  11 KB                         \u001b[K\npulling e0daf17ff83e: 100% \u2595\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258f   21 B                         \u001b[K\npulling 22eb5c960e5f: 100% \u2595\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258f  514 B                         \u001b[K\nverifying sha256 digest \u001b[K\nwriting manifest \u001b[K\nsuccess \u001b[K\u001b[?25h\u001b[?2026l",
+      "qualifies": false,
+      "started_at": "2026-09-24T02:50:29.523238+00:00",
+      "tag": "ministral-3:8b",
+      "verdict": "promote_eligible",
+      "verification_state": "verified"
+    },
+    {
+      "atlasbench_run_id": "benchrun_7b81917c71a6499c9ef4ac4d6e09bf3d",
+      "atlasbench_total_passed": 83,
+      "atlasbench_total_tasks": 90,
+      "candidate_id": "basemodel_eb19928862d5c239ff4c5734",
+      "critical_regressions": [
+        "agentic",
+        "sql"
+      ],
+      "decision_id": "promodecision_3f8d78966b4041eea23f0163e1b10454",
+      "failing_gates": [
+        "atlasbench_promote_eligible",
+        "acceptance_rate_ge_90pct"
+      ],
+      "gates": {
+        "acceptance_rate_ge_90pct": false,
+        "atlasbench_promote_eligible": false,
+        "gpu_100_percent": true,
+        "valid_json_rate_ge_95pct": true,
+        "warm_p95_under_12s": true
+      },
+      "gpu_percent": 100.0,
+      "license": "Apache-2.0",
+      "license_check": "confirmed Apache-2.0 via ollama show --license and Hugging Face license tag",
+      "outcome": "evaluated_not_qualified",
+      "overall_candidate_pass_rate": 0.9222222222222223,
+      "overall_production_pass_rate": 0.9333333333333333,
+      "planner": {
+        "cold_start_seconds": 2.2920188999996753,
+        "warm_acceptance_rate": 0.0,
+        "warm_max_seconds": 2.746436800000083,
+        "warm_p50_seconds": 1.053175500004727,
+        "warm_p95_seconds": 2.553447899997991,
+        "warm_sample_size": 19,
+        "warm_valid_json_rate": 1.0
+      },
+      "pull_detail": "nifest \u001b[K\npulling 910e4bf4e233: 100% \u2595\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258f 3.0 GB                         \u001b[K\npulling 24c6226aca35: 100% \u2595\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258f 3.4 KB                         \u001b[K\npulling 43070e2d4e53: 100% \u2595\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258f  11 KB                         \u001b[K\npulling e0daf17ff83e: 100% \u2595\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258f   21 B                         \u001b[K\npulling 12d848b3c47b: 100% \u2595\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258f  514 B                         \u001b[K\nverifying sha256 digest \u001b[K\nwriting manifest \u001b[K\nsuccess \u001b[K\u001b[?25h\u001b[?2026l",
+      "qualifies": false,
+      "started_at": "2026-09-24T02:52:52.102662+00:00",
+      "tag": "ministral-3:3b",
+      "verdict": "reject",
+      "verification_state": "verified"
+    },
+    {
+      "atlasbench_run_id": "benchrun_ec352812890e41d9b3790a184e570414",
+      "atlasbench_total_passed": 89,
+      "atlasbench_total_tasks": 90,
+      "candidate_id": "basemodel_585b7e79e9f195024a57dc9a",
+      "critical_regressions": [],
+      "decision_id": "promodecision_968157b574ca4c98a36c9505a6646ae7",
+      "failing_gates": [
+        "acceptance_rate_ge_90pct"
+      ],
+      "gates": {
+        "acceptance_rate_ge_90pct": false,
+        "atlasbench_promote_eligible": true,
+        "gpu_100_percent": true,
+        "valid_json_rate_ge_95pct": true,
+        "warm_p95_under_12s": true
+      },
+      "gpu_percent": 100.0,
+      "license": "Apache-2.0",
+      "license_check": "confirmed Apache-2.0 via ollama show --license and Hugging Face license tag",
+      "outcome": "evaluated_not_qualified",
+      "overall_candidate_pass_rate": 0.9888888888888889,
+      "overall_production_pass_rate": 0.9333333333333333,
+      "planner": {
+        "cold_start_seconds": 2.9239904999994906,
+        "warm_acceptance_rate": 0.15789473684210525,
+        "warm_max_seconds": 4.2015555999969365,
+        "warm_p50_seconds": 1.5981007999944268,
+        "warm_p95_seconds": 3.5551445999954012,
+        "warm_sample_size": 19,
+        "warm_valid_json_rate": 1.0
+      },
+      "pull_detail": "nifest \u001b[K\npulling 85e4a5b7b8ef: 100% \u2595\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258f 2.5 GB                         \u001b[K\npulling eade0a07cac7: 100% \u2595\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258f 1.4 KB                         \u001b[K\npulling d18a5cc71b84: 100% \u2595\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258f  11 KB                         \u001b[K\npulling 0914c7781e00: 100% \u2595\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258f  119 B                         \u001b[K\npulling b72accf9724e: 100% \u2595\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258f  487 B                         \u001b[K\nverifying sha256 digest \u001b[K\nwriting manifest \u001b[K\nsuccess \u001b[K\u001b[?25h\u001b[?2026l",
+      "qualifies": false,
+      "started_at": "2026-09-24T02:53:48.485235+00:00",
+      "tag": "qwen3:4b-instruct-2507-q4_K_M",
+      "verdict": "promote_eligible",
+      "verification_state": "verified"
+    },
+    {
+      "atlasbench_run_id": "benchrun_05ee0c6e6bc74d87a8fe1920cd243773",
+      "atlasbench_total_passed": 23,
+      "atlasbench_total_tasks": 90,
+      "candidate_id": "basemodel_3098b7178555621710244516",
+      "critical_regressions": [
+        "agentic",
+        "causal_safety",
+        "evidence",
+        "machine_learning",
+        "python_sandbox",
+        "sql",
+        "statistics"
+      ],
+      "decision_id": "promodecision_09a8e44d5a734520abe2f07cf8d480b7",
+      "failing_gates": [
+        "atlasbench_promote_eligible",
+        "acceptance_rate_ge_90pct"
+      ],
+      "gates": {
+        "acceptance_rate_ge_90pct": false,
+        "atlasbench_promote_eligible": false,
+        "gpu_100_percent": true,
+        "valid_json_rate_ge_95pct": true,
+        "warm_p95_under_12s": true
+      },
+      "gpu_percent": 100.0,
+      "license": "MIT",
+      "license_check": "confirmed MIT via ollama show --license and Hugging Face license tag",
+      "outcome": "evaluated_not_qualified",
+      "overall_candidate_pass_rate": 0.25555555555555554,
+      "overall_production_pass_rate": 0.9333333333333333,
+      "planner": {
+        "cold_start_seconds": 4.729492200000095,
+        "warm_acceptance_rate": 0.2631578947368421,
+        "warm_max_seconds": 4.596903799996653,
+        "warm_p50_seconds": 0.7667623999950592,
+        "warm_p95_seconds": 4.514562600001227,
+        "warm_sample_size": 19,
+        "warm_valid_json_rate": 1.0
+      },
+      "pull_detail": "l\u001b[?2026h\u001b[?25l\u001b[1Gpulling manifest \u2807 \u001b[K\u001b[?25h\u001b[?2026l\u001b[?2026h\u001b[?25l\u001b[1Gpulling manifest \u001b[K\npulling 3c168af1dea0: 100% \u2595\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258f 2.5 GB                         \u001b[K\npulling 813f53fdc6e5: 100% \u2595\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258f  655 B                         \u001b[K\npulling fa8235e5b48f: 100% \u2595\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258f 1.1 KB                         \u001b[K\npulling 8c2539a423c4: 100% \u2595\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258f  411 B                         \u001b[K\nverifying sha256 digest \u001b[K\nwriting manifest \u001b[K\nsuccess \u001b[K\u001b[?25h\u001b[?2026l",
+      "qualifies": false,
+      "started_at": "2026-09-24T02:54:57.421672+00:00",
+      "tag": "phi4-mini:latest",
+      "verdict": "reject",
+      "verification_state": "verified"
+    }
+  ],
+  "completed_at": "2026-09-24T02:56:06.899618+00:00",
+  "context_tokens": 4096,
+  "git_commit": "d4225b4",
+  "hardware_line": "NVIDIA GeForce RTX 5060, 8151 MB VRAM",
+  "production_run_id": "benchrun_914cf836996e485b87eb69f69aa1d3e8",
+  "qualifying_tags": [],
+  "round": 1
+}

@@ -1,0 +1,22 @@
+[
+  "Forecast weekly signups for the next eight weeks from the daily signup counts.",
+  "Project inventory depletion over the coming month using the daily stock-level column.",
+  "Estimate next season's demand from the historical order-volume time series.",
+  "Predict the trend in support-ticket volume for the next thirty days.",
+  "Train a model to flag likely fraudulent transactions from the transaction features.",
+  "Predict customer lifetime value from the account and purchase history features.",
+  "Score leads by likelihood to convert using the CRM feature set.",
+  "Estimate expected delivery delay from the shipment and route features.",
+  "Explain how this dataset's revision history led to its current schema.",
+  "Trace the lineage of the revenue column back to its original source upload.",
+  "Show what changed between the last two revisions of this dataset.",
+  "Walk through the audit trail behind the current cleaned version of this data.",
+  "Research what counts as an industry-standard churn rate for subscription businesses.",
+  "Look up the allowlisted source defining standard cohort-retention benchmarks.",
+  "Find the accepted definition of gross margin used in SaaS reporting.",
+  "Research typical conversion-rate benchmarks for e-commerce checkout funnels.",
+  "Write a Python snippet to bucket customers into quartiles by spend.",
+  "Run a sandboxed Python check for outliers using a custom z-score threshold.",
+  "Use Python to compute month-over-month percentage change in revenue.",
+  "Write custom Python to deduplicate near-identical customer records."
+]
