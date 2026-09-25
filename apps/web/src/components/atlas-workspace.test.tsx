@@ -52,12 +52,13 @@ describe("Atlas workspace", () => {
     const journey = screen.getByLabelText("Atlas active investigation journey");
     await waitFor(() => expect(within(journey).getByRole("button", { name: /Profile the active dataset/ })).toHaveAttribute("aria-pressed", "true"));
     expect(screen.getByText("Measured profile.")).toBeInTheDocument(); expect(screen.getByLabelText("Cortex real-state graph")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Focus Atlas run" })); expect(screen.getByRole("button", { name: "Reset focus" })).not.toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Focus Investigation complete" }));
     expect(screen.getByLabelText("Selected Cortex node")).toBeInTheDocument();
     expect(within(screen.getByLabelText("Selected Cortex node")).getByText("run")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Focus Scout" }));
     expect(within(journey).getByRole("button", { name: /Profile the active dataset/ })).toHaveAttribute("aria-pressed", "true");
-    fireEvent.click(screen.getByRole("button", { name: "dataset" })); // node-kind filter chip
+    fireEvent.click(screen.getByRole("button", { name: "Focus Dataset" }));
+    expect(screen.getByLabelText("Selected group membership")).toBeInTheDocument();
     expect(screen.queryByLabelText("Atlas server guardrails")).not.toBeInTheDocument();
 
     // Specialist activity: the real roster, not an invented one -- Scout

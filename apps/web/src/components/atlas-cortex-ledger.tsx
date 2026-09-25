@@ -58,7 +58,8 @@ export function AtlasCortexLedger({ graph, run, selectedStepId, onSelectStep, on
     <section className="cortex-ledger" aria-label="Cortex real-state graph">
       <header className="cortex-ledger-heading">
         <div><span className="eyebrow">ATLAS · RUN RECORD</span><h2>{heading}</h2>
-          <p>{run ? `${nodes.length} stored nodes · ${edges.length} recorded relations` : "Start an investigation to inspect its stored run, plan, evidence, and relations."}</p></div>
+          <p>{run ? `${nodes.length} real nodes · ${edges.length} real relations` : "Start an investigation to inspect its stored run, plan, evidence, and relations."}</p>
+          {run ? <code>{run.run_id}</code> : null}</div>
         {run ? <button type="button" className="cortex-run-focus" onClick={selectCore} aria-pressed={focus === nodes.find((node) => node.kind === "run")?.node_id}>Focus {heading}</button> : null}
       </header>
       {stageOverlay}
@@ -75,6 +76,11 @@ export function AtlasCortexLedger({ graph, run, selectedStepId, onSelectStep, on
         <dt>Kind</dt><dd>{selectionDetail.kind}</dd><dt>Label</dt><dd>{selectionDetail.label}</dd>
         <dt>State</dt><dd>{selectionDetail.state}</dd><dt>Source / membership</dt><dd className="acc-mono">{selectionDetail.detail}</dd>
       </dl> : null}
+      {focusedNode ? <p className="cortex-ledger-ids">Node ID: <code>{focusedNode.node_id}</code></p> : null}
+      {focusedGroup ? <div className="cortex-ledger-ids" aria-label="Selected group membership">
+        <p>Member node IDs: {focusedGroup.memberNodeIds.map((id) => <code key={id}>{id}</code>)}</p>
+        <p>Relation IDs: {focusedGroup.memberEdgeIds.length ? focusedGroup.memberEdgeIds.map((id) => <code key={id}>{id}</code>) : "None recorded"}</p>
+      </div> : null}
       {nodes.length ? <details className="cortex-atomic-disclosure" open>
         <summary>All graph nodes ({nodes.length})</summary>
         <ul className="cortex-node-list" aria-label="Cortex nodes">{nodes.map((node) => {

@@ -264,13 +264,7 @@
 @media (max-width:620px) { .atlas-immersive-top { flex-wrap:wrap;gap:8px; }.atlas-command-row { flex-wrap:wrap; }.atlas-command-row textarea { min-width:100%;order:1; }.atlas-mic-button { order:2; }.atlas-command-actions { order:3;margin-left:auto; } }
 @media (prefers-reduced-motion:reduce) { .atlas-result-panel .atlas-answer { transition:none; } }
 
-/* Atlas VNext: the Cortex is a stored-record reading surface. */
-.atlas-immersive { --accent:#c6bba6;--accent-soft:#272720;--good:#91b6a6;--focus:#e7dbc4;--danger:#d79a88;--canvas:#141411;--surface:#1b1b18;--surface-raised:#22221e;--surface-muted:#292923;--line:#393831;--line-soft:#302f29;--text:#eeeae0;--muted:#bcb7aa;--faint:#969184; }
-.atlas-immersive-top { border-top:2px solid var(--text); }
-.atlas-immersive-identity strong { font:400 19px/1.15 var(--serif); }
-.atlas-immersive-system { border-top:1px solid var(--line); }
-.atlas-immersive-main { grid-template-columns:minmax(0,1fr) minmax(300px,360px);gap:18px;align-items:start; }
-.atlas-inspector-drawer { max-height:76vh; }
+/* The structured Cortex reads from the existing Atlas tokens. */
 .cortex-ledger { border:1px solid var(--line);background:var(--surface);padding:24px;min-width:0; }
 .cortex-ledger-heading { display:flex;justify-content:space-between;align-items:start;gap:20px;padding-bottom:20px;border-bottom:1px solid var(--line); }
 .cortex-ledger-heading h2 { font:400 clamp(27px,3vw,40px)/1.08 var(--serif);margin:7px 0 9px;letter-spacing:-.02em; }
@@ -310,5 +304,8 @@
 .cortex-relations li { display:grid;grid-template-columns:minmax(0,1fr) 110px minmax(0,1fr);gap:8px;padding:8px 0;border-bottom:1px solid var(--line-soft);font-size:11px; }
 .cortex-relations li span { overflow-wrap:anywhere; }.cortex-relations li small { color:var(--faint);font:10px var(--mono); }.cortex-relations li code { grid-column:1/-1;color:var(--faint);font:9px var(--mono); }
 .cortex-ledger-note { margin:20px 0 0;color:var(--faint);font-size:11px; }
+.cortex-ledger-heading code,.cortex-ledger-ids code { display:inline-block;margin:5px 6px 0 0;color:var(--muted);font:10px var(--mono);overflow-wrap:anywhere; }
+.cortex-ledger-ids { margin:8px 0 0;color:var(--muted);font-size:11px;overflow-wrap:anywhere; }
+.cortex-ledger-ids p { margin:5px 0; }
 @media (max-width:1050px) { .atlas-immersive-main { grid-template-columns:1fr; }.atlas-inspector-drawer { max-height:none; } }
 @media (max-width:620px) { .cortex-ledger { padding:16px; }.cortex-ledger-heading { display:block; }.cortex-run-focus { margin-top:12px; }.cortex-ledger-section-title { display:block; }.cortex-ledger .cortex-group-list { grid-template-columns:repeat(2,minmax(0,1fr)); }.cortex-ledger .cortex-node-list button { grid-template-columns:1fr auto;gap:4px 8px; }.cortex-node-kind { grid-column:1/-1; }.cortex-relations li { grid-template-columns:1fr; } }

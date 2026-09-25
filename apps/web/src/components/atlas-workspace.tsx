@@ -188,7 +188,7 @@ export function AtlasWorkspace({
       <header className="atlas-immersive-top">
         <div className="atlas-immersive-identity">
           <span className="eyebrow">ATLAS</span>
-          <strong>Investigation desk</strong>
+          <strong>Immersive Cortex</strong>
         </div>
         <AtlasStatusBadge />
         <button type="button" className="atlas-immersive-system-toggle" aria-expanded={systemOpen} onClick={() => setSystemOpen((value) => !value)}>
