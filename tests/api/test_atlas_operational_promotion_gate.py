@@ -265,6 +265,49 @@ def test_promote_route_succeeds_once_a_fresh_clean_operational_run_is_on_record(
     assert current["candidate_id"] == candidate.candidate_id
 
 
+def test_deep_promotion_keeps_fast_pointer_and_has_an_independent_rollback_anchor(monkeypatch, tmp_path) -> None:  # type: ignore[no-untyped-def]
+    from prism_api.atlas_candidate_runtime import resolve_deep_ollama_model
+
+    database_url = f"sqlite:///{tmp_path / 'deep.db'}"
+    monkeypatch.setenv("PRISM_ANALYTICAL_HISTORY_DATABASE_URL", database_url)
+    stores = _wire_shared_stores(monkeypatch, database_url)
+    unique = uuid.uuid4().hex
+    candidate, production_run, candidate_run = _set_up_production_and_candidate_bench_runs(stores, unique)
+    fast_anchor = stores["promotion_store"].current_production()  # type: ignore[attr-defined]
+    assert fast_anchor is not None
+    arena_dir = tmp_path / "arena"
+    arena_dir.mkdir()
+    (arena_dir / "round-test.json").write_text(json.dumps({"models": [{
+        "tag": candidate.runtime_model,
+        "digest": f"sha256:cand-{unique}",
+        "bench": {"run_id": candidate_run.run_id},
+        "gpu_percent_min_observed": 92,
+        "planner": {"p95_seconds": 13.0, "valid_json_rate": 1.0, "acceptance_rate": 1.0},
+    }]}), encoding="utf-8")
+    monkeypatch.setenv("PRISM_ATLAS_ARENA_REPORT_DIR", str(arena_dir))
+    stores["opcert_store"].save(_good_operational_run(candidate=candidate, digest=f"sha256:cand-{unique}"))  # type: ignore[attr-defined]
+
+    client = TestClient(create_app())
+    decision = client.post("/api/v1/atlas/promotion/decisions", params={
+        "candidate_id": candidate.candidate_id, "production_run_id": production_run.run_id,
+        "candidate_run_id": candidate_run.run_id,
+    }).json()
+    promoted = client.post("/api/v1/atlas/promotion/promote", params={
+        "decision_id": decision["decision_id"], "reason": "deep certification cleared", "tier": "deep",
+    })
+    assert promoted.status_code == 200, promoted.text
+    assert promoted.json()["tier"] == "deep"
+    assert promoted.json()["previous_candidate_id"] == fast_anchor.candidate_id
+    assert client.get("/api/v1/atlas/promotion/current").json()["candidate_id"] == fast_anchor.candidate_id
+    assert client.get("/api/v1/atlas/promotion/current", params={"tier": "deep"}).json()["candidate_id"] == candidate.candidate_id
+    assert resolve_deep_ollama_model() == candidate.runtime_model
+
+    rolled_back = client.post("/api/v1/atlas/promotion/rollback", params={"reason": "deep rollback", "tier": "deep"})
+    assert rolled_back.status_code == 200, rolled_back.text
+    assert rolled_back.json()["candidate_id"] == fast_anchor.candidate_id
+    assert client.get("/api/v1/atlas/promotion/current").json()["candidate_id"] == fast_anchor.candidate_id
+
+
 def test_live_candidate_run_route_requires_verification_and_runtime_binding(monkeypatch, tmp_path) -> None:  # type: ignore[no-untyped-def]
     database_url = f"sqlite:///{tmp_path / 'live-route.db'}"
     _wire_shared_stores(monkeypatch, database_url)

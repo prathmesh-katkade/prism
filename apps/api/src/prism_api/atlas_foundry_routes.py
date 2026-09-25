@@ -65,7 +65,6 @@ from .atlas_bench_corpus import CORPUS_VERSION, all_tasks, corpus_hash
 from .atlas_bench_store import DurableAtlasBenchStore
 from .atlas_candidate_runtime import (
     DurableAtlasCandidateRuntimeStore,
-    activate_current_deep_ollama_model,
     activate_current_ollama_model,
     ensure_configured_production_baseline,
 )
@@ -790,7 +789,7 @@ def promote_candidate(decision_id: str, reason: str, tier: Literal["fast", "deep
             _promotion_store.bootstrap(fast_anchor.candidate_id, reason="deep tier rollback anchor", tier="deep")
         pointer = _promotion_store.promote(decision, reason=reason, tier=tier)
         if tier == "deep":
-            activate_current_deep_ollama_model()
+            os.environ["PRISM_ATLAS_DEEP_OLLAMA_MODEL"] = binding.runtime_model
         else:
             activate_current_ollama_model()
         return pointer
@@ -804,7 +803,8 @@ def rollback_production(reason: str, tier: Literal["fast", "deep"] = "fast") -> 
     if len(history) < 2:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="No prior production candidate to roll back to.")
     rollback_target = history[1].candidate_id
-    if _candidate_runtime_store.latest(rollback_target) is None:
+    rollback_binding = _candidate_runtime_store.latest(rollback_target)
+    if rollback_binding is None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Rollback target has no durable runtime binding; production pointer was not changed.",
@@ -812,7 +812,7 @@ def rollback_production(reason: str, tier: Literal["fast", "deep"] = "fast") -> 
     try:
         pointer = _promotion_store.rollback(reason=reason, tier=tier)
         if tier == "deep":
-            activate_current_deep_ollama_model()
+            os.environ["PRISM_ATLAS_DEEP_OLLAMA_MODEL"] = rollback_binding.runtime_model
         else:
             activate_current_ollama_model()
         return pointer
