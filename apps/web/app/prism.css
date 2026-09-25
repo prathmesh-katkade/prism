@@ -134,22 +134,6 @@
   .atlas-inspector-open { display:inline-flex;align-items:center;gap:6px;align-self:flex-start;margin-top:10px;padding:7px 12px;border:1px solid var(--line);border-radius:4px;background:var(--surface-raised);color:var(--text);font-size:12px;cursor:pointer; }
 }
 
-/* Cortex grouped-satellite labels: a compact, bounded card anchored just
-   below each satellite so it never overlaps the mesh or a neighbouring
-   label's text -- the deterministic arc layout in cortexGroupPositions3D
-   keeps satellites (and so their labels) spaced apart. */
-.cortex-group-label { display:flex;flex-direction:column;align-items:center;gap:1px;padding:4px 9px;margin-top:24px;border:1px solid var(--line-soft);border-radius:4px;background:var(--canvas);white-space:nowrap;text-align:center;pointer-events:none; }
-.cortex-group-label strong { font-size:11px;font-weight:600;color:var(--text); }
-.cortex-group-label small { font-size:9px;font-family:var(--mono);text-transform:uppercase;letter-spacing:.04em;color:var(--faint); }
-.cortex-group-label[data-tone="active"] { border-color:var(--accent); }
-.cortex-group-label[data-tone="active"] small { color:var(--accent); }
-.cortex-group-label[data-tone="good"] small { color:var(--good); }
-.cortex-group-label[data-tone="danger"] { border-color:var(--danger); }
-.cortex-group-label[data-tone="danger"] small { color:var(--danger); }
-.cortex-group-label.is-muted { border-style:dashed;background:var(--surface); }
-.cortex-group-label.is-selected { border-color:var(--accent);box-shadow:0 0 0 1px var(--accent); }
-@media (max-width:780px) { .cortex-label-anchor { display:none !important; } }
-
 .cortex-group-list { list-style:none;display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 0;padding:0; }
 .cortex-group-list button { display:flex;flex-direction:column;gap:2px;padding:8px 11px;min-width:96px;border:1px solid var(--line);border-radius:5px;background:var(--surface-raised);color:var(--text);text-align:left;cursor:pointer; }
 .cortex-group-list button strong { font-size:12px; }
@@ -165,14 +149,7 @@
 .cortex-atomic-disclosure summary { cursor:pointer;color:var(--faint);font:10px var(--mono);letter-spacing:.06em;text-transform:uppercase; }
 .cortex-atomic-disclosure .cortex-node-list { margin-top:8px; }
 
-/* Cortex V3: the immersive 3D scene. The stage reserves a real chunk of the
-   viewport (roughly half on a laptop-height window) so the core reads as a
-   presence, not a thumbnail; it never grows large enough on its own to push
-   the rest of the run's real evidence below the fold. */
-/* A real, keyboard-operable mirror of every node the canvas draws: pointer
-   users get the 3D scene, keyboard and screen-reader users get the same
-   facts and actions as an ordinary chip row, never depending on canvas
-   hit-testing. */
+/* The atomic node list keeps every stored record keyboard reachable. */
 .cortex-node-list { list-style:none;display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 0;padding:0; }
 .cortex-node-list button { padding:6px 9px;border:1px solid var(--line);border-radius:4px;background:var(--surface-raised);color:var(--text);font-size:11px;cursor:pointer; }
 .cortex-node-list button[data-tone="active"] { border-color:var(--accent);color:var(--accent); }
@@ -192,9 +169,7 @@
    than editing each rule -- normal PRISM workspaces never see these
    values since they live outside .atlas-immersive. --danger is pinned to
    the shared red so a real failed/cancelled step stays visually distinct
-   from a merely blocked one; the 3D scene's own TONE_COLOR map already
-   renders "blocked" in amber (atlas-cortex-3d.tsx), matching the
-   reference for the one state it actually depicts.
+   from a merely blocked one.
 
    Fixed defect: this block used to redefine only the surface/accent
    tokens and silently inherit --text/--muted/--faint from whichever
@@ -241,17 +216,8 @@
 .atlas-command-row textarea { flex:1;min-height:44px; }
 .atlas-mic-button { display:grid;place-items:center;width:38px;height:38px;flex-shrink:0;border:1px solid var(--line);border-radius:4px;background:var(--surface-raised);color:var(--faint);cursor:not-allowed; }
 .atlas-command-actions { display:flex;gap:8px;flex-shrink:0; }
-/* Anchored to the top-right corner of the canvas (this is now rendered
-   inside `.cortex-stage` itself via AtlasCortex3D's `stageOverlay` prop),
-   never the bottom: the Cortex's real accessible content (grouped
-   satellites, the run-focus button, the atomic-node disclosure, the
-   legend) flows below the canvas and can be taller than the canvas
-   itself, so a bottom-anchored panel would grow upward over those real
-   controls once expanded. `max-height` + its own scroll (rather than the
-   stage's `overflow:hidden` silently clipping it) keeps a long real answer
-   readable on a short canvas instead of cut off. */
-/* The scene constrains Drei Html labels to zIndexRange 20..0, so real DOM
-   controls can sit above them without competing near the browser maximum. */
+/* The ledger overrides this legacy positioning below so the result panel
+   stays in document flow with the grouped and atomic records. */
 .atlas-result-panel { position:absolute;top:12px;right:12px;left:12px;max-width:420px;max-height:calc(100% - 24px);margin-left:auto;background:var(--surface-raised);border:1px solid var(--line);box-shadow:0 14px 36px rgba(0,0,0,.24);overflow-x:hidden;overflow-y:auto;z-index:30; }
 .atlas-result-toggle { display:flex;align-items:center;gap:8px;width:100%;padding:10px 12px;border:0;background:transparent;color:var(--text);text-align:left;cursor:pointer;font-size:12px; }
 .atlas-result-toggle svg { width:15px;flex-shrink:0;color:var(--accent); }
@@ -307,5 +273,8 @@
 .cortex-ledger-heading code,.cortex-ledger-ids code { display:inline-block;margin:5px 6px 0 0;color:var(--muted);font:10px var(--mono);overflow-wrap:anywhere; }
 .cortex-ledger-ids { margin:8px 0 0;color:var(--muted);font-size:11px;overflow-wrap:anywhere; }
 .cortex-ledger-ids p { margin:5px 0; }
+.atlas-immersive .atlas-plan li[data-state="running"] .plan-marker,
+.atlas-immersive .specialist-signal.running,
+.atlas-immersive .atlas-pipeline li[data-current="true"] .atlas-pipeline-dot { animation:none; }
 @media (max-width:1050px) { .atlas-immersive-main { grid-template-columns:1fr; }.atlas-inspector-drawer { max-height:none; } }
 @media (max-width:620px) { .cortex-ledger { padding:16px; }.cortex-ledger-heading { display:block; }.cortex-run-focus { margin-top:12px; }.cortex-ledger-section-title { display:block; }.cortex-ledger .cortex-group-list { grid-template-columns:repeat(2,minmax(0,1fr)); }.cortex-ledger .cortex-node-list button { grid-template-columns:1fr auto;gap:4px 8px; }.cortex-node-kind { grid-column:1/-1; }.cortex-relations li { grid-template-columns:1fr; } }
