@@ -28,7 +28,7 @@ from .atlas_foundry_routes import router as atlas_foundry_router
 from .atlas_investigation_links import router as atlas_investigation_links_router
 from .atlas_model_arena import router as atlas_model_arena_router
 from .atlas_operational_cert import router as atlas_operational_cert_router
-from .atlas_runtime import reconcile_stale_in_flight_runs_once
+from .atlas_runtime import reconcile_deep_refinements_once, reconcile_stale_in_flight_runs_once
 from .atlas_runtime import runs as atlas_runs
 from .clean import router as clean_router
 from .deployment_security import resolve_deployment_security
@@ -72,6 +72,7 @@ def create_app() -> FastAPI:
     # run still DRAFT/RUNNING from before this process started cannot have a
     # live worker and is durably marked FAILED with an explicit reason.
     reconcile_stale_in_flight_runs_once()
+    reconcile_deep_refinements_once()
     app = FastAPI(
         title=settings.api_title,
         version=settings.api_version,

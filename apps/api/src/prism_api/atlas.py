@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from prism_api_contracts import (
+    AtlasDeepRefinement,
+    AtlasDeepRefinementState,
     AtlasEmbeddingCapability,
     AtlasKnowledgeChunk,
     AtlasKnowledgeSearchRequest,
@@ -32,17 +36,28 @@ from prism_api_contracts import (
     CortexGraphState,
 )
 
+from . import atlas_runtime
 from .atlas_authorization import require_run_access
 from .atlas_event_stream import durable_stream_events
 from .atlas_memory import DurableAtlasMemoryStore
 from .atlas_research import researcher
 from .atlas_resources import governor
 from .atlas_retrieval import DurableAtlasRetrievalStore
-from .atlas_runtime import SPECIALISTS, cortex_graph, execute, providers, run_admission, runs
+from .atlas_runtime import (
+    SPECIALISTS,
+    accept_deep_refinement,
+    cortex_graph,
+    execute,
+    providers,
+    run_admission,
+    runs,
+    schedule_deep_refinement,
+)
 from .atlas_sandbox import AtlasPythonSandbox
 from .transport import sse_response
 
 router = APIRouter(prefix="/api/v1/atlas", tags=["atlas"])
+logger = logging.getLogger("prism_api.atlas")
 sandbox = AtlasPythonSandbox()
 memory = DurableAtlasMemoryStore()
 retrieval = DurableAtlasRetrievalStore()
@@ -97,12 +112,39 @@ def start_run(request: AtlasRunRequest) -> AtlasRunResponse:
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Atlas could not dispatch the accepted run; retry shortly.",
         ) from error
+    try:
+        schedule_deep_refinement(run.run_id)
+    except Exception:
+        # The fast run has already been accepted and dispatched. Deep is an
+        # optional proposal; its persistence failure cannot undo the run.
+        logger.exception("atlas_deep_refinement_schedule_failed run_id=%s", run.run_id)
+        try:
+            atlas_runtime.deep_refinements.create(
+                run.run_id, state=AtlasDeepRefinementState.FAILED,
+                reason="Deep refinement scheduling failed.",
+            )
+        except Exception:
+            logger.exception("atlas_deep_refinement_failure_record_failed run_id=%s", run.run_id)
     return run
 
 
 @router.get("/runs/{run_id}", response_model=AtlasRunResponse, dependencies=[Depends(require_run_access)])
 def get_run(run_id: str) -> AtlasRunResponse:
     return runs.get(run_id)
+
+
+@router.get("/runs/{run_id}/refinement", response_model=AtlasDeepRefinement, dependencies=[Depends(require_run_access)])
+def get_deep_refinement(run_id: str) -> AtlasDeepRefinement:
+    runs.get(run_id)
+    record = atlas_runtime.deep_refinements.get(run_id)
+    if record is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Deep refinement was not requested for this run.")
+    return record
+
+
+@router.post("/runs/{run_id}/refinement/accept", response_model=AtlasRunResponse, status_code=status.HTTP_202_ACCEPTED, dependencies=[Depends(require_run_access)])
+def accept_refinement(run_id: str) -> AtlasRunResponse:
+    return accept_deep_refinement(run_id)
 
 
 @router.post("/runs/{run_id}/cancel", response_model=AtlasRunResponse, dependencies=[Depends(require_run_access)])

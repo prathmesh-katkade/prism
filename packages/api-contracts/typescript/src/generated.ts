@@ -280,6 +280,23 @@ export interface AtlasCriticalRegression {
   candidate_pass_rate: number;
 }
 
+export interface AtlasDeepRefinement {
+  run_id: string;
+  state: AtlasDeepRefinementState;
+  reason: string;
+  candidate_id?: string;
+  runtime_model?: string;
+  runtime_model_digest?: string;
+  dataset_revision?: number;
+  source_fingerprint?: string;
+  proposed_steps?: AtlasPlanStep[];
+  accepted_run_id?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export type AtlasDeepRefinementState = "unavailable" | "queued" | "running" | "ready" | "failed" | "accepting" | "accepted";
+
 export interface AtlasEmbeddingCapability {
   provider: string;
   model: string;
@@ -845,7 +862,7 @@ export interface AtlasRunEvent {
   payload?: Record<string, unknown>;
 }
 
-export type AtlasRunEventType = "run_created" | "plan_created" | "step_started" | "step_completed" | "council_conclusion" | "run_completed" | "run_failed" | "run_cancelled";
+export type AtlasRunEventType = "run_created" | "plan_created" | "step_started" | "step_completed" | "council_conclusion" | "run_completed" | "run_failed" | "run_cancelled" | "deep_refinement_queued" | "deep_refinement_ready" | "deep_refinement_failed" | "deep_refinement_accepted";
 
 export interface AtlasRunRequest {
   dataset_id: string;

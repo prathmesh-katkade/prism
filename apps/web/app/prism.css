@@ -212,6 +212,12 @@
 .atlas-inspector-focus .eyebrow { margin:0 0 2px; }
 .atlas-inspector-focus strong { font-size:13px; }
 .atlas-command-bar { margin-top:0;border-top:2px solid var(--accent); }
+.atlas-deep-refinement { display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:16px;padding:12px 14px;border:1px solid var(--line);border-left:3px solid var(--accent);background:var(--surface);color:var(--text);overflow-wrap:anywhere; }
+.atlas-deep-refinement h2 { margin:3px 0 6px;font-size:15px; }
+.atlas-deep-refinement p { margin:3px 0;color:var(--muted);font-size:12px; }
+.atlas-deep-refinement ul { margin:8px 0 0;padding-left:18px;font-size:12px; }
+.atlas-deep-refinement button { flex-shrink:0;padding:8px 11px;border:1px solid var(--accent);border-radius:4px;background:var(--accent-soft);color:var(--text);cursor:pointer; }
+.atlas-deep-refinement button:disabled { opacity:.55;cursor:not-allowed; }
 .atlas-command-row { display:flex;align-items:flex-end;gap:9px; }
 .atlas-command-row textarea { flex:1;min-height:44px; }
 .atlas-mic-button { display:grid;place-items:center;width:38px;height:38px;flex-shrink:0;border:1px solid var(--line);border-radius:4px;background:var(--surface-raised);color:var(--faint);cursor:not-allowed; }

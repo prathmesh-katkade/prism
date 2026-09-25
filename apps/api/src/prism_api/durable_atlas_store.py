@@ -221,7 +221,8 @@ class DurableAtlasRunStore:
         return result
 
     def create(
-        self, request: AtlasRunRequest, provider: AtlasModelProviderName, plan: AtlasStructuredPlan
+        self, request: AtlasRunRequest, provider: AtlasModelProviderName, plan: AtlasStructuredPlan,
+        *, run_id: Optional[str] = None,
     ) -> AtlasRunResponse:
         if request.idempotency_key:
             with self.engine.connect() as connection:
@@ -232,7 +233,7 @@ class DurableAtlasRunStore:
                 return self.get(str(existing))
         now = datetime.now(timezone.utc)
         run = AtlasRunResponse(
-            run_id=f"atlas_{uuid.uuid4().hex}", plan=plan, created_at=now, updated_at=now
+            run_id=run_id or f"atlas_{uuid.uuid4().hex}", plan=plan, created_at=now, updated_at=now
         )
         values = {
             "run_id": run.run_id,
@@ -261,6 +262,11 @@ class DurableAtlasRunStore:
                     return self.get(str(existing))
             raise
         return run
+
+    def get_by_idempotency_key(self, key: str) -> Optional[AtlasRunResponse]:
+        with self.engine.connect() as connection:
+            run_id = connection.execute(select(_runs.c.run_id).where(_runs.c.idempotency_key == key)).scalar_one_or_none()
+        return None if run_id is None else self.get(str(run_id))
 
     def get(self, run_id: str) -> AtlasRunResponse:
         with self.engine.connect() as connection:
