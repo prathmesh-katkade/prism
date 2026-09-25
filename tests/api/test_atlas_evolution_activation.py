@@ -93,7 +93,7 @@ def test_live_bench_context_policy_is_uniform_without_changing_prompt_or_score(m
 
     def generate(url, *, json, timeout):  # type: ignore[no-untyped-def]
         requests.append(json)
-        return httpx.Response(200, json={"response": '{"choice_index": 1}'}, request=httpx.Request("POST", url))
+        return httpx.Response(200, json={"response": '{"choice": "two"}'}, request=httpx.Request("POST", url))
 
     monkeypatch.setattr("prism_api.atlas_bench_live.httpx.post", generate)
     for model in ("production", "challenger"):
@@ -105,8 +105,8 @@ def test_live_bench_context_policy_is_uniform_without_changing_prompt_or_score(m
     assert requests[0]["think"] is requests[1]["think"] is False
     assert requests[0]["format"] == requests[1]["format"] == {
         "type": "object",
-        "properties": {"choice_index": {"type": "integer", "enum": [0, 1]}},
-        "required": ["choice_index"],
+        "properties": {"choice": {"type": "string", "enum": ["one", "two"]}},
+        "required": ["choice"],
         "additionalProperties": False,
     }
 
@@ -141,7 +141,7 @@ def test_prose_control_changes_only_prompt_envelope(monkeypatch) -> None:  # typ
 
     def generate(url, *, json, timeout):  # type: ignore[no-untyped-def]
         requests.append(json)
-        return httpx.Response(200, json={"response": '{"choice_index": 1}'}, request=httpx.Request("POST", url))
+        return httpx.Response(200, json={"response": '{"choice": "left"}'}, request=httpx.Request("POST", url))
 
     monkeypatch.setattr("prism_api.atlas_bench_live.httpx.post", generate)
     baseline = AtlasProviderBenchSubject(AtlasModelProviderName.OLLAMA)
@@ -152,7 +152,8 @@ def test_prose_control_changes_only_prompt_envelope(monkeypatch) -> None:  # typ
         key: value for key, value in requests[1].items() if key != "prompt"
     }
     assert "Question: Which join?" in requests[1]["prompt"]
-    assert "A) inner\nB) left\nC) right\nD) full" in requests[1]["prompt"]
+    assert "- inner\n- left\n- right\n- full" in requests[1]["prompt"]
+    assert "A) inner" not in requests[1]["prompt"]
     assert baseline.evaluation_policy_id(corpus_version="v1", corpus_hash_value="a" * 64) != prose.evaluation_policy_id(corpus_version="v1", corpus_hash_value="a" * 64)
 
 

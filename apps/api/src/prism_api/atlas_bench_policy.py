@@ -19,8 +19,11 @@ from __future__ import annotations
 
 import hashlib
 import json
+from typing import Optional
 
-EVALUATION_POLICY_VERSION = "atlasbench-eval-policy-v2-schema-think-off"
+from .atlas_bench_shuffle import DEFAULT_SHUFFLE_SEED
+
+EVALUATION_POLICY_VERSION = "atlasbench-eval-policy-v3-shuffled-string-choice"
 
 
 def compute_evaluation_policy_id(
@@ -33,6 +36,7 @@ def compute_evaluation_policy_id(
     provider: str,
     corpus_version: str,
     corpus_hash_value: str,
+    shuffle_seed: Optional[str] = DEFAULT_SHUFFLE_SEED,
 ) -> str:
     """Deterministic sha256 identity over one exact, comparable-run policy.
 
@@ -56,6 +60,7 @@ def compute_evaluation_policy_id(
             "provider": provider,
             "corpus_version": corpus_version,
             "corpus_hash": corpus_hash_value,
+            "shuffle_seed": shuffle_seed,
         },
         sort_keys=True,
     )

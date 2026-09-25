@@ -34,6 +34,7 @@ def main() -> None:
             "model": run.runtime_model,
             "digest": run.runtime_model_digest,
             "policy": run.evaluation_policy_id,
+            "shuffle_seed": run.shuffle_seed,
             "correct": run.total_passed,
             "incorrect_parsed": run.incorrect_parsed,
             "unparseable_or_invalid": run.unparseable_or_invalid,

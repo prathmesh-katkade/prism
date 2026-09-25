@@ -55,3 +55,7 @@
 ## Harness boundary — 2026-09-25
 
 Rounds 1–4 used the former loose JSON output mode and 64-token AtlasBench cap. They are historical results and are not directly comparable with runs using the decoder schema, `think: false`, 256-token cap, and three-way outcome reporting. [Preflight controls](controls-2026-09-25.md) found a large, model-dependent prompt-envelope effect. Round 5 has not been run.
+
+## Choice-order defect — 2026-09-25
+
+The V1 answer key is authored at indices 0/1/2/3 in counts 8/81/1/0. A constant index-1 answer scored 81/90 before shuffling and 24/90 after deterministic shuffling with seed `atlasbench-shuffle-v1`. The fixed harness also requires the exact choice string instead of an index. All earlier arena rounds, including the preflight envelope controls, are non-comparable with this fixed policy. [ADR 0016](../../architecture/adr/0016-atlasbench-choice-order-and-string-answers.md) records the scoring remedy. The corpus itself still needs a future versioned rebalance; its content and hash are unchanged in this pass.

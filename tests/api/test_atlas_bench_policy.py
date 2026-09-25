@@ -7,7 +7,7 @@ from prism_api_contracts import AtlasModelProviderName
 
 def _base_kwargs() -> dict:
     return {
-        "prompt_schema_version": "atlasbench-choice-v2",
+        "prompt_schema_version": "atlasbench-choice-v3-string",
         "temperature": 0,
         "num_predict": 256,
         "context_tokens": 4096,
@@ -42,7 +42,9 @@ def test_policy_id_changes_with_each_material_field() -> None:
         ("num_predict", 128),
         ("timeout_seconds", 30.0),
         ("provider", "deterministic"),
-        ("prompt_schema_version", "atlasbench-choice-v3"),
+        ("prompt_schema_version", "atlasbench-choice-v4"),
+        ("shuffle_seed", "another-seed"),
+        ("shuffle_seed", None),
         ("corpus_version", "atlasbench-v2-holdout-wave1"),
         ("corpus_hash_value", "b" * 64),
     ]:

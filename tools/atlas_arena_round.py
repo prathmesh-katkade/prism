@@ -483,7 +483,7 @@ def establish_comparable_production_run(context_tokens: int) -> str:
                 "runtime_model_digest": subject.model_digest,
                 "provider": "ollama",
                 "evaluation_policy_id": subject.evaluation_policy_id(
-                    corpus_version=CORPUS_VERSION, corpus_hash_value=corpus_hash()
+                    corpus_version=CORPUS_VERSION, corpus_hash_value=corpus_hash(), shuffle_seed=suite_run.shuffle_seed
                 ),
             }
         )

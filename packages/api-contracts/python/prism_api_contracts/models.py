@@ -1493,6 +1493,7 @@ class AtlasBenchTaskResult(ContractModel):
     correct: bool
     raw_answer: str = Field(default="", max_length=2_000)
     raw_response: str = ""
+    presentation_permutation: list[int] = Field(default_factory=list)
     done_reason: Optional[str] = None
     eval_count: Optional[int] = Field(default=None, ge=0)
     outcome: Literal["correct", "incorrect_parsed", "unparseable_or_invalid"] = "unparseable_or_invalid"
@@ -1529,6 +1530,7 @@ class AtlasBenchSuiteRun(ContractModel):
     corpus_hash: str = Field(min_length=32, max_length=64)
     total_tasks: int = Field(ge=0)
     total_passed: int = Field(ge=0)
+    shuffle_seed: Optional[str] = None
     incorrect_parsed: int = Field(default=0, ge=0)
     unparseable_or_invalid: int = Field(default=0, ge=0)
     category_scores: list[AtlasBenchCategoryScore] = Field(default_factory=list)

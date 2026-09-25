@@ -32,12 +32,13 @@ def main() -> None:
         AtlasModelProviderName.OLLAMA, model_override=args.model, prompt_envelope=args.prompt_envelope
     )
     suite, results = run_suite(subject, all_tasks(), corpus_version=CORPUS_VERSION, corpus_hash_value=corpus_hash())
-    policy_id = subject.evaluation_policy_id(corpus_version=CORPUS_VERSION, corpus_hash_value=corpus_hash())
+    policy_id = subject.evaluation_policy_id(corpus_version=CORPUS_VERSION, corpus_hash_value=corpus_hash(), shuffle_seed=suite.shuffle_seed)
     suite = suite.model_copy(update={
         "runtime_model": subject.model,
         "runtime_model_digest": subject.model_digest,
         "provider": "ollama",
         "evaluation_policy_id": policy_id,
+        "shuffle_seed": suite.shuffle_seed,
     })
     DurableAtlasBenchStore().save(suite, results)
 
