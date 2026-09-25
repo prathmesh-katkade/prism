@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from prism_api import atlas_bench_policy
 from prism_api.atlas_bench_live import AtlasProviderBenchSubject
 from prism_api.atlas_bench_policy import compute_evaluation_policy_id
 from prism_api_contracts import AtlasModelProviderName
@@ -33,6 +34,12 @@ def test_policy_id_changes_when_context_tokens_changes() -> None:
     baseline = compute_evaluation_policy_id(**_base_kwargs())
     changed = compute_evaluation_policy_id(**{**_base_kwargs(), "context_tokens": 40_960})
     assert baseline != changed
+
+
+def test_policy_id_records_the_critical_item_allowance(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    baseline = compute_evaluation_policy_id(**_base_kwargs())
+    monkeypatch.setattr(atlas_bench_policy, "CRITICAL_REGRESSION_ALLOWANCE_ITEMS", 0)
+    assert compute_evaluation_policy_id(**_base_kwargs()) != baseline
 
 
 def test_policy_id_changes_with_each_material_field() -> None:

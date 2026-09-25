@@ -10,7 +10,7 @@ either subject to mutate even if it wanted to. A future subject that wraps a
 real tool-executing Atlas provider must preserve that boundary (dry-run /
 no-op tool execution) to remain a legitimate Shadow Brain participant.
 
-Promotion policy is locked: IMPROVE TARGET CAPABILITY + NO UNACCEPTABLE
+Promotion policy is locked: NO OVERALL REGRESSION + NO UNACCEPTABLE
 CRITICAL REGRESSION. A candidate cannot win on aggregate score alone while
 regressing a critical category -- ``CRITICAL_CATEGORIES`` makes that
 non-negotiable rather than a judgment call applied inconsistently at
@@ -55,6 +55,7 @@ from sqlalchemy import (
 from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.exc import IntegrityError, OperationalError
 
+from .atlas_bench_policy import CRITICAL_REGRESSION_ALLOWANCE_ITEMS
 from .atlas_bench_runner import AtlasBenchSubject, run_suite
 from .atlas_schema_utils import ensure_index
 from .durable_registry import history_database_url
@@ -80,24 +81,32 @@ def decide_promotion(
     candidate_id: str,
     production_run: AtlasBenchSuiteRun,
     candidate_run: AtlasBenchSuiteRun,
-    *,
-    critical_regression_tolerance: float = 0.0,
 ) -> AtlasPromotionDecision:
     """Compare two AtlasBench suite runs and produce a typed verdict."""
     production_by_category = {score.category: score for score in production_run.category_scores}
+    candidate_by_category = {score.category: score for score in candidate_run.category_scores}
+    if (
+        production_run.total_tasks != candidate_run.total_tasks
+        or production_run.corpus_version != candidate_run.corpus_version
+        or production_run.corpus_hash != candidate_run.corpus_hash
+        or production_run.evaluation_policy_id != candidate_run.evaluation_policy_id
+        or production_by_category.keys() != candidate_by_category.keys()
+        or any(
+            score.total != candidate_by_category[category].total
+            for category, score in production_by_category.items()
+        )
+    ):
+        raise ValueError("AtlasBench runs have incompatible task or policy provenance")
     critical_regressions: list[AtlasCriticalRegression] = []
-    improved_any = False
     for candidate_score in candidate_run.category_scores:
         production_score = production_by_category.get(candidate_score.category)
         if production_score is None:
             continue
         candidate_rate = _pass_rate(candidate_score.passed, candidate_score.total)
         production_rate = _pass_rate(production_score.passed, production_score.total)
-        if candidate_rate > production_rate:
-            improved_any = True
         if (
             candidate_score.category in CRITICAL_CATEGORIES
-            and candidate_rate < production_rate - critical_regression_tolerance
+            and production_score.passed - candidate_score.passed > CRITICAL_REGRESSION_ALLOWANCE_ITEMS
         ):
             critical_regressions.append(
                 AtlasCriticalRegression(
@@ -110,12 +119,10 @@ def decide_promotion(
     overall_production_rate = _pass_rate(production_run.total_passed, production_run.total_tasks)
     overall_candidate_rate = _pass_rate(candidate_run.total_passed, candidate_run.total_tasks)
 
-    if critical_regressions:
+    if critical_regressions or candidate_run.total_passed < production_run.total_passed:
         verdict = AtlasPromotionVerdict.REJECT
-    elif overall_candidate_rate > overall_production_rate or improved_any:
-        verdict = AtlasPromotionVerdict.PROMOTE_ELIGIBLE
     else:
-        verdict = AtlasPromotionVerdict.HOLD
+        verdict = AtlasPromotionVerdict.PROMOTE_ELIGIBLE
 
     return AtlasPromotionDecision(
         decision_id=f"promodecision_{uuid.uuid4().hex}",
@@ -137,7 +144,6 @@ def shadow_compare(
     *,
     corpus_version: str,
     corpus_hash_value: str,
-    critical_regression_tolerance: float = 0.0,
 ) -> tuple[AtlasBenchSuiteRun, AtlasBenchSuiteRun, AtlasPromotionDecision]:
     """Run production and candidate through the identical task set."""
     production_run, _ = run_suite(
@@ -150,7 +156,6 @@ def shadow_compare(
         candidate_subject.subject_id,
         production_run,
         candidate_run,
-        critical_regression_tolerance=critical_regression_tolerance,
     )
     return production_run, candidate_run, decision
 

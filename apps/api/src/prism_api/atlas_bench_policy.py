@@ -23,7 +23,8 @@ from typing import Optional
 
 from .atlas_bench_shuffle import DEFAULT_SHUFFLE_SEED
 
-EVALUATION_POLICY_VERSION = "atlasbench-eval-policy-v3-shuffled-string-choice"
+EVALUATION_POLICY_VERSION = "atlasbench-eval-policy-v4-critical-item-allowance"
+CRITICAL_REGRESSION_ALLOWANCE_ITEMS = 1
 
 
 def compute_evaluation_policy_id(
@@ -61,6 +62,7 @@ def compute_evaluation_policy_id(
             "corpus_version": corpus_version,
             "corpus_hash": corpus_hash_value,
             "shuffle_seed": shuffle_seed,
+            "critical_regression_allowance_items": CRITICAL_REGRESSION_ALLOWANCE_ITEMS,
         },
         sort_keys=True,
     )

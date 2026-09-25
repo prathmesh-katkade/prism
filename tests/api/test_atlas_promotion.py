@@ -17,7 +17,12 @@ from prism_api.atlas_promotion import (
     decide_promotion,
     shadow_compare,
 )
-from prism_api_contracts import AtlasAdapterId, AtlasPromotionDecision, AtlasPromotionVerdict
+from prism_api_contracts import (
+    AtlasAdapterId,
+    AtlasBenchCategory,
+    AtlasPromotionDecision,
+    AtlasPromotionVerdict,
+)
 
 
 def _runs():  # type: ignore[no-untyped-def]
@@ -35,12 +40,64 @@ def test_a_strictly_better_candidate_with_no_critical_regression_is_promote_elig
     assert decision.overall_candidate_pass_rate > decision.overall_production_pass_rate
 
 
-def test_identical_performance_is_hold() -> None:
+def test_identical_performance_meets_the_no_regression_gate() -> None:
     tasks = all_tasks()
     production_run, _ = run_suite(PerfectReferenceSubject(tasks, subject_id="prod"), tasks, corpus_version=CORPUS_VERSION, corpus_hash_value=corpus_hash())
     candidate_run, _ = run_suite(PerfectReferenceSubject(tasks, subject_id="candidate"), tasks, corpus_version=CORPUS_VERSION, corpus_hash_value=corpus_hash())
     decision = decide_promotion("candidate", production_run, candidate_run)
-    assert decision.verdict is AtlasPromotionVerdict.HOLD
+    assert decision.verdict is AtlasPromotionVerdict.PROMOTE_ELIGIBLE
+
+
+def _miss_category_items(run, category: AtlasBenchCategory, count: int):  # type: ignore[no-untyped-def]
+    scores = [
+        score.model_copy(update={"passed": score.passed - count}) if score.category is category else score
+        for score in run.category_scores
+    ]
+    return run.model_copy(update={"category_scores": scores, "total_passed": run.total_passed - count})
+
+
+def test_one_critical_item_difference_is_allowed_when_overall_is_equal() -> None:
+    tasks = all_tasks()
+    perfect, _ = run_suite(PerfectReferenceSubject(tasks), tasks, corpus_version=CORPUS_VERSION, corpus_hash_value=corpus_hash())
+    production = _miss_category_items(perfect, AtlasBenchCategory.GENERAL, 1)
+    candidate = _miss_category_items(perfect, AtlasBenchCategory.SQL, 1)
+
+    decision = decide_promotion("candidate", production, candidate)
+    assert decision.verdict is AtlasPromotionVerdict.PROMOTE_ELIGIBLE
+    assert decision.critical_regressions == []
+
+
+def test_two_critical_items_missing_rejects_even_when_overall_is_equal() -> None:
+    tasks = all_tasks()
+    perfect, _ = run_suite(PerfectReferenceSubject(tasks), tasks, corpus_version=CORPUS_VERSION, corpus_hash_value=corpus_hash())
+    production = _miss_category_items(perfect, AtlasBenchCategory.GENERAL, 2)
+    candidate = _miss_category_items(perfect, AtlasBenchCategory.SQL, 2)
+
+    decision = decide_promotion("candidate", production, candidate)
+    assert decision.verdict is AtlasPromotionVerdict.REJECT
+    assert [item.category for item in decision.critical_regressions] == [AtlasBenchCategory.SQL]
+
+
+def test_overall_regression_rejects_without_any_critical_regression() -> None:
+    tasks = all_tasks()
+    perfect, _ = run_suite(PerfectReferenceSubject(tasks), tasks, corpus_version=CORPUS_VERSION, corpus_hash_value=corpus_hash())
+    candidate = _miss_category_items(perfect, AtlasBenchCategory.GENERAL, 1)
+
+    decision = decide_promotion("candidate", perfect, candidate)
+    assert decision.verdict is AtlasPromotionVerdict.REJECT
+    assert decision.critical_regressions == []
+
+
+def test_decision_refuses_mismatched_evaluation_policies() -> None:
+    tasks = all_tasks()
+    production, _ = run_suite(PerfectReferenceSubject(tasks), tasks, corpus_version=CORPUS_VERSION, corpus_hash_value=corpus_hash())
+    candidate = production.model_copy(update={"evaluation_policy_id": "a" * 64})
+    try:
+        decide_promotion("candidate", production, candidate)
+    except ValueError as error:
+        assert "incompatible" in str(error)
+    else:
+        raise AssertionError("mismatched policy must not produce a promotion verdict")
 
 
 def test_a_worse_candidate_that_regresses_a_critical_category_is_rejected_even_with_overall_improvement_impossible() -> None:
@@ -54,30 +111,15 @@ def test_a_worse_candidate_that_regresses_a_critical_category_is_rejected_even_w
 
 
 def test_critical_regression_blocks_promotion_even_if_aggregate_score_would_otherwise_pass() -> None:
-    # A candidate that aces every non-critical category but regresses even one
-    # critical category must still be rejected -- "cannot win on aggregate
-    # score while catastrophically regressing a critical category."
     tasks = all_tasks()
-    production_run, _ = run_suite(PerfectReferenceSubject(tasks, subject_id="prod"), tasks, corpus_version=CORPUS_VERSION, corpus_hash_value=corpus_hash())
+    perfect, _ = run_suite(PerfectReferenceSubject(tasks), tasks, corpus_version=CORPUS_VERSION, corpus_hash_value=corpus_hash())
+    production = _miss_category_items(perfect, AtlasBenchCategory.GENERAL, 3)
+    candidate = _miss_category_items(perfect, AtlasBenchCategory.SQL, 2)
 
-    class _MostlyPerfectButFailsOneCritical:
-        subject_id = "candidate"
-
-        def __init__(self, tasks):  # type: ignore[no-untyped-def]
-            self._correct = {task.task_id: task.correct_choice for task in tasks}
-
-        def answer(self, prompt, choices):  # type: ignore[no-untyped-def]
-            for task in tasks:
-                if task.prompt == prompt:
-                    if task.task_id == "sql_001":  # SQL is a critical category
-                        return next(i for i in range(len(choices)) if i != task.correct_choice)
-                    return task.correct_choice
-            return 0
-
-    candidate_run, _ = run_suite(_MostlyPerfectButFailsOneCritical(tasks), tasks, corpus_version=CORPUS_VERSION, corpus_hash_value=corpus_hash())
-    decision = decide_promotion("candidate", production_run, candidate_run)
+    decision = decide_promotion("candidate", production, candidate)
     assert decision.verdict is AtlasPromotionVerdict.REJECT
-    assert decision.overall_candidate_pass_rate < 1.0  # sanity: it really did miss one
+    assert [item.category for item in decision.critical_regressions] == [AtlasBenchCategory.SQL]
+    assert decision.overall_candidate_pass_rate > decision.overall_production_pass_rate
 
 
 def test_shadow_compare_runs_both_subjects_and_returns_a_decision() -> None:
@@ -123,24 +165,8 @@ def test_promotion_is_atomic_auditable_and_never_overwrites_history(tmp_path) ->
 
     candidate_b_run, _ = run_suite(PerfectReferenceSubject(tasks, subject_id="candidate_b"), tasks, corpus_version=CORPUS_VERSION, corpus_hash_value=corpus_hash())
     decision_b = decide_promotion("candidate_b", candidate_a_run, candidate_b_run)
-    # candidate_b ties candidate_a (both perfect) -> HOLD, not eligible; use a
-    # synthetic eligible decision to exercise a second real promotion instead.
-    import datetime as _dt
-
-    from prism_api_contracts import AtlasPromotionDecision
-
-    forced_eligible = AtlasPromotionDecision(
-        decision_id=decision_b.decision_id,
-        candidate_id="candidate_b",
-        production_run_id=decision_b.production_run_id,
-        candidate_run_id=decision_b.candidate_run_id,
-        verdict=AtlasPromotionVerdict.PROMOTE_ELIGIBLE,
-        overall_production_pass_rate=decision_b.overall_production_pass_rate,
-        overall_candidate_pass_rate=decision_b.overall_candidate_pass_rate,
-        critical_regressions=[],
-        decided_at=_dt.datetime.now(_dt.timezone.utc),
-    )
-    pointer_b = store.promote(forced_eligible, reason="second promotion")
+    assert decision_b.verdict is AtlasPromotionVerdict.PROMOTE_ELIGIBLE
+    pointer_b = store.promote(decision_b, reason="second promotion")
     assert pointer_b.candidate_id == "candidate_b"
     assert pointer_b.previous_candidate_id == "candidate_a"
 

@@ -1,0 +1,103 @@
+{
+  "critical_regression_allowance_items": 1,
+  "evaluation_policy_version": "atlasbench-eval-policy-v4-critical-item-allowance",
+  "future_evaluation_policy_id": "385857072a4ae541a63e986646d29a3b69da0b806ffdf9908238db4ca3bb523d",
+  "models": [
+    {
+      "correct": 90,
+      "critical_item_losses": {},
+      "production_correct": 90,
+      "run_id": "benchrun_ece36787235f40598caf88cfad9c36f3",
+      "tag": "qwen3:4b-instruct-2507-q4_K_M",
+      "verdict": "production_baseline"
+    },
+    {
+      "correct": 88,
+      "critical_item_losses": {
+        "machine_learning": 1,
+        "python_sandbox": 1
+      },
+      "production_correct": 90,
+      "run_id": "benchrun_0eae65bd6688453a92107c75b882b80b",
+      "tag": "qwen2.5:3b",
+      "verdict": "reject"
+    },
+    {
+      "correct": 89,
+      "critical_item_losses": {
+        "statistics": 1
+      },
+      "production_correct": 90,
+      "run_id": "benchrun_c4c717618c7f44d7a6616201848d9294",
+      "tag": "ministral-3:8b",
+      "verdict": "reject"
+    },
+    {
+      "correct": 89,
+      "critical_item_losses": {
+        "machine_learning": 1
+      },
+      "production_correct": 90,
+      "run_id": "benchrun_fc1d12326591445bba28883c579329c0",
+      "tag": "ministral-3:3b",
+      "verdict": "reject"
+    },
+    {
+      "correct": 90,
+      "critical_item_losses": {},
+      "production_correct": 90,
+      "run_id": "benchrun_9b17b0c0b33c48d59f4c698bb1370994",
+      "tag": "granite4:micro",
+      "verdict": "promote_eligible"
+    },
+    {
+      "correct": 89,
+      "critical_item_losses": {
+        "python_sandbox": 1
+      },
+      "production_correct": 90,
+      "run_id": "benchrun_8393cf6681874d31ac56f8caddec54bb",
+      "tag": "granite4:tiny-h",
+      "verdict": "reject"
+    },
+    {
+      "correct": 90,
+      "critical_item_losses": {},
+      "production_correct": 90,
+      "run_id": "benchrun_0c9b403263f3492c8f261665776db682",
+      "tag": "qwen3:8b",
+      "verdict": "promote_eligible"
+    },
+    {
+      "correct": 90,
+      "critical_item_losses": {},
+      "production_correct": 90,
+      "run_id": "benchrun_d480f7473ce24870831ed5abfb255dc6",
+      "tag": "qwen2.5:7b-instruct",
+      "verdict": "promote_eligible"
+    },
+    {
+      "correct": 90,
+      "critical_item_losses": {},
+      "production_correct": 90,
+      "run_id": "benchrun_054053b4faee4cedace512bf6cb52b4a",
+      "tag": "phi4-mini:latest",
+      "verdict": "promote_eligible"
+    },
+    {
+      "correct": 88,
+      "critical_item_losses": {
+        "sql": 2
+      },
+      "production_correct": 90,
+      "run_id": "benchrun_407142b66d8e416ba195cc7b5da5927b",
+      "tag": "olmo-3:7b-instruct",
+      "verdict": "reject"
+    }
+  ],
+  "overall_score_must_not_be_lower": true,
+  "rescored_at": "2026-09-25T12:38:52.818999+00:00",
+  "source_corpus_hash": "f0af1e39a778755a925f70570c19a4e5754e2dcccbb57d44e8673627a7f4f10f",
+  "source_report": "C:\\Users\\Admin\\source\\repos\\prism-merge\\docs\\atlas\\arena\\round-5.json",
+  "stored_evaluation_policy_id": "2567d704bfb69b3335a93a47e0b4ecf817522c1fd71c4c8504c27080741dd531"
+}
