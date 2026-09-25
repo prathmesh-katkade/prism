@@ -16,6 +16,16 @@ node_modules/
 .prism/vnext-*.log
 **/.prism/work/
 **/.prism/runtime/
+apps/api/build/
+apps/api/dist/
+apps/api/*.log
+apps/api/*.pid
+apps/api/prism-api.spec
+apps/desktop-shell/src-tauri/.prism/
+apps/desktop-shell/src-tauri/binaries/
+apps/desktop-shell/src-tauri/gen/
+apps/desktop-shell/src-tauri/target/
+tauri_dev.log
 test-results/
 playwright-report/
 venv/
