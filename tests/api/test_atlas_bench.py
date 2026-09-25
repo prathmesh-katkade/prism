@@ -1,13 +1,17 @@
 from __future__ import annotations
 
+import pytest
 from prism_api.atlas_bench_corpus import CORPUS_VERSION, all_tasks, corpus_hash
 from prism_api.atlas_bench_runner import (
+    BenchAnswer,
+    ConstantChoiceSubject,
     FirstChoiceSubject,
     PerfectReferenceSubject,
     WorstReferenceSubject,
     replay_hash,
     run_suite,
 )
+from prism_api.atlas_bench_shuffle import DEFAULT_SHUFFLE_SEED
 from prism_api.atlas_bench_store import DurableAtlasBenchStore
 from prism_api_contracts import AtlasBenchCategory
 
@@ -26,6 +30,27 @@ def test_corpus_has_a_meaningful_task_count_across_every_required_category() -> 
 
 def test_corpus_hash_is_deterministic() -> None:
     assert corpus_hash() == corpus_hash()
+
+
+def test_positional_control_exposes_old_bias_and_shuffled_floor() -> None:
+    tasks = all_tasks()
+    original_hash = corpus_hash()
+    subject = ConstantChoiceSubject(position=1)
+    before, _ = run_suite(subject, tasks, corpus_version=CORPUS_VERSION, corpus_hash_value=original_hash, shuffle_seed=None)
+    after, results = run_suite(subject, tasks, corpus_version=CORPUS_VERSION, corpus_hash_value=original_hash)
+    assert before.total_passed == 81
+    assert 15 <= after.total_passed <= 30
+    assert after.total_passed == 24
+    assert after.shuffle_seed == DEFAULT_SHUFFLE_SEED
+    assert corpus_hash() == original_hash
+    assert all(sorted(result.presentation_permutation) == list(range(4)) for result in results)
+
+
+def test_duplicate_choice_text_fails_with_task_id() -> None:
+    task = all_tasks()[0]
+    duplicate = task.model_copy(update={"choices": [task.choices[0], task.choices[0], *task.choices[2:]]})
+    with pytest.raises(ValueError, match=task.task_id):
+        run_suite(FirstChoiceSubject(), [duplicate], corpus_version=CORPUS_VERSION, corpus_hash_value=corpus_hash())
 
 
 def test_perfect_subject_scores_100_percent() -> None:
@@ -82,16 +107,45 @@ def test_durable_store_persists_a_run_and_its_task_results_and_failed_tasks(tmp_
     assert fetched is not None
     assert fetched.total_tasks == suite_run.total_tasks
     assert fetched.total_passed == 0
+    assert fetched.shuffle_seed == DEFAULT_SHUFFLE_SEED
+    assert fetched.incorrect_parsed == len(tasks)
+    assert fetched.unparseable_or_invalid == 0
     assert len(fetched.category_scores) == len(suite_run.category_scores)
 
     stored_results = store.task_results(suite_run.run_id)
     assert len(stored_results) == len(tasks)
+    assert all(sorted(item.presentation_permutation) == list(range(4)) for item in stored_results)
 
     failed = store.failed_tasks(suite_run.run_id)
     assert len(failed) == len(tasks)  # WorstReferenceSubject fails everything
 
     listed = store.list_runs_for_subject(subject.subject_id)
     assert listed and listed[0].run_id == suite_run.run_id
+
+
+def test_invalid_response_is_separate_from_wrong_answer_and_telemetry_survives(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    tasks = all_tasks()[:2]
+
+    class MixedSubject:
+        subject_id = "mixed"
+
+        def answer_detailed(self, prompt, choices):  # type: ignore[no-untyped-def]
+            if prompt == tasks[0].prompt:
+                wrong = next(index for index, choice in enumerate(choices) if choice != tasks[0].choices[tasks[0].correct_choice])
+                return BenchAnswer(wrong, '{"choice": "wrong"}', "stop", 5)
+            return BenchAnswer(-1, '{"choice_index":', "length", 256)
+
+    suite, results = run_suite(MixedSubject(), tasks, corpus_version=CORPUS_VERSION, corpus_hash_value=corpus_hash())
+    assert suite.total_passed == 0
+    assert suite.incorrect_parsed == 1
+    assert suite.unparseable_or_invalid == 1
+    store = DurableAtlasBenchStore(f"sqlite:///{(tmp_path / 'bench.sqlite').as_posix()}")
+    store.save(suite, results)
+    stored = store.task_results(suite.run_id)
+    assert [item.outcome for item in stored] == ["incorrect_parsed", "unparseable_or_invalid"]
+    assert stored[1].raw_response == '{"choice_index":'
+    assert stored[1].done_reason == "length"
+    assert stored[1].eval_count == 256
 
 
 def test_two_suite_runs_are_both_retained_never_overwritten(tmp_path) -> None:  # type: ignore[no-untyped-def]

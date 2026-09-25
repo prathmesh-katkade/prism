@@ -91,7 +91,7 @@ class AtlasModelProvider(Protocol):
     def propose_plan(self, objective: str, metadata: dict[str, object]) -> Optional[list[dict[str, object]]]: ...
 
 
-_DEFAULT_PLANNER_TIMEOUT_SECONDS = 3.0
+_DEFAULT_PLANNER_TIMEOUT_SECONDS = 30.0
 _MIN_PLANNER_TIMEOUT_SECONDS = 1.0
 _MAX_PLANNER_TIMEOUT_SECONDS = 30.0
 
@@ -174,7 +174,8 @@ class OllamaAtlasProvider:
             "model": os.environ.get("PRISM_ATLAS_OLLAMA_MODEL", "qwen2.5:3b"),
             "stream": False,
             "format": format_value,
-            "options": {"temperature": 0, "num_predict": 700},
+            "think": False,
+            "options": {"temperature": 0, "num_predict": 1800, "num_ctx": 4096},
             "prompt": json.dumps({
                 "instruction": instruction,
                 "operational_safety_policy": OPERATIONAL_SAFETY_POLICY,
@@ -193,19 +194,6 @@ class OllamaAtlasProvider:
         timeout = planner_timeout_seconds()
         try:
             response = httpx.post(url, json=self._plan_payload(objective, metadata, schema=True), timeout=timeout)
-            if response.status_code == 400:
-                # Ollama versions predating structured outputs reject a JSON
-                # Schema `format` (only the string "json" is accepted) with a
-                # 400 rather than degrading gracefully. Fall back once to the
-                # legacy unconstrained prompt+format rather than treating this
-                # model/daemon as unreachable.
-                logger.warning(
-                    "Ollama rejected the schema-constrained plan format (HTTP 400) for model %r; "
-                    "falling back to format='json' with the legacy %s prompt.",
-                    os.environ.get("PRISM_ATLAS_OLLAMA_MODEL", "qwen2.5:3b"),
-                    PLAN_PROMPT_SCHEMA_VERSION_V1_LEGACY,
-                )
-                response = httpx.post(url, json=self._plan_payload(objective, metadata, schema=False), timeout=timeout)
             response.raise_for_status()
             value = json.loads(str(response.json().get("response", "")))
             steps = value.get("steps")

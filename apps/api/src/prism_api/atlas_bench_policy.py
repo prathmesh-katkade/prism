@@ -11,19 +11,19 @@ decision. This module gives every live-provider run a deterministic identity
 over exactly the settings that make two runs comparable, so a promotion
 decision can fail closed on a mismatch instead of assuming one.
 
-An unset/ambiguous setting -- most importantly a context window the operator
-never pinned -- never receives a policy id at all (see
-``atlas_bench_live.AtlasProviderBenchSubject.evaluation_policy_id``). Such a
-run is legacy/unqualified evidence, not a policy that could coincidentally
-compare equal to another ambiguous run just because both are ``None``.
+Live subjects now pin 4096 context tokens by default. Older runs with an
+ambiguous context retain a null policy id and remain legacy evidence.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+from typing import Optional
 
-EVALUATION_POLICY_VERSION = "atlasbench-eval-policy-v1"
+from .atlas_bench_shuffle import DEFAULT_SHUFFLE_SEED
+
+EVALUATION_POLICY_VERSION = "atlasbench-eval-policy-v3-shuffled-string-choice"
 
 
 def compute_evaluation_policy_id(
@@ -36,6 +36,7 @@ def compute_evaluation_policy_id(
     provider: str,
     corpus_version: str,
     corpus_hash_value: str,
+    shuffle_seed: Optional[str] = DEFAULT_SHUFFLE_SEED,
 ) -> str:
     """Deterministic sha256 identity over one exact, comparable-run policy.
 
@@ -59,6 +60,7 @@ def compute_evaluation_policy_id(
             "provider": provider,
             "corpus_version": corpus_version,
             "corpus_hash": corpus_hash_value,
+            "shuffle_seed": shuffle_seed,
         },
         sort_keys=True,
     )

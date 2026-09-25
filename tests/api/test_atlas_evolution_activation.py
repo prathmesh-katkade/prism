@@ -93,17 +93,22 @@ def test_live_bench_context_policy_is_uniform_without_changing_prompt_or_score(m
 
     def generate(url, *, json, timeout):  # type: ignore[no-untyped-def]
         requests.append(json)
-        return httpx.Response(200, json={"response": '{"choice_index": 1}'}, request=httpx.Request("POST", url))
+        return httpx.Response(200, json={"response": '{"choice": "two"}'}, request=httpx.Request("POST", url))
 
     monkeypatch.setattr("prism_api.atlas_bench_live.httpx.post", generate)
     for model in ("production", "challenger"):
         subject = AtlasProviderBenchSubject(AtlasModelProviderName.OLLAMA, model_override=model)
         assert subject.answer("Independent test question", ["one", "two"]) == 1
-    expected = {"temperature": 0, "num_predict": 64}
-    if context is not None:
-        expected["num_ctx"] = 4096
+    expected = {"temperature": 0, "num_predict": 256, "num_ctx": 4096}
     assert requests[0]["options"] == requests[1]["options"] == expected
     assert requests[0]["prompt"] == requests[1]["prompt"]
+    assert requests[0]["think"] is requests[1]["think"] is False
+    assert requests[0]["format"] == requests[1]["format"] == {
+        "type": "object",
+        "properties": {"choice": {"type": "string", "enum": ["one", "two"]}},
+        "required": ["choice"],
+        "additionalProperties": False,
+    }
 
 
 @pytest.mark.parametrize("context", ["0", "-1", "broken"])
@@ -112,6 +117,44 @@ def test_live_bench_refuses_invalid_context_policy(monkeypatch, context) -> None
     monkeypatch.setenv("PRISM_ATLAS_BENCH_OLLAMA_CONTEXT_TOKENS", context)
     with pytest.raises(AtlasBenchSubjectUnavailable, match="positive integer"):
         AtlasProviderBenchSubject(AtlasModelProviderName.OLLAMA)
+
+
+def test_live_bench_keeps_truncated_response_and_generation_metadata(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    monkeypatch.setenv("PRISM_AI_PROVIDER", "ollama")
+    monkeypatch.setattr(AtlasProviderBenchSubject, "_probe_model_digest", lambda self: "verified-digest")
+
+    def generate(url, *, json, timeout):  # type: ignore[no-untyped-def]
+        return httpx.Response(200, json={"response": '{"choice_index":', "done_reason": "length", "eval_count": 256}, request=httpx.Request("POST", url))
+
+    monkeypatch.setattr("prism_api.atlas_bench_live.httpx.post", generate)
+    answer = AtlasProviderBenchSubject(AtlasModelProviderName.OLLAMA).answer_detailed("question", ["a", "b"])
+    assert answer.choice_index == -1
+    assert answer.raw_response == '{"choice_index":'
+    assert answer.done_reason == "length"
+    assert answer.eval_count == 256
+
+
+def test_prose_control_changes_only_prompt_envelope(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    monkeypatch.setenv("PRISM_AI_PROVIDER", "ollama")
+    monkeypatch.setattr(AtlasProviderBenchSubject, "_probe_model_digest", lambda self: "verified-digest")
+    requests = []
+
+    def generate(url, *, json, timeout):  # type: ignore[no-untyped-def]
+        requests.append(json)
+        return httpx.Response(200, json={"response": '{"choice": "left"}'}, request=httpx.Request("POST", url))
+
+    monkeypatch.setattr("prism_api.atlas_bench_live.httpx.post", generate)
+    baseline = AtlasProviderBenchSubject(AtlasModelProviderName.OLLAMA)
+    prose = AtlasProviderBenchSubject(AtlasModelProviderName.OLLAMA, prompt_envelope="prose")
+    assert baseline.answer("Which join?", ["inner", "left", "right", "full"]) == 1
+    assert prose.answer("Which join?", ["inner", "left", "right", "full"]) == 1
+    assert {key: value for key, value in requests[0].items() if key != "prompt"} == {
+        key: value for key, value in requests[1].items() if key != "prompt"
+    }
+    assert "Question: Which join?" in requests[1]["prompt"]
+    assert "- inner\n- left\n- right\n- full" in requests[1]["prompt"]
+    assert "A) inner" not in requests[1]["prompt"]
+    assert baseline.evaluation_policy_id(corpus_version="v1", corpus_hash_value="a" * 64) != prose.evaluation_policy_id(corpus_version="v1", corpus_hash_value="a" * 64)
 
 
 def test_decision_route_rejects_unknown_candidate_before_evaluation() -> None:

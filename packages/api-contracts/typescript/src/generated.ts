@@ -131,6 +131,9 @@ export interface AtlasBenchSuiteRun {
   corpus_hash: string;
   total_tasks: number;
   total_passed: number;
+  shuffle_seed?: string;
+  incorrect_parsed?: number;
+  unparseable_or_invalid?: number;
   category_scores?: AtlasBenchCategoryScore[];
   started_at: string;
   completed_at: string;
@@ -151,6 +154,11 @@ export interface AtlasBenchTaskResult {
   chosen_choice?: number;
   correct: boolean;
   raw_answer?: string;
+  raw_response?: string;
+  presentation_permutation?: number[];
+  done_reason?: string;
+  eval_count?: number;
+  outcome?: "correct" | "incorrect_parsed" | "unparseable_or_invalid";
   evaluated_at: string;
 }
 

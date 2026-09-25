@@ -115,7 +115,7 @@ def run_arena_baseline(runtime_model: str = Query(min_length=1, max_length=300))
                     "runtime_model_digest": subject.model_digest,
                     "provider": "ollama",
                     "evaluation_policy_id": subject.evaluation_policy_id(
-                        corpus_version=CORPUS_VERSION, corpus_hash_value=corpus_hash()
+                        corpus_version=CORPUS_VERSION, corpus_hash_value=corpus_hash(), shuffle_seed=suite.shuffle_seed
                     ),
                 }
             ),

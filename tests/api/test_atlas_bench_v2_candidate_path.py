@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json as jsonlib
 import uuid
 from datetime import datetime, timezone
 
@@ -141,7 +142,8 @@ def test_run_candidate_benchmark_defaults_to_v1_when_corpus_omitted(monkeypatch)
             return httpx.Response(200, json={"models": [{"name": runtime_model, "digest": digest}]}, request=httpx.Request("GET", url))
 
         def fake_post(url, *, json, timeout):  # type: ignore[no-untyped-def]
-            return httpx.Response(200, json={"response": '{"choice_index": 0}'}, request=httpx.Request("POST", url))
+            choice = json["format"]["properties"]["choice"]["enum"][0]
+            return httpx.Response(200, json={"response": jsonlib.dumps({"choice": choice})}, request=httpx.Request("POST", url))
 
         monkeypatch.setattr("prism_api.atlas_bench_live.httpx.get", fake_get)
         monkeypatch.setattr("prism_api.atlas_bench_live.httpx.post", fake_post)
@@ -181,7 +183,8 @@ def test_run_candidate_benchmark_can_select_the_v2_holdout_corpus(monkeypatch) -
             return httpx.Response(200, json={"models": [{"name": runtime_model, "digest": digest}]}, request=httpx.Request("GET", url))
 
         def fake_post(url, *, json, timeout):  # type: ignore[no-untyped-def]
-            return httpx.Response(200, json={"response": '{"choice_index": 0}'}, request=httpx.Request("POST", url))
+            choice = json["format"]["properties"]["choice"]["enum"][0]
+            return httpx.Response(200, json={"response": jsonlib.dumps({"choice": choice})}, request=httpx.Request("POST", url))
 
         monkeypatch.setattr("prism_api.atlas_bench_live.httpx.get", fake_get)
         monkeypatch.setattr("prism_api.atlas_bench_live.httpx.post", fake_post)
