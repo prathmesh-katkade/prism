@@ -1,8 +1,8 @@
 /**
  * Data-layer contract shared by every Cortex presentation. This module owns
  * no rendering: it maps the durable `CortexGraphState` / `AtlasRunResponse`
- * onto plan-step selection and stable spatial layout, so a presentation
- * layer (2D SVG, 3D scene, or a future replacement) can be swapped without
+ * onto plan-step selection and grounded groups, so a presentation
+ * layer can be swapped without
  * touching the truthfulness or determinism rules that live here.
  */
 import type { AtlasRunResponse, CortexGraphState, CortexNode } from "@prism/api-contracts";
@@ -46,44 +46,6 @@ export function isMemoryNode(node: CortexNode): boolean {
  * real grouped satellite, never a fabricated selection. */
 export type CortexSelection = { kind: "core" } | { kind: "node"; node: CortexNode } | { kind: "pipeline"; stage: PipelineStage } | { kind: "group"; group: CortexGroup };
 
-export type Vec3 = readonly [number, number, number];
-
-/** Radius of the decorative pipeline ring, sized to sit between the core
- * and the innermost real-node ring (plan_step, at 1.7) without overlapping
- * either. */
-export const PIPELINE_RING_RADIUS = 1.25;
-
-const RING_RADIUS: Record<string, number> = { plan_step: 1.7, specialist: 2.4, tool: 3.1, evidence: 3.9, dataset: 2.9, analytical_object: 3.4, artifact: 3.6 };
-const RING_TILT_SEED: Record<string, number> = { plan_step: 0, specialist: 1.3, tool: 2.6, evidence: 3.9, dataset: 5.2, analytical_object: 0.7, artifact: 1.9 };
-
-/** 3D layout: the same determinism guarantee as `positionFor2D` (grouped by
- * kind into concentric rings so specialists/tools/evidence read as distinct
- * orbital shells around the run core), keyed by node_id so callers never
- * need to re-derive index/total themselves. */
-export function cortexPositions3D(nodes: readonly CortexNode[]): Record<string, Vec3> {
-  const byKind = new Map<string, CortexNode[]>();
-  for (const node of nodes) {
-    const bucket = byKind.get(node.kind);
-    if (bucket) bucket.push(node);
-    else byKind.set(node.kind, [node]);
-  }
-  const positions: Record<string, Vec3> = {};
-  for (const [kind, bucket] of byKind) {
-    if (kind === "run") {
-      for (const node of bucket) positions[node.node_id] = [0, 0, 0];
-      continue;
-    }
-    const radius = RING_RADIUS[kind] ?? 2.7;
-    const tiltSeed = RING_TILT_SEED[kind] ?? 4.4;
-    const total = bucket.length;
-    bucket.forEach((node, index) => {
-      const angle = (index / Math.max(1, total)) * Math.PI * 2;
-      const tilt = Math.sin(angle * 2 + tiltSeed) * 0.4;
-      positions[node.node_id] = [Math.cos(angle) * radius, tilt, Math.sin(angle) * radius];
-    });
-  }
-  return positions;
-}
 
 // --- Grouped projection ------------------------------------------------------
 //
@@ -183,30 +145,3 @@ export function buildCortexGroups(graph: CortexGraphState | null, run: AtlasRunR
   return groups;
 }
 
-/** Deterministic satellite layout: dataset anchored upper-left and evidence
- * lower area (matching the reference), specialists (sorted by id, so the
- * same run always lays out the same way) spread across the arc between --
- * stable for a given group set rather than insertion order. */
-export function cortexGroupPositions3D(groups: readonly CortexGroup[]): Record<string, Vec3> {
-  const positions: Record<string, Vec3> = {};
-  const dataset = groups.filter((group) => group.kind === "dataset");
-  const specialists = [...groups.filter((group) => group.kind === "specialist")].sort((a, b) => a.sourceId.localeCompare(b.sourceId));
-  const evidence = groups.filter((group) => group.kind === "evidence");
-  const ordered = [...dataset, ...specialists, ...evidence];
-  const radius = 2.7;
-  const startAngle = Math.PI * 0.85; // upper-left (dataset)
-  // A sweep of exactly -PI keeps the two fixed endpoints (dataset, evidence)
-  // genuinely opposite (180 degrees apart, the maximum possible separation)
-  // rather than wrapping past halfway and landing them back near each
-  // other -- the earlier -1.55*PI sweep did exactly that, which is why the
-  // dataset and evidence labels visibly overlapped on screen.
-  const sweep = -Math.PI;
-  const total = ordered.length;
-  ordered.forEach((group, index) => {
-    const t = total <= 1 ? 0 : index / (total - 1);
-    const angle = startAngle + sweep * t;
-    const y = 0.55 - t * 1.05; // starts high (dataset), ends low (evidence)
-    positions[group.groupId] = [Math.cos(angle) * radius, y, Math.sin(angle) * radius];
-  });
-  return positions;
-}

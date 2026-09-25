@@ -64,7 +64,7 @@ test("Atlas deep link is accessible in dark and light themes on desktop and mobi
   await expect(atlas).toBeVisible();
   await expect(page.getByLabel("Atlas command center")).toBeVisible();
   await expect(page.getByLabel("Cortex real-state graph")).toBeVisible();
-  await expect(page.getByLabel("Cortex real-state graph").locator("canvas")).toBeVisible();
+  await expect(page.getByLabel("Cortex real-state graph").getByLabel("Cortex nodes")).toBeVisible();
   await expect(page.getByLabel("Selected Cortex node")).toContainText("run");
 
   const darkViolations = await seriousAxeViolations(page, ".atlas-immersive");

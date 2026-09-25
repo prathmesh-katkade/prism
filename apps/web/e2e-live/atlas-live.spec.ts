@@ -117,13 +117,13 @@ test("ATLAS First Light: honest system state, a real investigation, and the rece
   await page.keyboard.press("Enter");
   await expect(firstEvidenceDetail.getByText("Summary")).toBeVisible();
 
-  // Cortex: the real durable graph, now a grouped 3D scene in a real
-  // browser (never the jsdom/no-WebGL fallback). The dedicated run-focus
-  // button (its own real-state label, e.g. "Focus Investigation complete")
-  // updates the detail panel with that node's actual persisted facts.
+  // Cortex: the real durable graph appears as grouped and atomic records.
+  // The run-focus button updates the detail panel with persisted facts.
   const cortex = page.getByLabel("Cortex real-state graph");
   await expect(cortex).toBeVisible();
-  await expect(cortex.locator(".cortex-stage canvas")).toBeVisible();
+  await expect(cortex.getByLabel("Cortex groups")).toBeVisible();
+  await expect(cortex.getByLabel("Cortex nodes")).toBeVisible();
+  await expect(cortex.getByText(/Recorded relations \(/)).toBeVisible();
   const runFocusButton = cortex.locator(".cortex-run-focus");
   await expect(runFocusButton).toBeVisible();
   await runFocusButton.click();

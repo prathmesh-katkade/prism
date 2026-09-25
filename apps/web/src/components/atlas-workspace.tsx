@@ -5,7 +5,7 @@ import type { KeyboardEvent } from "react";
 import type { AtlasFeedbackEvent, AtlasMemoryRecord, AtlasResourceSnapshot, AtlasRunResponse, AtlasSpecialistIdentity, CortexGraphState, OverviewProfileResponse } from "@prism/api-contracts";
 import { apiUrl } from "../config/api";
 import { PipelineStepper } from "./atlas-run-activity";
-import { AtlasCortex3D } from "./atlas-cortex-3d";
+import { AtlasCortexLedger } from "./atlas-cortex-ledger";
 import { AtlasInspectorDrawer } from "./atlas-inspector-drawer";
 import { AtlasCommandCenter } from "./atlas-command-center";
 import { AtlasStatusBadge } from "./atlas-status-badge";
@@ -17,8 +17,8 @@ export { connectedStepIdForNode } from "./atlas-cortex-shared";
 const terminal = new Set(["completed", "failed", "cancelled"]);
 
 /**
- * ATLAS's immersive shell: a dedicated environment (top identity/status,
- * a dominant 3D Cortex, a bottom command bar, a side context inspector)
+ * ATLAS's investigation desk: a dedicated environment (top identity/status,
+ * a stored graph ledger, objective entry, and context inspector)
  * rather than another flat stack of panels in the ordinary PRISM tab body.
  * `onEnterImmersive`/`onExitImmersive` are optional so this still renders
  * correctly wherever a caller (a test, a future embed) doesn't wire them --
@@ -214,7 +214,7 @@ export function AtlasWorkspace({
           {error ? <p className="query-error" role="alert">{error}</p> : null}
           <div className="atlas-immersive-main">
             <div className="atlas-immersive-stage-wrap">
-              <AtlasCortex3D
+              <AtlasCortexLedger
                 graph={graph}
                 run={run}
                 selectedStepId={selectedStepId}
