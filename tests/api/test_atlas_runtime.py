@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import time
 
+import httpx
 from fastapi.testclient import TestClient
 from prism_api.main import create_app
 from prism_api_contracts import AtlasPlanState, AtlasRunResponse, CortexGraphState
@@ -349,12 +350,14 @@ def test_schema_constrained_plan_response_parses_and_survives_validation(monkeyp
 
     assert len(calls) == 1
     assert calls[0]["format"] == atlas_runtime.PLAN_RESPONSE_SCHEMA
+    assert calls[0]["think"] is False
+    assert calls[0]["options"] == {"temperature": 0, "num_predict": 1800, "num_ctx": 4096}
     prompt = json.loads(calls[0]["prompt"])  # type: ignore[arg-type]
     assert prompt["prompt_schema_version"] == atlas_runtime.PLAN_PROMPT_SCHEMA_VERSION_V2
     assert "declared_tool_kind_pairs" in prompt
 
 
-def test_schema_format_rejected_falls_back_to_legacy_json_format(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+def test_schema_format_rejected_fails_closed(monkeypatch) -> None:  # type: ignore[no-untyped-def]
     from prism_api import atlas_runtime
 
     monkeypatch.setenv("PRISM_AI_PROVIDER", "ollama")
@@ -366,41 +369,18 @@ def test_schema_format_rejected_falls_back_to_legacy_json_format(monkeypatch) ->
         # Ollama versions predating structured outputs never reach either.
         status_code = 400
 
-    class _LegacyResponse:
-        status_code = 200
-
         def raise_for_status(self) -> None:
-            return None
-
-        def json(self) -> dict[str, object]:
-            return {
-                "response": json.dumps(
-                    {
-                        "steps": [
-                            {
-                                "kind": "data_quality",
-                                "tool_name": "overview.quality_review",
-                                "title": "Review data quality",
-                                "rationale": "Legacy-format proposed step.",
-                            }
-                        ]
-                    }
-                )
-            }
+            raise httpx.HTTPStatusError("schema rejected", request=httpx.Request("POST", "http://localhost"), response=httpx.Response(400))
 
     def _fake_post(url, *, json, timeout):  # type: ignore[no-untyped-def]
         calls.append(json)
-        return _RejectedResponse() if len(calls) == 1 else _LegacyResponse()
+        return _RejectedResponse()
 
     monkeypatch.setattr(atlas_runtime.httpx, "post", _fake_post)
 
     provider = atlas_runtime.OllamaAtlasProvider()
     result = provider.propose_plan_detailed("Review data quality.", {"dataset_id": "x"})
 
-    assert result.status == "ok"
-    assert len(calls) == 2
+    assert result.status == "invalid"
+    assert len(calls) == 1
     assert calls[0]["format"] == atlas_runtime.PLAN_RESPONSE_SCHEMA
-    assert calls[1]["format"] == "json"
-    legacy_prompt = json.loads(calls[1]["prompt"])  # type: ignore[arg-type]
-    assert legacy_prompt["prompt_schema_version"] == atlas_runtime.PLAN_PROMPT_SCHEMA_VERSION_V1_LEGACY
-    assert "declared_tools" in legacy_prompt

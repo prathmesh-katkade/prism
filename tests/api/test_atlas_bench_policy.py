@@ -7,9 +7,9 @@ from prism_api_contracts import AtlasModelProviderName
 
 def _base_kwargs() -> dict:
     return {
-        "prompt_schema_version": "atlasbench-choice-v1",
+        "prompt_schema_version": "atlasbench-choice-v2",
         "temperature": 0,
-        "num_predict": 64,
+        "num_predict": 256,
         "context_tokens": 4096,
         "timeout_seconds": 20.0,
         "provider": "ollama",
@@ -42,7 +42,7 @@ def test_policy_id_changes_with_each_material_field() -> None:
         ("num_predict", 128),
         ("timeout_seconds", 30.0),
         ("provider", "deterministic"),
-        ("prompt_schema_version", "atlasbench-choice-v2"),
+        ("prompt_schema_version", "atlasbench-choice-v3"),
         ("corpus_version", "atlasbench-v2-holdout-wave1"),
         ("corpus_hash_value", "b" * 64),
     ]:
@@ -50,15 +50,14 @@ def test_policy_id_changes_with_each_material_field() -> None:
         assert variant != baseline, f"expected a different policy id when {field} changes"
 
 
-def test_subject_has_no_policy_id_when_context_is_unset(monkeypatch) -> None:  # type: ignore[no-untyped-def]
-    """An ambiguous/default context window must never masquerade as a real,
-    comparable policy -- it gets no id at all, not a colliding one."""
+def test_subject_pins_default_context_when_env_is_unset(monkeypatch) -> None:  # type: ignore[no-untyped-def]
     monkeypatch.setenv("PRISM_AI_PROVIDER", "ollama")
     monkeypatch.delenv("PRISM_ATLAS_BENCH_OLLAMA_CONTEXT_TOKENS", raising=False)
     monkeypatch.setattr(AtlasProviderBenchSubject, "_probe_model_digest", lambda self: "test-digest")
 
     subject = AtlasProviderBenchSubject(AtlasModelProviderName.OLLAMA, model_override="test-model")
-    assert subject.evaluation_policy_id(corpus_version="atlasbench-v1", corpus_hash_value="a" * 64) is None
+    assert subject.context_tokens == 4096
+    assert subject.evaluation_policy_id(corpus_version="atlasbench-v1", corpus_hash_value="a" * 64) is not None
 
 
 def test_subject_has_a_policy_id_when_context_is_pinned(monkeypatch) -> None:  # type: ignore[no-untyped-def]

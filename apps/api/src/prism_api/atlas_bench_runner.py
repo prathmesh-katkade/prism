@@ -21,8 +21,9 @@ import hashlib
 import json
 import uuid
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Protocol, Sequence
+from typing import Optional, Protocol, Sequence
 
 from prism_api_contracts import (
     AtlasBenchCategory,
@@ -31,6 +32,14 @@ from prism_api_contracts import (
     AtlasBenchTask,
     AtlasBenchTaskResult,
 )
+
+
+@dataclass(frozen=True)
+class BenchAnswer:
+    choice_index: int
+    raw_response: str = ""
+    done_reason: Optional[str] = None
+    eval_count: Optional[int] = None
 
 
 class AtlasBenchSubject(Protocol):
@@ -107,16 +116,23 @@ def run_suite(
     results: list[AtlasBenchTaskResult] = []
     for task in sorted(tasks, key=lambda item: item.task_id):
         now = datetime.now(timezone.utc)
-        chosen = subject.answer(task.prompt, task.choices)
+        detailed = getattr(subject, "answer_detailed", None)
+        answer = detailed(task.prompt, task.choices) if callable(detailed) else BenchAnswer(subject.answer(task.prompt, task.choices))
+        chosen = answer.choice_index
         correct = chosen == task.correct_choice
+        parsed = 0 <= chosen < len(task.choices)
         results.append(
             AtlasBenchTaskResult(
                 task_id=task.task_id,
                 category=task.category,
                 subject_id=subject.subject_id,
-                chosen_choice=chosen if 0 <= chosen < len(task.choices) else None,
+                chosen_choice=chosen if parsed else None,
                 correct=correct,
-                raw_answer=task.choices[chosen] if 0 <= chosen < len(task.choices) else "",
+                raw_answer=task.choices[chosen] if parsed else "",
+                raw_response=answer.raw_response if not correct else "",
+                done_reason=answer.done_reason,
+                eval_count=answer.eval_count,
+                outcome="correct" if correct else "incorrect_parsed" if parsed else "unparseable_or_invalid",
                 evaluated_at=now,
             )
         )
@@ -141,6 +157,8 @@ def run_suite(
         corpus_hash=corpus_hash_value,
         total_tasks=len(results),
         total_passed=sum(1 for item in results if item.correct),
+        incorrect_parsed=sum(1 for item in results if item.outcome == "incorrect_parsed"),
+        unparseable_or_invalid=sum(1 for item in results if item.outcome == "unparseable_or_invalid"),
         category_scores=category_scores,
         started_at=started,
         completed_at=completed,

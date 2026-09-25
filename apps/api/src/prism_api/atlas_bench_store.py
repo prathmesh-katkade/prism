@@ -48,6 +48,8 @@ _runs = Table(
     Column("corpus_hash", String(64), nullable=False, index=True),
     Column("total_tasks", Integer, nullable=False),
     Column("total_passed", Integer, nullable=False),
+    Column("incorrect_parsed", Integer, nullable=False, server_default="0"),
+    Column("unparseable_or_invalid", Integer, nullable=False, server_default="0"),
     Column("category_scores_payload", Text, nullable=False),
     Column("started_at", DateTime(timezone=True), nullable=False),
     Column("completed_at", DateTime(timezone=True), nullable=False, index=True),
@@ -71,6 +73,10 @@ _task_results = Table(
     Column("chosen_choice", Integer, nullable=True),
     Column("correct", Boolean, nullable=False),
     Column("raw_answer", Text, nullable=False),
+    Column("raw_response", Text, nullable=False, server_default=""),
+    Column("done_reason", String(40), nullable=True),
+    Column("eval_count", Integer, nullable=True),
+    Column("outcome", String(32), nullable=False, server_default="unparseable_or_invalid"),
     Column("evaluated_at", DateTime(timezone=True), nullable=False),
 )
 
@@ -88,6 +94,8 @@ class DurableAtlasBenchStore:
         with self.engine.begin() as connection:
             existing = {str(item["name"]) for item in inspect(connection).get_columns("prism_atlas_bench_runs")}
             additions = {
+                "incorrect_parsed": "INTEGER NOT NULL DEFAULT 0",
+                "unparseable_or_invalid": "INTEGER NOT NULL DEFAULT 0",
                 "subject_kind": "VARCHAR(16) NOT NULL DEFAULT 'generic'",
                 "candidate_id": "VARCHAR(120)", "candidate_fingerprint": "VARCHAR(64)",
                 "trust_verification_id": "VARCHAR(120)", "runtime_model": "VARCHAR(300)",
@@ -97,6 +105,30 @@ class DurableAtlasBenchStore:
             for name, definition in additions.items():
                 if name not in existing:
                     connection.execute(text(f"ALTER TABLE prism_atlas_bench_runs ADD COLUMN {name} {definition}"))
+            existing_results = {str(item["name"]) for item in inspect(connection).get_columns("prism_atlas_bench_task_results")}
+            result_additions = {
+                "raw_response": "TEXT NOT NULL DEFAULT ''",
+                "done_reason": "VARCHAR(40)",
+                "eval_count": "INTEGER",
+                "outcome": "VARCHAR(32) NOT NULL DEFAULT 'unparseable_or_invalid'",
+            }
+            for name, definition in result_additions.items():
+                if name not in existing_results:
+                    connection.execute(text(f"ALTER TABLE prism_atlas_bench_task_results ADD COLUMN {name} {definition}"))
+            if "outcome" not in existing_results:
+                connection.execute(text(
+                    "UPDATE prism_atlas_bench_task_results SET outcome = CASE "
+                    "WHEN correct THEN 'correct' WHEN chosen_choice IS NOT NULL THEN 'incorrect_parsed' "
+                    "ELSE 'unparseable_or_invalid' END"
+                ))
+            if "incorrect_parsed" not in existing or "unparseable_or_invalid" not in existing:
+                connection.execute(text(
+                    "UPDATE prism_atlas_bench_runs SET "
+                    "incorrect_parsed = (SELECT COUNT(*) FROM prism_atlas_bench_task_results t "
+                    "WHERE t.run_id = prism_atlas_bench_runs.run_id AND t.outcome = 'incorrect_parsed'), "
+                    "unparseable_or_invalid = (SELECT COUNT(*) FROM prism_atlas_bench_task_results t "
+                    "WHERE t.run_id = prism_atlas_bench_runs.run_id AND t.outcome = 'unparseable_or_invalid')"
+                ))
             ensure_index(
                 connection,
                 "prism_atlas_bench_task_results",
@@ -122,6 +154,8 @@ class DurableAtlasBenchStore:
                     corpus_hash=suite_run.corpus_hash,
                     total_tasks=suite_run.total_tasks,
                     total_passed=suite_run.total_passed,
+                    incorrect_parsed=suite_run.incorrect_parsed,
+                    unparseable_or_invalid=suite_run.unparseable_or_invalid,
                     category_scores_payload=json.dumps(
                         [score.model_dump(mode="json") for score in suite_run.category_scores], sort_keys=True
                     ),
@@ -148,6 +182,10 @@ class DurableAtlasBenchStore:
                         chosen_choice=result.chosen_choice,
                         correct=result.correct,
                         raw_answer=result.raw_answer,
+                        raw_response=result.raw_response,
+                        done_reason=result.done_reason,
+                        eval_count=result.eval_count,
+                        outcome=result.outcome,
                         evaluated_at=result.evaluated_at,
                     )
                 )
@@ -171,6 +209,8 @@ class DurableAtlasBenchStore:
             corpus_hash=row["corpus_hash"],  # type: ignore[index]
             total_tasks=row["total_tasks"],  # type: ignore[index]
             total_passed=row["total_passed"],  # type: ignore[index]
+            incorrect_parsed=row["incorrect_parsed"],  # type: ignore[index]
+            unparseable_or_invalid=row["unparseable_or_invalid"],  # type: ignore[index]
             category_scores=scores,
             started_at=row["started_at"],  # type: ignore[index]
             completed_at=row["completed_at"],  # type: ignore[index]
@@ -238,6 +278,10 @@ class DurableAtlasBenchStore:
                 chosen_choice=row["chosen_choice"],
                 correct=bool(row["correct"]),
                 raw_answer=row["raw_answer"],
+                raw_response=row["raw_response"],
+                done_reason=row["done_reason"],
+                eval_count=row["eval_count"],
+                outcome=row["outcome"],
                 evaluated_at=row["evaluated_at"],
             )
             for row in rows

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from prism_api.atlas_bench_corpus import CORPUS_VERSION, all_tasks, corpus_hash
 from prism_api.atlas_bench_runner import (
+    BenchAnswer,
     FirstChoiceSubject,
     PerfectReferenceSubject,
     WorstReferenceSubject,
@@ -82,6 +83,8 @@ def test_durable_store_persists_a_run_and_its_task_results_and_failed_tasks(tmp_
     assert fetched is not None
     assert fetched.total_tasks == suite_run.total_tasks
     assert fetched.total_passed == 0
+    assert fetched.incorrect_parsed == len(tasks)
+    assert fetched.unparseable_or_invalid == 0
     assert len(fetched.category_scores) == len(suite_run.category_scores)
 
     stored_results = store.task_results(suite_run.run_id)
@@ -92,6 +95,31 @@ def test_durable_store_persists_a_run_and_its_task_results_and_failed_tasks(tmp_
 
     listed = store.list_runs_for_subject(subject.subject_id)
     assert listed and listed[0].run_id == suite_run.run_id
+
+
+def test_invalid_response_is_separate_from_wrong_answer_and_telemetry_survives(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    tasks = all_tasks()[:2]
+
+    class MixedSubject:
+        subject_id = "mixed"
+
+        def answer_detailed(self, prompt, choices):  # type: ignore[no-untyped-def]
+            if prompt == tasks[0].prompt:
+                wrong = (tasks[0].correct_choice + 1) % len(choices)
+                return BenchAnswer(wrong, '{"choice_index": 1}', "stop", 5)
+            return BenchAnswer(-1, '{"choice_index":', "length", 256)
+
+    suite, results = run_suite(MixedSubject(), tasks, corpus_version=CORPUS_VERSION, corpus_hash_value=corpus_hash())
+    assert suite.total_passed == 0
+    assert suite.incorrect_parsed == 1
+    assert suite.unparseable_or_invalid == 1
+    store = DurableAtlasBenchStore(f"sqlite:///{(tmp_path / 'bench.sqlite').as_posix()}")
+    store.save(suite, results)
+    stored = store.task_results(suite.run_id)
+    assert [item.outcome for item in stored] == ["incorrect_parsed", "unparseable_or_invalid"]
+    assert stored[1].raw_response == '{"choice_index":'
+    assert stored[1].done_reason == "length"
+    assert stored[1].eval_count == 256
 
 
 def test_two_suite_runs_are_both_retained_never_overwritten(tmp_path) -> None:  # type: ignore[no-untyped-def]
