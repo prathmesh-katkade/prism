@@ -31,7 +31,14 @@ test("Atlas deep link is accessible in dark and light themes on desktop and mobi
   page.on("console", (message) => {
     if (message.type() === "error") consoleErrors.push(message.text());
   });
-  page.on("requestfailed", (requestFailure) => failedRequests.push(requestFailure.url()));
+  page.on("requestfailed", (requestFailure) => {
+    // The Command Center's stale-response protection (see use-atlas-resource.ts)
+    // deliberately aborts an in-flight fetch when its context is superseded
+    // (a re-render fetches a newer path, or the owning component unmounts) --
+    // that is correct, intended behavior, not a network failure to catch here.
+    if (requestFailure.failure()?.errorText === "net::ERR_ABORTED") return;
+    failedRequests.push(requestFailure.url());
+  });
 
   const upload = await request.post(`${API}/overview/datasets`, {
     multipart: { file: { name: "atlas-a11y.csv", mimeType: "text/csv", buffer: Buffer.from(CSV) } },

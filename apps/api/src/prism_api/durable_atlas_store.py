@@ -19,6 +19,7 @@ from fastapi import HTTPException, status
 from prism_api_contracts import (
     AtlasModelProviderName,
     AtlasPlanState,
+    AtlasRecentRunSummary,
     AtlasRunEvent,
     AtlasRunEventType,
     AtlasRunRequest,
@@ -204,6 +205,20 @@ class DurableAtlasRunStore:
         statement = select(_runs.c.run_id).order_by(_runs.c.created_at.desc()).limit(limit)
         with self.engine.connect() as connection:
             return [str(row) for row in connection.execute(statement).scalars().all()]
+
+    def recent_summaries(self, *, dataset_id: Optional[str] = None, limit: int = 8) -> list[AtlasRecentRunSummary]:
+        """One bounded query, no per-run event/history reads."""
+        statement = select(_runs.c.snapshot).order_by(_runs.c.created_at.desc(), _runs.c.run_id.desc()).limit(limit)
+        if dataset_id is not None:
+            statement = statement.where(_runs.c.dataset_id == dataset_id)
+        with self.engine.connect() as connection:
+            snapshots = connection.execute(statement).scalars().all()
+        result = []
+        for snapshot in snapshots:
+            run = AtlasRunResponse.model_validate_json(snapshot)
+            result.append(AtlasRecentRunSummary(run_id=run.run_id, dataset_id=run.plan.dataset_id,
+                objective=run.plan.objective, state=run.plan.state, created_at=run.created_at, updated_at=run.updated_at))
+        return result
 
     def create(
         self, request: AtlasRunRequest, provider: AtlasModelProviderName, plan: AtlasStructuredPlan
