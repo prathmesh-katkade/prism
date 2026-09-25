@@ -1,0 +1,3619 @@
+{
+  "bench_policy": {
+    "answer_field": "choice",
+    "answer_type": "per_item_exact_string_enum",
+    "num_ctx": 4096,
+    "num_predict": 256,
+    "prompt_envelope": "nested_json",
+    "prompt_schema_version": "atlasbench-choice-v3-string",
+    "shuffle_seed": "atlasbench-shuffle-v1",
+    "temperature": 0,
+    "think": false,
+    "timeout_seconds": 60
+  },
+  "completed_at": "2026-09-25T10:28:21.945098+00:00",
+  "corpus_hash": "f0af1e39a778755a925f70570c19a4e5754e2dcccbb57d44e8673627a7f4f10f",
+  "corpus_version": "atlasbench-v1",
+  "gates": {
+    "acceptance_min_rate": 0.9,
+    "gpu_min_percent": 85,
+    "valid_json_min_rate": 0.95,
+    "warm_p95_max_seconds": 12
+  },
+  "models": [
+    {
+      "atlasbench_verdict": "production_baseline",
+      "bench": {
+        "categories": {
+          "agentic": {
+            "correct": 10
+          },
+          "causal_safety": {
+            "correct": 8
+          },
+          "evidence": {
+            "correct": 8
+          },
+          "forecasting": {
+            "correct": 8
+          },
+          "general": {
+            "correct": 10
+          },
+          "machine_learning": {
+            "correct": 10
+          },
+          "personality": {
+            "correct": 8
+          },
+          "python_sandbox": {
+            "correct": 8
+          },
+          "sql": {
+            "correct": 10
+          },
+          "statistics": {
+            "correct": 10
+          }
+        },
+        "correct": 90,
+        "done_reason_distribution": {
+          "stop": 90
+        },
+        "eval_count_distribution": {
+          "10": 2,
+          "12": 2,
+          "13": 2,
+          "15": 3,
+          "16": 4,
+          "17": 4,
+          "18": 7,
+          "19": 2,
+          "20": 3,
+          "21": 8,
+          "22": 5,
+          "23": 9,
+          "24": 9,
+          "25": 6,
+          "26": 4,
+          "27": 4,
+          "28": 2,
+          "29": 2,
+          "32": 3,
+          "38": 1,
+          "41": 1,
+          "47": 1,
+          "8": 2,
+          "9": 4
+        },
+        "eval_count_missing": 0,
+        "evaluation_policy_id": "2567d704bfb69b3335a93a47e0b4ecf817522c1fd71c4c8504c27080741dd531",
+        "incorrect_parsed": 0,
+        "run_id": "benchrun_ece36787235f40598caf88cfad9c36f3",
+        "shuffle_seed": "atlasbench-shuffle-v1",
+        "total": 90,
+        "unparseable_or_invalid": 0
+      },
+      "critical_regressions": [],
+      "digest": "0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0",
+      "gate_results": {
+        "acceptance_ge_90_percent": true,
+        "atlasbench_promote_eligible": null,
+        "gpu_ge_85_percent": true,
+        "operational_certification": null,
+        "valid_json_ge_95_percent": true,
+        "warm_p95_le_12_seconds": true
+      },
+      "gpu_after_bench": {
+        "exit_code": 0,
+        "gpu_percent": 100.0,
+        "line": "qwen3:4b-instruct-2507-q4_K_M    0edcdef34593    3.2 GB    100% GPU     4096       4 minutes from now    ",
+        "stdout": "NAME                             ID              SIZE      PROCESSOR    CONTEXT    UNTIL              \nqwen3:4b-instruct-2507-q4_K_M    0edcdef34593    3.2 GB    100% GPU     4096       4 minutes from now    \n"
+      },
+      "gpu_after_planner": {
+        "exit_code": 0,
+        "gpu_percent": 100.0,
+        "line": "qwen3:4b-instruct-2507-q4_K_M    0edcdef34593    3.2 GB    100% GPU     4096       4 minutes from now    ",
+        "stdout": "NAME                             ID              SIZE      PROCESSOR    CONTEXT    UNTIL              \nqwen3:4b-instruct-2507-q4_K_M    0edcdef34593    3.2 GB    100% GPU     4096       4 minutes from now    \n"
+      },
+      "gpu_percent_min_observed": 100.0,
+      "planner": {
+        "acceptance_rate": 1.0,
+        "cold_start_seconds": 1.6821668000002319,
+        "p50_seconds": 0.7539481000003434,
+        "p95_seconds": 1.658701100000144,
+        "rejection_cause_counts": {
+          "empty_steps": 0,
+          "excluded_kind": 0,
+          "invalid_json": 0,
+          "kind_tool_mismatch": 0,
+          "not_requested": 0,
+          "timed_out": 0,
+          "unknown_kind": 0,
+          "unknown_tool": 0
+        },
+        "samples": [
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.5347375000001193,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.5171760000002905,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.5265448000000106,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 1.658701100000144,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 1.9094685999998546,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.7390644999995857,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.7876635000002352,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.8759425999996893,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.6549532000008185,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.7407508999995116,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.6534634999998161,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.7048430000004373,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.7666383000005226,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.7128481999998257,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.7986714999997275,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.8923078999996505,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.885420300000078,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 1.2458636000001206,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 1.1702063999991879,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 1.6476561999998012,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.5159660999997868,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 1.2948450000003504,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 1.636185999999725,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.5155616000001828,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 1.7764583000007406,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.5164850999999544,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.5174066999998104,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.599972500000149,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.5808574000002409,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 1.1839735000003202,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 1.265647600000193,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.6672377000004417,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.7178018999993583,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.7539481000003434,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.684485499999937,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.5168997999999192,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.8427944999993997,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.7677819000000454,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 1.1119932999999946,
+            "status": "ok"
+          }
+        ],
+        "valid_json_rate": 1.0,
+        "warm_count": 39
+      },
+      "status": "complete",
+      "tag": "qwen3:4b-instruct-2507-q4_K_M"
+    },
+    {
+      "atlasbench_verdict": "reject",
+      "bench": {
+        "categories": {
+          "agentic": {
+            "correct": 10
+          },
+          "causal_safety": {
+            "correct": 8
+          },
+          "evidence": {
+            "correct": 8
+          },
+          "forecasting": {
+            "correct": 8
+          },
+          "general": {
+            "correct": 10
+          },
+          "machine_learning": {
+            "correct": 9,
+            "incorrect_parsed": 1
+          },
+          "personality": {
+            "correct": 8
+          },
+          "python_sandbox": {
+            "correct": 7,
+            "incorrect_parsed": 1
+          },
+          "sql": {
+            "correct": 10
+          },
+          "statistics": {
+            "correct": 10
+          }
+        },
+        "correct": 88,
+        "done_reason_distribution": {
+          "stop": 90
+        },
+        "eval_count_distribution": {
+          "10": 2,
+          "12": 3,
+          "13": 3,
+          "15": 3,
+          "16": 3,
+          "17": 4,
+          "18": 6,
+          "19": 2,
+          "20": 3,
+          "21": 8,
+          "22": 5,
+          "23": 9,
+          "24": 9,
+          "25": 6,
+          "26": 4,
+          "27": 4,
+          "28": 2,
+          "29": 2,
+          "31": 1,
+          "32": 2,
+          "38": 1,
+          "41": 1,
+          "47": 1,
+          "8": 2,
+          "9": 4
+        },
+        "eval_count_missing": 0,
+        "evaluation_policy_id": "2567d704bfb69b3335a93a47e0b4ecf817522c1fd71c4c8504c27080741dd531",
+        "incorrect_parsed": 2,
+        "run_id": "benchrun_0eae65bd6688453a92107c75b882b80b",
+        "shuffle_seed": "atlasbench-shuffle-v1",
+        "total": 90,
+        "unparseable_or_invalid": 0
+      },
+      "critical_regressions": [
+        "machine_learning",
+        "python_sandbox"
+      ],
+      "digest": "357c53fb659c5076de1d65ccb0b397446227b71a42be9d1603d46168015c9e4b",
+      "gate_results": {
+        "acceptance_ge_90_percent": true,
+        "atlasbench_promote_eligible": false,
+        "gpu_ge_85_percent": true,
+        "operational_certification": null,
+        "valid_json_ge_95_percent": true,
+        "warm_p95_le_12_seconds": true
+      },
+      "gpu_after_bench": {
+        "exit_code": 0,
+        "gpu_percent": 100.0,
+        "line": "qwen2.5:3b    357c53fb659c    2.2 GB    100% GPU     4096       4 minutes from now    ",
+        "stdout": "NAME          ID              SIZE      PROCESSOR    CONTEXT    UNTIL              \nqwen2.5:3b    357c53fb659c    2.2 GB    100% GPU     4096       4 minutes from now    \n"
+      },
+      "gpu_after_planner": {
+        "exit_code": 0,
+        "gpu_percent": 100.0,
+        "line": "qwen2.5:3b    357c53fb659c    2.2 GB    100% GPU     4096       4 minutes from now    ",
+        "stdout": "NAME          ID              SIZE      PROCESSOR    CONTEXT    UNTIL              \nqwen2.5:3b    357c53fb659c    2.2 GB    100% GPU     4096       4 minutes from now    \n"
+      },
+      "gpu_percent_min_observed": 100.0,
+      "planner": {
+        "acceptance_rate": 1.0,
+        "cold_start_seconds": 0.658903200000168,
+        "p50_seconds": 0.6541194000001269,
+        "p95_seconds": 3.081888599999729,
+        "rejection_cause_counts": {
+          "empty_steps": 0,
+          "excluded_kind": 0,
+          "invalid_json": 0,
+          "kind_tool_mismatch": 0,
+          "not_requested": 0,
+          "timed_out": 0,
+          "unknown_kind": 0,
+          "unknown_tool": 0
+        },
+        "samples": [
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.5687818999995216,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.5565576999997575,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.620017100000041,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.6517107999998188,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 3.412535299999945,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 3.7614192000000912,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.6216042000005473,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.7214440999996441,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.5775461000002906,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.6336479000001418,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.6591093999995792,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.6541194000001269,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.6848982999999862,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.6635127999998076,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.6971106999999392,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.5622934000002715,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 1.0555452999997215,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.6350519999996322,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.5819559000001391,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.6477007000003141,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.651694199999838,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.5969887000001108,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.6364487000000736,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 3.081888599999729,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.6621236000000863,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.6846096999997826,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.7318618999997852,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.594378400000096,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.904483700000128,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.6025539999991452,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.8709128999998939,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.6290724999998929,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.6605058999994071,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.6298334000002797,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.7309698999997636,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.7199038000007931,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.6231992999992144,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.6788327000003846,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.6606079000002865,
+            "status": "ok"
+          }
+        ],
+        "valid_json_rate": 1.0,
+        "warm_count": 39
+      },
+      "status": "complete",
+      "tag": "qwen2.5:3b"
+    },
+    {
+      "atlasbench_verdict": "reject",
+      "bench": {
+        "categories": {
+          "agentic": {
+            "correct": 10
+          },
+          "causal_safety": {
+            "correct": 8
+          },
+          "evidence": {
+            "correct": 8
+          },
+          "forecasting": {
+            "correct": 8
+          },
+          "general": {
+            "correct": 10
+          },
+          "machine_learning": {
+            "correct": 10
+          },
+          "personality": {
+            "correct": 8
+          },
+          "python_sandbox": {
+            "correct": 8
+          },
+          "sql": {
+            "correct": 10
+          },
+          "statistics": {
+            "correct": 9,
+            "incorrect_parsed": 1
+          }
+        },
+        "correct": 89,
+        "done_reason_distribution": {
+          "stop": 90
+        },
+        "eval_count_distribution": {
+          "10": 2,
+          "11": 1,
+          "12": 1,
+          "13": 2,
+          "15": 4,
+          "16": 3,
+          "17": 4,
+          "18": 6,
+          "19": 4,
+          "20": 1,
+          "21": 11,
+          "22": 2,
+          "23": 10,
+          "24": 6,
+          "25": 5,
+          "26": 5,
+          "27": 5,
+          "28": 4,
+          "29": 4,
+          "32": 1,
+          "36": 1,
+          "40": 1,
+          "46": 1,
+          "8": 2,
+          "9": 4
+        },
+        "eval_count_missing": 0,
+        "evaluation_policy_id": "2567d704bfb69b3335a93a47e0b4ecf817522c1fd71c4c8504c27080741dd531",
+        "incorrect_parsed": 1,
+        "run_id": "benchrun_c4c717618c7f44d7a6616201848d9294",
+        "shuffle_seed": "atlasbench-shuffle-v1",
+        "total": 90,
+        "unparseable_or_invalid": 0
+      },
+      "critical_regressions": [
+        "statistics"
+      ],
+      "digest": "1922accd5827ebe6829e536369195db25eaf664528dc66206d646ea3bb386b71",
+      "gate_results": {
+        "acceptance_ge_90_percent": true,
+        "atlasbench_promote_eligible": false,
+        "gpu_ge_85_percent": true,
+        "operational_certification": null,
+        "valid_json_ge_95_percent": true,
+        "warm_p95_le_12_seconds": true
+      },
+      "gpu_after_bench": {
+        "exit_code": 0,
+        "gpu_percent": 92.0,
+        "line": "ministral-3:8b    1922accd5827    6.0 GB    8%/92% CPU/GPU    4096       4 minutes from now    ",
+        "stdout": "NAME              ID              SIZE      PROCESSOR         CONTEXT    UNTIL              \nministral-3:8b    1922accd5827    6.0 GB    8%/92% CPU/GPU    4096       4 minutes from now    \n"
+      },
+      "gpu_after_planner": {
+        "exit_code": 0,
+        "gpu_percent": 92.0,
+        "line": "ministral-3:8b    1922accd5827    6.0 GB    8%/92% CPU/GPU    4096       4 minutes from now    ",
+        "stdout": "NAME              ID              SIZE      PROCESSOR         CONTEXT    UNTIL              \nministral-3:8b    1922accd5827    6.0 GB    8%/92% CPU/GPU    4096       4 minutes from now    \n"
+      },
+      "gpu_percent_min_observed": 92.0,
+      "planner": {
+        "acceptance_rate": 1.0,
+        "cold_start_seconds": 9.784353199999714,
+        "p50_seconds": 5.022289600000477,
+        "p95_seconds": 9.866042599999673,
+        "rejection_cause_counts": {
+          "empty_steps": 0,
+          "excluded_kind": 0,
+          "invalid_json": 0,
+          "kind_tool_mismatch": 0,
+          "not_requested": 0,
+          "timed_out": 0,
+          "unknown_kind": 0,
+          "unknown_tool": 0
+        },
+        "samples": [
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 5.1994937999998,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 2.0464700000002267,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 3.726432499999646,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 6.3328418000000966,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 10.350577799999883,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 9.091280800000277,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 2.629593300000124,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 5.022289600000477,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 2.045374900000752,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 5.634102199999688,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 6.7323003999999855,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 5.807633899999928,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 3.8390752000004795,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 2.2032169000003705,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 1.900060900000426,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 8.751974599999812,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 6.759291800000028,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 6.712063599999965,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 2.054846500000167,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 8.025612999999794,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 6.619940400000814,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 9.208051499999783,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 5.567712799999754,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 10.2853384,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 8.661334499999612,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 9.866042599999673,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 9.516481999999996,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 2.2872463000003336,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 2.0469671999999264,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 3.3967446999995445,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 3.7805143000005046,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 1.8867002000006323,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 2.25302019999981,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 4.365947000000233,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 4.5469410000005155,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 4.624912199999926,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 2.485373299999992,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 3.6617826000001514,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 5.63284509999994,
+            "status": "ok"
+          }
+        ],
+        "valid_json_rate": 1.0,
+        "warm_count": 39
+      },
+      "status": "complete",
+      "tag": "ministral-3:8b"
+    },
+    {
+      "atlasbench_verdict": "reject",
+      "bench": {
+        "categories": {
+          "agentic": {
+            "correct": 10
+          },
+          "causal_safety": {
+            "correct": 8
+          },
+          "evidence": {
+            "correct": 8
+          },
+          "forecasting": {
+            "correct": 8
+          },
+          "general": {
+            "correct": 10
+          },
+          "machine_learning": {
+            "correct": 9,
+            "incorrect_parsed": 1
+          },
+          "personality": {
+            "correct": 8
+          },
+          "python_sandbox": {
+            "correct": 8
+          },
+          "sql": {
+            "correct": 10
+          },
+          "statistics": {
+            "correct": 10
+          }
+        },
+        "correct": 89,
+        "done_reason_distribution": {
+          "stop": 90
+        },
+        "eval_count_distribution": {
+          "10": 4,
+          "11": 2,
+          "12": 2,
+          "13": 1,
+          "14": 1,
+          "15": 1,
+          "16": 3,
+          "17": 4,
+          "18": 7,
+          "19": 4,
+          "20": 2,
+          "21": 6,
+          "22": 8,
+          "23": 6,
+          "24": 6,
+          "25": 7,
+          "26": 4,
+          "27": 4,
+          "28": 6,
+          "29": 4,
+          "30": 2,
+          "32": 1,
+          "37": 1,
+          "40": 1,
+          "46": 1,
+          "8": 1,
+          "9": 1
+        },
+        "eval_count_missing": 0,
+        "evaluation_policy_id": "2567d704bfb69b3335a93a47e0b4ecf817522c1fd71c4c8504c27080741dd531",
+        "incorrect_parsed": 1,
+        "run_id": "benchrun_fc1d12326591445bba28883c579329c0",
+        "shuffle_seed": "atlasbench-shuffle-v1",
+        "total": 90,
+        "unparseable_or_invalid": 0
+      },
+      "critical_regressions": [
+        "machine_learning"
+      ],
+      "digest": "f04aa1c738f64e13c625b82ae92504fc0260fa6723b509ed1ece0fa188179b1d",
+      "gate_results": {
+        "acceptance_ge_90_percent": true,
+        "atlasbench_promote_eligible": false,
+        "gpu_ge_85_percent": true,
+        "operational_certification": null,
+        "valid_json_ge_95_percent": true,
+        "warm_p95_le_12_seconds": true
+      },
+      "gpu_after_bench": {
+        "exit_code": 0,
+        "gpu_percent": 100.0,
+        "line": "ministral-3:3b    f04aa1c738f6    2.7 GB    100% GPU     4096       4 minutes from now    ",
+        "stdout": "NAME              ID              SIZE      PROCESSOR    CONTEXT    UNTIL              \nministral-3:3b    f04aa1c738f6    2.7 GB    100% GPU     4096       4 minutes from now    \n"
+      },
+      "gpu_after_planner": {
+        "exit_code": 0,
+        "gpu_percent": 100.0,
+        "line": "ministral-3:3b    f04aa1c738f6    2.7 GB    100% GPU     4096       4 minutes from now    ",
+        "stdout": "NAME              ID              SIZE      PROCESSOR    CONTEXT    UNTIL              \nministral-3:3b    f04aa1c738f6    2.7 GB    100% GPU     4096       4 minutes from now    \n"
+      },
+      "gpu_percent_min_observed": 100.0,
+      "planner": {
+        "acceptance_rate": 1.0,
+        "cold_start_seconds": 0.9929617999996481,
+        "p50_seconds": 0.9472425000003568,
+        "p95_seconds": 1.798592699999972,
+        "rejection_cause_counts": {
+          "empty_steps": 0,
+          "excluded_kind": 0,
+          "invalid_json": 0,
+          "kind_tool_mismatch": 0,
+          "not_requested": 0,
+          "timed_out": 0,
+          "unknown_kind": 0,
+          "unknown_tool": 0
+        },
+        "samples": [
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 1.1695043999998234,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 1.106233099999372,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.8805835000002844,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 1.798592699999972,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 1.3750328999994963,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.8949005000004036,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.7879894000006971,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 1.018206800000371,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.7603335000003426,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.979585500000212,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.9244715999993787,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.7931458000002749,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.9120520999995279,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.846266800000194,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.9822690000000875,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.9826123000002553,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.9322439000006852,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 1.0352247999999236,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.8085019000000102,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 2.132761599999867,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 1.0370370000000548,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 1.6590157999999064,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 1.4665961999999126,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.8678414000005432,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.9472425000003568,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.7846233999998731,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.9342242000002443,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.973209400000087,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.7797706000001199,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.7215843000003588,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.6932043999995585,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 1.0162096999993082,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.7940564999998969,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.7914814999994633,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.7430129999993369,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 1.8635019000003012,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 1.0079418999994232,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 1.1580221000003803,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 1.6857579999996233,
+            "status": "ok"
+          }
+        ],
+        "valid_json_rate": 1.0,
+        "warm_count": 39
+      },
+      "status": "complete",
+      "tag": "ministral-3:3b"
+    },
+    {
+      "atlasbench_verdict": "hold",
+      "bench": {
+        "categories": {
+          "agentic": {
+            "correct": 10
+          },
+          "causal_safety": {
+            "correct": 8
+          },
+          "evidence": {
+            "correct": 8
+          },
+          "forecasting": {
+            "correct": 8
+          },
+          "general": {
+            "correct": 10
+          },
+          "machine_learning": {
+            "correct": 10
+          },
+          "personality": {
+            "correct": 8
+          },
+          "python_sandbox": {
+            "correct": 8
+          },
+          "sql": {
+            "correct": 10
+          },
+          "statistics": {
+            "correct": 10
+          }
+        },
+        "correct": 90,
+        "done_reason_distribution": {
+          "stop": 90
+        },
+        "eval_count_distribution": {
+          "10": 2,
+          "12": 2,
+          "13": 2,
+          "15": 3,
+          "16": 4,
+          "17": 4,
+          "18": 7,
+          "19": 2,
+          "20": 3,
+          "21": 8,
+          "22": 5,
+          "23": 9,
+          "24": 9,
+          "25": 6,
+          "26": 4,
+          "27": 4,
+          "28": 2,
+          "29": 2,
+          "31": 1,
+          "32": 2,
+          "38": 1,
+          "41": 1,
+          "47": 1,
+          "8": 2,
+          "9": 4
+        },
+        "eval_count_missing": 0,
+        "evaluation_policy_id": "2567d704bfb69b3335a93a47e0b4ecf817522c1fd71c4c8504c27080741dd531",
+        "incorrect_parsed": 0,
+        "run_id": "benchrun_9b17b0c0b33c48d59f4c698bb1370994",
+        "shuffle_seed": "atlasbench-shuffle-v1",
+        "total": 90,
+        "unparseable_or_invalid": 0
+      },
+      "critical_regressions": [],
+      "digest": "89962fcc75239ac434cdebceb6b7e0669397f92eaef9c487774b718bc36a3e5f",
+      "gate_results": {
+        "acceptance_ge_90_percent": true,
+        "atlasbench_promote_eligible": false,
+        "gpu_ge_85_percent": true,
+        "operational_certification": null,
+        "valid_json_ge_95_percent": true,
+        "warm_p95_le_12_seconds": true
+      },
+      "gpu_after_bench": {
+        "exit_code": 0,
+        "gpu_percent": 100.0,
+        "line": "granite4:micro    89962fcc7523    2.5 GB    100% GPU     4096       4 minutes from now    ",
+        "stdout": "NAME              ID              SIZE      PROCESSOR    CONTEXT    UNTIL              \ngranite4:micro    89962fcc7523    2.5 GB    100% GPU     4096       4 minutes from now    \n"
+      },
+      "gpu_after_planner": {
+        "exit_code": 0,
+        "gpu_percent": 100.0,
+        "line": "granite4:micro    89962fcc7523    2.5 GB    100% GPU     4096       4 minutes from now    ",
+        "stdout": "NAME              ID              SIZE      PROCESSOR    CONTEXT    UNTIL              \ngranite4:micro    89962fcc7523    2.5 GB    100% GPU     4096       4 minutes from now    \n"
+      },
+      "gpu_percent_min_observed": 100.0,
+      "planner": {
+        "acceptance_rate": 1.0,
+        "cold_start_seconds": 3.946685300000354,
+        "p50_seconds": 1.7493656000006013,
+        "p95_seconds": 3.989617699999144,
+        "rejection_cause_counts": {
+          "empty_steps": 0,
+          "excluded_kind": 0,
+          "invalid_json": 0,
+          "kind_tool_mismatch": 0,
+          "not_requested": 0,
+          "timed_out": 0,
+          "unknown_kind": 0,
+          "unknown_tool": 0
+        },
+        "samples": [
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 3.9049258000004556,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.6244582999997874,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.6918703000001187,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 1.3929241000005277,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 4.002874600000723,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 3.8520649000001868,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 1.091381399999591,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 3.899740599999859,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.7553170999999566,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 3.828979199999594,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 1.004996000000574,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 1.370882100000017,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 1.3938544000002366,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.6538180999996257,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.7655150999999023,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 3.8479919000001246,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 2.131453199999669,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 3.8872890999991796,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 3.811029899999994,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 2.1674696000009135,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 1.7775503999982902,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 3.879295299999285,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 2.128855200000544,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 3.741781799999444,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 3.854901200000313,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 3.8450494000007893,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 1.73700319999989,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 4.020855399998254,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.6720189999996364,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 1.7493656000006013,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 3.989617699999144,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.714828000000125,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.7277789999989182,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 1.9868593999999575,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 1.4248272000004363,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 1.460723100000905,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 1.0373983999998018,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 1.0583686000009038,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 1.4767503999992186,
+            "status": "ok"
+          }
+        ],
+        "valid_json_rate": 1.0,
+        "warm_count": 39
+      },
+      "status": "complete",
+      "tag": "granite4:micro"
+    },
+    {
+      "atlasbench_verdict": "reject",
+      "bench": {
+        "categories": {
+          "agentic": {
+            "correct": 10
+          },
+          "causal_safety": {
+            "correct": 8
+          },
+          "evidence": {
+            "correct": 8
+          },
+          "forecasting": {
+            "correct": 8
+          },
+          "general": {
+            "correct": 10
+          },
+          "machine_learning": {
+            "correct": 10
+          },
+          "personality": {
+            "correct": 8
+          },
+          "python_sandbox": {
+            "correct": 7,
+            "incorrect_parsed": 1
+          },
+          "sql": {
+            "correct": 10
+          },
+          "statistics": {
+            "correct": 10
+          }
+        },
+        "correct": 89,
+        "done_reason_distribution": {
+          "stop": 90
+        },
+        "eval_count_distribution": {
+          "10": 2,
+          "12": 4,
+          "13": 1,
+          "15": 3,
+          "16": 2,
+          "17": 1,
+          "18": 3,
+          "19": 4,
+          "20": 5,
+          "21": 8,
+          "22": 7,
+          "23": 8,
+          "24": 6,
+          "25": 8,
+          "26": 4,
+          "27": 5,
+          "28": 3,
+          "29": 2,
+          "30": 1,
+          "31": 2,
+          "32": 2,
+          "36": 1,
+          "38": 1,
+          "41": 1,
+          "47": 1,
+          "8": 2,
+          "9": 3
+        },
+        "eval_count_missing": 0,
+        "evaluation_policy_id": "2567d704bfb69b3335a93a47e0b4ecf817522c1fd71c4c8504c27080741dd531",
+        "incorrect_parsed": 1,
+        "run_id": "benchrun_8393cf6681874d31ac56f8caddec54bb",
+        "shuffle_seed": "atlasbench-shuffle-v1",
+        "total": 90,
+        "unparseable_or_invalid": 0
+      },
+      "critical_regressions": [
+        "python_sandbox"
+      ],
+      "digest": "566b725534ea0e9824f844abe6a78e1ab6f7357f1efb549be94908cb681513bb",
+      "gate_results": {
+        "acceptance_ge_90_percent": true,
+        "atlasbench_promote_eligible": false,
+        "gpu_ge_85_percent": true,
+        "operational_certification": null,
+        "valid_json_ge_95_percent": true,
+        "warm_p95_le_12_seconds": true
+      },
+      "gpu_after_bench": {
+        "exit_code": 0,
+        "gpu_percent": 100.0,
+        "line": "granite4:tiny-h    566b725534ea    4.4 GB    100% GPU     4096       4 minutes from now    ",
+        "stdout": "NAME               ID              SIZE      PROCESSOR    CONTEXT    UNTIL              \ngranite4:tiny-h    566b725534ea    4.4 GB    100% GPU     4096       4 minutes from now    \n"
+      },
+      "gpu_after_planner": {
+        "exit_code": 0,
+        "gpu_percent": 100.0,
+        "line": "granite4:tiny-h    566b725534ea    4.4 GB    100% GPU     4096       4 minutes from now    ",
+        "stdout": "NAME               ID              SIZE      PROCESSOR    CONTEXT    UNTIL              \ngranite4:tiny-h    566b725534ea    4.4 GB    100% GPU     4096       4 minutes from now    \n"
+      },
+      "gpu_percent_min_observed": 100.0,
+      "planner": {
+        "acceptance_rate": 1.0,
+        "cold_start_seconds": 1.4035242999998445,
+        "p50_seconds": 0.9488572999998723,
+        "p95_seconds": 2.4218320999989373,
+        "rejection_cause_counts": {
+          "empty_steps": 0,
+          "excluded_kind": 0,
+          "invalid_json": 0,
+          "kind_tool_mismatch": 0,
+          "not_requested": 0,
+          "timed_out": 0,
+          "unknown_kind": 0,
+          "unknown_tool": 0
+        },
+        "samples": [
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.8966630000013538,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.5711199000015768,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.6867841000002954,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 1.4627393999999185,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 2.153022200000123,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.7103494000002684,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.6576765999998315,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 1.1975165000003472,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.7034914000014396,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.9488572999998723,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.6562477000006766,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.7099569000001793,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.7838616000008187,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.6525051999997231,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.7185894000012922,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 2.260802299999341,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 2.4218320999989373,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.6695784000003187,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 1.2759397999998328,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 1.8995194999988598,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 1.814792999999554,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 2.4947228000000905,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 1.8442259000003105,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 3.0380660999999236,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 1.5282999000010022,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 2.0586652000001777,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 2.0613889999985986,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 1.851647100000264,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.6618663999997807,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 1.8110807000011846,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 1.6813273999996454,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 1.6817649999993591,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.7306372999992163,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.6412622999996529,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 1.8669430000009015,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.7483874999998079,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.7038013000001229,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.6799884000010934,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.7696459000017057,
+            "status": "ok"
+          }
+        ],
+        "valid_json_rate": 1.0,
+        "warm_count": 39
+      },
+      "status": "complete",
+      "tag": "granite4:tiny-h"
+    },
+    {
+      "atlasbench_verdict": "hold",
+      "bench": {
+        "categories": {
+          "agentic": {
+            "correct": 10
+          },
+          "causal_safety": {
+            "correct": 8
+          },
+          "evidence": {
+            "correct": 8
+          },
+          "forecasting": {
+            "correct": 8
+          },
+          "general": {
+            "correct": 10
+          },
+          "machine_learning": {
+            "correct": 10
+          },
+          "personality": {
+            "correct": 8
+          },
+          "python_sandbox": {
+            "correct": 8
+          },
+          "sql": {
+            "correct": 10
+          },
+          "statistics": {
+            "correct": 10
+          }
+        },
+        "correct": 90,
+        "done_reason_distribution": {
+          "stop": 90
+        },
+        "eval_count_distribution": {
+          "10": 3,
+          "12": 2,
+          "13": 2,
+          "15": 3,
+          "16": 4,
+          "17": 3,
+          "18": 8,
+          "19": 2,
+          "20": 3,
+          "21": 8,
+          "22": 5,
+          "23": 9,
+          "24": 9,
+          "25": 6,
+          "26": 4,
+          "27": 4,
+          "28": 2,
+          "29": 2,
+          "31": 1,
+          "32": 2,
+          "38": 1,
+          "41": 1,
+          "47": 1,
+          "8": 2,
+          "9": 3
+        },
+        "eval_count_missing": 0,
+        "evaluation_policy_id": "2567d704bfb69b3335a93a47e0b4ecf817522c1fd71c4c8504c27080741dd531",
+        "incorrect_parsed": 0,
+        "run_id": "benchrun_0c9b403263f3492c8f261665776db682",
+        "shuffle_seed": "atlasbench-shuffle-v1",
+        "total": 90,
+        "unparseable_or_invalid": 0
+      },
+      "critical_regressions": [],
+      "digest": "500a1f067a9f782620b40bee6f7b0c89e17ae61f686b92c24933e4ca4b2b8b41",
+      "gate_results": {
+        "acceptance_ge_90_percent": true,
+        "atlasbench_promote_eligible": false,
+        "gpu_ge_85_percent": true,
+        "operational_certification": null,
+        "valid_json_ge_95_percent": true,
+        "warm_p95_le_12_seconds": true
+      },
+      "gpu_after_bench": {
+        "exit_code": 0,
+        "gpu_percent": 100.0,
+        "line": "qwen3:8b    500a1f067a9f    5.6 GB    100% GPU     4096       4 minutes from now    ",
+        "stdout": "NAME        ID              SIZE      PROCESSOR    CONTEXT    UNTIL              \nqwen3:8b    500a1f067a9f    5.6 GB    100% GPU     4096       4 minutes from now    \n"
+      },
+      "gpu_after_planner": {
+        "exit_code": 0,
+        "gpu_percent": 100.0,
+        "line": "qwen3:8b    500a1f067a9f    5.6 GB    100% GPU     4096       4 minutes from now    ",
+        "stdout": "NAME        ID              SIZE      PROCESSOR    CONTEXT    UNTIL              \nqwen3:8b    500a1f067a9f    5.6 GB    100% GPU     4096       4 minutes from now    \n"
+      },
+      "gpu_percent_min_observed": 100.0,
+      "planner": {
+        "acceptance_rate": 1.0,
+        "cold_start_seconds": 5.153437400000001,
+        "p50_seconds": 0.9820276000000092,
+        "p95_seconds": 3.0954430000000173,
+        "rejection_cause_counts": {
+          "empty_steps": 0,
+          "excluded_kind": 0,
+          "invalid_json": 0,
+          "kind_tool_mismatch": 0,
+          "not_requested": 0,
+          "timed_out": 0,
+          "unknown_kind": 0,
+          "unknown_tool": 0
+        },
+        "samples": [
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.7961586999999781,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 1.3202772999999866,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.9864333000000158,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.866250100000002,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 3.584382000000005,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 1.60993959999999,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.9264014999999972,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 1.02693960000002,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.8622134000000017,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.9596363999999937,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 1.0081914000000154,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 1.036334299999993,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.9113231999999982,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.9285414999999944,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 1.0367288999999857,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.777580300000011,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.9618825999999956,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.9820276000000092,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 3.0340143999999896,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.9210726000000022,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 2.452503400000012,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 2.7401874999999905,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.8858147000000258,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 3.0905135000000143,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 3.0954430000000173,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 3.044228099999998,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 1.3491296999999918,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.8280793000000131,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.8428000999999767,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.8566300999999612,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 3.1583248000000026,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.9171810000000278,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 1.0279479000000151,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.9292363999999793,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.9123672000000056,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.9306561999999872,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.9291549000000145,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 1.1549765999999977,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 1.3715177999999923,
+            "status": "ok"
+          }
+        ],
+        "valid_json_rate": 1.0,
+        "warm_count": 39
+      },
+      "status": "complete",
+      "tag": "qwen3:8b"
+    },
+    {
+      "atlasbench_verdict": "hold",
+      "bench": {
+        "categories": {
+          "agentic": {
+            "correct": 10
+          },
+          "causal_safety": {
+            "correct": 8
+          },
+          "evidence": {
+            "correct": 8
+          },
+          "forecasting": {
+            "correct": 8
+          },
+          "general": {
+            "correct": 10
+          },
+          "machine_learning": {
+            "correct": 10
+          },
+          "personality": {
+            "correct": 8
+          },
+          "python_sandbox": {
+            "correct": 8
+          },
+          "sql": {
+            "correct": 10
+          },
+          "statistics": {
+            "correct": 10
+          }
+        },
+        "correct": 90,
+        "done_reason_distribution": {
+          "stop": 90
+        },
+        "eval_count_distribution": {
+          "10": 1,
+          "12": 3,
+          "13": 3,
+          "14": 1,
+          "15": 2,
+          "16": 4,
+          "17": 1,
+          "18": 6,
+          "19": 1,
+          "20": 2,
+          "21": 7,
+          "22": 3,
+          "23": 6,
+          "24": 3,
+          "25": 5,
+          "26": 5,
+          "27": 6,
+          "28": 9,
+          "29": 6,
+          "30": 3,
+          "31": 3,
+          "33": 1,
+          "36": 2,
+          "38": 1,
+          "45": 1,
+          "51": 1,
+          "8": 2,
+          "9": 2
+        },
+        "eval_count_missing": 0,
+        "evaluation_policy_id": "2567d704bfb69b3335a93a47e0b4ecf817522c1fd71c4c8504c27080741dd531",
+        "incorrect_parsed": 0,
+        "run_id": "benchrun_d480f7473ce24870831ed5abfb255dc6",
+        "shuffle_seed": "atlasbench-shuffle-v1",
+        "total": 90,
+        "unparseable_or_invalid": 0
+      },
+      "critical_regressions": [],
+      "digest": "845dbda0ea48ed749caafd9e6037047aa19acfcfd82e704d7ca97d631a0b697e",
+      "gate_results": {
+        "acceptance_ge_90_percent": true,
+        "atlasbench_promote_eligible": false,
+        "gpu_ge_85_percent": true,
+        "operational_certification": null,
+        "valid_json_ge_95_percent": true,
+        "warm_p95_le_12_seconds": true
+      },
+      "gpu_after_bench": {
+        "exit_code": 0,
+        "gpu_percent": 100.0,
+        "line": "qwen2.5:7b-instruct    845dbda0ea48    4.7 GB    100% GPU     4096       4 minutes from now    ",
+        "stdout": "NAME                   ID              SIZE      PROCESSOR    CONTEXT    UNTIL              \nqwen2.5:7b-instruct    845dbda0ea48    4.7 GB    100% GPU     4096       4 minutes from now    \n"
+      },
+      "gpu_after_planner": {
+        "exit_code": 0,
+        "gpu_percent": 100.0,
+        "line": "qwen2.5:7b-instruct    845dbda0ea48    4.7 GB    100% GPU     4096       4 minutes from now    ",
+        "stdout": "NAME                   ID              SIZE      PROCESSOR    CONTEXT    UNTIL              \nqwen2.5:7b-instruct    845dbda0ea48    4.7 GB    100% GPU     4096       4 minutes from now    \n"
+      },
+      "gpu_percent_min_observed": 100.0,
+      "planner": {
+        "acceptance_rate": 1.0,
+        "cold_start_seconds": 3.21315340000001,
+        "p50_seconds": 1.1307994000000008,
+        "p95_seconds": 6.452094200000033,
+        "rejection_cause_counts": {
+          "empty_steps": 0,
+          "excluded_kind": 0,
+          "invalid_json": 0,
+          "kind_tool_mismatch": 0,
+          "not_requested": 0,
+          "timed_out": 0,
+          "unknown_kind": 0,
+          "unknown_tool": 0
+        },
+        "samples": [
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 1.015240399999982,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.9363250000000107,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 1.054082899999969,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.9986231999999973,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 4.370557700000006,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 1.7657965999999874,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 1.0336282000000097,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 1.609291799999994,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 1.0922047000000248,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.9382166000000325,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 1.163669700000014,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 1.1243420000000128,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 1.06574820000003,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 1.0641110000000253,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 1.1772695000000226,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 3.0238961000000018,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 2.872413399999971,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 1.1327191000000312,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 3.128281100000038,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 1.6536140000000046,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 1.6976838000000498,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 1.600931600000024,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 1.0031020000000126,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 6.91182809999998,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 6.452094200000033,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 6.282276400000001,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 6.895142599999986,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 1.0340715000000387,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 1.0046307999999726,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 1.7091220000000362,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 3.065832799999953,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 1.0798465999999962,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 1.1256312000000435,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 1.0872757999999862,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 1.106678200000033,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 1.1165696999999568,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 1.2713674999999967,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 1.1161778999999683,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 1.1307994000000008,
+            "status": "ok"
+          }
+        ],
+        "valid_json_rate": 1.0,
+        "warm_count": 39
+      },
+      "status": "complete",
+      "tag": "qwen2.5:7b-instruct"
+    },
+    {
+      "atlasbench_verdict": "hold",
+      "bench": {
+        "categories": {
+          "agentic": {
+            "correct": 10
+          },
+          "causal_safety": {
+            "correct": 8
+          },
+          "evidence": {
+            "correct": 8
+          },
+          "forecasting": {
+            "correct": 8
+          },
+          "general": {
+            "correct": 10
+          },
+          "machine_learning": {
+            "correct": 10
+          },
+          "personality": {
+            "correct": 8
+          },
+          "python_sandbox": {
+            "correct": 8
+          },
+          "sql": {
+            "correct": 10
+          },
+          "statistics": {
+            "correct": 10
+          }
+        },
+        "correct": 90,
+        "done_reason_distribution": {
+          "stop": 90
+        },
+        "eval_count_distribution": {
+          "12": 3,
+          "13": 2,
+          "14": 2,
+          "15": 1,
+          "16": 3,
+          "17": 2,
+          "19": 2,
+          "20": 4,
+          "21": 3,
+          "22": 7,
+          "23": 3,
+          "24": 2,
+          "25": 8,
+          "26": 6,
+          "27": 11,
+          "28": 6,
+          "29": 4,
+          "30": 5,
+          "31": 4,
+          "32": 1,
+          "33": 4,
+          "35": 2,
+          "36": 1,
+          "42": 1,
+          "45": 1,
+          "50": 1,
+          "9": 1
+        },
+        "eval_count_missing": 0,
+        "evaluation_policy_id": "2567d704bfb69b3335a93a47e0b4ecf817522c1fd71c4c8504c27080741dd531",
+        "incorrect_parsed": 0,
+        "run_id": "benchrun_054053b4faee4cedace512bf6cb52b4a",
+        "shuffle_seed": "atlasbench-shuffle-v1",
+        "total": 90,
+        "unparseable_or_invalid": 0
+      },
+      "critical_regressions": [],
+      "digest": "78fad5d182a7c33065e153a5f8ba210754207ba9d91973f57dffa7f487363753",
+      "gate_results": {
+        "acceptance_ge_90_percent": true,
+        "atlasbench_promote_eligible": false,
+        "gpu_ge_85_percent": true,
+        "operational_certification": null,
+        "valid_json_ge_95_percent": true,
+        "warm_p95_le_12_seconds": true
+      },
+      "gpu_after_bench": {
+        "exit_code": 0,
+        "gpu_percent": 100.0,
+        "line": "phi4-mini:latest    78fad5d182a7    3.1 GB    100% GPU     4096       4 minutes from now    ",
+        "stdout": "NAME                ID              SIZE      PROCESSOR    CONTEXT    UNTIL              \nphi4-mini:latest    78fad5d182a7    3.1 GB    100% GPU     4096       4 minutes from now    \n"
+      },
+      "gpu_after_planner": {
+        "exit_code": 0,
+        "gpu_percent": 100.0,
+        "line": "phi4-mini:latest    78fad5d182a7    3.1 GB    100% GPU     4096       4 minutes from now    ",
+        "stdout": "NAME                ID              SIZE      PROCESSOR    CONTEXT    UNTIL              \nphi4-mini:latest    78fad5d182a7    3.1 GB    100% GPU     4096       4 minutes from now    \n"
+      },
+      "gpu_percent_min_observed": 100.0,
+      "planner": {
+        "acceptance_rate": 1.0,
+        "cold_start_seconds": 0.7695598999999902,
+        "p50_seconds": 0.7413086000000249,
+        "p95_seconds": 2.3289194999999836,
+        "rejection_cause_counts": {
+          "empty_steps": 0,
+          "excluded_kind": 0,
+          "invalid_json": 0,
+          "kind_tool_mismatch": 0,
+          "not_requested": 0,
+          "timed_out": 0,
+          "unknown_kind": 0,
+          "unknown_tool": 0
+        },
+        "samples": [
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.6717500000000314,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.6704351000000202,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.8031174000000192,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.7060911000000374,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 4.4428287999999725,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.8111242999999604,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.8045680999999831,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 2.296930799999984,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.7421174000000406,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.7253800999999953,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.7348719999999958,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.7622344000000112,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.7483358999999723,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.7184306000000333,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.8113452999999708,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 4.3805871999999795,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 1.9214861000000383,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.6684943000000203,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 0.671603599999969,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.7266228000000297,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.7031692000000476,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.709897500000011,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.7249691999999754,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.7611822999999731,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 2.3289194999999836,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.6737491999999747,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.7413086000000249,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.6737805000000208,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.6931571000000076,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.6852921000000265,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.7198686000000407,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.7475190000000111,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.7666654000000221,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.8427566999999954,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.7488214999999627,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.8202949999999873,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.8945964000000117,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.7394078000000377,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 0.7314496999999847,
+            "status": "ok"
+          }
+        ],
+        "valid_json_rate": 1.0,
+        "warm_count": 39
+      },
+      "status": "complete",
+      "tag": "phi4-mini:latest"
+    },
+    {
+      "atlasbench_verdict": "reject",
+      "bench": {
+        "categories": {
+          "agentic": {
+            "correct": 10
+          },
+          "causal_safety": {
+            "correct": 8
+          },
+          "evidence": {
+            "correct": 8
+          },
+          "forecasting": {
+            "correct": 8
+          },
+          "general": {
+            "correct": 10
+          },
+          "machine_learning": {
+            "correct": 10
+          },
+          "personality": {
+            "correct": 8
+          },
+          "python_sandbox": {
+            "correct": 8
+          },
+          "sql": {
+            "correct": 8,
+            "incorrect_parsed": 2
+          },
+          "statistics": {
+            "correct": 10
+          }
+        },
+        "correct": 88,
+        "done_reason_distribution": {
+          "stop": 90
+        },
+        "eval_count_distribution": {
+          "10": 4,
+          "11": 3,
+          "13": 2,
+          "14": 2,
+          "15": 1,
+          "16": 3,
+          "17": 4,
+          "18": 3,
+          "19": 7,
+          "20": 2,
+          "21": 3,
+          "22": 7,
+          "23": 5,
+          "24": 9,
+          "25": 9,
+          "26": 6,
+          "27": 4,
+          "28": 4,
+          "29": 2,
+          "30": 2,
+          "32": 1,
+          "33": 2,
+          "39": 1,
+          "42": 1,
+          "48": 1,
+          "9": 2
+        },
+        "eval_count_missing": 0,
+        "evaluation_policy_id": "2567d704bfb69b3335a93a47e0b4ecf817522c1fd71c4c8504c27080741dd531",
+        "incorrect_parsed": 2,
+        "run_id": "benchrun_407142b66d8e416ba195cc7b5da5927b",
+        "shuffle_seed": "atlasbench-shuffle-v1",
+        "total": 90,
+        "unparseable_or_invalid": 0
+      },
+      "critical_regressions": [
+        "sql"
+      ],
+      "digest": "ea72df8c85d75c6783ab0d00278803c53a634fc9d0fe38d3fd4ab6f35adbdbb2",
+      "gate_results": {
+        "acceptance_ge_90_percent": true,
+        "atlasbench_promote_eligible": false,
+        "gpu_ge_85_percent": true,
+        "operational_certification": null,
+        "valid_json_ge_95_percent": true,
+        "warm_p95_le_12_seconds": true
+      },
+      "gpu_after_bench": {
+        "exit_code": 0,
+        "gpu_percent": 89.0,
+        "line": "olmo-3:7b-instruct    ea72df8c85d7    6.2 GB    11%/89% CPU/GPU    4096       4 minutes from now    ",
+        "stdout": "NAME                  ID              SIZE      PROCESSOR          CONTEXT    UNTIL              \nolmo-3:7b-instruct    ea72df8c85d7    6.2 GB    11%/89% CPU/GPU    4096       4 minutes from now    \n"
+      },
+      "gpu_after_planner": {
+        "exit_code": 0,
+        "gpu_percent": 89.0,
+        "line": "olmo-3:7b-instruct    ea72df8c85d7    6.2 GB    11%/89% CPU/GPU    4096       4 minutes from now    ",
+        "stdout": "NAME                  ID              SIZE      PROCESSOR          CONTEXT    UNTIL              \nolmo-3:7b-instruct    ea72df8c85d7    6.2 GB    11%/89% CPU/GPU    4096       4 minutes from now    \n"
+      },
+      "gpu_percent_min_observed": 89.0,
+      "planner": {
+        "acceptance_rate": 1.0,
+        "cold_start_seconds": 1.5140433999999914,
+        "p50_seconds": 1.76703729999997,
+        "p95_seconds": 3.1930986999999504,
+        "rejection_cause_counts": {
+          "empty_steps": 0,
+          "excluded_kind": 0,
+          "invalid_json": 0,
+          "kind_tool_mismatch": 0,
+          "not_requested": 0,
+          "timed_out": 0,
+          "unknown_kind": 0,
+          "unknown_tool": 0
+        },
+        "samples": [
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 1.6406039000000874,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 1.6725907000000007,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 1.9066516999999976,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 1.707867800000031,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 3.1930986999999504,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 2.2910554000000047,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 1.627383899999927,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 1.7056471999999303,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 1.6708288000000948,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 1.4066636999999673,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 1.8512730999999576,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 1.729338900000016,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 1.873694300000011,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 1.718498400000044,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 1.8459852000000865,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 3.2674125999999433,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 2.5694281999999475,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 1.76703729999997,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "core",
+            "seconds": 1.4511781999999585,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 1.7654770000000326,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 1.6403516999999965,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 1.9465476999999964,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 1.9062479000000394,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 2.3568817999999965,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 5.917594999999892,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 1.406316199999992,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 1.5443456000000424,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 2.0423835999999937,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 1.6330239999999776,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 1.7243808999999146,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 1.8084094000000732,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 2.029728099999943,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 1.6433007000000543,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 1.913015400000063,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 1.6607757000000447,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 1.8400613000000021,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 2.0817996000000676,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 2.6292118000000073,
+            "status": "ok"
+          },
+          {
+            "accepted": true,
+            "group": "extra",
+            "seconds": 1.5524306999999453,
+            "status": "ok"
+          }
+        ],
+        "valid_json_rate": 1.0,
+        "warm_count": 39
+      },
+      "status": "complete",
+      "tag": "olmo-3:7b-instruct"
+    }
+  ],
+  "planner_policy": {
+    "num_ctx": 4096,
+    "num_predict": 1800,
+    "objectives": 40,
+    "temperature": 0,
+    "think": false,
+    "timeout_seconds": 30,
+    "warm_samples": 39
+  },
+  "production_candidate_id": "basemodel_585b7e79e9f195024a57dc9a",
+  "production_event_id": "promo_3ba5ad9dd8aa49eab6266e185a70c032",
+  "production_pointer_changed": false,
+  "round": 5,
+  "started_at": "2026-09-25T09:51:52.437756+00:00",
+  "status": "complete",
+  "store_path": "C:\\Users\\Admin\\source\\repos\\prism\\apps\\api\\.prism\\runtime\\analytical-history.sqlite",
+  "tags": [
+    "qwen3:4b-instruct-2507-q4_K_M",
+    "qwen2.5:3b",
+    "ministral-3:8b",
+    "ministral-3:3b",
+    "granite4:micro",
+    "granite4:tiny-h",
+    "qwen3:8b",
+    "qwen2.5:7b-instruct",
+    "phi4-mini:latest",
+    "olmo-3:7b-instruct"
+  ]
+}
