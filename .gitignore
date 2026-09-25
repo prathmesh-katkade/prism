@@ -12,6 +12,7 @@ node_modules/
 .turbo/
 .prism/work/
 .prism/runtime/
+.prism/*.sqlite
 **/.prism/work/
 **/.prism/runtime/
 test-results/

@@ -1,0 +1,36 @@
+const { chromium } = require('@playwright/test');
+
+(async () => {
+  const browser = await chromium.launch();
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
+  await page.goto('http://127.0.0.1:3100/');
+  await page.getByRole('button', { name: /Atlas native/i }).click();
+  await page.waitForTimeout(2000);
+  await page.screenshot({ path: 'docs/atlas/vnext/before/workspace-empty.png', fullPage: true });
+  console.log((await page.locator('body').innerText()).slice(0, 7000));
+  await page.getByRole('button', { name: 'System status' }).click();
+  await page.waitForTimeout(1500);
+  await page.screenshot({ path: 'docs/atlas/vnext/before/command-center.png', fullPage: true });
+  console.log('BUTTONS', await page.getByRole('button').allTextContents());
+  await page.getByRole('button', { name: /Overview native/i }).click();
+  await page.setInputFiles('#overview-upload', { name: 'atlas-vnext.csv', mimeType: 'text/csv', buffer: Buffer.from('segment,revenue\nNorth,10\nSouth,12\nNorth,14\n') });
+  await page.getByLabel('Central tabbed workspace').getByRole('heading', { name: 'atlas-vnext.csv' }).waitFor();
+  await page.getByRole('button', { name: /Atlas native/i }).click();
+  await page.screenshot({ path: 'docs/atlas/vnext/before/workspace.png', fullPage: true });
+  await page.getByLabel('Investigation objective').focus();
+  await page.keyboard.press('Enter');
+  await page.getByRole('button', { name: /Grounded answer ready/ }).waitFor({ timeout: 30000 });
+  await page.screenshot({ path: 'docs/atlas/vnext/before/cortex-core.png', fullPage: true });
+  console.log('RUN BUTTONS', await page.getByLabel('Cortex real-state graph').getByRole('button').allTextContents());
+  console.log('RUN TEXT', (await page.getByLabel('Cortex real-state graph').innerText()).slice(0, 4500));
+  await page.locator('.cortex-run-focus').click();
+  await page.screenshot({ path: 'docs/atlas/vnext/before/cortex-node.png', fullPage: true });
+  await page.getByLabel('Atlas request pipeline').getByRole('button', { name: /Result/ }).click();
+  await page.screenshot({ path: 'docs/atlas/vnext/before/cortex-pipeline.png', fullPage: true });
+  const group = page.getByLabel('Cortex satellites').getByRole('button', { name: 'Focus Active dataset revision' });
+  await group.click();
+  await page.screenshot({ path: 'docs/atlas/vnext/before/cortex-group.png', fullPage: true });
+  await page.getByRole('tab', { name: 'Summary' }).click();
+  await page.screenshot({ path: 'docs/atlas/vnext/before/inspector.png', fullPage: true });
+  await browser.close();
+})().catch(error => { console.error(error); process.exitCode = 1; });

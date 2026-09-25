@@ -26,7 +26,7 @@ import type {
 import { useAtlasResource } from "../state/use-atlas-resource";
 import { buildAtlasHistoryLink } from "../state/atlas-history-link";
 import { EvidencePanel, FeedbackItem, groupMemoriesByClass, MEMORY_CLASS_LABELS, MemoryRecordItem, PipelineStepper, RunMemoryTrace, SpecialistActivity, ToolTimeline, GuardrailPanel as RunGuardrailPanel } from "./atlas-run-activity";
-import { AtlasCortex3D } from "./atlas-cortex-3d";
+import { AtlasCortexLedger } from "./atlas-cortex-ledger";
 import type { CortexSelection } from "./atlas-cortex-shared";
 
 type CorpusState = {
@@ -373,8 +373,8 @@ function RunActivityPanel({
 }
 
 /**
- * A historical run's Cortex reuses the exact same server-owned graph and 3D
- * projection the live per-run workspace uses (`AtlasCortex3D` over
+ * A historical run reuses the exact same server-owned graph and ledger
+ * projection the live per-run workspace uses (`AtlasCortexLedger` over
  * `GET /runs/{id}/cortex`) -- never a second, simplified graph presentation
  * for "old" runs. This component only ever mounts inside an already-open
  * run's detail block (see `RunActivityPanel` above), so the fetch is
@@ -402,7 +402,7 @@ function HistoricalRunCortex({ run, initialFocusId }: { run: AtlasRunResponse; i
   // live AtlasWorkspace's own selection state, which is a different
   // component instance over a different (possibly still-running) run.
   const [selectedStepId, setSelectedStepId] = useState<string | null>(null);
-  // The exact same real selection AtlasCortex3D's own click handlers report
+  // The exact same real selection AtlasCortexLedger's own click handlers report
   // (a real node, group, or the core) -- tracked here only so the copy-link
   // action below can embed *this* run's currently focused node/step,
   // whether that focus came from a click or from `initialFocusId`.
@@ -414,7 +414,7 @@ function HistoricalRunCortex({ run, initialFocusId }: { run: AtlasRunResponse; i
   const focusedNodeId = selection.kind === "node" ? selection.node.node_id : null;
   return (
     <>
-      <AtlasCortex3D
+      <AtlasCortexLedger
         graph={graph}
         run={run}
         selectedStepId={selectedStepId}

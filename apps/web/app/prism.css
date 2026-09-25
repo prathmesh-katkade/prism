@@ -169,13 +169,6 @@
    viewport (roughly half on a laptop-height window) so the core reads as a
    presence, not a thumbnail; it never grows large enough on its own to push
    the rest of the run's real evidence below the fold. */
-.cortex-3d .cortex-stage { position:relative;width:100%;min-height:360px;height:56vh;max-height:640px;margin-top:14px;border:1px solid var(--line-soft);border-radius:6px;overflow:hidden;background:radial-gradient(circle at 50% 42%,color-mix(in srgb,var(--accent-soft) 30%,transparent),transparent 55%),var(--canvas); }
-.cortex-3d .cortex-stage canvas { display:block;width:100% !important;height:100% !important;cursor:grab; }
-.cortex-3d .cortex-stage canvas:active { cursor:grabbing; }
-.cortex-stage-fallback { position:absolute;inset:0;display:grid;place-items:center; }
-.cortex-orb-static { width:120px;height:120px;border-radius:50%;background:radial-gradient(circle at 38% 32%,color-mix(in srgb,var(--muted) 55%,transparent),transparent 60%),var(--surface-raised);border:2px solid var(--faint);box-shadow:0 0 40px -6px color-mix(in srgb,var(--faint) 45%,transparent);animation:cortex-orb-breathe 4.5s ease-in-out infinite; }
-.cortex-orb-static.is-active { border-color:var(--accent);box-shadow:0 0 46px -4px color-mix(in srgb,var(--accent) 65%,transparent);animation-duration:1.4s; }
-@keyframes cortex-orb-breathe { 50% { transform:scale(1.06); } }
 /* A real, keyboard-operable mirror of every node the canvas draws: pointer
    users get the 3D scene, keyboard and screen-reader users get the same
    facts and actions as an ordinary chip row, never depending on canvas
@@ -188,8 +181,6 @@
 .cortex-node-list button[data-muted="true"] { border-style:dashed;background:var(--surface); }
 .cortex-node-list button[aria-pressed="true"] { background:var(--surface-muted);box-shadow:inset 0 0 0 2px var(--accent); }
 .cortex-node-list small { display:block;color:var(--faint);font:9px var(--mono);text-transform:uppercase;margin-top:2px; }
-@media (max-width:1000px) { .cortex-3d .cortex-stage { height:44vh; } }
-@media (prefers-reduced-motion:reduce) { .cortex-orb-static { animation:none; } }
 /* Phase 11A immersive shell: a dedicated ATLAS environment -- top identity,
    a dominant Cortex, a bottom command bar, a side context inspector --
    instead of another flat stack of panels in the ordinary tab body. */
@@ -272,3 +263,52 @@
 @media (max-width:1050px) { .atlas-immersive-main { grid-template-columns:1fr; }.atlas-inspector-drawer { max-height:60vh; }.atlas-result-panel { position:static;max-width:none;margin-top:10px;box-shadow:none; } }
 @media (max-width:620px) { .atlas-immersive-top { flex-wrap:wrap;gap:8px; }.atlas-command-row { flex-wrap:wrap; }.atlas-command-row textarea { min-width:100%;order:1; }.atlas-mic-button { order:2; }.atlas-command-actions { order:3;margin-left:auto; } }
 @media (prefers-reduced-motion:reduce) { .atlas-result-panel .atlas-answer { transition:none; } }
+
+/* Atlas VNext: the Cortex is a stored-record reading surface. */
+.atlas-immersive { --accent:#c6bba6;--accent-soft:#272720;--good:#91b6a6;--focus:#e7dbc4;--danger:#d79a88;--canvas:#141411;--surface:#1b1b18;--surface-raised:#22221e;--surface-muted:#292923;--line:#393831;--line-soft:#302f29;--text:#eeeae0;--muted:#bcb7aa;--faint:#969184; }
+.atlas-immersive-top { border-top:2px solid var(--text); }
+.atlas-immersive-identity strong { font:400 19px/1.15 var(--serif); }
+.atlas-immersive-system { border-top:1px solid var(--line); }
+.atlas-immersive-main { grid-template-columns:minmax(0,1fr) minmax(300px,360px);gap:18px;align-items:start; }
+.atlas-inspector-drawer { max-height:76vh; }
+.cortex-ledger { border:1px solid var(--line);background:var(--surface);padding:24px;min-width:0; }
+.cortex-ledger-heading { display:flex;justify-content:space-between;align-items:start;gap:20px;padding-bottom:20px;border-bottom:1px solid var(--line); }
+.cortex-ledger-heading h2 { font:400 clamp(27px,3vw,40px)/1.08 var(--serif);margin:7px 0 9px;letter-spacing:-.02em; }
+.cortex-ledger-heading p { margin:0;color:var(--muted);font-size:12px; }
+.cortex-run-focus { flex-shrink:0;margin:0;border-radius:0;padding:8px 10px; }
+.cortex-ledger .atlas-result-panel { position:static;max-width:none;max-height:none;margin:20px 0 0;border:0;border-left:2px solid var(--text);box-shadow:none;background:var(--surface-raised);overflow:visible; }
+.cortex-ledger .atlas-result-toggle { padding:13px 16px; }
+.cortex-ledger .atlas-result-panel .atlas-answer { transition:none; }
+.cortex-ledger .atlas-result-panel.is-expanded .atlas-answer { max-height:none;padding:0 16px 16px; }
+.cortex-ledger-groups { margin-top:24px; }
+.cortex-ledger-section-title { display:flex;align-items:baseline;justify-content:space-between;gap:14px;border-bottom:1px solid var(--line);margin-bottom:0; }
+.cortex-ledger-section-title h3 { margin:0 0 11px;font:400 22px var(--serif); }
+.cortex-ledger-section-title p { margin:0;color:var(--faint);font:10px var(--mono); }
+.cortex-ledger .cortex-group-list { display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:0;margin:0;border-left:1px solid var(--line); }
+.cortex-ledger .cortex-group-list li { min-width:0; }
+.cortex-ledger .cortex-group-list button { width:100%;height:100%;min-width:0;min-height:120px;padding:14px;border:0;border-right:1px solid var(--line);border-bottom:1px solid var(--line);border-radius:0;background:transparent;gap:5px; }
+.cortex-ledger .cortex-group-list button:hover,.cortex-ledger .cortex-node-list button:hover { background:var(--surface-raised); }
+.cortex-ledger .cortex-group-list button[aria-pressed="true"] { box-shadow:inset 0 2px 0 var(--text);background:var(--surface-raised); }
+.cortex-group-kind,.cortex-node-kind { color:var(--faint);font:10px var(--mono);text-transform:uppercase;letter-spacing:.08em; }
+.cortex-ledger .cortex-group-list button strong { font:400 18px/1.2 var(--serif);overflow-wrap:anywhere; }
+.cortex-group-status,.cortex-node-state { color:var(--muted);font:11px var(--mono);text-transform:uppercase; }
+.cortex-ledger [data-tone="good"] .cortex-group-status,.cortex-ledger [data-tone="good"] .cortex-node-state { color:var(--good); }
+.cortex-ledger [data-tone="danger"] .cortex-group-status,.cortex-ledger [data-tone="danger"] .cortex-node-state { color:var(--danger); }
+.cortex-ledger [data-tone="active"] .cortex-group-status,.cortex-ledger [data-tone="active"] .cortex-node-state { color:var(--text); }
+.cortex-ledger .cortex-group-list button small { margin-top:auto;color:var(--faint);font:10px var(--mono);text-transform:none; }
+.cortex-ledger .cortex-detail { margin:20px 0 0; }
+.cortex-ledger .cortex-atomic-disclosure,.cortex-ledger .cortex-relations { margin-top:22px;border-top:1px solid var(--line);padding-top:13px; }
+.cortex-ledger .cortex-atomic-disclosure summary,.cortex-ledger .cortex-relations summary { cursor:pointer;color:var(--muted);font:11px var(--mono);text-transform:uppercase;letter-spacing:.07em; }
+.cortex-ledger .cortex-node-list { display:block;margin:13px 0 0;border-top:1px solid var(--line-soft); }
+.cortex-ledger .cortex-node-list li { border-bottom:1px solid var(--line-soft); }
+.cortex-ledger .cortex-node-list button { display:grid;grid-template-columns:110px minmax(0,1fr) auto;align-items:baseline;gap:14px;width:100%;padding:10px 7px;border:0;border-left:2px solid transparent;border-radius:0;background:transparent;text-align:left;color:var(--text); }
+.cortex-ledger .cortex-node-list button[aria-pressed="true"] { border-left-color:var(--text);background:var(--surface-raised);box-shadow:none; }
+.cortex-ledger .cortex-node-list button[data-linked-step="true"] { background:var(--surface-raised); }
+.cortex-ledger .cortex-node-list strong { font:500 12px/1.35 var(--sans);overflow-wrap:anywhere; }
+.cortex-ledger .cortex-node-list .cortex-node-state { white-space:nowrap; }
+.cortex-relations ol { list-style:none;padding:0;margin:12px 0; }
+.cortex-relations li { display:grid;grid-template-columns:minmax(0,1fr) 110px minmax(0,1fr);gap:8px;padding:8px 0;border-bottom:1px solid var(--line-soft);font-size:11px; }
+.cortex-relations li span { overflow-wrap:anywhere; }.cortex-relations li small { color:var(--faint);font:10px var(--mono); }.cortex-relations li code { grid-column:1/-1;color:var(--faint);font:9px var(--mono); }
+.cortex-ledger-note { margin:20px 0 0;color:var(--faint);font-size:11px; }
+@media (max-width:1050px) { .atlas-immersive-main { grid-template-columns:1fr; }.atlas-inspector-drawer { max-height:none; } }
+@media (max-width:620px) { .cortex-ledger { padding:16px; }.cortex-ledger-heading { display:block; }.cortex-run-focus { margin-top:12px; }.cortex-ledger-section-title { display:block; }.cortex-ledger .cortex-group-list { grid-template-columns:repeat(2,minmax(0,1fr)); }.cortex-ledger .cortex-node-list button { grid-template-columns:1fr auto;gap:4px 8px; }.cortex-node-kind { grid-column:1/-1; }.cortex-relations li { grid-template-columns:1fr; } }
