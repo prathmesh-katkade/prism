@@ -16,6 +16,8 @@
 .token-specimen__swatches { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .token-specimen__swatch { min-height: 64px; padding: 8px; border: 1px solid var(--atlas-color-border); background: var(--swatch); color: var(--atlas-color-text-primary); font: 10px/1.3 var(--atlas-font-mono); }
 .token-specimen__text-samples { display: grid; gap: 8px; }
+.token-specimen__hero { font: 600 var(--atlas-type-hero)/1.1 var(--atlas-font-editorial); }
+.token-specimen__metric { font: 600 var(--atlas-type-metric)/1.2 var(--atlas-font-editorial); }
 .token-specimen__display { font: 400 var(--atlas-type-display)/1.05 var(--atlas-font-editorial); }
 .token-specimen__section-type { font: 400 var(--atlas-type-section)/1.2 var(--atlas-font-editorial); }
 .token-specimen__body { font: var(--atlas-type-body)/1.5 var(--atlas-font-sans); }

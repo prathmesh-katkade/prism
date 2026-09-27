@@ -20,11 +20,13 @@ function ThemePanel({ theme }: { theme: "dark" | "light" }) {
     <div className="token-specimen__section">
       <h3>Type roles</h3>
       <div className="token-specimen__text-samples">
+        <div className="token-specimen__hero">Command-center headline</div>
         <div className="token-specimen__display">Evidence before emphasis</div>
+        <div className="token-specimen__metric">90 / 90 | metric</div>
         <div className="token-specimen__section-type">Section heading</div>
         <div className="token-specimen__body">Body copy with enough detail to make a careful analytical decision.</div>
-        <div className="token-specimen__caption">CAPTION Â· explanatory metadata</div>
-        <div className="token-specimen__data">RECORDED Â· 90/90 Â· 1.66 s</div>
+        <div className="token-specimen__caption">CAPTION | explanatory metadata</div>
+        <div className="token-specimen__data">RECORDED | 90/90 | 1.66 s</div>
       </div>
     </div>
     <div className="token-specimen__section">
@@ -55,4 +57,3 @@ export default function DesignTokensPage() {
     <div className="token-specimen__themes"><ThemePanel theme="dark" /><ThemePanel theme="light" /></div>
   </main>;
 }
-

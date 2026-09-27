@@ -7,3 +7,5 @@ The scale follows the locked questionnaire decisions in `design-decisions.md`: o
 Dark and light values are explicitly authored. Compact and standard analytical rows are 34px and 40px high. Related rows use an 8px gap, sections 16px. This keeps activity and evidence lists compact while preserving a larger interactive row for ordinary pointer and keyboard use.
 
 The specimen route is `/design-tokens`. It renders both themes and displays color roles, type roles, spacing, radii, and density without changing any existing surface styling.
+
+For the command center, the scale also includes a responsive hero role and a metric role so headline and score sizing stay separate from display and section text.

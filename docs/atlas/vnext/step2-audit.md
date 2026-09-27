@@ -1,4 +1,4 @@
-﻿# Atlas Step 2a baseline audit
+# Atlas Step 2a baseline audit
 
 ## Scope observed
 
@@ -27,9 +27,26 @@ The counts are source-literal occurrences, not unique values. The repo's current
 ## Naming observed
 
 - `Immersive Cortex` remains in `atlas-workspace.tsx:211`, outside the one-surface implementation scope for this phase.
-- No `ATLAS · CORTEX` label exists in the inspected source. The ledger currently uses `ATLAS · RUN RECORD`.
+- No `ATLAS Â· CORTEX` label exists in the inspected source. The ledger currently uses `ATLAS Â· RUN RECORD`.
 - `System Cortex` appears in the command center. It names the model lineage section, so it is not a stale reference to the removed 3D rendering.
 
 ## Design-decision conflicts
 
-`design-decisions.md` records the relevant source-backed conflicts: R3Q5–Q7 request rich interaction and cursor hover feedback, while the thesis rejects decorative motion; R22Q8 asks for motion tiers so work remains fast; and R1Q7/R20Q1 ask for a compact persistent Atlas signature, while the thesis describes Atlas as contextual only. The questionnaire wins. Any motion should communicate state without slowing work; the visual pass should preserve a compact Atlas identity while avoiding a permanent decorative centerpiece.
+`design-decisions.md` records the relevant source-backed conflicts: R3Q5â€“Q7 request rich interaction and cursor hover feedback, while the thesis rejects decorative motion; R22Q8 asks for motion tiers so work remains fast; and R1Q7/R20Q1 ask for a compact persistent Atlas signature, while the thesis describes Atlas as contextual only. The questionnaire wins. Any motion should communicate state without slowing work; the visual pass should preserve a compact Atlas identity while avoiding a permanent decorative centerpiece.
+
+## Command-center token migration
+
+The token migration is limited to `atlas-command-center.tsx`-specific `.atlas-command-center` and `.acc-*` CSS rules. Its TSX has no fixed visual literals; the only inline style is a bar width computed from returned category counts.
+
+The comparable CSS audit parses the 97 matching rules in `prism.css` at commit `152ce6d` and after this pass. Counts are literal occurrences in those rules, not unique values:
+
+| Literal category | Before | After |
+|---|---:|---:|
+| Color syntax occurrences | 4 | 1 |
+| Font/size length tokens | 34 | 0 |
+| Spacing length tokens | 85 | 4 |
+| Radius length tokens | 2 | 0 |
+
+The one remaining color keyword is `transparent` on a button background. Three remaining spacing lengths are 1px grid seams; the fourth is the -1px visually-hidden utility offset. These are retained for seam/accessibility behavior. Responsive grid widths and breakpoints remain structural layout values. Hero, panel, type, state, border, spacing, and metric values now reference design-system variables.
+
+The after screenshot is `step2-after/command-center.png` at 1440x900. The outer `Immersive Cortex` label is still emitted by `atlas-workspace.tsx`, which is a Step 2b file. Phase 2a explicitly reserves workspace changes for Step 2b, so that label remains for review in that phase. `System Cortex` within the command center remains unchanged because it labels the persisted model-lineage section, not the removed 3D rendering. No `ATLAS Â· CORTEX` source label was present.

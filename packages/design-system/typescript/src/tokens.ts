@@ -18,7 +18,9 @@ export const tokens = {
   },
   type: {
     display: "var(--atlas-type-display)",
+    hero: "var(--atlas-type-hero)",
     section: "var(--atlas-type-section)",
+    metric: "var(--atlas-type-metric)",
     body: "var(--atlas-type-body)",
     caption: "var(--atlas-type-caption)",
     monoData: "var(--atlas-type-mono-data)",
@@ -59,5 +61,3 @@ export const tokens = {
 export type PrismTokens = typeof tokens;
 export type PrismTokenColor = keyof typeof tokens.color;
 export type PrismTokenType = keyof typeof tokens.type;
-
-

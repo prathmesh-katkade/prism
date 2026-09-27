@@ -18,7 +18,9 @@
   --atlas-color-focus: #84c7ff;
 
   --atlas-type-display: clamp(2.25rem, 4vw, 3.25rem);
+  --atlas-type-hero: clamp(1.375rem, 3.2vw, 2.125rem);
   --atlas-type-section: 1.375rem;
+  --atlas-type-metric: 1.75rem;
   --atlas-type-body: 0.875rem;
   --atlas-type-caption: 0.75rem;
   --atlas-type-mono-data: 0.6875rem;
@@ -68,5 +70,3 @@
   --atlas-color-recorded: #0768aa;
   --atlas-color-focus: #0768aa;
 }
-
-
