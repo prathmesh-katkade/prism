@@ -25,6 +25,7 @@ from .atlas_foundry_routes import base_model_router as atlas_base_model_router
 from .atlas_foundry_routes import bench_router as atlas_bench_router
 from .atlas_foundry_routes import promotion_router as atlas_promotion_router
 from .atlas_foundry_routes import router as atlas_foundry_router
+from .atlas_interventions import router as atlas_interventions_router
 from .atlas_investigation_links import router as atlas_investigation_links_router
 from .atlas_model_arena import router as atlas_model_arena_router
 from .atlas_operational_cert import router as atlas_operational_cert_router
@@ -93,6 +94,7 @@ def create_app() -> FastAPI:
     app.include_router(atlas_router)
     app.include_router(atlas_command_center_router)
     app.include_router(atlas_investigation_links_router)
+    app.include_router(atlas_interventions_router)
     app.include_router(atlas_foundry_router)
     app.include_router(atlas_base_model_router)
     app.include_router(atlas_bench_router)

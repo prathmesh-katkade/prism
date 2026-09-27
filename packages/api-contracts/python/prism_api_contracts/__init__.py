@@ -50,6 +50,8 @@ from .models import (
     AtlasFoundryCapability,
     AtlasFoundryPreflight,
     AtlasGuardrailContext,
+    AtlasInterventionRecord,
+    AtlasInterventionWriteRequest,
     AtlasInvestigationLink,
     AtlasInvestigationLinkIssued,
     AtlasInvestigationLinkRequest,
@@ -241,6 +243,8 @@ from .models import (
 )
 
 __all__ = [
+    "AtlasInterventionRecord",
+    "AtlasInterventionWriteRequest",
     "AtlasDeepRefinement", "AtlasDeepRefinementState",
     "AtlasSectionAvailability",
     "AtlasRecentRunSummary",

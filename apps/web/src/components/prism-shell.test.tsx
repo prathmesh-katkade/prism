@@ -1,5 +1,5 @@
 import React from "react";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { PrismShell } from "./prism-shell";
 
@@ -119,14 +119,12 @@ describe("PRISM shell", () => {
 
     render(<PrismShell />);
 
-    // No manual "Atlas" nav click, and no manual "System status" click --
-    // the deep link alone puts the operator on the Cortex with the Command
-    // Center's Run activity already showing the linked run expanded.
-    await waitFor(() => expect(screen.getByText("Immersive Cortex")).toBeInTheDocument());
-    const systemToggle = screen.getByRole("button", { name: /System status|Hide system status/ });
-    expect(systemToggle).toHaveAttribute("aria-expanded", "true");
-    const commandCenter = screen.getByLabelText("Atlas command center");
-    await within(commandCenter).findByText("Investigate churn drivers");
+    // The explicit history link opens the recorded investigation directly in
+    // PRISM's tabbed shell, even when the URL lacks a dataset restore key.
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Investigate churn drivers" })).toBeInTheDocument());
+    expect(screen.getByLabelText("PRISM workspace navigation")).toBeInTheDocument();
+    expect(screen.getByLabelText("Open workspace tabs")).toBeInTheDocument();
+    expect(screen.getByText("Supporting evidence not linked.")).toBeInTheDocument();
   });
 });
 

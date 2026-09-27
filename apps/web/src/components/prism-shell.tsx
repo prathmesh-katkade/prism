@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MigrationState } from "@prism/api-contracts";
 import { CommandPalette, type CommandItem } from "./command-palette";
 import { Icon, type IconName } from "./icons";
@@ -14,7 +14,7 @@ import { ForecastingWorkspace } from "./forecasting-workspace";
 import { MlLabWorkspace } from "./mllab-workspace";
 import { EvidenceInspector } from "./evidence-inspector";
 import { HistoryWorkspace } from "./history-workspace";
-import { AtlasWorkspace } from "./atlas-workspace";
+import { AtlasInvestigation } from "./atlas-investigation";
 import { AtlasStatusBadge } from "./atlas-status-badge";
 import { parseAtlasHistoryQuery, type AtlasHistoryQuery } from "../state/atlas-history-link";
 import { EvolutionWorkspace } from "./evolution-workspace";
@@ -73,6 +73,16 @@ export function PrismShell() {
   const [status, setStatus] = useState<ShellStatus>("project-loaded");
   const [commandOpen, setCommandOpen] = useState(false);
   const [selectedContext, setSelectedContext] = useState<InspectorObjectState | null>(null);
+  const [mobileInspectorOpen, setMobileInspectorOpen] = useState(false);
+  const [isNarrow, setIsNarrow] = useState(false);
+  const mobileInspectorTrigger = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!window.matchMedia) return;
+    const query = window.matchMedia("(max-width: 760px)");
+    const update = () => setIsNarrow(query.matches);
+    update(); query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
   const [sqlDraft, setSqlDraft] = useState<string | undefined>();
   const [analystResultRunId, setAnalystResultRunId] = useState<string | undefined>();
   // Dataset context normally enters through Overview's upload control. Retain a
@@ -106,8 +116,17 @@ export function PrismShell() {
   }, []);
   const commandTrigger = useRef<HTMLButtonElement>(null);
   const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? baseTab;
+  const handleSelectContext = useCallback((context: InspectorObjectState) => {
+    setSelectedContext(context);
+    if (activeTab.kind === "atlas") setMobileInspectorOpen(true);
+  }, [activeTab.kind]);
   const activeMigration = activeTab.workflow ? findMigration(activeTab.workflow) : null;
   const inspector = selectedContext ?? inspectorFor(activeTab, activeMigration);
+  useEffect(() => {
+    if (mobileInspectorOpen && activeTab.kind === "atlas" && window.matchMedia("(max-width: 760px)").matches) {
+      document.querySelector<HTMLButtonElement>(".atlas-mobile-inspector-layer .inspector-heading button")?.focus();
+    }
+  }, [mobileInspectorOpen, activeTab.kind, selectedContext]);
 
   function resizePanel(panel: "rail" | "inspector", clientX: number) {
     const width = panel === "rail" ? Math.max(180, Math.min(360, clientX)) : Math.max(240, Math.min(420, window.innerWidth - clientX));
@@ -224,14 +243,16 @@ export function PrismShell() {
             <div className="workspace-tab-actions"><button className="tab-add" aria-label="Open command surface" onClick={() => setCommandOpen(true)}>+</button><button className={layout.splitView ? "tab-tool is-active" : "tab-tool"} aria-label="Toggle split view" aria-pressed={layout.splitView} onClick={() => updateLayout({ splitView: !layout.splitView })}><Icon name="split" /></button></div>
           </div>
           <section id={`panel-${activeTab.id}`} role="tabpanel" aria-labelledby={`tab-${activeTab.id}`} className={layout.splitView ? "workspace-content split-enabled" : "workspace-content"}>
-            <WorkspaceSurface tab={activeTab} status={status} onStatusChange={setStatus} onOpenCommand={() => setCommandOpen(true)} onSelectContext={setSelectedContext} onOpenWorkflow={openWorkflow} sqlDraft={sqlDraft} analystResultRunId={analystResultRunId} activeDatasetId={activeDatasetId} initialAtlasRunId={activeAtlasRunId} initialAtlasHistoryRunId={atlasHistory.runId ?? undefined} initialAtlasHistoryFocusId={atlasHistory.focusId ?? undefined} onDatasetReady={setActiveDatasetId} onSqlDraft={(draft) => { setSqlDraft(draft); openWorkflow("sql-lab"); }} onUseAsEvidence={(runId) => { setAnalystResultRunId(runId); openWorkflow("ai-analyst"); }} onEnterAtlasImmersive={() => updateLayout({ railCollapsed: true, inspectorOpen: false })} onExitAtlasImmersive={() => updateLayout({ railCollapsed: false, inspectorOpen: true })} onBackToProject={() => { setActiveTabId(baseTab.id); setStatus("project-loaded"); }} />
+            <WorkspaceSurface tab={activeTab} status={status} onStatusChange={setStatus} onOpenCommand={() => setCommandOpen(true)} onSelectContext={handleSelectContext} onOpenWorkflow={openWorkflow} sqlDraft={sqlDraft} analystResultRunId={analystResultRunId} activeDatasetId={activeDatasetId} initialAtlasRunId={activeAtlasRunId} initialAtlasHistoryRunId={atlasHistory.runId ?? undefined} initialAtlasHistoryFocusId={atlasHistory.focusId ?? undefined} onDatasetReady={setActiveDatasetId} onSqlDraft={(draft) => { setSqlDraft(draft); openWorkflow("sql-lab"); }} onUseAsEvidence={(runId) => { setAnalystResultRunId(runId); openWorkflow("ai-analyst"); }} onEnterAtlasImmersive={() => updateLayout({ railCollapsed: true, inspectorOpen: false })} onExitAtlasImmersive={() => updateLayout({ railCollapsed: false, inspectorOpen: true })} onBackToProject={() => { setActiveTabId(baseTab.id); setStatus("project-loaded"); }} />
             {layout.splitView ? <aside className="split-foundation" aria-label="Secondary tab group foundation"><p>SECONDARY TAB GROUP</p><strong>Drop a tab here</strong><span>Split-view layout is saved locally. Analytical content does not duplicate here until its migration phase.</span></aside> : null}
           </section>
-          <button className={layout.atlasExpanded ? "atlas-presence is-expanded" : "atlas-presence"} onClick={() => updateLayout({ atlasExpanded: !layout.atlasExpanded })} aria-expanded={layout.atlasExpanded} aria-label="Expand Atlas workspace"><span className="atlas-signal"><i /><i /><i /></span><span><strong>Atlas</strong><small>{layout.atlasExpanded ? "Context workspace ready" : "Watching workspace context"}</small></span><Icon name="arrow" /></button>
-          {layout.atlasExpanded ? <section className="atlas-drawer" aria-label="Atlas contextual workspace"><div><span className="eyebrow">ATLAS · AMBIENT OPERATING PRESENCE</span><h2>What should we investigate?</h2><p>Run Atlas from durable data context, inspect each declared tool, and keep executable SQL in SQL Lab.</p></div><button onClick={() => openWorkflow("atlas")}>Open Atlas <kbd>⌘ K</kbd></button></section> : null}
+          {activeTab.kind !== "atlas" ? <button className={layout.atlasExpanded ? "atlas-presence is-expanded" : "atlas-presence"} onClick={() => updateLayout({ atlasExpanded: !layout.atlasExpanded })} aria-expanded={layout.atlasExpanded} aria-label="Expand Atlas workspace"><span className="atlas-signal"><i /><i /><i /></span><span><strong>Atlas</strong><small>{layout.atlasExpanded ? "Context workspace ready" : "Watching workspace context"}</small></span><Icon name="arrow" /></button> : null}
+          {layout.atlasExpanded && activeTab.kind !== "atlas" ? <section className="atlas-drawer" aria-label="Atlas contextual workspace"><div><span className="eyebrow">ATLAS · AMBIENT OPERATING PRESENCE</span><h2>What should we investigate?</h2><p>Run Atlas from durable data context, inspect each declared tool, and keep executable SQL in SQL Lab.</p></div><button onClick={() => openWorkflow("atlas")}>Open Atlas <kbd>⌘ K</kbd></button></section> : null}
         </section>
         {layout.inspectorOpen ? <><ResizeHandle panel="inspector" value={layout.inspectorWidth} onPointerDown={startResize} onKeyboardResize={(delta) => updateLayout({ inspectorWidth: Math.max(240, Math.min(420, layout.inspectorWidth + delta)) })} /><Inspector state={inspector} onClose={() => updateLayout({ inspectorOpen: false })} /></> : <><div className="resize-spacer" /><button className="inspector-restore" onClick={() => updateLayout({ inspectorOpen: true })} aria-label="Show inspector"><Icon name="panel" /></button></>}
       </div>
+      {isNarrow && activeTab.kind === "atlas" && selectedContext ? <button ref={mobileInspectorTrigger} type="button" className="atlas-mobile-inspector-trigger" onClick={() => setMobileInspectorOpen(true)}>Inspect selected record</button> : null}
+      {isNarrow && activeTab.kind === "atlas" && selectedContext && mobileInspectorOpen ? <div className="atlas-mobile-inspector-layer"><button type="button" className="atlas-mobile-inspector-backdrop" aria-label="Close inspector" onClick={() => { setMobileInspectorOpen(false); mobileInspectorTrigger.current?.focus(); }} /><div role="dialog" aria-modal="true" aria-label="Selected Atlas record" onKeyDown={(event) => { if (event.key === "Escape") { setMobileInspectorOpen(false); mobileInspectorTrigger.current?.focus(); } }}><Inspector state={inspector} onClose={() => { setMobileInspectorOpen(false); mobileInspectorTrigger.current?.focus(); }} /></div></div> : null}
       <CommandPalette open={commandOpen} commands={commands} onClose={() => { setCommandOpen(false); commandTrigger.current?.focus(); }} />
     </main>
   );
@@ -241,7 +262,7 @@ function ResizeHandle({ panel, value, onPointerDown, onKeyboardResize }: { panel
   return <div className={`resize-handle resize-handle-${panel}`} role="separator" aria-label={`Resize ${panel === "rail" ? "navigation" : "inspector"}`} aria-orientation="vertical" aria-valuemin={panel === "rail" ? 180 : 240} aria-valuemax={panel === "rail" ? 360 : 420} aria-valuenow={value} tabIndex={0} onPointerDown={(event) => onPointerDown(panel, event)} onKeyDown={(event) => { if (event.key === "ArrowLeft") onKeyboardResize(-12); if (event.key === "ArrowRight") onKeyboardResize(12); }} />;
 }
 
-function WorkspaceSurface({ tab, status, onStatusChange, onOpenCommand, onSelectContext, onOpenWorkflow, sqlDraft, analystResultRunId, activeDatasetId, initialAtlasRunId, initialAtlasHistoryRunId, initialAtlasHistoryFocusId, onDatasetReady, onSqlDraft, onUseAsEvidence, onEnterAtlasImmersive, onExitAtlasImmersive, onBackToProject }: { tab: WorkspaceTab; status: ShellStatus; onStatusChange(status: ShellStatus): void; onOpenCommand(): void; onSelectContext(state: InspectorObjectState): void; onOpenWorkflow(workflow: string): void; sqlDraft: string | undefined; analystResultRunId: string | undefined; activeDatasetId: string | undefined; initialAtlasRunId: string | undefined; initialAtlasHistoryRunId: string | undefined; initialAtlasHistoryFocusId: string | undefined; onDatasetReady(datasetId: string): void; onSqlDraft(draft: string): void; onUseAsEvidence(runId: string): void; onEnterAtlasImmersive(): void; onExitAtlasImmersive(): void; onBackToProject(): void }) {
+function WorkspaceSurface({ tab, status, onStatusChange, onOpenCommand, onSelectContext, onOpenWorkflow, sqlDraft, analystResultRunId, activeDatasetId, initialAtlasRunId, onDatasetReady, onSqlDraft, onUseAsEvidence }: { tab: WorkspaceTab; status: ShellStatus; onStatusChange(status: ShellStatus): void; onOpenCommand(): void; onSelectContext(state: InspectorObjectState): void; onOpenWorkflow(workflow: string): void; sqlDraft: string | undefined; analystResultRunId: string | undefined; activeDatasetId: string | undefined; initialAtlasRunId: string | undefined; initialAtlasHistoryRunId: string | undefined; initialAtlasHistoryFocusId: string | undefined; onDatasetReady(datasetId: string): void; onSqlDraft(draft: string): void; onUseAsEvidence(runId: string): void; onEnterAtlasImmersive(): void; onExitAtlasImmersive(): void; onBackToProject(): void }) {
   if (tab.kind === "overview") return <OverviewWorkspace activeDatasetId={activeDatasetId} onSelectContext={onSelectContext} onOpenWorkflow={onOpenWorkflow} onDatasetReady={onDatasetReady} />;
   if (tab.kind === "sql-lab") return <QueryStudio onSelectContext={onSelectContext} {...(sqlDraft ? { initialSql: sqlDraft } : {})} onUseAsEvidence={onUseAsEvidence} />;
   if (tab.kind === "ai-analyst") return <AiAnalyst datasetId={activeDatasetId} resultRunId={analystResultRunId} onSqlDraft={onSqlDraft} onSelectContext={onSelectContext} />;
@@ -252,17 +273,7 @@ function WorkspaceSurface({ tab, status, onStatusChange, onOpenCommand, onSelect
   if (tab.kind === "ml") return <MlLabWorkspace datasetId={activeDatasetId} onSelectContext={onSelectContext} onOpenWorkflow={onOpenWorkflow} />;
   if (tab.kind === "history") return <HistoryWorkspace onSelectContext={onSelectContext} />;
   if (tab.kind === "atlas")
-    return (
-      <AtlasWorkspace
-        datasetId={activeDatasetId}
-        initialRunId={initialAtlasRunId}
-        initialHistoryRunId={initialAtlasHistoryRunId}
-        initialHistoryFocusId={initialAtlasHistoryFocusId}
-        onEnterImmersive={onEnterAtlasImmersive}
-        onExitImmersive={onExitAtlasImmersive}
-        onBackToProject={onBackToProject}
-      />
-    );
+    return <AtlasInvestigation datasetId={activeDatasetId} initialRunId={initialAtlasRunId} onSelectContext={onSelectContext} />;
   if (tab.kind === "evolution") return <EvolutionWorkspace />;
   if (tab.kind === "bridge" && tab.workflow) {
     const migration = findMigration(tab.workflow);
@@ -281,10 +292,11 @@ function ShellState({ status }: { status: ShellStatus }) {
 
 function Inspector({ state, onClose }: { state: InspectorObjectState; onClose(): void }) {
   if (state.analyticalObjectId) return <EvidenceInspector objectId={state.analyticalObjectId} onClose={onClose} />;
-  return <aside className="inspector" aria-label="Contextual inspector"><div className="inspector-heading"><div><span className="eyebrow">CONTEXT</span><h2>{state.label}</h2></div><button className="icon-button" onClick={onClose} aria-label="Hide inspector"><Icon name="close" /></button></div><dl className="inspector-data"><div><dt>Object type</dt><dd>{state.type}</dd></div><div><dt>State</dt><dd><span className={`migration-chip ${state.state}`}>{state.state}</span></dd></div><div><dt>Inspector contract</dt><dd>object-state/v1</dd></div>{state.metadata?.map((item) => <div key={item}><dt>Evidence</dt><dd>{item}</dd></div>)}</dl><div className="inspector-actions"><span className="eyebrow">CONTEXT ACTIONS</span>{state.actions.map((action) => <button key={action.id} disabled={action.disabled}>{action.label}{action.shortcut ? <kbd>{action.shortcut}</kbd> : <Icon name="arrow" />}</button>)}</div><div className="drag-foundation" draggable onDragStart={(event) => event.dataTransfer.setData("text/plain", state.objectId ?? "project")}><span className="eyebrow">SEMANTIC DRAG FOUNDATION</span><p>Drag object context to a future tab group.</p></div></aside>;
+  return <aside className="inspector" aria-label="Contextual inspector"><div className="inspector-heading"><div><span className="eyebrow">CONTEXT</span><h2>{state.label}</h2></div><button className="icon-button" onClick={onClose} aria-label="Hide inspector"><Icon name="close" /></button></div><dl className="inspector-data"><div><dt>Object type</dt><dd>{state.type}</dd></div><div><dt>State</dt><dd><span className={`migration-chip ${state.state}`}>{state.state}</span></dd></div>{state.type === "finding" ? null : <div><dt>Inspector contract</dt><dd>object-state/v1</dd></div>}{state.metadata?.map((item) => <div key={item}><dt>{state.type === "finding" ? "Record" : "Evidence"}</dt><dd>{item}</dd></div>)}</dl>{state.actions.length ? <div className="inspector-actions"><span className="eyebrow">CONTEXT ACTIONS</span>{state.actions.map((action) => <button key={action.id} disabled={action.disabled}>{action.label}{action.shortcut ? <kbd>{action.shortcut}</kbd> : <Icon name="arrow" />}</button>)}</div> : null}{state.type === "finding" ? null : <div className="drag-foundation" draggable onDragStart={(event) => event.dataTransfer.setData("text/plain", state.objectId ?? "project")}><span className="eyebrow">SEMANTIC DRAG FOUNDATION</span><p>Drag object context to a future tab group.</p></div>}</aside>;
 }
 
 function inspectorFor(tab: WorkspaceTab, migration: MigrationState | null): InspectorObjectState {
+  if (tab.kind === "atlas") return { objectId: "atlas", label: "Select an Atlas record", type: "finding", state: "ready", metadata: ["Plan outputs, objections, and evidence appear here when selected."], actions: [] };
   if (migration) return { objectId: migration.workflow, label: tab.label, type: "workflow", state: migrationPresentation(migration), actions: [{ id: "open-reference", label: "Open legacy reference", disabled: migrationPresentation(migration) === "native" }, { id: "view-parity", label: "View parity status", disabled: true }] };
   return { objectId: "project", label: "Untitled research", type: "project", state: "ready", actions: [{ id: "project-settings", label: "Project settings", disabled: true }, { id: "layout-reset", label: "Reset layout", disabled: true }] };
 }

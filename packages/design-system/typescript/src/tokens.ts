@@ -1,15 +1,18 @@
-/** Phase 1 semantic tokens. Components must consume tokens, not raw product colors. */
+/** Shared semantic references. CSS owns theme values. */
 export const tokens = {
   color: {
-    canvas: "#07111F",
-    surface: "#0C1B2D",
-    text: "#F4F8FC",
-    mutedText: "#AFC0D3",
-    focus: "#38BDF8",
-    danger: "#FB7185"
+    canvas: "var(--prism-canvas)", surface: "var(--prism-surface)", raised: "var(--prism-raised)",
+    text: "var(--prism-text)", muted: "var(--prism-muted)", border: "var(--prism-border)",
+    focus: "var(--prism-focus)", selection: "var(--prism-selection)",
+    completed: "var(--prism-completed)", blocked: "var(--prism-blocked)",
+    running: "var(--prism-running)", recorded: "var(--prism-recorded)"
   },
-  space: { 1: "0.25rem", 2: "0.5rem", 3: "0.75rem", 4: "1rem", 6: "1.5rem", 8: "2rem" },
-  radius: { control: "0.5rem", panel: "0.75rem" }
+  font: { sans: "var(--prism-font-sans)", mono: "var(--prism-font-mono)" },
+  space: { 1: "var(--prism-space-1)", 2: "var(--prism-space-2)", 3: "var(--prism-space-3)", 4: "var(--prism-space-4)", 6: "var(--prism-space-6)", 8: "var(--prism-space-8)" },
+  radius: { control: "var(--prism-radius-control)", panel: "var(--prism-radius-panel)" },
+  border: { hairline: "var(--prism-border-hairline)", emphasis: "var(--prism-border-emphasis)" },
+  density: { compactRow: "var(--prism-compact-row)", standardRow: "var(--prism-standard-row)" },
+  motion: { feedback: "var(--prism-motion-feedback)", handoff: "var(--prism-motion-handoff)" }
 } as const;
 
 export type PrismTokens = typeof tokens;

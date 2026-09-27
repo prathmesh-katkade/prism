@@ -1,0 +1,144 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import type { AtlasRunEvent, AtlasRunResponse } from "@prism/api-contracts";
+import { apiUrl } from "../config/api";
+import type { InspectorObjectState } from "../state/shell-model";
+
+type View = "investigation" | "collaboration" | "evidence" | "activity";
+type Note = { intervention_id: string; target_id: string; text: string; created_at: string; author: "human" };
+type SampleMessage = { id: string; role: string; kind: string; text: string; reply?: string; target?: string };
+
+const sampleMessages: SampleMessage[] = [
+  { id: "sample-m1", role: "Query", kind: "Recorded output · sample", text: "Control: 1,200 / 5,000 activated (24%). Treatment: 1,350 / 5,000 (27%). Observed difference: +3 percentage points.", target: "sample-e1" },
+  { id: "sample-m2", role: "Auditor", kind: "Objection · sample", text: "The difference is descriptive. Assignment provenance is missing, so causal attribution remains unresolved.", reply: "sample-m1", target: "sample-issue" },
+  { id: "sample-m3", role: "Atlas", kind: "Proposal · sample", text: "Keep the observed difference; request assignment records and check cohort exclusions before revisiting the causal claim.", reply: "sample-m2", target: "sample-issue" },
+];
+
+const sampleSteps = [
+  { id: "sample-compare", title: "Compare observed activation", role: "Query", method: "Illustrative aggregate", state: "completed", output: "Control 24% · Treatment 27% · observed difference +3 pp", dependencies: [] as string[] },
+  { id: "sample-causal", title: "Assess causal attribution", role: "Auditor", method: "Assignment review", state: "blocked", output: "Assignment provenance is missing. Causal attribution remains unresolved.", dependencies: ["sample-compare"] },
+  { id: "sample-next", title: "Specify the next check", role: "Atlas", method: "Evidence request", state: "pending", output: "Waiting for assignment records; no check has executed.", dependencies: ["sample-causal"] },
+];
+const largeSampleSteps = Array.from({ length: 200 }, (_, index) => ({
+  id: `large-sample-${index + 1}`, title: `Illustrative task ${index + 1}`,
+  role: ["Query", "Auditor", "Atlas"][index % 3]!, method: "Sample method",
+  state: index < 180 ? "completed" : "pending", output: index < 180 ? "Illustrative output; no tool executed." : "No output recorded.",
+  dependencies: index ? [`large-sample-${index}`] : [],
+}));
+
+const sampleEvents = [
+  { id: "sample-e1", label: "Illustrative cohort counts recorded" },
+  { id: "sample-e2", label: "Illustrative objection opened" },
+  { id: "sample-e3", label: "Illustrative next check proposed" },
+];
+
+function stringValue(value: unknown): string | null { return typeof value === "string" && value.trim() ? value : null; }
+function eventLabel(event: AtlasRunEvent): string {
+  const reason = stringValue(event.payload?.reason);
+  return `${event.type.replaceAll("_", " ")}${event.step_id ? ` · ${event.step_id}` : ""}${reason ? ` · ${reason}` : ""}`;
+}
+
+export function AtlasInvestigation({ datasetId, initialRunId, onSelectContext }: {
+  datasetId: string | undefined;
+  initialRunId?: string | undefined;
+  onSelectContext(state: InspectorObjectState): void;
+}) {
+  const [run, setRun] = useState<AtlasRunResponse | null>(null);
+  const [sample, setSample] = useState(false);
+  const [largeSample, setLargeSample] = useState(false);
+  const [objective, setObjective] = useState("");
+  const [view, setView] = useState<View>("investigation");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [collapsed, setCollapsed] = useState(false);
+  const [eventIndex, setEventIndex] = useState(0);
+  const [noteText, setNoteText] = useState("");
+  const [notes, setNotes] = useState<Note[]>([]);
+  const [noteState, setNoteState] = useState<"idle" | "saving" | "saved" | "failed">("idle");
+  const [error, setError] = useState<string | null>(null);
+  const [starting, setStarting] = useState(false);
+
+  useEffect(() => {
+    if (!initialRunId) return;
+    let active = true;
+    fetch(apiUrl(`/api/v1/atlas/runs/${encodeURIComponent(initialRunId)}`))
+      .then(async (response) => { if (!response.ok) throw new Error("Recorded investigation could not be loaded."); return response.json() as Promise<AtlasRunResponse>; })
+      .then((record) => { if (active && (!datasetId || record.plan.dataset_id === datasetId)) setRun(record); })
+      .catch((reason: unknown) => { if (active) setError(reason instanceof Error ? reason.message : "Investigation unavailable."); });
+    return () => { active = false; };
+  }, [datasetId, initialRunId]);
+
+  useEffect(() => {
+    if (!run || ["completed", "failed", "cancelled"].includes(run.plan.state ?? "")) return;
+    const runId = run.run_id;
+    const timer = window.setInterval(() => {
+      fetch(apiUrl(`/api/v1/atlas/runs/${encodeURIComponent(runId)}`))
+        .then((response) => response.ok ? response.json() as Promise<AtlasRunResponse> : null)
+        .then((record) => { if (record) setRun(record); })
+        .catch(() => setError("Could not refresh the recorded run."));
+    }, 1500);
+    return () => window.clearInterval(timer);
+  }, [run?.run_id, run?.plan.state]);
+
+  useEffect(() => {
+    if (!run) return;
+    let active = true;
+    fetch(apiUrl(`/api/v1/atlas/runs/${encodeURIComponent(run.run_id)}/interventions`))
+      .then((response) => response.ok ? response.json() as Promise<Note[]> : [])
+      .then((records) => { if (active) setNotes(records); })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, [run?.run_id]);
+
+  const steps = useMemo(() => sample ? (largeSample ? largeSampleSteps : sampleSteps) : (run?.plan.steps ?? []).map((step) => ({
+    id: step.step_id, title: step.title, role: step.specialist, method: step.tool_name,
+    state: step.state, output: step.error ?? ((step.evidence ?? []).map((e) => e.summary).join(" · ") || "No output recorded."),
+    dependencies: step.dependencies ?? [],
+  })), [sample, largeSample, run]);
+  const events = sample ? (largeSample ? [] : sampleEvents) : (run?.events ?? []).slice().sort((a, b) => a.sequence - b.sequence).map((event) => ({ id: event.event_id, label: eventLabel(event) }));
+  const issueCount = sample ? (largeSample ? 0 : 1) : (run?.council ?? []).reduce((count, item) => count + (item.objections ?? []).length, 0);
+
+  async function start() {
+    if (!datasetId || !objective.trim() || starting) return;
+    setStarting(true); setError(null); setSample(false); setRun(null); setNotes([]);
+    try {
+      const response = await fetch(apiUrl("/api/v1/atlas/runs"), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ dataset_id: datasetId, objective: objective.trim(), idempotency_key: crypto.randomUUID() }) });
+      if (!response.ok) throw new Error("Atlas did not accept the investigation.");
+      setRun(await response.json() as AtlasRunResponse); setView("investigation");
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "Investigation failed to start."); }
+    finally { setStarting(false); }
+  }
+
+  function select(id: string, label: string, detail: string, kind = "recorded item") {
+    setSelectedId(id);
+    onSelectContext({ objectId: id, label, type: "finding", state: "native", actions: [], metadata: [kind, detail, sample ? "Illustrative sample; no model or tool execution" : `Recorded in run ${run?.run_id ?? "unknown"}`] });
+  }
+
+  async function saveNote() {
+    if (!run || !selectedId || !noteText.trim() || noteState === "saving") return;
+    setNoteState("saving");
+    try {
+      const response = await fetch(apiUrl(`/api/v1/atlas/runs/${encodeURIComponent(run.run_id)}/interventions`), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ target_id: selectedId, text: noteText.trim() }) });
+      if (!response.ok) throw new Error("The intervention was not saved.");
+      const record = await response.json() as Note;
+      setNotes((previous) => [...previous, record]); setNoteText(""); setNoteState("saved");
+    } catch { setNoteState("failed"); }
+  }
+
+  return <section className="atlas-investigation" aria-label="Atlas investigation workspace">
+    <header className="atlas-investigation-header">
+      <div><span className="atlas-kicker">ATLAS / {sample ? "ILLUSTRATIVE SAMPLE" : run ? "RECORDED INVESTIGATION" : "INVESTIGATION"}</span>
+        <h1>{sample ? (largeSample ? "Large illustrative investigation · 200 tasks" : "Should we roll out the shorter onboarding flow?") : run?.plan.objective ?? "What decision are you trying to make?"}</h1>
+        <p>{sample ? (largeSample ? "Synthetic scale check. No model or tool executed." : "The observed lift is recorded in this sample; the causal question remains unresolved.") : run ? `Dataset ${run.plan.dataset_id} · execution ${run.plan.state} · ${run.plan.steps.length} steps` : `Active dataset: ${datasetId ?? "none selected"}`}</p>
+      </div>
+      {run || sample ? <span className="atlas-run-state" data-state={sample ? "sample" : run?.plan.state}>{sample ? "Sample · no execution" : run?.plan.state}</span> : null}
+    </header>
+    {!run && !sample ? <div className="atlas-empty-actions"><p>Start with a question about the active dataset, or inspect the labelled sample investigation.</p><button type="button" onClick={() => { setLargeSample(false); setSample(true); setView("investigation"); }}>Open sample investigation</button><button type="button" onClick={() => { setLargeSample(true); setSample(true); setView("collaboration"); }}>Open 200-task sample</button></div> : null}
+    {(run || sample) ? <nav className="atlas-view-tabs" aria-label="Investigation views">{(["investigation", "collaboration", "evidence", "activity"] as const).map((item) => <button key={item} type="button" aria-current={view === item ? "page" : undefined} onClick={() => setView(item)}>{item === "collaboration" ? `Collaboration${issueCount ? ` · ${issueCount} open` : ""}` : item[0]!.toUpperCase() + item.slice(1)}</button>)}</nav> : null}
+    {view === "investigation" && (run || sample) ? <div className="atlas-section"><div className="atlas-section-heading"><div><h2>Plan execution sequence</h2><p>Execution can finish while the question stays unresolved.</p></div><button type="button" onClick={() => setCollapsed((value) => !value)} aria-expanded={!collapsed}>{collapsed ? "Expand details" : "Collapse details"}</button></div><ol className="atlas-plan-list">{steps.map((step, index) => <li key={step.id} data-state={step.state}><div className="atlas-step-head"><span className="atlas-step-index">{String(index + 1).padStart(2, "0")}</span><div><strong>{step.title}</strong><small>{step.role} · {step.method}</small></div><span className="atlas-state-label">{step.state}</span></div>{!collapsed ? <p className="atlas-step-dependency">{step.dependencies.length ? `Depends on ${step.dependencies.join(", ")}` : "No dependency recorded"}</p> : null}<button type="button" className="atlas-step-output" onClick={() => select(step.id, step.title, step.output, step.state === "blocked" ? "execution refusal" : "recorded output")} aria-pressed={selectedId === step.id}><span>{step.state === "blocked" ? "Execution refusal" : step.state === "pending" ? (sample ? "Waiting dependency · sample" : "Pending") : "Recorded output"}</span><strong>{step.output}</strong></button></li>)}</ol>{run?.answer ? <div className="atlas-result"><strong>Atlas interpretation</strong><button type="button" onClick={() => select("answer", "Atlas interpretation", run.answer ?? "", "interpretation")}>{run.answer}</button>{run.uncertainty ? <p><strong>Limit:</strong> {run.uncertainty}</p> : null}<small>Supporting evidence not linked.</small></div> : null}</div> : null}
+    {view === "collaboration" && (run || sample) ? <div className="atlas-collaboration"><section className="atlas-section"><div className="atlas-section-heading"><div><h2>Work map</h2><p>Participating roles and recorded dependencies</p></div></div><ol className="atlas-work-map">{steps.map((step, index) => <li key={step.id} data-state={step.state}><span className="atlas-step-index">{String(index + 1).padStart(2, "0")}</span><div><strong>{step.role}</strong><span>{step.title}</span><small>{step.dependencies.length ? `After ${step.dependencies.join(", ")}` : "No dependency recorded"}</small></div><span className="atlas-state-label">{step.state}</span></li>)}</ol></section><section className="atlas-section"><div className="atlas-section-heading"><div><h2>Recorded exchange</h2><p>{sample ? "Illustrative messages · one shared model represented by roles" : "Council records and human notes · reply links unavailable for historical records"}</p></div></div><ol className="atlas-exchange">{sample && !largeSample ? sampleMessages.map((message) => <li key={message.id}><div className="atlas-message-meta"><strong>{message.role}</strong><span>{message.kind}</span><small>{message.reply ? `Reply to ${message.reply}` : "Starts exchange"}</small></div><button type="button" onClick={() => select(message.target ?? message.id, message.kind, message.text)}>{message.text}</button></li>) : (run?.council ?? []).map((message, index) => <li key={`${message.specialist}-${index}`}><div className="atlas-message-meta"><strong>{message.specialist}</strong><span>Recorded conclusion</span><small>Record {index + 1}</small></div><button type="button" onClick={() => select(`council:${index}`, `${message.specialist} conclusion`, message.conclusion)}>{message.conclusion}</button>{(message.objections ?? []).map((objection, objectionIndex) => <button key={objectionIndex} type="button" className="atlas-objection" onClick={() => select(`objection:${index}:${objectionIndex}`, "Recorded objection", objection)}><span>Objection</span>{objection}</button>)}</li>)}{notes.map((note) => <li key={note.intervention_id}><div className="atlas-message-meta"><strong>You</strong><span>Human intervention</span><small>Targets {note.target_id} · {note.created_at}</small></div><p>{note.text}</p></li>)}</ol>{sample ? <p className="atlas-support-note">Sample messages are illustrative; no model exchange was persisted.</p> : null}</section><section className="atlas-section"><h2>Open issues</h2>{sample && !largeSample ? <button type="button" className="atlas-issue" onClick={() => select("sample-issue", "Causal attribution unresolved", "Assignment provenance is missing. The +3 percentage point observed difference remains descriptive.")}><strong>Causal attribution unresolved</strong><span>Assignment provenance missing · observed difference preserved · assignment records needed</span></button> : issueCount ? (run?.council ?? []).flatMap((item, index) => (item.objections ?? []).map((objection, offset) => <button key={`${index}-${offset}`} type="button" className="atlas-issue" onClick={() => select(`objection:${index}:${offset}`, "Recorded objection", objection)}><strong>{objection}</strong><span>Consequence and resolution not separately recorded.</span></button>)) : <p>No recorded objection.</p>}{!sample && run ? <div className="atlas-intervention"><label htmlFor="atlas-note">Challenge a selected record or request a check</label><textarea id="atlas-note" value={noteText} onChange={(event) => { setNoteText(event.target.value); setNoteState("idle"); }} placeholder={selectedId ? `Note about ${selectedId}` : "Select a record first"} disabled={!selectedId} maxLength={2000} /><button type="button" onClick={() => void saveNote()} disabled={!selectedId || !noteText.trim() || noteState === "saving"}>{noteState === "saving" ? "Saving…" : "Save intervention"}</button><small role="status">{noteState === "saved" ? "Saved as a human note. No check was executed." : noteState === "failed" ? "Save failed. The note was not recorded." : selectedId ? `Target: ${selectedId}` : "Select a contribution, output, or objection."}</small></div> : null}</section></div> : null}
+    {view === "evidence" && (run || sample) ? <section className="atlas-section"><h2>Evidence records</h2>{sample && !largeSample ? <button type="button" className="atlas-evidence-row" onClick={() => select("sample-e1", "Illustrative cohort counts", "Control 1,200 / 5,000 (24%); treatment 1,350 / 5,000 (27%). No assignment provenance.")}><strong>Illustrative cohort counts</strong><span>Observed difference +3 percentage points · sample only</span></button> : (run?.evidence ?? []).length ? (run?.evidence ?? []).map((evidence) => <button key={evidence.evidence_id} type="button" className="atlas-evidence-row" onClick={() => select(evidence.evidence_id, evidence.summary, `${evidence.kind} · ${evidence.evidence_id}`)}><strong>{evidence.summary}</strong><span>{evidence.kind} · {evidence.evidence_id}</span></button>) : <p>No evidence record attached to this run.</p>}<p className="atlas-support-note">Supporting evidence is highlighted only where a stored relationship establishes it.</p><button type="button" disabled title="The originating SQL text and source reference were not persisted for this record.">Open exact query in SQL Lab · unavailable</button><p className="atlas-support-note">The originating query and source reference were not persisted.</p></section> : null}
+    {view === "activity" && (run || sample) ? <section className="atlas-section"><h2>Recorded event log</h2><p>Stepping selects an event. Historical state reconstruction is unavailable.</p>{events.length ? <><div className="atlas-replay"><button type="button" disabled={eventIndex === 0} onClick={() => setEventIndex((value) => value - 1)}>Previous event</button><span>Event {eventIndex + 1} of {events.length}</span><button type="button" disabled={eventIndex >= events.length - 1} onClick={() => setEventIndex((value) => value + 1)}>Next event</button></div><ol className="atlas-event-list">{events.map((event, index) => <li key={event.id}><button type="button" aria-current={eventIndex === index ? "step" : undefined} onClick={() => setEventIndex(index)}><span>{String(index + 1).padStart(2, "0")}</span>{event.label}</button></li>)}</ol></> : <p>No event journal entries were recorded.</p>}</section> : null}
+    <form className="atlas-new-run" onSubmit={(event) => { event.preventDefault(); void start(); }}><label htmlFor="atlas-objective">Investigation objective</label><div><input id="atlas-objective" value={objective} onChange={(event) => setObjective(event.target.value)} placeholder={datasetId ? "Ask about the active dataset" : "Select a dataset to begin"} disabled={!datasetId || starting} /><button type="submit" disabled={!datasetId || !objective.trim() || starting}>{starting ? "Starting…" : "Run investigation"}</button></div>{error ? <p role="alert">{error}</p> : null}</form>
+  </section>;
+}

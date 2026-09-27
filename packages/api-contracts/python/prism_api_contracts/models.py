@@ -1157,6 +1157,20 @@ class AtlasRunResponse(ContractModel):
     updated_at: Optional[datetime] = None
 
 
+class AtlasInterventionWriteRequest(ContractModel):
+    target_id: str = Field(min_length=1, max_length=200)
+    text: str = Field(min_length=1, max_length=2_000)
+
+
+class AtlasInterventionRecord(ContractModel):
+    intervention_id: str = Field(min_length=1, max_length=140)
+    run_id: str = Field(min_length=1, max_length=120)
+    target_id: str = Field(min_length=1, max_length=200)
+    text: str = Field(min_length=1, max_length=2_000)
+    author: Literal["human"] = "human"
+    created_at: datetime
+
+
 class AtlasDeepRefinementState(str, Enum):
     UNAVAILABLE = "unavailable"
     QUEUED = "queued"

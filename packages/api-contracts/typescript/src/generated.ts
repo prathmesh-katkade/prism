@@ -399,6 +399,20 @@ export interface AtlasGuardrailContext {
   evidence_metric?: string;
 }
 
+export interface AtlasInterventionRecord {
+  intervention_id: string;
+  run_id: string;
+  target_id: string;
+  text: string;
+  author?: string;
+  created_at: string;
+}
+
+export interface AtlasInterventionWriteRequest {
+  target_id: string;
+  text: string;
+}
+
 export interface AtlasInvestigationLink {
   link_id: string;
   expires_at: string;

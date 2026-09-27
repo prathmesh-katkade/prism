@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
+import "@prism/design-system/src/tokens.css";
 import "./prism.css";
+import "./atlas-investigation.css";
 
 export const metadata: Metadata = {
   title: "PRISM — Analytical workspace",
