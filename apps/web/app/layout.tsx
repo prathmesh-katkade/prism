@@ -1,3 +1,4 @@
+import "../../../packages/design-system/typescript/src/tokens.css";
 import type { Metadata } from "next";
 import "./prism.css";
 

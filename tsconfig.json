@@ -14,6 +14,7 @@
     "paths": {
       "@prism/api-contracts": ["packages/api-contracts/typescript/src/index.ts"],
       "@prism/design-system": ["packages/design-system/typescript/src/index.ts"],
+      "@prism/design-system/tokens": ["packages/design-system/typescript/src/tokens.ts"],
       "@prism/test-utils": ["packages/test-utils/typescript/src/index.ts"]
     }
   },
