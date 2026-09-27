@@ -1098,6 +1098,10 @@ class AtlasRunEventType(str, Enum):
     RUN_COMPLETED = "run_completed"
     RUN_FAILED = "run_failed"
     RUN_CANCELLED = "run_cancelled"
+    DEEP_REFINEMENT_QUEUED = "deep_refinement_queued"
+    DEEP_REFINEMENT_READY = "deep_refinement_ready"
+    DEEP_REFINEMENT_FAILED = "deep_refinement_failed"
+    DEEP_REFINEMENT_ACCEPTED = "deep_refinement_accepted"
 
 
 class AtlasRunEvent(ContractModel):
@@ -1151,6 +1155,31 @@ class AtlasRunResponse(ContractModel):
     cancellation_requested: bool = False
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+
+
+class AtlasDeepRefinementState(str, Enum):
+    UNAVAILABLE = "unavailable"
+    QUEUED = "queued"
+    RUNNING = "running"
+    READY = "ready"
+    FAILED = "failed"
+    ACCEPTING = "accepting"
+    ACCEPTED = "accepted"
+
+
+class AtlasDeepRefinement(ContractModel):
+    run_id: str = Field(min_length=1, max_length=120)
+    state: AtlasDeepRefinementState
+    reason: str = Field(max_length=500)
+    candidate_id: Optional[str] = None
+    runtime_model: Optional[str] = None
+    runtime_model_digest: Optional[str] = None
+    dataset_revision: Optional[int] = None
+    source_fingerprint: Optional[str] = None
+    proposed_steps: list[AtlasPlanStep] = Field(default_factory=list)
+    accepted_run_id: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
 
 
 class AtlasMemoryScope(str, Enum):

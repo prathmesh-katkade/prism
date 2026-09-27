@@ -18,6 +18,8 @@ import httpx
 from fastapi import HTTPException, status
 from prism_api_contracts import (
     AtlasCouncilConclusion,
+    AtlasDeepRefinement,
+    AtlasDeepRefinementState,
     AtlasEvidenceReference,
     AtlasModelProviderCapabilities,
     AtlasModelProviderName,
@@ -41,6 +43,7 @@ from prism_api_contracts import (
 )
 
 from .atlas_candidate_runtime import resolve_deep_ollama_model
+from .atlas_deep_refinement_store import DurableAtlasDeepRefinementStore
 from .atlas_guardrail_context import evaluate_request
 from .atlas_run_admission import AtlasRunAdmission
 from .atlas_safety_policy import OPERATIONAL_SAFETY_POLICY
@@ -210,12 +213,12 @@ class OllamaAtlasProvider:
             }, separators=(",", ":")),
         }
 
-    def propose_plan_detailed(self, objective: str, metadata: dict[str, object], *, model_override: Optional[str] = None) -> AtlasPlanProposal:
+    def propose_plan_detailed(self, objective: str, metadata: dict[str, object], *, model_override: Optional[str] = None, timeout_override: Optional[float] = None) -> AtlasPlanProposal:
         """Same request as propose_plan, but also reports what happened to it."""
         if not self.capabilities().available:
             return AtlasPlanProposal(None, "not_requested")
         url = os.environ.get("PRISM_ATLAS_OLLAMA_URL", "http://127.0.0.1:11434/api/generate")
-        timeout = planner_timeout_seconds()
+        timeout = timeout_override if timeout_override is not None else planner_timeout_seconds()
         try:
             response = httpx.post(url, json=self._plan_payload(objective, metadata, schema=True, model_override=model_override), timeout=timeout)
             response.raise_for_status()
@@ -252,10 +255,10 @@ class AtlasProviderRegistry:
         provider = self._providers[1] if self.select() is AtlasModelProviderName.OLLAMA else self._providers[0]
         return provider.propose_plan(objective, metadata)
 
-    def propose_plan_detailed(self, objective: str, metadata: dict[str, object], *, model_override: Optional[str] = None) -> AtlasPlanProposal:
+    def propose_plan_detailed(self, objective: str, metadata: dict[str, object], *, model_override: Optional[str] = None, timeout_override: Optional[float] = None) -> AtlasPlanProposal:
         if self.select() is not AtlasModelProviderName.OLLAMA:
             return AtlasPlanProposal(None, "not_requested")
-        return cast(OllamaAtlasProvider, self._providers[1]).propose_plan_detailed(objective, metadata, model_override=model_override)
+        return cast(OllamaAtlasProvider, self._providers[1]).propose_plan_detailed(objective, metadata, model_override=model_override, timeout_override=timeout_override)
 
 
 TOOL_REGISTRY: dict[str, set[AtlasStepKind]] = {
@@ -587,7 +590,9 @@ class AtlasRunStore:
         self._planner = planner or DynamicAtlasPlanner()
 
     def create(
-        self, request: AtlasRunRequest, provider: AtlasModelProviderName
+        self, request: AtlasRunRequest, provider: AtlasModelProviderName,
+        *, accepted_refinement: Optional[AtlasDeepRefinement] = None,
+        child_run_id: Optional[str] = None,
     ) -> AtlasRunResponse:
         metadata: dict[str, object] = {"dataset_id": request.dataset_id, "raw_dataset_sent": False}
         try:
@@ -598,26 +603,39 @@ class AtlasRunStore:
         guardrail = evaluate_request(request)
         metadata["guardrail_decision"] = guardrail.metadata()
         requested_tier, tier_reason = choose_planning_tier(request.objective, metadata)
-        tier = requested_tier
+        tier = "fast"
         model_override: Optional[str] = None
-        if provider is AtlasModelProviderName.OLLAMA and tier == "deep":
+        deep_refinement_requested = False
+        if accepted_refinement is not None:
+            if provider is not AtlasModelProviderName.OLLAMA or not accepted_refinement.proposed_steps or guardrail.state != "checked":
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Accepted refinement is not a valid Ollama plan proposal.")
+            model_override = accepted_refinement.runtime_model
+            tier = "deep"
+            tier_reason = "accepted_refinement"
+            requested_tier = "deep"
+        elif provider is AtlasModelProviderName.OLLAMA and requested_tier == "deep":
             try:
-                model_override = resolve_deep_ollama_model()
+                deep_model = resolve_deep_ollama_model()
             except (OSError, ValueError):
-                model_override = None
-            if model_override is None:
-                tier = "fast"
+                deep_model = None
+            if deep_model is None:
                 tier_reason = f"deep_unavailable:{tier_reason}"
+            else:
+                deep_refinement_requested = True
+                tier_reason = f"deep_refinement_queued:{tier_reason}"
         elif provider is not AtlasModelProviderName.OLLAMA:
-            tier = "fast"
             tier_reason = "deterministic_provider"
         proposal_result = (
-            providers.propose_plan_detailed(request.objective, metadata, model_override=model_override)
+            AtlasPlanProposal([step.model_dump(mode="json") for step in accepted_refinement.proposed_steps], "ok")
+            if accepted_refinement is not None and guardrail.state == "checked"
+            else providers.propose_plan_detailed(request.objective, metadata)
             if guardrail.state == "checked"
             else AtlasPlanProposal(None, "not_requested")
         )
         plan = self._planner.create(request, provider, proposal_result.steps)
-        run = self._store.create(request, provider, plan)
+        if accepted_refinement is not None and not DynamicAtlasPlanner._validated_proposal(proposal_result.steps or []):
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Deep proposal no longer validates against the tool registry.")
+        run = self._store.create(request, provider, plan, run_id=child_run_id)
         if not run.events:
             self.append_event(
                 run.run_id,
@@ -640,6 +658,10 @@ class AtlasRunStore:
                     "model": (model_override or os.environ.get("PRISM_ATLAS_OLLAMA_MODEL")) if provider is AtlasModelProviderName.OLLAMA else "deterministic-v1",
                     "model_tier": tier,
                     "model_tier_reason": tier_reason,
+                    "deep_refinement_requested": deep_refinement_requested,
+                    "requested_tier": requested_tier,
+                    "source_run_id": accepted_refinement.run_id if accepted_refinement else None,
+                    "guardrail_context": request.guardrail_context.model_dump(mode="json") if request.guardrail_context else None,
                     "prompt_schema_version": "atlas-plan-v1",
                     "raw_dataset_sent": False,
                     "guardrail_decision": guardrail.metadata(),
@@ -757,6 +779,248 @@ def handle_atlas_run_worker_crash(run_id: str, error: BaseException) -> None:
 providers = AtlasProviderRegistry()
 runs = AtlasRunStore()
 run_admission = AtlasRunAdmission(on_worker_crash=handle_atlas_run_worker_crash)
+deep_refinements = DurableAtlasDeepRefinementStore()
+
+
+def _deep_worker_crashed(run_id: str, error: BaseException) -> None:
+    if deep_refinements.transition(
+        run_id, expected=[AtlasDeepRefinementState.QUEUED, AtlasDeepRefinementState.RUNNING],
+        state=AtlasDeepRefinementState.FAILED, reason=f"Deep worker failed: {type(error).__name__}.",
+    ):
+        runs.append_event(run_id, AtlasRunEventType.DEEP_REFINEMENT_FAILED, payload={"reason": "worker_crashed"})
+
+
+deep_admission = AtlasRunAdmission(
+    max_concurrent_runs=1, max_queued_runs=1,
+    on_worker_crash=_deep_worker_crashed, thread_name_prefix="atlas-deep",
+)
+
+
+def _deep_refinement_failure(run_id: str, reason: str) -> None:
+    if deep_refinements.transition(
+        run_id, expected=[AtlasDeepRefinementState.QUEUED, AtlasDeepRefinementState.RUNNING],
+        state=AtlasDeepRefinementState.FAILED, reason=reason,
+    ):
+        runs.append_event(run_id, AtlasRunEventType.DEEP_REFINEMENT_FAILED, payload={"reason": reason})
+
+
+def schedule_deep_refinement(run_id: str) -> None:
+    """Never block the fast response on a deep model call."""
+    from .atlas_candidate_runtime import DurableAtlasCandidateRuntimeStore
+    from .atlas_promotion import DurableAtlasPromotionStore
+
+    run = runs.get(run_id)
+    plan_event = next((item for item in run.events if item.type is AtlasRunEventType.PLAN_CREATED), None)
+    payload = plan_event.payload if plan_event else {}
+    if payload.get("requested_tier") != "deep" or payload.get("source_run_id") is not None:
+        return
+    if deep_refinements.get(run_id) is not None:
+        return
+    if not payload.get("deep_refinement_requested"):
+        deep_refinements.create(run_id, state=AtlasDeepRefinementState.UNAVAILABLE, reason="No promoted, bound deep model is available.")
+        return
+    pointer = DurableAtlasPromotionStore().current_production("deep")
+    binding = DurableAtlasCandidateRuntimeStore().latest(pointer.candidate_id) if pointer else None
+    if pointer is None or binding is None or binding.runtime_model_digest is None:
+        deep_refinements.create(run_id, state=AtlasDeepRefinementState.UNAVAILABLE, reason="Deep pointer or verified runtime binding is unavailable.")
+        return
+    try:
+        profile = get_profile(run.plan.dataset_id)
+    except HTTPException:
+        deep_refinements.create(run_id, state=AtlasDeepRefinementState.UNAVAILABLE, reason="Dataset profile is unavailable.")
+        return
+    if not deep_admission.try_reserve():
+        deep_refinements.create(run_id, state=AtlasDeepRefinementState.UNAVAILABLE, reason="Deep refinement capacity is saturated.")
+        return
+    try:
+        record, created = deep_refinements.create(
+            run_id, state=AtlasDeepRefinementState.QUEUED, reason="Waiting for deep worker.",
+            candidate_id=pointer.candidate_id, runtime_model=binding.runtime_model,
+            runtime_model_digest=binding.runtime_model_digest,
+            dataset_revision=profile.dataset.revision,
+            source_fingerprint=profile.provenance.source_fingerprint,
+        )
+    except Exception:
+        deep_admission.release_without_dispatch()
+        raise
+    if not created:
+        deep_admission.release_without_dispatch()
+        return
+    try:
+        runs.append_event(run_id, AtlasRunEventType.DEEP_REFINEMENT_QUEUED, payload={
+            "candidate_id": record.candidate_id, "model": record.runtime_model,
+            "model_digest": record.runtime_model_digest,
+        })
+    except Exception:
+        deep_admission.release_without_dispatch()
+        _deep_refinement_failure(run_id, "Deep refinement queue event could not be recorded.")
+        raise
+    try:
+        deep_admission.dispatch(run_id, run_deep_refinement)
+    except Exception:
+        _deep_refinement_failure(run_id, "Deep worker dispatch failed.")
+
+
+def run_deep_refinement(run_id: str) -> None:
+    from .atlas_candidate_runtime import DurableAtlasCandidateRuntimeStore
+    from .atlas_promotion import DurableAtlasPromotionStore
+
+    record = deep_refinements.get(run_id)
+    if record is None or not deep_refinements.transition(
+        run_id, expected=[AtlasDeepRefinementState.QUEUED],
+        state=AtlasDeepRefinementState.RUNNING, reason="Deep model is proposing a refinement.",
+    ):
+        return
+    pointer = DurableAtlasPromotionStore().current_production("deep")
+    binding = DurableAtlasCandidateRuntimeStore().latest(pointer.candidate_id) if pointer else None
+    if (
+        pointer is None or binding is None or pointer.candidate_id != record.candidate_id
+        or binding.runtime_model != record.runtime_model
+        or binding.runtime_model_digest != record.runtime_model_digest
+    ):
+        _deep_refinement_failure(run_id, "Deep production provenance changed before inference.")
+        return
+    original = runs.get(run_id)
+    if original.cancellation_requested:
+        _deep_refinement_failure(run_id, "Source run was cancelled.")
+        return
+    try:
+        profile = get_profile(original.plan.dataset_id)
+    except HTTPException:
+        _deep_refinement_failure(run_id, "Dataset profile is unavailable.")
+        return
+    if profile.dataset.revision != record.dataset_revision or profile.provenance.source_fingerprint != record.source_fingerprint:
+        _deep_refinement_failure(run_id, "Dataset changed before deep inference.")
+        return
+    metadata: dict[str, object] = {
+        "dataset_id": original.plan.dataset_id, "raw_dataset_sent": False,
+        "rows": profile.quality.n_rows, "columns": profile.quality.n_cols,
+        "health": profile.health.total,
+        "column_names": [column.name[:120] for column in profile.columns][:100],
+    }
+    proposal = providers.propose_plan_detailed(
+        original.plan.objective, metadata, model_override=record.runtime_model,
+        timeout_override=120.0,
+    )
+    steps = DynamicAtlasPlanner._validated_proposal(proposal.steps or []) if proposal.status == "ok" else []
+    if not steps:
+        _deep_refinement_failure(run_id, f"Deep proposal was not usable: {proposal.status}.")
+        return
+    if deep_refinements.transition(
+        run_id, expected=[AtlasDeepRefinementState.RUNNING],
+        state=AtlasDeepRefinementState.READY,
+        reason="Validated deep proposal is ready for explicit acceptance.",
+        proposed_steps=steps,
+    ):
+        runs.append_event(run_id, AtlasRunEventType.DEEP_REFINEMENT_READY, payload={
+            "candidate_id": record.candidate_id, "model": record.runtime_model,
+            "model_digest": record.runtime_model_digest, "proposed_steps": len(steps),
+        })
+
+
+_deep_startup_lock = threading.Lock()
+_deep_startup_done = False
+
+
+def reconcile_deep_refinements_once() -> int:
+    """Mark orphaned jobs failed; recover an interrupted accept by child ID."""
+    global _deep_startup_done
+    with _deep_startup_lock:
+        if _deep_startup_done:
+            return 0
+        _deep_startup_done = True
+    count = 0
+    for run_id in deep_refinements.unfinished_run_ids():
+        record = deep_refinements.get(run_id)
+        if record is None:
+            continue
+        if record.state is AtlasDeepRefinementState.ACCEPTING:
+            child = runs._store.get_by_idempotency_key(f"deepref:{run_id}")
+            target = AtlasDeepRefinementState.ACCEPTED if child else AtlasDeepRefinementState.READY
+            reason = "Accepted child run survived restart." if child else "Acceptance interrupted; ready for retry."
+            changed = deep_refinements.transition(run_id, expected=[record.state], state=target, reason=reason)
+        else:
+            changed = deep_refinements.transition(run_id, expected=[record.state], state=AtlasDeepRefinementState.FAILED, reason="Deep worker interrupted by API restart.")
+            if changed:
+                runs.append_event(run_id, AtlasRunEventType.DEEP_REFINEMENT_FAILED, payload={"reason": "api_restarted"})
+        count += int(changed)
+    return count
+
+
+def accept_deep_refinement(run_id: str) -> AtlasRunResponse:
+    """Create one explicit child run; never rewrite the source run's plan."""
+    from .atlas_candidate_runtime import DurableAtlasCandidateRuntimeStore
+    from .atlas_promotion import DurableAtlasPromotionStore
+
+    record = deep_refinements.get(run_id)
+    if record is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Deep refinement was not found.")
+    if record.state is AtlasDeepRefinementState.ACCEPTED and record.accepted_run_id:
+        return runs.get(record.accepted_run_id)
+    if record.state is not AtlasDeepRefinementState.READY or not record.proposed_steps:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Deep refinement is not ready to accept.")
+    source = runs.get(run_id)
+    if source.plan.state is not AtlasPlanState.COMPLETED or source.cancellation_requested:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Source run must complete before accepting its refinement.")
+    profile = get_profile(source.plan.dataset_id)
+    if profile.dataset.revision != record.dataset_revision or profile.provenance.source_fingerprint != record.source_fingerprint:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Dataset changed since the deep proposal; rerun Atlas before accepting.")
+    pointer = DurableAtlasPromotionStore().current_production("deep")
+    binding = DurableAtlasCandidateRuntimeStore().latest(pointer.candidate_id) if pointer else None
+    if (
+        pointer is None or binding is None or pointer.candidate_id != record.candidate_id
+        or binding.runtime_model != record.runtime_model
+        or binding.runtime_model_digest != record.runtime_model_digest
+    ):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Deep production binding changed since the proposal.")
+    plan_event = next((item for item in source.events if item.type is AtlasRunEventType.PLAN_CREATED), None)
+    context = plan_event.payload.get("guardrail_context") if plan_event else None
+    request = AtlasRunRequest.model_validate({
+        "dataset_id": source.plan.dataset_id, "objective": source.plan.objective,
+        "guardrail_context": context, "idempotency_key": f"deepref:{run_id}",
+    })
+    if evaluate_request(request).state != "checked":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Current guardrail does not authorize the refined plan.")
+    if not run_admission.try_reserve():
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Atlas run capacity is saturated; retry acceptance shortly.")
+    child_id = f"atlas_deep_{uuid.uuid5(uuid.NAMESPACE_URL, run_id).hex}"
+    if not deep_refinements.transition(
+        run_id, expected=[AtlasDeepRefinementState.READY],
+        state=AtlasDeepRefinementState.ACCEPTING, reason="Creating accepted child run.",
+        accepted_run_id=child_id,
+    ):
+        run_admission.release_without_dispatch()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Refinement acceptance is already in progress.")
+    try:
+        child = runs.create(
+            request, AtlasModelProviderName.OLLAMA,
+            accepted_refinement=record, child_run_id=child_id,
+        )
+    except Exception:
+        deep_refinements.transition(
+            run_id, expected=[AtlasDeepRefinementState.ACCEPTING],
+            state=AtlasDeepRefinementState.READY, reason="Child creation failed; acceptance may be retried.",
+        )
+        run_admission.release_without_dispatch()
+        raise
+    try:
+        run_admission.dispatch(child.run_id, execute)
+    except Exception as error:
+        runs.fail_if_in_flight(child.run_id, reason="dispatch_failed", detail="Accepted refinement could not be dispatched.")
+        deep_refinements.transition(
+            run_id, expected=[AtlasDeepRefinementState.ACCEPTING],
+            state=AtlasDeepRefinementState.FAILED, reason="Accepted child run could not be dispatched.",
+        )
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Accepted refinement could not be dispatched.") from error
+    deep_refinements.transition(
+        run_id, expected=[AtlasDeepRefinementState.ACCEPTING],
+        state=AtlasDeepRefinementState.ACCEPTED, reason="User accepted refinement as a new run.",
+    )
+    runs.append_event(run_id, AtlasRunEventType.DEEP_REFINEMENT_ACCEPTED, payload={
+        "child_run_id": child.run_id, "candidate_id": record.candidate_id,
+        "model": record.runtime_model, "model_digest": record.runtime_model_digest,
+    })
+    return child
 
 _startup_reconciliation_lock = threading.Lock()
 _startup_reconciliation_done = False

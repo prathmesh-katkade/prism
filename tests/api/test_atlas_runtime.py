@@ -264,9 +264,10 @@ def test_high_stakes_route_uses_only_a_promoted_deep_binding(monkeypatch) -> Non
     monkeypatch.setattr(atlas_runtime, "resolve_deep_ollama_model", lambda: "verified-deep-model")
     run_id = client.post("/api/v1/atlas/runs", json={"dataset_id": dataset_id, "objective": "Investigate a causal claim."}).json()["run_id"]
     payload = _plan_created_payload(client, run_id)
-    assert requested_models[-1] == "verified-deep-model"
-    assert payload["model_tier"] == "deep"
-    assert payload["model_tier_reason"] == "causal_or_significance"
+    assert requested_models[-1] == "fast-model"
+    assert payload["model_tier"] == "fast"
+    assert payload["model_tier_reason"] == "deep_refinement_queued:causal_or_significance"
+    assert client.get(f"/api/v1/atlas/runs/{run_id}/refinement").json()["state"] == "unavailable"
 
 
 def test_ollama_plan_proposal_accepted_is_recorded_with_step_count(monkeypatch) -> None:  # type: ignore[no-untyped-def]

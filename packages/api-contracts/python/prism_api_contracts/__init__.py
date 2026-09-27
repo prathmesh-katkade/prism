@@ -34,6 +34,8 @@ from .models import (
     AtlasCommandCenterSummary,
     AtlasCouncilConclusion,
     AtlasCriticalRegression,
+    AtlasDeepRefinement,
+    AtlasDeepRefinementState,
     AtlasEmbeddingCapability,
     AtlasEvidence,
     AtlasEvidenceReference,
@@ -239,6 +241,7 @@ from .models import (
 )
 
 __all__ = [
+    "AtlasDeepRefinement", "AtlasDeepRefinementState",
     "AtlasSectionAvailability",
     "AtlasRecentRunSummary",
     "AtlasCommandCenterSummary",

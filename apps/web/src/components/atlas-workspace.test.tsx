@@ -33,6 +33,29 @@ function mockAtlas(runBody: unknown, options: { memories?: unknown[]; feedback?:
 
 describe("Atlas workspace", () => {
   afterEach(() => vi.restoreAllMocks());
+  it("shows a stored deep proposal and opens its accepted child run", async () => {
+    const source = { ...run, events: [...run.events, { event_id: "evt_deep", run_id: "atlas_1", sequence: 3, type: "plan_created", occurred_at: "2026-09-04T00:00:03Z", payload: { requested_tier: "deep" } }] };
+    const child = { ...run, run_id: "atlas_child", answer: "Refined child answer", plan: { ...run.plan, plan_id: "plan_child" }, events: [] };
+    const refinement = { run_id: "atlas_1", state: "ready", reason: "Validated deep proposal is ready for explicit acceptance.", candidate_id: "candidate_deep", runtime_model: "deep-model", runtime_model_digest: "digest", dataset_revision: 0, source_fingerprint: "a".repeat(64), proposed_steps: [{ ...run.plan.steps[0], step_id: "model_methodology", title: "Review causal readiness" }], accepted_run_id: null, created_at: "2026-09-04T00:00:00Z", updated_at: "2026-09-04T00:00:01Z" };
+    vi.stubGlobal("fetch", vi.fn(async (input: string | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path.endsWith("/specialists")) return json(roster);
+      if (path.endsWith("/atlas_1/refinement/accept") && init?.method === "POST") return json(child, 202);
+      if (path.endsWith("/atlas_1/refinement")) return json(refinement);
+      if (path.endsWith("/atlas_1")) return json(source);
+      if (path.endsWith("/atlas_child")) return json(child);
+      if (path.endsWith("/cortex")) return json(graph);
+      if (path.endsWith("/events")) return new Response("event: atlas.run\ndata: {}\n\n", { headers: { "content-type": "text/event-stream" } });
+      if (path.includes("/memories")) return json([]);
+      if (path.includes("/feedback/runs/")) return json([]);
+      return notFound();
+    }));
+    render(<AtlasWorkspace datasetId="ds_1" initialRunId="atlas_1" />);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Accept as new run" })).toBeEnabled());
+    expect(screen.getByText("Review causal readiness")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Accept as new run" }));
+    await waitFor(() => expect(screen.getByText("Refined child answer")).toBeInTheDocument());
+  });
   it("requires a durable dataset context", () => { render(<AtlasWorkspace datasetId={undefined} />); expect(screen.getByText("Load a dataset before opening an investigation.")).toBeInTheDocument(); });
   it("maps only real Cortex step, specialist, and tool records back to a declared plan step", () => {
     const typedRun = run as AtlasRunResponse;

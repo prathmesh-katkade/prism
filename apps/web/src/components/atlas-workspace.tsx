@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
-import type { AtlasFeedbackEvent, AtlasMemoryRecord, AtlasResourceSnapshot, AtlasRunResponse, AtlasSpecialistIdentity, CortexGraphState, OverviewProfileResponse } from "@prism/api-contracts";
+import type { AtlasDeepRefinement, AtlasFeedbackEvent, AtlasMemoryRecord, AtlasResourceSnapshot, AtlasRunResponse, AtlasSpecialistIdentity, CortexGraphState, OverviewProfileResponse } from "@prism/api-contracts";
 import { apiUrl } from "../config/api";
 import { PipelineStepper } from "./atlas-run-activity";
 import { AtlasCortexLedger } from "./atlas-cortex-ledger";
@@ -48,6 +48,7 @@ export function AtlasWorkspace({
   const [objective, setObjective] = useState("Profile this dataset and identify the evidence needed for the next decision.");
   const [datasetProfile, setDatasetProfile] = useState<OverviewProfileResponse | null>(null);
   const [run, setRun] = useState<AtlasRunResponse | null>(null);
+  const [refinement, setRefinement] = useState<AtlasDeepRefinement | null>(null);
   const [graph, setGraph] = useState<CortexGraphState | null>(null);
   const [memories, setMemories] = useState<AtlasMemoryRecord[]>([]);
   const [resources, setResources] = useState<AtlasResourceSnapshot | null>(null);
@@ -120,6 +121,17 @@ export function AtlasWorkspace({
       .catch(() => undefined);
     return () => { cancelled = true; };
   }, [run?.run_id, run?.plan.state]);
+  useEffect(() => {
+    if (!run) { setRefinement(null); return; }
+    const requested = (run.events ?? []).some((event) => event.type === "plan_created" && event.payload?.requested_tier === "deep");
+    if (!requested) { setRefinement(null); return; }
+    let cancelled = false;
+    fetch(apiUrl(`/api/v1/atlas/runs/${run.run_id}/refinement`))
+      .then((response) => response.ok ? response.json() as Promise<AtlasDeepRefinement> : null)
+      .then((record) => { if (!cancelled) setRefinement(record); })
+      .catch(() => { if (!cancelled) setRefinement(null); });
+    return () => { cancelled = true; };
+  }, [run?.run_id, run?.events?.length]);
   async function refresh(id: string): Promise<AtlasRunResponse | null> {
     const [runResponse, graphResponse] = await Promise.all([fetch(apiUrl(`/api/v1/atlas/runs/${id}`)), fetch(apiUrl(`/api/v1/atlas/runs/${id}/cortex`))]);
     if (runResponse.ok) {
@@ -159,12 +171,20 @@ export function AtlasWorkspace({
     } catch (reason) { if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : "Atlas stream failed."); }
   }
   async function start() {
-    if (!datasetId) return; setError(null); setRun(null); setGraph(null); setRunMemories([]); setRunFeedback([]); setSelectedStepId(null); setSelection({ kind: "core" }); setResultExpanded(false);
+    if (!datasetId) return; setError(null); setRun(null); setRefinement(null); setGraph(null); setRunMemories([]); setRunFeedback([]); setSelectedStepId(null); setSelection({ kind: "core" }); setResultExpanded(false);
     const response = await fetch(apiUrl("/api/v1/atlas/runs"), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ dataset_id: datasetId, objective, idempotency_key: crypto.randomUUID() }) });
     if (!response.ok) { setError((await response.json() as { detail?: string }).detail ?? "Atlas run could not start."); return; }
     const created = await response.json() as AtlasRunResponse; setRun(created); await refresh(created.run_id); void watch(created.run_id);
   }
   async function cancel() { if (!run) return; await fetch(apiUrl(`/api/v1/atlas/runs/${run.run_id}/cancel`), { method: "POST" }); await refresh(run.run_id); }
+  async function acceptRefinement() {
+    if (!run || refinement?.state !== "ready") return;
+    setError(null);
+    const response = await fetch(apiUrl(`/api/v1/atlas/runs/${run.run_id}/refinement/accept`), { method: "POST" });
+    if (!response.ok) { setError((await response.json() as { detail?: string }).detail ?? "Deep refinement could not be accepted."); return; }
+    const child = await response.json() as AtlasRunResponse;
+    setRefinement(null); setRun(child); await refresh(child.run_id); void watch(child.run_id);
+  }
   async function refreshPulse() {
     const [memoryResponse, resourceResponse] = await Promise.all([fetch(apiUrl("/api/v1/atlas/memories?limit=8")), fetch(apiUrl("/api/v1/atlas/resources/snapshot"))]);
     if (memoryResponse.ok) setMemories(await memoryResponse.json() as AtlasMemoryRecord[]);
@@ -242,6 +262,19 @@ export function AtlasWorkspace({
               />
             ) : null}
           </div>
+          {refinement ? (
+            <section className="atlas-deep-refinement" aria-label="Deep plan refinement">
+              <div>
+                <span className="eyebrow">DEEP REFINEMENT</span>
+                <h2>{refinement.state === "ready" ? "A deeper plan is ready" : `Deep refinement: ${refinement.state}`}</h2>
+                <p>{refinement.reason}</p>
+                {refinement.runtime_model ? <p>Model: {refinement.runtime_model}</p> : null}
+                {refinement.state === "ready" ? <ul>{(refinement.proposed_steps ?? []).map((step) => <li key={step.step_id}>{step.title}</li>)}</ul> : null}
+              </div>
+              {refinement.state === "ready" ? <button type="button" onClick={() => void acceptRefinement()} disabled={run?.plan.state !== "completed"}>Accept as new run</button> : null}
+              {refinement.state === "accepted" && refinement.accepted_run_id ? <button type="button" onClick={() => { void refresh(refinement.accepted_run_id!); void watch(refinement.accepted_run_id!); }}>Open accepted run</button> : null}
+            </section>
+          ) : null}
           <AtlasCommandBar
             objective={objective}
             onObjectiveChange={setObjective}
