@@ -113,6 +113,26 @@ def main() -> None:
                         result["run_after_execution"] = run
                         if run["plan"]["state"] != "completed":
                             raise RuntimeError(f"Atlas run did not complete: {run['plan']['state']}")
+                        stat_upload = client.post("/api/v1/overview/datasets", files={
+                            "file": ("atlas-stat-fixture.csv", b"exposure,outcome\n1,2\n2,4\n3,6\n4,8\n5,10\n", "text/csv")
+                        })
+                        stat_upload.raise_for_status()
+                        stat_dataset = stat_upload.json()
+                        result["stat_dataset"] = stat_dataset
+                        started_stat = client.post("/api/v1/atlas/runs", json={
+                            "dataset_id": stat_dataset["dataset_id"], "objective": "Test correlation significance",
+                        })
+                        started_stat.raise_for_status()
+                        stat_run_id = started_stat.json()["run_id"]
+                        result["stat_run_id"] = stat_run_id
+                        for _ in range(120):
+                            waiting = client.get(f"/api/v1/atlas/runs/{stat_run_id}").json()
+                            if waiting["plan"]["state"] == "waiting":
+                                break
+                            time.sleep(0.1)
+                        if waiting["plan"]["state"] != "waiting":
+                            raise RuntimeError(f"Statistical run did not wait: {waiting['plan']['state']}")
+                        result["stat_waiting_before_restart"] = waiting
                     else:
                         run_id = str(result["run_id"])
                         response = client.get(f"/api/v1/atlas/runs/{run_id}")
@@ -121,6 +141,25 @@ def main() -> None:
                         response = client.get(f"/api/v1/overview/datasets/{result['dataset']['dataset_id']}/profile")  # type: ignore[index]
                         response.raise_for_status()
                         result["dataset_revision_after_restart"] = response.json()["dataset"]["revision"]
+                        stat_run_id = str(result["stat_run_id"])
+                        waiting_response = client.get(f"/api/v1/atlas/runs/{stat_run_id}")
+                        waiting_response.raise_for_status()
+                        result["stat_waiting_after_restart"] = waiting_response.json()
+                        if result["stat_waiting_after_restart"] != result["stat_waiting_before_restart"]:
+                            raise AssertionError("Waiting question changed across restart")
+                        question_id = result["stat_waiting_after_restart"]["clarifications"][0]["question_id"]  # type: ignore[index]
+                        answered = client.post(f"/api/v1/atlas/runs/{stat_run_id}/clarifications/{question_id}", json={
+                            "test": "pearson", "col_a": "exposure", "col_b": "outcome", "design": "linear_association",
+                        })
+                        answered.raise_for_status()
+                        for _ in range(120):
+                            stat_completed = client.get(f"/api/v1/atlas/runs/{stat_run_id}").json()
+                            if stat_completed["plan"]["state"] in {"completed", "failed"}:
+                                break
+                            time.sleep(0.1)
+                        if stat_completed["plan"]["state"] != "completed":
+                            raise RuntimeError(f"Statistical run did not complete: {stat_completed['plan']['state']}")
+                        result["stat_run_after_resume"] = stat_completed
                 finally:
                     stop(process, log)
         result["backup_sha256_after"] = sha256(backup)

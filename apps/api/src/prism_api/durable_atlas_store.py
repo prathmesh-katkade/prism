@@ -327,6 +327,23 @@ class DurableAtlasRunStore:
             )
         return self.get(response.run_id)
 
+    def save_if_state(self, response: AtlasRunResponse, expected: AtlasPlanState) -> bool:
+        """Claim a waiting run once before dispatching resumed work."""
+        now = datetime.now(timezone.utc)
+        response = response.model_copy(update={"updated_at": now})
+        with self.engine.begin() as connection:
+            result = connection.execute(
+                update(_runs)
+                .where((_runs.c.run_id == response.run_id)
+                       & (_runs.c.state == expected.value)
+                       & (_runs.c.cancellation_requested.is_(False)))
+                .values(
+                    state=response.plan.state.value, updated_at=now,
+                    snapshot=self._snapshot(response),
+                )
+            )
+        return result.rowcount == 1
+
     def fail_if_in_flight(
         self,
         run_id: str,

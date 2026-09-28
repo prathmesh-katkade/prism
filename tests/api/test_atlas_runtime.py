@@ -321,11 +321,12 @@ def test_plan_response_schema_covers_every_allowed_tool_registry_entry_and_exclu
         for tool_name, kinds in atlas_runtime.TOOL_REGISTRY.items()
         for kind in kinds
         if kind not in {atlas_runtime.AtlasStepKind.PROFILE_DATASET, atlas_runtime.AtlasStepKind.AUDIT_EVIDENCE}
-        and tool_name != "sql_lab.local_aggregate"
+        and tool_name not in {"sql_lab.local_aggregate", "stats.declared_test"}
     }
     assert set(atlas_runtime.ALLOWED_STEP_PAIRS) == expected_pairs
-    assert len(atlas_runtime.ALLOWED_STEP_PAIRS) == len(atlas_runtime.TOOL_REGISTRY) - 3
+    assert len(atlas_runtime.ALLOWED_STEP_PAIRS) == len(atlas_runtime.TOOL_REGISTRY) - 4
     assert (atlas_runtime.AtlasStepKind.SQL_QUESTION.value, "sql_lab.local_aggregate") not in atlas_runtime.ALLOWED_STEP_PAIRS
+    assert (atlas_runtime.AtlasStepKind.STATISTICAL_ANALYSIS.value, "stats.declared_test") not in atlas_runtime.ALLOWED_STEP_PAIRS
 
     schema = atlas_runtime.PLAN_RESPONSE_SCHEMA
     variants = schema["properties"]["steps"]["items"]["oneOf"]  # type: ignore[index]

@@ -33,6 +33,7 @@ from prism_api_contracts import (
     AtlasSandboxExecutionResult,
     AtlasSandboxWorkerHealth,
     AtlasSpecialistIdentity,
+    AtlasStatAnalysis,
     CortexGraphState,
 )
 
@@ -46,6 +47,7 @@ from .atlas_retrieval import DurableAtlasRetrievalStore
 from .atlas_runtime import (
     SPECIALISTS,
     accept_deep_refinement,
+    answer_stat_clarification,
     cortex_graph,
     execute,
     providers,
@@ -133,6 +135,12 @@ def get_run(run_id: str) -> AtlasRunResponse:
     return runs.get(run_id)
 
 
+@router.post("/runs/{run_id}/clarifications/{question_id}", response_model=AtlasRunResponse,
+             dependencies=[Depends(require_run_access)])
+def answer_clarification(run_id: str, question_id: str, answer: AtlasStatAnalysis) -> AtlasRunResponse:
+    return answer_stat_clarification(run_id, question_id, answer)
+
+
 @router.get("/runs/{run_id}/refinement", response_model=AtlasDeepRefinement, dependencies=[Depends(require_run_access)])
 def get_deep_refinement(run_id: str) -> AtlasDeepRefinement:
     runs.get(run_id)
@@ -149,7 +157,11 @@ def accept_refinement(run_id: str) -> AtlasRunResponse:
 
 @router.post("/runs/{run_id}/cancel", response_model=AtlasRunResponse, dependencies=[Depends(require_run_access)])
 def cancel_run(run_id: str) -> AtlasRunResponse:
-    return runs.request_cancel(run_id)
+    run = runs.request_cancel(run_id)
+    if run.plan.state.value == "waiting":
+        atlas_runtime._cancel_run(run_id)
+        return runs.get(run_id)
+    return run
 
 
 @router.post("/sandbox/executions", response_model=AtlasSandboxExecutionResult)

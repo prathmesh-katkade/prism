@@ -42,7 +42,7 @@
 .atlas-step-output[aria-pressed="true"],.atlas-evidence-row:focus-visible,.atlas-issue:focus-visible { outline:2px solid var(--prism-focus); outline-offset:2px; }
 .atlas-result { border-top:1px solid var(--prism-border); padding-top:14px; }
 .atlas-result > strong { font-size:12px; }
-.atlas-result > button { display:block; padding:4px 0; border:0; background:transparent; color:var(--prism-text); text-align:left; font-size:12px; line-height:1.5; }
+.atlas-result > button { display:block; max-width:100%; padding:4px 0; border:0; background:transparent; color:var(--prism-text); text-align:left; font-size:12px; line-height:1.5; overflow-wrap:anywhere; }
 .atlas-result p { font-size:12px; margin:7px 0; }
 .atlas-result small,.atlas-support-note { color:var(--prism-muted); font-size:11px; }
 .atlas-collaboration { display:grid; gap:0; }
@@ -81,6 +81,14 @@
 .atlas-new-run select { width:100%; min-width:0; background:var(--prism-canvas); color:var(--prism-text); border:1px solid var(--prism-border); border-radius:var(--prism-radius-control); padding:8px 10px; }
 .atlas-recorded-query { min-width:0; overflow-wrap:anywhere; font-size:12px; }
 .atlas-recorded-query pre { white-space:pre-wrap; overflow-wrap:anywhere; max-width:100%; }
+.atlas-run-controls { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 14px; border:1px solid var(--prism-border); font-size:12px; }
+.atlas-clarification { display:grid; gap:8px; padding:14px; border:1px solid var(--prism-focus); background:var(--prism-surface); }
+.atlas-clarification h2 { font-size:16px; margin:0; }
+.atlas-clarification p { font-size:12px; margin:0; }
+.atlas-clarification label { font-size:12px; font-weight:650; }
+.atlas-clarification select { width:100%; min-width:0; background:var(--prism-canvas); color:var(--prism-text); border:1px solid var(--prism-border); border-radius:var(--prism-radius-control); padding:8px 10px; }
+.atlas-stat-record { min-width:0; overflow-wrap:anywhere; }
+.atlas-stat-record pre { white-space:pre-wrap; overflow-wrap:anywhere; max-width:100%; }
 .atlas-new-run p { color:var(--prism-blocked); font-size:12px; }
 @media (max-width:700px) { .atlas-investigation-header { display:block; }.atlas-run-state { display:inline-block; margin-top:10px; }.atlas-exchange > li { grid-template-columns:1fr; }.atlas-message-meta { grid-row:auto; }.atlas-new-run > div { flex-wrap:wrap; }.atlas-new-run input { flex-basis:100%; } }
 .atlas-mobile-inspector-trigger,.atlas-mobile-inspector-layer { display:none; }

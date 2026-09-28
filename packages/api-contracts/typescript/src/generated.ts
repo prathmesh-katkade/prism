@@ -200,6 +200,16 @@ export interface AtlasCandidateVerification {
 
 export type AtlasCandidateVerificationState = "pending" | "verified" | "rejected";
 
+export interface AtlasClarification {
+  question_id: string;
+  step_id: string;
+  prompt: string;
+  state?: "open" | "answered";
+  answer?: AtlasStatAnalysis;
+  created_at: string;
+  answered_at?: string;
+}
+
 export type AtlasCleanAction = "explain_issue" | "propose_fix" | "compare_before_after";
 
 export interface AtlasCleanRequest {
@@ -636,7 +646,7 @@ export interface AtlasOverviewResponse {
   provenance: OverviewProvenance;
 }
 
-export type AtlasPlanState = "draft" | "running" | "completed" | "failed" | "cancelled";
+export type AtlasPlanState = "draft" | "running" | "waiting" | "completed" | "failed" | "cancelled";
 
 export interface AtlasPlanStep {
   step_id: string;
@@ -876,7 +886,7 @@ export interface AtlasRunEvent {
   payload?: Record<string, unknown>;
 }
 
-export type AtlasRunEventType = "run_created" | "plan_created" | "step_started" | "step_completed" | "council_conclusion" | "run_completed" | "run_failed" | "run_cancelled" | "deep_refinement_queued" | "deep_refinement_ready" | "deep_refinement_failed" | "deep_refinement_accepted";
+export type AtlasRunEventType = "run_created" | "plan_created" | "step_started" | "step_completed" | "council_conclusion" | "clarification_requested" | "clarification_answered" | "run_completed" | "run_failed" | "run_cancelled" | "deep_refinement_queued" | "deep_refinement_ready" | "deep_refinement_failed" | "deep_refinement_accepted";
 
 export interface AtlasRunRequest {
   dataset_id: string;
@@ -884,6 +894,7 @@ export interface AtlasRunRequest {
   idempotency_key?: string;
   guardrail_context?: AtlasGuardrailContext;
   sql_analysis?: AtlasSqlAnalysis;
+  stat_analysis?: AtlasStatAnalysis;
 }
 
 export interface AtlasRunResponse {
@@ -894,6 +905,7 @@ export interface AtlasRunResponse {
   evidence?: AtlasEvidenceReference[];
   council?: AtlasCouncilConclusion[];
   events?: AtlasRunEvent[];
+  clarifications?: AtlasClarification[];
   cancellation_requested?: boolean;
   created_at?: string;
   updated_at?: string;
@@ -962,7 +974,7 @@ export interface AtlasSftTrainingRecord {
   created_at: string;
 }
 
-export type AtlasSpecialistId = "atlas" | "scout" | "curator" | "query" | "stat" | "forge" | "oracle" | "lens" | "researcher" | "librarian" | "auditor";
+export type AtlasSpecialistId = "atlas" | "scout" | "curator" | "query" | "stat" | "auditor";
 
 export interface AtlasSpecialistIdentity {
   specialist: AtlasSpecialistId;
@@ -1000,6 +1012,13 @@ export interface AtlasSqlResponse {
   executable?: boolean;
 }
 
+export interface AtlasStatAnalysis {
+  test: StatTestKind;
+  col_a: string;
+  col_b: string;
+  design: "independent_groups" | "one_way_groups" | "linear_association" | "categorical_association";
+}
+
 export type AtlasStatsAction = "explain_test" | "explain_assumptions" | "explain_effect_size" | "recommend_next_step";
 
 export interface AtlasStatsRequest {
@@ -1017,7 +1036,7 @@ export interface AtlasStatsResponse {
 
 export type AtlasStepKind = "profile_dataset" | "data_quality" | "sql_question" | "methodology_review" | "statistical_analysis" | "forecast" | "machine_learning" | "visualization" | "explain_history" | "python_analysis" | "research" | "audit_evidence";
 
-export type AtlasStepState = "pending" | "running" | "completed" | "failed" | "cancelled" | "blocked";
+export type AtlasStepState = "pending" | "running" | "waiting" | "completed" | "failed" | "cancelled" | "blocked";
 
 export interface AtlasStructuredPlan {
   plan_id: string;

@@ -81,4 +81,29 @@ describe("Atlas investigation", () => {
     expect(onSqlDraft).toHaveBeenCalledWith(sql, { filter_value: "west" }, "local:dataset-1");
     expect(screen.getByText("Recorded original; edits in SQL Lab create a draft.")).toBeInTheDocument();
   });
+
+  it("shows a persisted statistical question and sends the declared method and design", async () => {
+    const waiting = { ...recorded, plan: { ...recorded.plan, state: "waiting" }, clarifications: [{
+      question_id: "clarify:atlas-recorded:statistical_analysis", step_id: "statistical_analysis", state: "open",
+      prompt: "Which columns and design?", created_at: "2026-09-27T00:00:00Z",
+    }] };
+    const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path.includes("/overview/datasets/")) return new Response(JSON.stringify({ columns: [{ name: "outcome" }, { name: "group" }] }), { status: 200 });
+      if (path.endsWith("/interventions")) return new Response("[]", { status: 200 });
+      if (init?.method === "POST") return new Response(JSON.stringify({ ...waiting, plan: { ...waiting.plan, state: "running" }, clarifications: [{ ...waiting.clarifications[0], state: "answered" }] }), { status: 200 });
+      return new Response(JSON.stringify(waiting), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<AtlasInvestigation datasetId="dataset-1" initialRunId="atlas-recorded" onSelectContext={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText("Which columns and design?")).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText("Statistical method"), { target: { value: "ttest" } });
+    fireEvent.change(screen.getByLabelText("Outcome or first comparison column"), { target: { value: "outcome" } });
+    fireEvent.change(screen.getByLabelText("Group or second comparison column"), { target: { value: "group" } });
+    fireEvent.change(screen.getByLabelText("Study design"), { target: { value: "independent_groups" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save answer and resume" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/clarifications/"), expect.objectContaining({
+      method: "POST", body: JSON.stringify({ test: "ttest", col_a: "outcome", col_b: "group", design: "independent_groups" }),
+    })));
+  });
 });

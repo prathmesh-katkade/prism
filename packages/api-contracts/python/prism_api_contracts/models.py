@@ -993,6 +993,7 @@ class AtlasModelProviderCapabilities(ContractModel):
 class AtlasPlanState(str, Enum):
     DRAFT = "draft"
     RUNNING = "running"
+    WAITING = "waiting"
     COMPLETED = "completed"
     FAILED = "failed"
     CANCELLED = "cancelled"
@@ -1001,6 +1002,7 @@ class AtlasPlanState(str, Enum):
 class AtlasStepState(str, Enum):
     PENDING = "pending"
     RUNNING = "running"
+    WAITING = "waiting"
     COMPLETED = "completed"
     FAILED = "failed"
     CANCELLED = "cancelled"
@@ -1028,11 +1030,6 @@ class AtlasSpecialistId(str, Enum):
     CURATOR = "curator"
     QUERY = "query"
     STAT = "stat"
-    FORGE = "forge"
-    ORACLE = "oracle"
-    LENS = "lens"
-    RESEARCHER = "researcher"
-    LIBRARIAN = "librarian"
     AUDITOR = "auditor"
 
 
@@ -1095,6 +1092,8 @@ class AtlasRunEventType(str, Enum):
     STEP_STARTED = "step_started"
     STEP_COMPLETED = "step_completed"
     COUNCIL_CONCLUSION = "council_conclusion"
+    CLARIFICATION_REQUESTED = "clarification_requested"
+    CLARIFICATION_ANSWERED = "clarification_answered"
     RUN_COMPLETED = "run_completed"
     RUN_FAILED = "run_failed"
     RUN_CANCELLED = "run_cancelled"
@@ -1147,12 +1146,32 @@ class AtlasSqlAnalysis(ContractModel):
     filter_value: Optional[str | int | float | bool] = None
 
 
+class AtlasStatAnalysis(ContractModel):
+    """Declared Stats Lab method, columns, and the supported study design."""
+
+    test: StatTestKind
+    col_a: str = Field(min_length=1, max_length=200)
+    col_b: str = Field(min_length=1, max_length=200)
+    design: Literal["independent_groups", "one_way_groups", "linear_association", "categorical_association"]
+
+
 class AtlasRunRequest(ContractModel):
     dataset_id: str = Field(min_length=1)
     objective: str = Field(min_length=3, max_length=2_000)
     idempotency_key: Optional[str] = Field(default=None, min_length=8, max_length=120)
     guardrail_context: Optional[AtlasGuardrailContext] = None
     sql_analysis: Optional[AtlasSqlAnalysis] = None
+    stat_analysis: Optional[AtlasStatAnalysis] = None
+
+
+class AtlasClarification(ContractModel):
+    question_id: str = Field(min_length=1, max_length=120)
+    step_id: str = Field(min_length=1, max_length=120)
+    prompt: str = Field(min_length=1, max_length=1_000)
+    state: Literal["open", "answered"] = "open"
+    answer: Optional[AtlasStatAnalysis] = None
+    created_at: datetime
+    answered_at: Optional[datetime] = None
 
 
 class AtlasRunResponse(ContractModel):
@@ -1163,6 +1182,7 @@ class AtlasRunResponse(ContractModel):
     evidence: list[AtlasEvidenceReference] = Field(default_factory=list)
     council: list[AtlasCouncilConclusion] = Field(default_factory=list)
     events: list[AtlasRunEvent] = Field(default_factory=list)
+    clarifications: list[AtlasClarification] = Field(default_factory=list)
     cancellation_requested: bool = False
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None

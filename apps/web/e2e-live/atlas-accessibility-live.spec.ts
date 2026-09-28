@@ -46,3 +46,29 @@ test("Atlas record selection and shared inspector work in dark, light, and mobil
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBeLessThanOrEqual(1);
 });
+
+test("statistical clarification and evidence remain accessible at narrow width", async ({ page, request }, testInfo) => {
+  const mobile = testInfo.project.name.includes("mobile");
+  if (!mobile) await page.setViewportSize({ width: 400, height: 844 });
+  const upload = await request.post(`${API}/overview/datasets`, { multipart: { file: {
+    name: "atlas-mobile-stat.csv", mimeType: "text/csv", buffer: Buffer.from("exposure,outcome\n1,2\n2,4\n3,6\n4,8\n5,10\n"),
+  } } });
+  expect(upload.ok()).toBe(true);
+  const dataset = await upload.json() as { dataset_id: string };
+  await page.goto(`/?dataset_id=${encodeURIComponent(dataset.dataset_id)}`);
+  await page.getByRole("button", { name: /Atlas native/i }).click();
+  await page.getByLabel("Investigation objective").fill("Test correlation significance");
+  await page.getByRole("button", { name: "Run investigation" }).click();
+  await expect(page.getByRole("heading", { name: "Stat needs a clarification" })).toBeVisible({ timeout: 20_000 });
+  expect(await seriousViolations(page, ".atlas-investigation")).toEqual([]);
+  await page.getByLabel("Statistical method").selectOption("pearson");
+  await page.getByLabel("Outcome or first comparison column").selectOption("exposure");
+  await page.getByLabel("Group or second comparison column").selectOption("outcome");
+  await page.getByLabel("Study design").selectOption("linear_association");
+  await page.getByRole("button", { name: "Save answer and resume" }).click();
+  await expect(page.getByRole("button", { name: "Inspect supporting statistical evidence" })).toBeVisible({ timeout: 20_000 });
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(overflow).toBeLessThanOrEqual(1);
+  expect(await seriousViolations(page, ".atlas-investigation")).toEqual([]);
+  if (mobile) await page.screenshot({ path: "docs/atlas/production-investigation-v1/verification/atlas-stat-mobile.png", fullPage: true });
+});

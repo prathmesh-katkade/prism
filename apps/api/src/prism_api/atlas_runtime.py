@@ -17,6 +17,7 @@ from typing import AsyncIterator, Optional, Protocol, cast
 import httpx
 from fastapi import HTTPException, status
 from prism_api_contracts import (
+    AtlasClarification,
     AtlasCouncilConclusion,
     AtlasDeepRefinement,
     AtlasDeepRefinementState,
@@ -34,6 +35,7 @@ from prism_api_contracts import (
     AtlasSpecialistId,
     AtlasSpecialistIdentity,
     AtlasSqlAnalysis,
+    AtlasStatAnalysis,
     AtlasStepKind,
     AtlasStepState,
     AtlasStructuredPlan,
@@ -266,6 +268,7 @@ TOOL_REGISTRY: dict[str, set[AtlasStepKind]] = {
     "sql_lab.review_required": {AtlasStepKind.SQL_QUESTION},
     "sql_lab.local_aggregate": {AtlasStepKind.SQL_QUESTION},
     "stats.declared_analysis_required": {AtlasStepKind.STATISTICAL_ANALYSIS},
+    "stats.declared_test": {AtlasStepKind.STATISTICAL_ANALYSIS},
     "forecast.declared_time_column_required": {AtlasStepKind.FORECAST},
     "ml.declared_target_required": {AtlasStepKind.MACHINE_LEARNING},
     "visualize.declared_spec_required": {AtlasStepKind.VISUALIZATION},
@@ -279,6 +282,7 @@ EXECUTABLE_TOOLS = {
     "atlas.methodology_review",
     "atlas.evidence_audit",
     "sql_lab.local_aggregate",
+    "stats.declared_test",
 }
 
 # _validated_proposal (below) always rejects a model-proposed step of either
@@ -299,7 +303,7 @@ def _build_allowed_step_pairs() -> tuple[tuple[str, str], ...]:
         (kind.value, tool_name)
         for tool_name, kinds in TOOL_REGISTRY.items()
         for kind in kinds
-        if kind not in _EXCLUDED_PROPOSAL_KINDS and tool_name != "sql_lab.local_aggregate"
+        if kind not in _EXCLUDED_PROPOSAL_KINDS and tool_name not in {"sql_lab.local_aggregate", "stats.declared_test"}
     ]
     return tuple(sorted(pairs))
 
@@ -495,6 +499,17 @@ class DynamicAtlasPlanner:
                 rationale="Execute a typed, schema-validated aggregate over the uploaded dataset.",
                 dependencies=["profile"], expected_evidence=["dataset_revision", "tool_output"],
             ))
+        if request.stat_analysis is not None or any(word in objective for word in ("statistic", "significance", "hypothesis", "compare", "correlation")):
+            steps.append(AtlasPlanStep(
+                step_id=AtlasStepKind.STATISTICAL_ANALYSIS.value,
+                title="Run a declared statistical test",
+                kind=AtlasStepKind.STATISTICAL_ANALYSIS,
+                specialist=AtlasSpecialistId.STAT,
+                tool_name="stats.declared_test" if request.stat_analysis is not None else "stats.declared_analysis_required",
+                rationale="Require named columns, method, and study design before computing statistics.",
+                dependencies=["profile"], expected_evidence=["dataset_revision", "tool_output"],
+                tool_args=request.stat_analysis.model_dump(mode="json") if request.stat_analysis is not None else {},
+            ))
         if (
             any(
                 word in objective
@@ -535,6 +550,7 @@ class DynamicAtlasPlanner:
             steps=steps,
         )
         requested_sql_step = next((step for step in steps if step.kind is AtlasStepKind.SQL_QUESTION), None)
+        requested_stat_step = next((step for step in steps if step.kind is AtlasStepKind.STATISTICAL_ANALYSIS), None)
         if proposal:
             proposed = self._validated_proposal(proposal)
             if proposed:
@@ -558,6 +574,17 @@ class DynamicAtlasPlanner:
                 }) if step.kind is AtlasStepKind.SQL_QUESTION else step
                 for step in plan.steps
             ]})
+        if requested_stat_step is not None:
+            if not any(step.kind is AtlasStepKind.STATISTICAL_ANALYSIS for step in plan.steps):
+                plan = plan.model_copy(update={"steps": [
+                    *plan.steps[:-1], requested_stat_step,
+                    plan.steps[-1].model_copy(update={"dependencies": [*plan.steps[-1].dependencies, requested_stat_step.step_id]}),
+                ]})
+            else:
+                plan = plan.model_copy(update={"steps": [
+                    requested_stat_step if step.kind is AtlasStepKind.STATISTICAL_ANALYSIS else step
+                    for step in plan.steps
+                ]})
         self.validate(plan)
         return plan
 
@@ -581,7 +608,7 @@ class DynamicAtlasPlanner:
             try:
                 kind = AtlasStepKind(str(item["kind"]))
                 tool = str(item["tool_name"])
-                if tool not in TOOL_REGISTRY or kind not in TOOL_REGISTRY[tool] or tool == "sql_lab.local_aggregate" or kind in {AtlasStepKind.PROFILE_DATASET, AtlasStepKind.AUDIT_EVIDENCE}:
+                if tool not in TOOL_REGISTRY or kind not in TOOL_REGISTRY[tool] or tool in {"sql_lab.local_aggregate", "stats.declared_test"} or kind in {AtlasStepKind.PROFILE_DATASET, AtlasStepKind.AUDIT_EVIDENCE}:
                     continue
                 accepted.append(AtlasPlanStep(step_id=f"model_{kind.value}", title=str(item.get("title", kind.value))[:240], kind=kind, specialist=specialists[kind], tool_name=tool, rationale=str(item.get("rationale", "Provider proposal validated against Atlas tool registry."))[:1000], dependencies=["profile"], expected_evidence=["declared_context", "dataset_revision"]))
             except (KeyError, ValueError, TypeError):
@@ -1166,7 +1193,7 @@ def _cancel_run(run_id: str) -> None:
     run = runs.get(run_id)
     steps = [
         step.model_copy(update={"state": AtlasStepState.CANCELLED})
-        if step.state in {AtlasStepState.PENDING, AtlasStepState.RUNNING}
+        if step.state in {AtlasStepState.PENDING, AtlasStepState.RUNNING, AtlasStepState.WAITING}
         else step
         for step in run.plan.steps
     ]
@@ -1198,10 +1225,105 @@ def _blocked_reason(kind: AtlasStepKind) -> str:
     }.get(kind, "This declared capability needs additional evidence before it can run.")
 
 
+def _wait_for_stat_input(run_id: str, step: AtlasPlanStep) -> None:
+    question = AtlasClarification(
+        question_id=f"clarify:{run_id}:{step.step_id}", step_id=step.step_id,
+        prompt="Which two columns, statistical method, and study design should Stat use? Choose a supported Stats Lab procedure; no method or design will be guessed.",
+        created_at=datetime.now(timezone.utc),
+    )
+    run = runs.get(run_id)
+    if any(item.question_id == question.question_id for item in run.clarifications):
+        return
+    waiting = _replace_step(run, step.step_id, AtlasStepState.WAITING, error=question.prompt)
+    runs.update(waiting.model_copy(update={
+        "plan": waiting.plan.model_copy(update={"state": AtlasPlanState.WAITING}),
+        "clarifications": [*waiting.clarifications, question],
+        "uncertainty": "Statistical execution is waiting for declared inputs; completed evidence remains available.",
+    }))
+    runs.append_event(run_id, AtlasRunEventType.CLARIFICATION_REQUESTED,
+                      specialist=AtlasSpecialistId.ATLAS, step_id=step.step_id,
+                      payload={"question_id": question.question_id, "prompt": question.prompt})
+
+
+def answer_stat_clarification(run_id: str, question_id: str, analysis: AtlasStatAnalysis) -> AtlasRunResponse:
+    """Claim one waiting run, persist the answer, then dispatch remaining work."""
+    from .atlas_stat_adapter import validate_analysis
+
+    run = runs.get(run_id)
+    question = next((item for item in run.clarifications if item.question_id == question_id), None)
+    if question is None:
+        raise HTTPException(status_code=404, detail="Clarification question was not found.")
+    if question.state == "answered":
+        if question.answer == analysis:
+            return run
+        raise HTTPException(status_code=409, detail="This question already has a different answer.")
+    if run.plan.state is not AtlasPlanState.WAITING or run.cancellation_requested:
+        raise HTTPException(status_code=409, detail="This run is not waiting for clarification.")
+    profile_evidence = next((item for item in run.evidence if item.kind == "dataset_revision"), None)
+    current_source = get_profile(run.plan.dataset_id).dataset
+    if (profile_evidence is None or profile_evidence.dataset_revision != current_source.revision
+            or profile_evidence.source_fingerprint != current_source.source_fingerprint):
+        raise HTTPException(status_code=409, detail="Dataset revision changed while Atlas waited; start a new investigation.")
+    try:
+        validate_analysis(run.plan.dataset_id, analysis)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    if not run_admission.try_reserve():
+        raise HTTPException(status_code=503, detail="Atlas run capacity is saturated; retry the clarification shortly.")
+    answered_at = datetime.now(timezone.utc)
+    updated = run.model_copy(update={
+        "plan": run.plan.model_copy(update={
+            "state": AtlasPlanState.DRAFT,
+            "steps": [step.model_copy(update={
+                "tool_name": "stats.declared_test", "tool_args": analysis.model_dump(mode="json"),
+                "state": AtlasStepState.PENDING, "error": None,
+            }) if step.step_id == question.step_id else step for step in run.plan.steps],
+        }),
+        "clarifications": [item.model_copy(update={
+            "state": "answered", "answer": analysis, "answered_at": answered_at,
+        }) if item.question_id == question_id else item for item in run.clarifications],
+        "uncertainty": None,
+    })
+    if not runs._store.save_if_state(updated, AtlasPlanState.WAITING):
+        run_admission.release_without_dispatch()
+        raise HTTPException(status_code=409, detail="Another request already resumed or cancelled this run.")
+    try:
+        runs.append_event(run_id, AtlasRunEventType.CLARIFICATION_ANSWERED,
+                          specialist=AtlasSpecialistId.ATLAS, step_id=question.step_id,
+                          payload={"question_id": question_id, "answer": analysis.model_dump(mode="json")})
+    except Exception:
+        run_admission.release_without_dispatch()
+        runs.fail_if_in_flight(
+            run_id, reason="clarification_event_failed",
+            detail="The clarification answer could not be recorded; start a new investigation.",
+        )
+        raise
+    try:
+        run_admission.dispatch(run_id, execute)
+    except Exception as error:
+        runs.fail_if_in_flight(run_id, reason="resume_dispatch_failed", detail="Answered run could not be dispatched.")
+        raise HTTPException(status_code=503, detail="Atlas could not dispatch the resumed run.") from error
+    return runs.get(run_id)
+
+
 def execute(run_id: str) -> None:
     """Run only declared handlers. Unavailable context is visibly blocked, never guessed."""
     try:
         initial = runs.get(run_id)
+        if initial.plan.state is AtlasPlanState.WAITING:
+            return
+        profile_evidence = next((item for item in initial.evidence if item.kind == "dataset_revision"), None)
+        if profile_evidence is not None:
+            current_source = get_profile(initial.plan.dataset_id).dataset
+            if (profile_evidence.dataset_revision != current_source.revision
+                    or profile_evidence.source_fingerprint != current_source.source_fingerprint):
+                reason = "Dataset revision changed after completed work; this run's evidence is stale. Start a new investigation."
+                runs.append_event(run_id, AtlasRunEventType.RUN_FAILED, payload={"reason": "stale_evidence", "detail": reason})
+                runs.update(initial.model_copy(update={
+                    "plan": initial.plan.model_copy(update={"state": AtlasPlanState.FAILED}),
+                    "uncertainty": reason,
+                }))
+                return
         guard = next((event.payload.get("guardrail_decision") for event in initial.events
                       if event.type is AtlasRunEventType.PLAN_CREATED), None)
         if isinstance(guard, dict) and guard.get("state") in {"blocked", "verification_required"}:
@@ -1219,6 +1341,11 @@ def execute(run_id: str) -> None:
         for step in runs.get(run_id).plan.steps:
             if runs.cancelled(run_id):
                 _cancel_run(run_id)
+                return
+            if step.state in {AtlasStepState.COMPLETED, AtlasStepState.BLOCKED}:
+                continue
+            if step.tool_name == "stats.declared_analysis_required":
+                _wait_for_stat_input(run_id, step)
                 return
             policy = current_policy()
             if not policy.permits(step.tool_name):
@@ -1301,6 +1428,35 @@ def execute(run_id: str) -> None:
                 )
                 _complete_step(run_id, step, evidence, conclusion, output=output)
                 continue
+            if step.tool_name == "stats.declared_test":
+                from .atlas_stat_adapter import execute_declared_test
+
+                try:
+                    output = execute_declared_test(
+                        current.plan.dataset_id, AtlasStatAnalysis.model_validate(step.tool_args)
+                    )
+                except ValueError as error:
+                    reason = str(error)[:1000]
+                    runs.update(_replace_step(runs.get(run_id), step.step_id, AtlasStepState.BLOCKED, error=reason))
+                    runs.append_event(run_id, AtlasRunEventType.STEP_COMPLETED,
+                                      specialist=step.specialist, step_id=step.step_id,
+                                      payload={"state": "blocked", "reason": reason})
+                    continue
+                result = cast(dict[str, object], output["result"])
+                evidence = [AtlasEvidenceReference(
+                    evidence_id=f"stat:{run_id}:{step.step_id}", kind="tool_output",
+                    summary=f"Stats Lab {output['method']}: statistic {result['statistic']}, p={result['p_value']}; {output['analyzed_rows']} analyzed, {output['excluded_rows']} excluded.",
+                    dataset_id=current.plan.dataset_id,
+                    dataset_revision=cast(int, output["dataset_revision"]),
+                    source_fingerprint=cast(str, output["source_fingerprint"]),
+                )]
+                conclusion = AtlasCouncilConclusion(
+                    specialist=AtlasSpecialistId.STAT,
+                    conclusion=f"{result['interpretation']} {result['evidence_statement']} Evidence {evidence[0].evidence_id} records the declared design, sample size, exclusions, and limitations."[:2000],
+                    confidence="high", evidence=evidence,
+                )
+                _complete_step(run_id, step, evidence, conclusion, output=output)
+                continue
             profile = get_profile(current.plan.dataset_id)
             evidence = _evidence(
                 profile.dataset.dataset_id,
@@ -1326,9 +1482,17 @@ def execute(run_id: str) -> None:
                     evidence=evidence,
                 )
             elif step.kind is AtlasStepKind.METHODOLOGY_REVIEW:
+                completed_stat = any(
+                    item.tool_name == "stats.declared_test" and item.state is AtlasStepState.COMPLETED
+                    for item in runs.get(run_id).plan.steps
+                )
                 conclusion = AtlasCouncilConclusion(
                     specialist=AtlasSpecialistId.STAT,
-                    conclusion="No inferential test was run because this request does not declare an outcome, hypothesis, comparison, or split strategy.",
+                    conclusion=(
+                        "The declared statistical test ran in Stats Lab. Its recorded method, design, sample size, exclusions, and limitations govern interpretation."
+                        if completed_stat else
+                        "No inferential test was run because this request does not declare an outcome, hypothesis, comparison, or split strategy."
+                    ),
                     confidence="high",
                     objections=[
                         "Do not infer causality, significance, or model performance from a profile alone."
@@ -1336,12 +1500,17 @@ def execute(run_id: str) -> None:
                     evidence=evidence,
                 )
             else:
+                completed_tools = {item.tool_name for item in runs.get(run_id).plan.steps if item.state is AtlasStepState.COMPLETED}
+                observed = [name for name in ("SQL Lab aggregate", "Stats Lab test") if
+                            (name == "SQL Lab aggregate" and "sql_lab.local_aggregate" in completed_tools)
+                            or (name == "Stats Lab test" and "stats.declared_test" in completed_tools)]
                 conclusion = AtlasCouncilConclusion(
                     specialist=AtlasSpecialistId.AUDITOR,
-                    conclusion="The current result is grounded in the active DatasetStore revision and deterministic Overview profile only.",
+                    conclusion="Deterministic evidence audit found the active DatasetStore revision, Overview profile" +
+                    (", and recorded " + " and ".join(observed) if observed else "") + ". This is a provenance check, not independent model corroboration.",
                     confidence="high",
                     objections=[
-                        "No web research, raw-row provider transfer, SQL execution, Python execution, or model training occurred."
+                        "No web research, raw-row provider transfer, arbitrary Python execution, or model training occurred."
                     ],
                     evidence=evidence,
                 )
@@ -1356,11 +1525,23 @@ def execute(run_id: str) -> None:
         answer = f"Atlas completed a deterministic first-pass assessment of {profile.dataset.source_name}: {profile.quality.n_rows:,} rows × {profile.quality.n_cols} columns, health {profile.health.total}/100, and {profile.quality.total_missing_pct:.2f}% missing cells."
         uncertainty = "This is a profile and methodology review, not a causal conclusion, statistical result, or trained model."
         sql_outputs = [event.payload.get("output") for event in finished.events
-                       if event.type is AtlasRunEventType.STEP_COMPLETED and isinstance(event.payload.get("output"), dict)]
+                       if event.type is AtlasRunEventType.STEP_COMPLETED and isinstance(event.payload.get("output"), dict)
+                       and "sql_run_id" in cast(dict[str, object], event.payload["output"])]
         if sql_outputs:
             sql_output = cast(dict[str, object], sql_outputs[-1])
             answer += f" Recorded SQL result {sql_output['sql_run_id']}: {json.dumps(sql_output['rows'], default=str)[:2000]}. Evidence sql:{sql_output['sql_run_id']}."
             uncertainty = "The SQL aggregate is descriptive and bounded to 100 result rows; it does not establish causality or statistical significance."
+        stat_events = [event for event in finished.events
+                       if event.type is AtlasRunEventType.STEP_COMPLETED and isinstance(event.payload.get("output"), dict)
+                       and cast(dict[str, object], event.payload["output"]).get("method") in {"ttest", "anova", "chi2", "pearson"}]
+        if stat_events:
+            stat_output = cast(dict[str, object], stat_events[-1].payload["output"])
+            stat_result = cast(dict[str, object], stat_output["result"])
+            answer += f" Stats Lab {stat_output['method']}: {stat_result['interpretation']} Evidence stat:{run_id}:{stat_events[-1].step_id}."
+            uncertainty = (
+                ("The SQL aggregate is descriptive. " if sql_outputs else "")
+                + "The declared statistical design and exclusions are recorded; the result does not establish causality or model performance."
+            )
         if isinstance(guard, dict) and guard.get("evidence"):
             answer += " Evidence arbitration: " + json.dumps(guard["evidence"], sort_keys=True)
         if blocked:
