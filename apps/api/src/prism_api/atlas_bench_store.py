@@ -74,8 +74,12 @@ _task_results = Table(
     Column("chosen_choice", Integer, nullable=True),
     Column("correct", Boolean, nullable=False),
     Column("raw_answer", Text, nullable=False),
-    Column("raw_response", Text, nullable=False, server_default=""),
-    Column("presentation_permutation_payload", Text, nullable=False, server_default="[]"),
+    # MySQL rejects an unparenthesized literal DEFAULT on TEXT/BLOB/GEOMETRY/
+    # JSON columns (error 1101); a parenthesized "expression default" (support
+    # added in 8.0.13) is required. SQLite accepts the same DEFAULT (expr)
+    # form, so this stays portable across both.
+    Column("raw_response", Text, nullable=False, server_default=text("('')")),
+    Column("presentation_permutation_payload", Text, nullable=False, server_default=text("('[]')")),
     Column("done_reason", String(40), nullable=True),
     Column("eval_count", Integer, nullable=True),
     Column("outcome", String(32), nullable=False, server_default="unparseable_or_invalid"),
@@ -110,8 +114,8 @@ class DurableAtlasBenchStore:
                     connection.execute(text(f"ALTER TABLE prism_atlas_bench_runs ADD COLUMN {name} {definition}"))
             existing_results = {str(item["name"]) for item in inspect(connection).get_columns("prism_atlas_bench_task_results")}
             result_additions = {
-                "presentation_permutation_payload": "TEXT NOT NULL DEFAULT '[]'",
-                "raw_response": "TEXT NOT NULL DEFAULT ''",
+                "presentation_permutation_payload": "TEXT NOT NULL DEFAULT ('[]')",
+                "raw_response": "TEXT NOT NULL DEFAULT ('')",
                 "done_reason": "VARCHAR(40)",
                 "eval_count": "INTEGER",
                 "outcome": "VARCHAR(32) NOT NULL DEFAULT 'unparseable_or_invalid'",

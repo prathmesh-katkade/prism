@@ -4,7 +4,21 @@ import globals from "globals";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["**/node_modules/**", "**/.next/**", "**/dist/**", "apps/web/next-env.d.ts", "packages/api-contracts/typescript/src/generated.ts"] },
+  {
+    ignores: [
+      "**/node_modules/**",
+      "**/.next/**",
+      "**/dist/**",
+      // A Python venv created anywhere under apps/ or packages/ (e.g.
+      // apps/api/.venv) contains vendored JS bundles (plotly, streamlit,
+      // matplotlib, ...) that are not this project's code; without this,
+      // `eslint apps packages` recurses into them and OOMs on their
+      // minified single-line bundles.
+      "**/.venv/**",
+      "apps/web/next-env.d.ts",
+      "packages/api-contracts/typescript/src/generated.ts",
+    ],
+  },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
