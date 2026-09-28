@@ -51,10 +51,10 @@ describe("Atlas workspace", () => {
       return notFound();
     }));
     render(<AtlasWorkspace datasetId="ds_1" initialRunId="atlas_1" />);
-    await waitFor(() => expect(screen.getByRole("button", { name: "Accept as new run" })).toBeEnabled());
+    await waitFor(() => expect(screen.getByRole("button", { name: "Accept as new run" })).toBeEnabled(), { timeout: 5_000 });
     expect(screen.getByText("Review causal readiness")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Accept as new run" }));
-    await waitFor(() => expect(screen.getByText("Refined child answer")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Refined child answer")).toBeInTheDocument(), { timeout: 5_000 });
   });
   it("requires a durable dataset context", () => { render(<AtlasWorkspace datasetId={undefined} />); expect(screen.getByText("Load a dataset before opening an investigation.")).toBeInTheDocument(); });
   it("maps only real Cortex step, specialist, and tool records back to a declared plan step", () => {

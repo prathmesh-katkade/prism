@@ -37,7 +37,7 @@ from prism_api_contracts import (
 )
 
 from . import atlas_runtime
-from .atlas_authorization import require_run_access
+from .atlas_authorization import require_local_owner, require_run_access
 from .atlas_event_stream import durable_stream_events
 from .atlas_memory import DurableAtlasMemoryStore
 from .atlas_research import researcher
@@ -84,7 +84,7 @@ def list_recent_runs(limit: int = Query(default=20, ge=1, le=100)) -> list[str]:
     return runs.list_recent_run_ids(limit=limit)
 
 
-@router.post("/runs", response_model=AtlasRunResponse, status_code=status.HTTP_202_ACCEPTED)
+@router.post("/runs", response_model=AtlasRunResponse, status_code=status.HTTP_202_ACCEPTED, dependencies=[Depends(require_local_owner)])
 def start_run(request: AtlasRunRequest) -> AtlasRunResponse:
     """Reserve a bounded execution slot before doing anything durable: a
     saturated boundary is rejected immediately (503), rather than accepting

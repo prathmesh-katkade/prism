@@ -1137,11 +1137,22 @@ class AtlasGuardrailContext(ContractModel):
     evidence_metric: Optional[str] = Field(default=None, min_length=1, max_length=120)
 
 
+class AtlasSqlAnalysis(ContractModel):
+    """A bounded aggregate over the run's uploaded dataset; never raw model SQL."""
+
+    aggregate: Literal["count", "sum", "avg", "min", "max"]
+    measure: Optional[str] = Field(default=None, min_length=1, max_length=200)
+    group_by: Optional[str] = Field(default=None, min_length=1, max_length=200)
+    filter_column: Optional[str] = Field(default=None, min_length=1, max_length=200)
+    filter_value: Optional[str | int | float | bool] = None
+
+
 class AtlasRunRequest(ContractModel):
     dataset_id: str = Field(min_length=1)
     objective: str = Field(min_length=3, max_length=2_000)
     idempotency_key: Optional[str] = Field(default=None, min_length=8, max_length=120)
     guardrail_context: Optional[AtlasGuardrailContext] = None
+    sql_analysis: Optional[AtlasSqlAnalysis] = None
 
 
 class AtlasRunResponse(ContractModel):

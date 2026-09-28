@@ -1,19 +1,24 @@
 # Runtime database and launch boundary
 
-Status: partial local inspection, 2026-09-28. This report does not certify the
-production startup path or reconstruct when schema migrations occurred.
+Status: direct read-only source inspection and disposable-copy startup test,
+2026-09-28. This report does not reconstruct when source migrations occurred.
 
 ## Designated desktop history store
 
 The designated SQLite file is
 `C:\Users\Admin\source\repos\prism\apps\api\.prism\runtime\analytical-history.sqlite`.
 A direct SQLite read-only connection (`mode=ro`) returned `ok` from
-`PRAGMA integrity_check` on 2026-09-28. Earlier local inspection reported 38
-tables, the fast pointer `basemodel_585b7e79e9f195024a57dc9a` bound to
+`PRAGMA integrity_check` on 2026-09-28. It found **39 tables**, whereas the
+earlier local report recorded 38. This difference is unresolved. Direct SQL
+read the two pointer rows: sequence 0 is
+`production_env_e77dbfc3de7584a8c502a6f8`; sequence 1 is the current fast
+pointer `basemodel_585b7e79e9f195024a57dc9a`, bound to
 `qwen3:4b-instruct-2507-q4_K_M`, the previous candidate
 `production_env_e77dbfc3de7584a8c502a6f8` bound to `qwen2.5:3b`, two
-promotion events, and no deep pointer. These pointer values require a fresh
-read-only check before production launch; no pointer change is authorized.
+promotion events, and no deep pointer. Directly read runtime binding digests
+were `0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0`
+and `357c53fb659c5076de1d65ccb0b397446227b71a42be9d1603d46168015c9e4b`.
+No pointer change is authorized.
 
 The audit before this investigation found no `tier` column in the designated
 source; a subsequent inspection found one. The intervening schema change is
@@ -53,9 +58,16 @@ The local desktop SQLite path is not a hosted deployment setting.
 
 The repository's `apps/api/.env.example` and `apps/api/README.md` document the
 intended startup command. Their edits alone are not a successful startup test.
-Before release, exercise the actual API launch against a disposable backup,
-verify its pointer reads across a restart, and separately verify the supported
-desktop path without modifying promotion history.
+The actual uvicorn command was launched twice with `--env-file` pointing to a
+**disposable copy** of the local backup. Both processes reached
+`/api/v1/platform/ready`; the promotion pointer response was identical. The
+first process uploaded a three-row CSV and ran a typed SQL aggregate through
+Atlas; the second recovered the identical durable run and revision 0 profile.
+The independently calculated SQL totals were east 7 and west 15, matching the
+recorded rows. The supplied backup hash was unchanged before and after.
+Raw API outputs and server logs are in `verification/`; the reproducible test
+driver is `tools/verify_atlas_disposable_startup.py`. This verifies the
+disposable startup path, not a launch against the designated source file.
 
 ## Rollback boundary
 

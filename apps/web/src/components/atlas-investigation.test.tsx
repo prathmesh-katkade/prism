@@ -62,4 +62,23 @@ describe("Atlas investigation", () => {
     expect(screen.getByText("No dependency recorded")).toBeInTheDocument();
     expect(screen.getByText("A reviewed query is required; SQL was not executed.")).toBeInTheDocument();
   });
+
+  it("hands the exact recorded SQL and parameters to SQL Lab after evidence selection", async () => {
+    const onSqlDraft = vi.fn();
+    const sql = 'SELECT COUNT(*) AS result_value FROM "data" WHERE "region" = $filter_value LIMIT 100';
+    const withSql = { ...recorded, evidence: [{ evidence_id: "sql:run-1", kind: "tool_output", summary: "Counted rows", dataset_id: "dataset-1", dataset_revision: 0, source_fingerprint: "a".repeat(64) }], events: [
+      ...recorded.events,
+      { event_id: "e3", run_id: "atlas-recorded", sequence: 3, type: "step_completed", step_id: "sql", occurred_at: "2026-09-27T00:00:03Z", payload: { output: { sql_run_id: "run-1", sql, parameters: { filter_value: "west" }, connection_id: "local:dataset-1", rows: [{ result_value: 2 }] } } },
+    ] };
+    vi.stubGlobal("fetch", vi.fn(async (input: string | URL) => new Response(
+      JSON.stringify(String(input).endsWith("/interventions") ? [] : withSql), { status: 200 },
+    )));
+    render(<AtlasInvestigation datasetId="dataset-1" initialRunId="atlas-recorded" onSelectContext={vi.fn()} onSqlDraft={onSqlDraft} />);
+    await waitFor(() => expect(screen.getByText("Can we attribute the change?")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Evidence" }));
+    fireEvent.click(screen.getByRole("button", { name: /Counted rows/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Open exact query in SQL Lab" }));
+    expect(onSqlDraft).toHaveBeenCalledWith(sql, { filter_value: "west" }, "local:dataset-1");
+    expect(screen.getByText("Recorded original; edits in SQL Lab create a draft.")).toBeInTheDocument();
+  });
 });

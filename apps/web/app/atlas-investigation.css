@@ -78,6 +78,9 @@
 .atlas-new-run { display:grid; gap:8px; border:1px solid var(--prism-border); background:var(--prism-surface); padding:14px; }
 .atlas-new-run > div { display:flex; gap:8px; }
 .atlas-new-run input { flex:1; min-width:0; background:var(--prism-canvas); color:var(--prism-text); border:1px solid var(--prism-border); border-radius:var(--prism-radius-control); padding:8px 10px; }
+.atlas-new-run select { width:100%; min-width:0; background:var(--prism-canvas); color:var(--prism-text); border:1px solid var(--prism-border); border-radius:var(--prism-radius-control); padding:8px 10px; }
+.atlas-recorded-query { min-width:0; overflow-wrap:anywhere; font-size:12px; }
+.atlas-recorded-query pre { white-space:pre-wrap; overflow-wrap:anywhere; max-width:100%; }
 .atlas-new-run p { color:var(--prism-blocked); font-size:12px; }
 @media (max-width:700px) { .atlas-investigation-header { display:block; }.atlas-run-state { display:inline-block; margin-top:10px; }.atlas-exchange > li { grid-template-columns:1fr; }.atlas-message-meta { grid-row:auto; }.atlas-new-run > div { flex-wrap:wrap; }.atlas-new-run input { flex-basis:100%; } }
 .atlas-mobile-inspector-trigger,.atlas-mobile-inspector-layer { display:none; }

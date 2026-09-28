@@ -883,6 +883,7 @@ export interface AtlasRunRequest {
   objective: string;
   idempotency_key?: string;
   guardrail_context?: AtlasGuardrailContext;
+  sql_analysis?: AtlasSqlAnalysis;
 }
 
 export interface AtlasRunResponse {
@@ -972,6 +973,14 @@ export interface AtlasSpecialistIdentity {
 }
 
 export type AtlasSqlAction = "explain_query" | "optimize_query" | "debug_error" | "inspect_plan" | "generate_sql" | "compare_queries" | "explain_selection" | "trace_lineage" | "convert_result";
+
+export interface AtlasSqlAnalysis {
+  aggregate: "count" | "sum" | "avg" | "min" | "max";
+  measure?: string;
+  group_by?: string;
+  filter_column?: string;
+  filter_value?: string | number | boolean;
+}
 
 export interface AtlasSqlRequest {
   action: AtlasSqlAction;

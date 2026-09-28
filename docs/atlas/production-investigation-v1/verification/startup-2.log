@@ -1,0 +1,13 @@
+INFO:     Loading environment from 'C:\Users\Admin\AppData\Local\Temp\prism-atlas-disposable-hnghihk4\api.env'
+INFO:     Started server process [22860]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8769 (Press CTRL+C to quit)
+2026-09-28 14:50:53,983 INFO prism_api request_completed request_id=req_66fc2527f3e94585b8a45611d022c84d method=GET path=/api/v1/platform/ready status=200 duration_ms=2.0
+INFO:     127.0.0.1:51034 - "GET /api/v1/platform/ready HTTP/1.1" 200 OK
+2026-09-28 14:50:53,987 INFO prism_api request_completed request_id=req_46d734ef8b5942cea97505e54452233e method=GET path=/api/v1/atlas/promotion/current status=200 duration_ms=1.8
+INFO:     127.0.0.1:51034 - "GET /api/v1/atlas/promotion/current HTTP/1.1" 200 OK
+2026-09-28 14:50:54,008 INFO prism_api request_completed request_id=req_7a29b8ed22d34d589f59445bb30d6d33 method=GET path=/api/v1/atlas/runs/atlas_43873983d90e4c39927bc37ba4245afd status=200 duration_ms=20.3
+INFO:     127.0.0.1:51034 - "GET /api/v1/atlas/runs/atlas_43873983d90e4c39927bc37ba4245afd HTTP/1.1" 200 OK
+2026-09-28 14:50:54,053 INFO prism_api request_completed request_id=req_8689b0033bb149ca8c0b417e6f9a0da0 method=GET path=/api/v1/overview/datasets/ds_29727f7d1df34e46a35b8f095c82a097/profile status=200 duration_ms=43.1
+INFO:     127.0.0.1:51034 - "GET /api/v1/overview/datasets/ds_29727f7d1df34e46a35b8f095c82a097/profile HTTP/1.1" 200 OK

@@ -83,7 +83,7 @@ describe("Evolution workspace", () => {
     expect(screen.getAllByText(/No version has been built yet\./).length).toBe(2);
     expect(screen.getByText(/No training job is queued or running/)).toBeInTheDocument();
     expect(screen.getByText(/No promotion or rollback has ever occurred/)).toBeInTheDocument();
-    expect(screen.getByText("soup · unavailable")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText("soup · unavailable")).toBeInTheDocument());
     expect(screen.getByRole("button", { name: "Run live AtlasBench" })).toBeInTheDocument();
   });
 

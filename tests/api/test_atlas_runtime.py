@@ -129,9 +129,8 @@ def test_atlas_exposes_a_deterministic_provider_and_atlas_as_sole_voice() -> Non
         "atlas",
         "scout",
         "curator",
+        "query",
         "stat",
-        "researcher",
-        "librarian",
         "auditor",
     ]
     assert [item["display_name"] for item in specialists if item["speaks_to_user"]] == ["Atlas"]
@@ -322,9 +321,11 @@ def test_plan_response_schema_covers_every_allowed_tool_registry_entry_and_exclu
         for tool_name, kinds in atlas_runtime.TOOL_REGISTRY.items()
         for kind in kinds
         if kind not in {atlas_runtime.AtlasStepKind.PROFILE_DATASET, atlas_runtime.AtlasStepKind.AUDIT_EVIDENCE}
+        and tool_name != "sql_lab.local_aggregate"
     }
     assert set(atlas_runtime.ALLOWED_STEP_PAIRS) == expected_pairs
-    assert len(atlas_runtime.ALLOWED_STEP_PAIRS) == len(atlas_runtime.TOOL_REGISTRY) - 2
+    assert len(atlas_runtime.ALLOWED_STEP_PAIRS) == len(atlas_runtime.TOOL_REGISTRY) - 3
+    assert (atlas_runtime.AtlasStepKind.SQL_QUESTION.value, "sql_lab.local_aggregate") not in atlas_runtime.ALLOWED_STEP_PAIRS
 
     schema = atlas_runtime.PLAN_RESPONSE_SCHEMA
     variants = schema["properties"]["steps"]["items"]["oneOf"]  # type: ignore[index]

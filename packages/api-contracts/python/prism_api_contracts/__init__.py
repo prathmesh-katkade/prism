@@ -121,6 +121,7 @@ from .models import (
     AtlasSpecialistId,
     AtlasSpecialistIdentity,
     AtlasSqlAction,
+    AtlasSqlAnalysis,
     AtlasSqlRequest,
     AtlasSqlResponse,
     AtlasStatsAction,
@@ -256,7 +257,7 @@ __all__ = [
 
     "AtlasFeatureDeclaration", "AtlasGuardrailContext",
     "ApiError", "AiAnalystOutcome", "AiAnalystRequest", "AiAnalystResponse", "AiContextPacket", "AiEvidence", "AiProviderStatus", "AtlasEvidence", "AtlasOverviewAction", "AtlasOverviewRequest", "AtlasOverviewResponse",
-    "AtlasBenchmarkResult", "AtlasBenchmarkVerdict", "AtlasCouncilConclusion", "AtlasEvidenceReference", "AtlasMemoryClass", "AtlasMemoryQuery", "AtlasMemoryRecord", "AtlasMemoryScope", "AtlasMemoryWriteRequest", "AtlasModelProviderCapabilities", "AtlasModelProviderName", "AtlasProviderCapability", "AtlasModelTrust", "AtlasPlanState", "AtlasPlanStep", "AtlasResourcePriority", "AtlasResourceLease", "AtlasResourceLeaseRequest", "AtlasResourceSnapshot", "AtlasResourceWorkload", "AtlasKnowledgeChunk", "AtlasKnowledgeSearchRequest", "AtlasKnowledgeSourceRequest", "AtlasEmbeddingCapability", "AtlasRetrievalChunk", "AtlasRetrievalChunkUpsertRequest", "AtlasRetrievalQueryRequest", "AtlasRetrievalResult", "AtlasResearchRequest", "AtlasResearchResult", "AtlasRunEvent", "AtlasRunEventType", "AtlasRunRequest", "AtlasRunResponse", "AtlasSandboxArtifact", "AtlasSandboxErrorKind", "AtlasSandboxExecutionRequest", "AtlasSandboxExecutionResult", "AtlasSandboxWorkerHealth", "AtlasSpecialistId", "AtlasSpecialistIdentity", "AtlasStepKind", "AtlasStepState", "AtlasStructuredPlan",
+    "AtlasBenchmarkResult", "AtlasBenchmarkVerdict", "AtlasCouncilConclusion", "AtlasEvidenceReference", "AtlasMemoryClass", "AtlasMemoryQuery", "AtlasMemoryRecord", "AtlasMemoryScope", "AtlasMemoryWriteRequest", "AtlasModelProviderCapabilities", "AtlasModelProviderName", "AtlasProviderCapability", "AtlasModelTrust", "AtlasPlanState", "AtlasPlanStep", "AtlasResourcePriority", "AtlasResourceLease", "AtlasResourceLeaseRequest", "AtlasResourceSnapshot", "AtlasResourceWorkload", "AtlasKnowledgeChunk", "AtlasKnowledgeSearchRequest", "AtlasKnowledgeSourceRequest", "AtlasEmbeddingCapability", "AtlasRetrievalChunk", "AtlasRetrievalChunkUpsertRequest", "AtlasRetrievalQueryRequest", "AtlasRetrievalResult", "AtlasResearchRequest", "AtlasResearchResult", "AtlasRunEvent", "AtlasRunEventType", "AtlasRunRequest", "AtlasSqlAnalysis", "AtlasRunResponse", "AtlasSandboxArtifact", "AtlasSandboxErrorKind", "AtlasSandboxExecutionRequest", "AtlasSandboxExecutionResult", "AtlasSandboxWorkerHealth", "AtlasSpecialistId", "AtlasSpecialistIdentity", "AtlasStepKind", "AtlasStepState", "AtlasStructuredPlan",
     "AtlasOperationalScenarioId", "AtlasOperationalCriticalFailureKind", "AtlasOperationalToolCall", "AtlasOperationalSubjectResponse", "AtlasOperationalScenarioResult", "AtlasOperationalSuiteRun",
     "AtlasSystemSeedDomain", "AtlasSystemSeedDomainCount", "AtlasSystemSeedExample", "AtlasSystemSeedManifest", "AtlasSystemSeedReviewStatus",
     "AtlasSyntheticTeacherExample", "AtlasSyntheticTeacherManifest", "AtlasSyntheticTeacherSkillArea", "AtlasSyntheticTeacherSkillAreaCount", "AtlasSyntheticTeacherValidationStatus",

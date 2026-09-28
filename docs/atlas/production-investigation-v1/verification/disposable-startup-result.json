@@ -1,0 +1,908 @@
+{
+  "backup_sha256_after": "03bbc35cb97e84abc1a92d54a9f5fbeb3592d5b208c6d0c01d397afddfcc6afc",
+  "backup_sha256_before": "03bbc35cb97e84abc1a92d54a9f5fbeb3592d5b208c6d0c01d397afddfcc6afc",
+  "dataset": {
+    "column_count": 2,
+    "dataset_id": "ds_29727f7d1df34e46a35b8f095c82a097",
+    "revision": 0,
+    "row_count": 3,
+    "source_fingerprint": "c44eddb50f695f51ea869120eda2a950ab4d9fdd5cc34577c40cb725b9f90d31",
+    "source_name": "atlas-fixture.csv"
+  },
+  "dataset_revision_after_restart": 0,
+  "pointer_after_start_1": {
+    "candidate_id": "basemodel_585b7e79e9f195024a57dc9a",
+    "decision_id": "promodecision_f6d2cf373cc54059b4216601ace347af",
+    "event_id": "promo_3ba5ad9dd8aa49eab6266e185a70c032",
+    "is_rollback": false,
+    "previous_candidate_id": "production_env_e77dbfc3de7584a8c502a6f8",
+    "promoted_at": "2026-09-24T05:20:29.980225",
+    "reason": "Round 4 winner qwen3:4b-instruct-2507-q4_K_M: AtlasBench 89/90 (98.9%) vs production 94.4%, 0 critical regressions; warm planner p95 (full-40) 1.70s; 100% GPU residency; 100% valid-JSON; 100% acceptance rate (0/39 rejected); Operational Certification opcert_8418b0e0ca7d49a697641837827fdfd8 passed 22/23 (95.7%), 0 critical failures. decision_id=promodecision_f6d2cf373cc54059b4216601ace347af.",
+    "tier": "fast"
+  },
+  "pointer_after_start_2": {
+    "candidate_id": "basemodel_585b7e79e9f195024a57dc9a",
+    "decision_id": "promodecision_f6d2cf373cc54059b4216601ace347af",
+    "event_id": "promo_3ba5ad9dd8aa49eab6266e185a70c032",
+    "is_rollback": false,
+    "previous_candidate_id": "production_env_e77dbfc3de7584a8c502a6f8",
+    "promoted_at": "2026-09-24T05:20:29.980225",
+    "reason": "Round 4 winner qwen3:4b-instruct-2507-q4_K_M: AtlasBench 89/90 (98.9%) vs production 94.4%, 0 critical regressions; warm planner p95 (full-40) 1.70s; 100% GPU residency; 100% valid-JSON; 100% acceptance rate (0/39 rejected); Operational Certification opcert_8418b0e0ca7d49a697641837827fdfd8 passed 22/23 (95.7%), 0 critical failures. decision_id=promodecision_f6d2cf373cc54059b4216601ace347af.",
+    "tier": "fast"
+  },
+  "run_after_execution": {
+    "answer": "Atlas completed a deterministic first-pass assessment of atlas-fixture.csv: 3 rows \u00d7 2 columns, health 94/100, and 0.00% missing cells. Recorded SQL result run_e7cae281f8224eb8aff313eb77ad3929: [{\"group_value\": \"east\", \"result_value\": 7.0}, {\"group_value\": \"west\", \"result_value\": 15.0}]. Evidence sql:run_e7cae281f8224eb8aff313eb77ad3929.",
+    "cancellation_requested": false,
+    "council": [
+      {
+        "conclusion": "Profiled atlas-fixture.csv: 3 rows \u00d7 2 columns; health score 94/100 and missingness 0.00%.",
+        "confidence": "high",
+        "evidence": [
+          {
+            "dataset_id": "ds_29727f7d1df34e46a35b8f095c82a097",
+            "dataset_revision": 0,
+            "evidence_id": "dataset:ds_29727f7d1df34e46a35b8f095c82a097:r0",
+            "kind": "dataset_revision",
+            "source_fingerprint": "c44eddb50f695f51ea869120eda2a950ab4d9fdd5cc34577c40cb725b9f90d31",
+            "summary": "Active DatasetStore revision."
+          },
+          {
+            "dataset_id": "ds_29727f7d1df34e46a35b8f095c82a097",
+            "dataset_revision": 0,
+            "evidence_id": "overview:ds_29727f7d1df34e46a35b8f095c82a097:r0",
+            "kind": "overview_profile",
+            "source_fingerprint": "c44eddb50f695f51ea869120eda2a950ab4d9fdd5cc34577c40cb725b9f90d31",
+            "summary": "Overview profile: 3 rows, 2 columns, health 94/100."
+          }
+        ],
+        "objections": [],
+        "specialist": "scout"
+      },
+      {
+        "conclusion": "Executed the recorded aggregate in SQL Lab; 2 result rows. Inspect evidence sql:run_e7cae281f8224eb8aff313eb77ad3929 for the exact query and bounded values.",
+        "confidence": "high",
+        "evidence": [
+          {
+            "dataset_id": "ds_29727f7d1df34e46a35b8f095c82a097",
+            "dataset_revision": 0,
+            "evidence_id": "sql:run_e7cae281f8224eb8aff313eb77ad3929",
+            "kind": "tool_output",
+            "source_fingerprint": "c44eddb50f695f51ea869120eda2a950ab4d9fdd5cc34577c40cb725b9f90d31",
+            "summary": "SQL Lab aggregate: 2 recorded result rows."
+          }
+        ],
+        "objections": [],
+        "specialist": "query"
+      },
+      {
+        "conclusion": "The current result is grounded in the active DatasetStore revision and deterministic Overview profile only.",
+        "confidence": "high",
+        "evidence": [
+          {
+            "dataset_id": "ds_29727f7d1df34e46a35b8f095c82a097",
+            "dataset_revision": 0,
+            "evidence_id": "dataset:ds_29727f7d1df34e46a35b8f095c82a097:r0",
+            "kind": "dataset_revision",
+            "source_fingerprint": "c44eddb50f695f51ea869120eda2a950ab4d9fdd5cc34577c40cb725b9f90d31",
+            "summary": "Active DatasetStore revision."
+          },
+          {
+            "dataset_id": "ds_29727f7d1df34e46a35b8f095c82a097",
+            "dataset_revision": 0,
+            "evidence_id": "overview:ds_29727f7d1df34e46a35b8f095c82a097:r0",
+            "kind": "overview_profile",
+            "source_fingerprint": "c44eddb50f695f51ea869120eda2a950ab4d9fdd5cc34577c40cb725b9f90d31",
+            "summary": "Overview profile: 3 rows, 2 columns, health 94/100."
+          }
+        ],
+        "objections": [
+          "No web research, raw-row provider transfer, SQL execution, Python execution, or model training occurred."
+        ],
+        "specialist": "auditor"
+      }
+    ],
+    "created_at": "2026-09-28T09:20:46.807166Z",
+    "events": [
+      {
+        "event_id": "evt_ba7c0cc6b3cf48bda01ab4213461357b",
+        "occurred_at": "2026-09-28T09:20:46.810299",
+        "payload": {
+          "dataset_id": "ds_29727f7d1df34e46a35b8f095c82a097"
+        },
+        "run_id": "atlas_43873983d90e4c39927bc37ba4245afd",
+        "sequence": 1,
+        "specialist": null,
+        "step_id": null,
+        "type": "run_created"
+      },
+      {
+        "event_id": "evt_1d5da6ebd1e74dd08056140423fd937b",
+        "occurred_at": "2026-09-28T09:20:46.816134",
+        "payload": {
+          "deep_refinement_requested": false,
+          "execution_policy_version": "atlas-execution-v1",
+          "guardrail_context": null,
+          "guardrail_decision": {
+            "authority": "server",
+            "decision_id": "guard_ba8e2872c9a001b1b9d5e66e",
+            "evidence": {},
+            "execution_authorized": false,
+            "feature_checks": [],
+            "findings": [],
+            "policy_version": "atlas-guardrails-v1",
+            "state": "checked"
+          },
+          "model": "deterministic-v1",
+          "model_proposal": "not_requested",
+          "model_proposal_steps_accepted": 0,
+          "model_tier": "fast",
+          "model_tier_reason": "deterministic_provider",
+          "plan_id": "plan_3120849669d6498cb357fe6a9056902a",
+          "prompt_schema_version": "atlas-plan-v1",
+          "provider": "deterministic",
+          "raw_dataset_sent": false,
+          "requested_tier": "fast",
+          "source_run_id": null
+        },
+        "run_id": "atlas_43873983d90e4c39927bc37ba4245afd",
+        "sequence": 2,
+        "specialist": null,
+        "step_id": null,
+        "type": "plan_created"
+      },
+      {
+        "event_id": "evt_7a73f1f9d06845a8a648919d765a3208",
+        "occurred_at": "2026-09-28T09:20:46.827681",
+        "payload": {
+          "policy_version": "atlas-execution-v1",
+          "tool": "overview.profile"
+        },
+        "run_id": "atlas_43873983d90e4c39927bc37ba4245afd",
+        "sequence": 3,
+        "specialist": "scout",
+        "step_id": "profile",
+        "type": "step_started"
+      },
+      {
+        "event_id": "evt_b2dbe2257adc40d891832e63200dac9e",
+        "occurred_at": "2026-09-28T09:20:46.902877",
+        "payload": {
+          "evidence_ids": [
+            "dataset:ds_29727f7d1df34e46a35b8f095c82a097:r0",
+            "overview:ds_29727f7d1df34e46a35b8f095c82a097:r0"
+          ]
+        },
+        "run_id": "atlas_43873983d90e4c39927bc37ba4245afd",
+        "sequence": 4,
+        "specialist": "scout",
+        "step_id": "profile",
+        "type": "step_completed"
+      },
+      {
+        "event_id": "evt_380a0d517bdf4ea7a6fd64c51ad6978f",
+        "occurred_at": "2026-09-28T09:20:46.906886",
+        "payload": {
+          "confidence": "high",
+          "objections": []
+        },
+        "run_id": "atlas_43873983d90e4c39927bc37ba4245afd",
+        "sequence": 5,
+        "specialist": "scout",
+        "step_id": "profile",
+        "type": "council_conclusion"
+      },
+      {
+        "event_id": "evt_9597c12d250a4223ae489f501a389c06",
+        "occurred_at": "2026-09-28T09:20:46.925098",
+        "payload": {
+          "policy_version": "atlas-execution-v1",
+          "tool": "sql_lab.local_aggregate"
+        },
+        "run_id": "atlas_43873983d90e4c39927bc37ba4245afd",
+        "sequence": 6,
+        "specialist": "query",
+        "step_id": "sql_question",
+        "type": "step_started"
+      },
+      {
+        "event_id": "evt_ab7d344e43a34304814c781dd6d715d7",
+        "occurred_at": "2026-09-28T09:20:47.165393",
+        "payload": {
+          "evidence_ids": [
+            "sql:run_e7cae281f8224eb8aff313eb77ad3929"
+          ],
+          "output": {
+            "connection_id": "local:ds_29727f7d1df34e46a35b8f095c82a097",
+            "dataset_id": "ds_29727f7d1df34e46a35b8f095c82a097",
+            "dataset_revision": 0,
+            "duration_ms": 102,
+            "error": null,
+            "execution_state": "succeeded",
+            "parameters": {},
+            "policy_version": "atlas-local-aggregate-v1",
+            "result_fingerprint": "ca9a4720823515ff2b59455814628e0189577c09adb25fe7d12544a6459dad95",
+            "rows": [
+              {
+                "group_value": "east",
+                "result_value": 7.0
+              },
+              {
+                "group_value": "west",
+                "result_value": 15.0
+              }
+            ],
+            "source_fingerprint": "c44eddb50f695f51ea869120eda2a950ab4d9fdd5cc34577c40cb725b9f90d31",
+            "sql": "SELECT \"region\" AS group_value, SUM(\"revenue\") AS result_value FROM \"data\" GROUP BY \"region\" ORDER BY \"region\" LIMIT 100",
+            "sql_run_id": "run_e7cae281f8224eb8aff313eb77ad3929",
+            "truncated": false
+          }
+        },
+        "run_id": "atlas_43873983d90e4c39927bc37ba4245afd",
+        "sequence": 7,
+        "specialist": "query",
+        "step_id": "sql_question",
+        "type": "step_completed"
+      },
+      {
+        "event_id": "evt_7aae587e3f2e441ea8d1eb0b9dfde7bb",
+        "occurred_at": "2026-09-28T09:20:47.168399",
+        "payload": {
+          "confidence": "high",
+          "objections": []
+        },
+        "run_id": "atlas_43873983d90e4c39927bc37ba4245afd",
+        "sequence": 8,
+        "specialist": "query",
+        "step_id": "sql_question",
+        "type": "council_conclusion"
+      },
+      {
+        "event_id": "evt_04e7d11e3d1d4f108ee9ae3c51fe1e95",
+        "occurred_at": "2026-09-28T09:20:47.174916",
+        "payload": {
+          "policy_version": "atlas-execution-v1",
+          "tool": "atlas.evidence_audit"
+        },
+        "run_id": "atlas_43873983d90e4c39927bc37ba4245afd",
+        "sequence": 9,
+        "specialist": "auditor",
+        "step_id": "audit",
+        "type": "step_started"
+      },
+      {
+        "event_id": "evt_162dbc35ca1f49fead627ac430a20aa0",
+        "occurred_at": "2026-09-28T09:20:47.238750",
+        "payload": {
+          "evidence_ids": [
+            "dataset:ds_29727f7d1df34e46a35b8f095c82a097:r0",
+            "overview:ds_29727f7d1df34e46a35b8f095c82a097:r0"
+          ]
+        },
+        "run_id": "atlas_43873983d90e4c39927bc37ba4245afd",
+        "sequence": 10,
+        "specialist": "auditor",
+        "step_id": "audit",
+        "type": "step_completed"
+      },
+      {
+        "event_id": "evt_6828cbb650f74ed89adf69130589e505",
+        "occurred_at": "2026-09-28T09:20:47.242733",
+        "payload": {
+          "confidence": "high",
+          "objections": [
+            "No web research, raw-row provider transfer, SQL execution, Python execution, or model training occurred."
+          ]
+        },
+        "run_id": "atlas_43873983d90e4c39927bc37ba4245afd",
+        "sequence": 11,
+        "specialist": "auditor",
+        "step_id": "audit",
+        "type": "council_conclusion"
+      },
+      {
+        "event_id": "evt_16e6a420c5d84a07af98ceeb190e72aa",
+        "occurred_at": "2026-09-28T09:20:47.251644",
+        "payload": {
+          "answer_grounded": true,
+          "blocked_steps": 0
+        },
+        "run_id": "atlas_43873983d90e4c39927bc37ba4245afd",
+        "sequence": 12,
+        "specialist": "atlas",
+        "step_id": null,
+        "type": "run_completed"
+      }
+    ],
+    "evidence": [
+      {
+        "dataset_id": "ds_29727f7d1df34e46a35b8f095c82a097",
+        "dataset_revision": 0,
+        "evidence_id": "dataset:ds_29727f7d1df34e46a35b8f095c82a097:r0",
+        "kind": "dataset_revision",
+        "source_fingerprint": "c44eddb50f695f51ea869120eda2a950ab4d9fdd5cc34577c40cb725b9f90d31",
+        "summary": "Active DatasetStore revision."
+      },
+      {
+        "dataset_id": "ds_29727f7d1df34e46a35b8f095c82a097",
+        "dataset_revision": 0,
+        "evidence_id": "overview:ds_29727f7d1df34e46a35b8f095c82a097:r0",
+        "kind": "overview_profile",
+        "source_fingerprint": "c44eddb50f695f51ea869120eda2a950ab4d9fdd5cc34577c40cb725b9f90d31",
+        "summary": "Overview profile: 3 rows, 2 columns, health 94/100."
+      },
+      {
+        "dataset_id": "ds_29727f7d1df34e46a35b8f095c82a097",
+        "dataset_revision": 0,
+        "evidence_id": "sql:run_e7cae281f8224eb8aff313eb77ad3929",
+        "kind": "tool_output",
+        "source_fingerprint": "c44eddb50f695f51ea869120eda2a950ab4d9fdd5cc34577c40cb725b9f90d31",
+        "summary": "SQL Lab aggregate: 2 recorded result rows."
+      }
+    ],
+    "plan": {
+      "created_at": "2026-09-28T09:20:46.807166Z",
+      "dataset_id": "ds_29727f7d1df34e46a35b8f095c82a097",
+      "objective": "Sum revenue by region using SQL",
+      "plan_id": "plan_3120849669d6498cb357fe6a9056902a",
+      "provider": "deterministic",
+      "state": "completed",
+      "steps": [
+        {
+          "attempts": 1,
+          "dependencies": [],
+          "error": null,
+          "evidence": [
+            {
+              "dataset_id": "ds_29727f7d1df34e46a35b8f095c82a097",
+              "dataset_revision": 0,
+              "evidence_id": "dataset:ds_29727f7d1df34e46a35b8f095c82a097:r0",
+              "kind": "dataset_revision",
+              "source_fingerprint": "c44eddb50f695f51ea869120eda2a950ab4d9fdd5cc34577c40cb725b9f90d31",
+              "summary": "Active DatasetStore revision."
+            },
+            {
+              "dataset_id": "ds_29727f7d1df34e46a35b8f095c82a097",
+              "dataset_revision": 0,
+              "evidence_id": "overview:ds_29727f7d1df34e46a35b8f095c82a097:r0",
+              "kind": "overview_profile",
+              "source_fingerprint": "c44eddb50f695f51ea869120eda2a950ab4d9fdd5cc34577c40cb725b9f90d31",
+              "summary": "Overview profile: 3 rows, 2 columns, health 94/100."
+            }
+          ],
+          "expected_evidence": [
+            "dataset_revision",
+            "overview_profile"
+          ],
+          "kind": "profile_dataset",
+          "max_attempts": 3,
+          "rationale": "Establish schema, quality, and revision evidence before choosing a method.",
+          "requires_approval": false,
+          "specialist": "scout",
+          "state": "completed",
+          "step_id": "profile",
+          "title": "Profile the active dataset",
+          "tool_args": {},
+          "tool_name": "overview.profile"
+        },
+        {
+          "attempts": 1,
+          "dependencies": [
+            "profile"
+          ],
+          "error": null,
+          "evidence": [
+            {
+              "dataset_id": "ds_29727f7d1df34e46a35b8f095c82a097",
+              "dataset_revision": 0,
+              "evidence_id": "sql:run_e7cae281f8224eb8aff313eb77ad3929",
+              "kind": "tool_output",
+              "source_fingerprint": "c44eddb50f695f51ea869120eda2a950ab4d9fdd5cc34577c40cb725b9f90d31",
+              "summary": "SQL Lab aggregate: 2 recorded result rows."
+            }
+          ],
+          "expected_evidence": [
+            "dataset_revision",
+            "tool_output"
+          ],
+          "kind": "sql_question",
+          "max_attempts": 3,
+          "rationale": "A named SQL Lab connection and reviewed query are required before SQL can execute.",
+          "requires_approval": false,
+          "specialist": "query",
+          "state": "completed",
+          "step_id": "sql_question",
+          "title": "A named SQL Lab connection and reviewed query are required before SQL can execute",
+          "tool_args": {
+            "aggregate": "sum",
+            "filter_column": null,
+            "filter_value": null,
+            "group_by": "region",
+            "measure": "revenue"
+          },
+          "tool_name": "sql_lab.local_aggregate"
+        },
+        {
+          "attempts": 1,
+          "dependencies": [
+            "profile",
+            "sql_question"
+          ],
+          "error": null,
+          "evidence": [
+            {
+              "dataset_id": "ds_29727f7d1df34e46a35b8f095c82a097",
+              "dataset_revision": 0,
+              "evidence_id": "dataset:ds_29727f7d1df34e46a35b8f095c82a097:r0",
+              "kind": "dataset_revision",
+              "source_fingerprint": "c44eddb50f695f51ea869120eda2a950ab4d9fdd5cc34577c40cb725b9f90d31",
+              "summary": "Active DatasetStore revision."
+            },
+            {
+              "dataset_id": "ds_29727f7d1df34e46a35b8f095c82a097",
+              "dataset_revision": 0,
+              "evidence_id": "overview:ds_29727f7d1df34e46a35b8f095c82a097:r0",
+              "kind": "overview_profile",
+              "source_fingerprint": "c44eddb50f695f51ea869120eda2a950ab4d9fdd5cc34577c40cb725b9f90d31",
+              "summary": "Overview profile: 3 rows, 2 columns, health 94/100."
+            }
+          ],
+          "expected_evidence": [
+            "dataset_revision",
+            "tool_output"
+          ],
+          "kind": "audit_evidence",
+          "max_attempts": 3,
+          "rationale": "Verify that every visible claim is grounded in stored run evidence.",
+          "requires_approval": false,
+          "specialist": "auditor",
+          "state": "completed",
+          "step_id": "audit",
+          "title": "Audit evidence and limits",
+          "tool_args": {},
+          "tool_name": "atlas.evidence_audit"
+        }
+      ]
+    },
+    "run_id": "atlas_43873983d90e4c39927bc37ba4245afd",
+    "uncertainty": "The SQL aggregate is descriptive and bounded to 100 result rows; it does not establish causality or statistical significance.",
+    "updated_at": "2026-09-28T09:20:47.259677Z"
+  },
+  "run_after_restart": {
+    "answer": "Atlas completed a deterministic first-pass assessment of atlas-fixture.csv: 3 rows \u00d7 2 columns, health 94/100, and 0.00% missing cells. Recorded SQL result run_e7cae281f8224eb8aff313eb77ad3929: [{\"group_value\": \"east\", \"result_value\": 7.0}, {\"group_value\": \"west\", \"result_value\": 15.0}]. Evidence sql:run_e7cae281f8224eb8aff313eb77ad3929.",
+    "cancellation_requested": false,
+    "council": [
+      {
+        "conclusion": "Profiled atlas-fixture.csv: 3 rows \u00d7 2 columns; health score 94/100 and missingness 0.00%.",
+        "confidence": "high",
+        "evidence": [
+          {
+            "dataset_id": "ds_29727f7d1df34e46a35b8f095c82a097",
+            "dataset_revision": 0,
+            "evidence_id": "dataset:ds_29727f7d1df34e46a35b8f095c82a097:r0",
+            "kind": "dataset_revision",
+            "source_fingerprint": "c44eddb50f695f51ea869120eda2a950ab4d9fdd5cc34577c40cb725b9f90d31",
+            "summary": "Active DatasetStore revision."
+          },
+          {
+            "dataset_id": "ds_29727f7d1df34e46a35b8f095c82a097",
+            "dataset_revision": 0,
+            "evidence_id": "overview:ds_29727f7d1df34e46a35b8f095c82a097:r0",
+            "kind": "overview_profile",
+            "source_fingerprint": "c44eddb50f695f51ea869120eda2a950ab4d9fdd5cc34577c40cb725b9f90d31",
+            "summary": "Overview profile: 3 rows, 2 columns, health 94/100."
+          }
+        ],
+        "objections": [],
+        "specialist": "scout"
+      },
+      {
+        "conclusion": "Executed the recorded aggregate in SQL Lab; 2 result rows. Inspect evidence sql:run_e7cae281f8224eb8aff313eb77ad3929 for the exact query and bounded values.",
+        "confidence": "high",
+        "evidence": [
+          {
+            "dataset_id": "ds_29727f7d1df34e46a35b8f095c82a097",
+            "dataset_revision": 0,
+            "evidence_id": "sql:run_e7cae281f8224eb8aff313eb77ad3929",
+            "kind": "tool_output",
+            "source_fingerprint": "c44eddb50f695f51ea869120eda2a950ab4d9fdd5cc34577c40cb725b9f90d31",
+            "summary": "SQL Lab aggregate: 2 recorded result rows."
+          }
+        ],
+        "objections": [],
+        "specialist": "query"
+      },
+      {
+        "conclusion": "The current result is grounded in the active DatasetStore revision and deterministic Overview profile only.",
+        "confidence": "high",
+        "evidence": [
+          {
+            "dataset_id": "ds_29727f7d1df34e46a35b8f095c82a097",
+            "dataset_revision": 0,
+            "evidence_id": "dataset:ds_29727f7d1df34e46a35b8f095c82a097:r0",
+            "kind": "dataset_revision",
+            "source_fingerprint": "c44eddb50f695f51ea869120eda2a950ab4d9fdd5cc34577c40cb725b9f90d31",
+            "summary": "Active DatasetStore revision."
+          },
+          {
+            "dataset_id": "ds_29727f7d1df34e46a35b8f095c82a097",
+            "dataset_revision": 0,
+            "evidence_id": "overview:ds_29727f7d1df34e46a35b8f095c82a097:r0",
+            "kind": "overview_profile",
+            "source_fingerprint": "c44eddb50f695f51ea869120eda2a950ab4d9fdd5cc34577c40cb725b9f90d31",
+            "summary": "Overview profile: 3 rows, 2 columns, health 94/100."
+          }
+        ],
+        "objections": [
+          "No web research, raw-row provider transfer, SQL execution, Python execution, or model training occurred."
+        ],
+        "specialist": "auditor"
+      }
+    ],
+    "created_at": "2026-09-28T09:20:46.807166Z",
+    "events": [
+      {
+        "event_id": "evt_ba7c0cc6b3cf48bda01ab4213461357b",
+        "occurred_at": "2026-09-28T09:20:46.810299",
+        "payload": {
+          "dataset_id": "ds_29727f7d1df34e46a35b8f095c82a097"
+        },
+        "run_id": "atlas_43873983d90e4c39927bc37ba4245afd",
+        "sequence": 1,
+        "specialist": null,
+        "step_id": null,
+        "type": "run_created"
+      },
+      {
+        "event_id": "evt_1d5da6ebd1e74dd08056140423fd937b",
+        "occurred_at": "2026-09-28T09:20:46.816134",
+        "payload": {
+          "deep_refinement_requested": false,
+          "execution_policy_version": "atlas-execution-v1",
+          "guardrail_context": null,
+          "guardrail_decision": {
+            "authority": "server",
+            "decision_id": "guard_ba8e2872c9a001b1b9d5e66e",
+            "evidence": {},
+            "execution_authorized": false,
+            "feature_checks": [],
+            "findings": [],
+            "policy_version": "atlas-guardrails-v1",
+            "state": "checked"
+          },
+          "model": "deterministic-v1",
+          "model_proposal": "not_requested",
+          "model_proposal_steps_accepted": 0,
+          "model_tier": "fast",
+          "model_tier_reason": "deterministic_provider",
+          "plan_id": "plan_3120849669d6498cb357fe6a9056902a",
+          "prompt_schema_version": "atlas-plan-v1",
+          "provider": "deterministic",
+          "raw_dataset_sent": false,
+          "requested_tier": "fast",
+          "source_run_id": null
+        },
+        "run_id": "atlas_43873983d90e4c39927bc37ba4245afd",
+        "sequence": 2,
+        "specialist": null,
+        "step_id": null,
+        "type": "plan_created"
+      },
+      {
+        "event_id": "evt_7a73f1f9d06845a8a648919d765a3208",
+        "occurred_at": "2026-09-28T09:20:46.827681",
+        "payload": {
+          "policy_version": "atlas-execution-v1",
+          "tool": "overview.profile"
+        },
+        "run_id": "atlas_43873983d90e4c39927bc37ba4245afd",
+        "sequence": 3,
+        "specialist": "scout",
+        "step_id": "profile",
+        "type": "step_started"
+      },
+      {
+        "event_id": "evt_b2dbe2257adc40d891832e63200dac9e",
+        "occurred_at": "2026-09-28T09:20:46.902877",
+        "payload": {
+          "evidence_ids": [
+            "dataset:ds_29727f7d1df34e46a35b8f095c82a097:r0",
+            "overview:ds_29727f7d1df34e46a35b8f095c82a097:r0"
+          ]
+        },
+        "run_id": "atlas_43873983d90e4c39927bc37ba4245afd",
+        "sequence": 4,
+        "specialist": "scout",
+        "step_id": "profile",
+        "type": "step_completed"
+      },
+      {
+        "event_id": "evt_380a0d517bdf4ea7a6fd64c51ad6978f",
+        "occurred_at": "2026-09-28T09:20:46.906886",
+        "payload": {
+          "confidence": "high",
+          "objections": []
+        },
+        "run_id": "atlas_43873983d90e4c39927bc37ba4245afd",
+        "sequence": 5,
+        "specialist": "scout",
+        "step_id": "profile",
+        "type": "council_conclusion"
+      },
+      {
+        "event_id": "evt_9597c12d250a4223ae489f501a389c06",
+        "occurred_at": "2026-09-28T09:20:46.925098",
+        "payload": {
+          "policy_version": "atlas-execution-v1",
+          "tool": "sql_lab.local_aggregate"
+        },
+        "run_id": "atlas_43873983d90e4c39927bc37ba4245afd",
+        "sequence": 6,
+        "specialist": "query",
+        "step_id": "sql_question",
+        "type": "step_started"
+      },
+      {
+        "event_id": "evt_ab7d344e43a34304814c781dd6d715d7",
+        "occurred_at": "2026-09-28T09:20:47.165393",
+        "payload": {
+          "evidence_ids": [
+            "sql:run_e7cae281f8224eb8aff313eb77ad3929"
+          ],
+          "output": {
+            "connection_id": "local:ds_29727f7d1df34e46a35b8f095c82a097",
+            "dataset_id": "ds_29727f7d1df34e46a35b8f095c82a097",
+            "dataset_revision": 0,
+            "duration_ms": 102,
+            "error": null,
+            "execution_state": "succeeded",
+            "parameters": {},
+            "policy_version": "atlas-local-aggregate-v1",
+            "result_fingerprint": "ca9a4720823515ff2b59455814628e0189577c09adb25fe7d12544a6459dad95",
+            "rows": [
+              {
+                "group_value": "east",
+                "result_value": 7.0
+              },
+              {
+                "group_value": "west",
+                "result_value": 15.0
+              }
+            ],
+            "source_fingerprint": "c44eddb50f695f51ea869120eda2a950ab4d9fdd5cc34577c40cb725b9f90d31",
+            "sql": "SELECT \"region\" AS group_value, SUM(\"revenue\") AS result_value FROM \"data\" GROUP BY \"region\" ORDER BY \"region\" LIMIT 100",
+            "sql_run_id": "run_e7cae281f8224eb8aff313eb77ad3929",
+            "truncated": false
+          }
+        },
+        "run_id": "atlas_43873983d90e4c39927bc37ba4245afd",
+        "sequence": 7,
+        "specialist": "query",
+        "step_id": "sql_question",
+        "type": "step_completed"
+      },
+      {
+        "event_id": "evt_7aae587e3f2e441ea8d1eb0b9dfde7bb",
+        "occurred_at": "2026-09-28T09:20:47.168399",
+        "payload": {
+          "confidence": "high",
+          "objections": []
+        },
+        "run_id": "atlas_43873983d90e4c39927bc37ba4245afd",
+        "sequence": 8,
+        "specialist": "query",
+        "step_id": "sql_question",
+        "type": "council_conclusion"
+      },
+      {
+        "event_id": "evt_04e7d11e3d1d4f108ee9ae3c51fe1e95",
+        "occurred_at": "2026-09-28T09:20:47.174916",
+        "payload": {
+          "policy_version": "atlas-execution-v1",
+          "tool": "atlas.evidence_audit"
+        },
+        "run_id": "atlas_43873983d90e4c39927bc37ba4245afd",
+        "sequence": 9,
+        "specialist": "auditor",
+        "step_id": "audit",
+        "type": "step_started"
+      },
+      {
+        "event_id": "evt_162dbc35ca1f49fead627ac430a20aa0",
+        "occurred_at": "2026-09-28T09:20:47.238750",
+        "payload": {
+          "evidence_ids": [
+            "dataset:ds_29727f7d1df34e46a35b8f095c82a097:r0",
+            "overview:ds_29727f7d1df34e46a35b8f095c82a097:r0"
+          ]
+        },
+        "run_id": "atlas_43873983d90e4c39927bc37ba4245afd",
+        "sequence": 10,
+        "specialist": "auditor",
+        "step_id": "audit",
+        "type": "step_completed"
+      },
+      {
+        "event_id": "evt_6828cbb650f74ed89adf69130589e505",
+        "occurred_at": "2026-09-28T09:20:47.242733",
+        "payload": {
+          "confidence": "high",
+          "objections": [
+            "No web research, raw-row provider transfer, SQL execution, Python execution, or model training occurred."
+          ]
+        },
+        "run_id": "atlas_43873983d90e4c39927bc37ba4245afd",
+        "sequence": 11,
+        "specialist": "auditor",
+        "step_id": "audit",
+        "type": "council_conclusion"
+      },
+      {
+        "event_id": "evt_16e6a420c5d84a07af98ceeb190e72aa",
+        "occurred_at": "2026-09-28T09:20:47.251644",
+        "payload": {
+          "answer_grounded": true,
+          "blocked_steps": 0
+        },
+        "run_id": "atlas_43873983d90e4c39927bc37ba4245afd",
+        "sequence": 12,
+        "specialist": "atlas",
+        "step_id": null,
+        "type": "run_completed"
+      }
+    ],
+    "evidence": [
+      {
+        "dataset_id": "ds_29727f7d1df34e46a35b8f095c82a097",
+        "dataset_revision": 0,
+        "evidence_id": "dataset:ds_29727f7d1df34e46a35b8f095c82a097:r0",
+        "kind": "dataset_revision",
+        "source_fingerprint": "c44eddb50f695f51ea869120eda2a950ab4d9fdd5cc34577c40cb725b9f90d31",
+        "summary": "Active DatasetStore revision."
+      },
+      {
+        "dataset_id": "ds_29727f7d1df34e46a35b8f095c82a097",
+        "dataset_revision": 0,
+        "evidence_id": "overview:ds_29727f7d1df34e46a35b8f095c82a097:r0",
+        "kind": "overview_profile",
+        "source_fingerprint": "c44eddb50f695f51ea869120eda2a950ab4d9fdd5cc34577c40cb725b9f90d31",
+        "summary": "Overview profile: 3 rows, 2 columns, health 94/100."
+      },
+      {
+        "dataset_id": "ds_29727f7d1df34e46a35b8f095c82a097",
+        "dataset_revision": 0,
+        "evidence_id": "sql:run_e7cae281f8224eb8aff313eb77ad3929",
+        "kind": "tool_output",
+        "source_fingerprint": "c44eddb50f695f51ea869120eda2a950ab4d9fdd5cc34577c40cb725b9f90d31",
+        "summary": "SQL Lab aggregate: 2 recorded result rows."
+      }
+    ],
+    "plan": {
+      "created_at": "2026-09-28T09:20:46.807166Z",
+      "dataset_id": "ds_29727f7d1df34e46a35b8f095c82a097",
+      "objective": "Sum revenue by region using SQL",
+      "plan_id": "plan_3120849669d6498cb357fe6a9056902a",
+      "provider": "deterministic",
+      "state": "completed",
+      "steps": [
+        {
+          "attempts": 1,
+          "dependencies": [],
+          "error": null,
+          "evidence": [
+            {
+              "dataset_id": "ds_29727f7d1df34e46a35b8f095c82a097",
+              "dataset_revision": 0,
+              "evidence_id": "dataset:ds_29727f7d1df34e46a35b8f095c82a097:r0",
+              "kind": "dataset_revision",
+              "source_fingerprint": "c44eddb50f695f51ea869120eda2a950ab4d9fdd5cc34577c40cb725b9f90d31",
+              "summary": "Active DatasetStore revision."
+            },
+            {
+              "dataset_id": "ds_29727f7d1df34e46a35b8f095c82a097",
+              "dataset_revision": 0,
+              "evidence_id": "overview:ds_29727f7d1df34e46a35b8f095c82a097:r0",
+              "kind": "overview_profile",
+              "source_fingerprint": "c44eddb50f695f51ea869120eda2a950ab4d9fdd5cc34577c40cb725b9f90d31",
+              "summary": "Overview profile: 3 rows, 2 columns, health 94/100."
+            }
+          ],
+          "expected_evidence": [
+            "dataset_revision",
+            "overview_profile"
+          ],
+          "kind": "profile_dataset",
+          "max_attempts": 3,
+          "rationale": "Establish schema, quality, and revision evidence before choosing a method.",
+          "requires_approval": false,
+          "specialist": "scout",
+          "state": "completed",
+          "step_id": "profile",
+          "title": "Profile the active dataset",
+          "tool_args": {},
+          "tool_name": "overview.profile"
+        },
+        {
+          "attempts": 1,
+          "dependencies": [
+            "profile"
+          ],
+          "error": null,
+          "evidence": [
+            {
+              "dataset_id": "ds_29727f7d1df34e46a35b8f095c82a097",
+              "dataset_revision": 0,
+              "evidence_id": "sql:run_e7cae281f8224eb8aff313eb77ad3929",
+              "kind": "tool_output",
+              "source_fingerprint": "c44eddb50f695f51ea869120eda2a950ab4d9fdd5cc34577c40cb725b9f90d31",
+              "summary": "SQL Lab aggregate: 2 recorded result rows."
+            }
+          ],
+          "expected_evidence": [
+            "dataset_revision",
+            "tool_output"
+          ],
+          "kind": "sql_question",
+          "max_attempts": 3,
+          "rationale": "A named SQL Lab connection and reviewed query are required before SQL can execute.",
+          "requires_approval": false,
+          "specialist": "query",
+          "state": "completed",
+          "step_id": "sql_question",
+          "title": "A named SQL Lab connection and reviewed query are required before SQL can execute",
+          "tool_args": {
+            "aggregate": "sum",
+            "filter_column": null,
+            "filter_value": null,
+            "group_by": "region",
+            "measure": "revenue"
+          },
+          "tool_name": "sql_lab.local_aggregate"
+        },
+        {
+          "attempts": 1,
+          "dependencies": [
+            "profile",
+            "sql_question"
+          ],
+          "error": null,
+          "evidence": [
+            {
+              "dataset_id": "ds_29727f7d1df34e46a35b8f095c82a097",
+              "dataset_revision": 0,
+              "evidence_id": "dataset:ds_29727f7d1df34e46a35b8f095c82a097:r0",
+              "kind": "dataset_revision",
+              "source_fingerprint": "c44eddb50f695f51ea869120eda2a950ab4d9fdd5cc34577c40cb725b9f90d31",
+              "summary": "Active DatasetStore revision."
+            },
+            {
+              "dataset_id": "ds_29727f7d1df34e46a35b8f095c82a097",
+              "dataset_revision": 0,
+              "evidence_id": "overview:ds_29727f7d1df34e46a35b8f095c82a097:r0",
+              "kind": "overview_profile",
+              "source_fingerprint": "c44eddb50f695f51ea869120eda2a950ab4d9fdd5cc34577c40cb725b9f90d31",
+              "summary": "Overview profile: 3 rows, 2 columns, health 94/100."
+            }
+          ],
+          "expected_evidence": [
+            "dataset_revision",
+            "tool_output"
+          ],
+          "kind": "audit_evidence",
+          "max_attempts": 3,
+          "rationale": "Verify that every visible claim is grounded in stored run evidence.",
+          "requires_approval": false,
+          "specialist": "auditor",
+          "state": "completed",
+          "step_id": "audit",
+          "title": "Audit evidence and limits",
+          "tool_args": {},
+          "tool_name": "atlas.evidence_audit"
+        }
+      ]
+    },
+    "run_id": "atlas_43873983d90e4c39927bc37ba4245afd",
+    "uncertainty": "The SQL aggregate is descriptive and bounded to 100 result rows; it does not establish causality or statistical significance.",
+    "updated_at": "2026-09-28T09:20:47.259677Z"
+  },
+  "run_id": "atlas_43873983d90e4c39927bc37ba4245afd"
+}

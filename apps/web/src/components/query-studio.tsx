@@ -10,7 +10,7 @@ import { QueryEditor } from "./query-editor";
 type StudioState = "loading" | "empty" | "ready" | "running" | "degraded" | "error";
 type ResultTab = "results" | "plan" | "history";
 
-export function QueryStudio({ onSelectContext, initialSql, onUseAsEvidence }: { onSelectContext(state: InspectorObjectState): void; initialSql?: string; onUseAsEvidence?(runId: string): void }) {
+export function QueryStudio({ onSelectContext, initialSql, initialParameters, initialConnectionId, onUseAsEvidence }: { onSelectContext(state: InspectorObjectState): void; initialSql?: string; initialParameters?: Record<string, unknown>; initialConnectionId?: string; onUseAsEvidence?(runId: string): void }) {
   const [state, setState] = useState<StudioState>("loading");
   const [connections, setConnections] = useState<SqlConnectionSummary[]>([]);
   const [connectionId, setConnectionId] = useState("");
@@ -27,6 +27,7 @@ export function QueryStudio({ onSelectContext, initialSql, onUseAsEvidence }: { 
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => { if (initialSql) setSql(initialSql); }, [initialSql]);
+  useEffect(() => { if (initialParameters) setParametersText(JSON.stringify(initialParameters)); }, [initialParameters]);
 
   const activeConnection = useMemo(() => connections.find((item) => item.connection_id === connectionId) ?? null, [connectionId, connections]);
   const readyConnections = useMemo(() => connections.filter((item) => item.status === "ready"), [connections]);
@@ -38,13 +39,13 @@ export function QueryStudio({ onSelectContext, initialSql, onUseAsEvidence }: { 
       if (!response.ok) throw new Error("SQL source metadata is unavailable.");
       const next = await response.json() as SqlConnectionSummary[];
       setConnections(next); setSnippets(await loadJson<SqlSnippet[]>("/api/v1/sql-lab/snippets"));
-      const first = next.find((item) => item.status === "ready") ?? null;
+      const first = next.find((item) => item.status === "ready" && item.connection_id === initialConnectionId) ?? next.find((item) => item.status === "ready") ?? null;
       if (!first) { setState("empty"); return; }
       setConnectionId(first.connection_id); setState("ready");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "SQL Lab could not reach the PRISM API."); setState("error");
     }
-  }, []);
+  }, [initialConnectionId]);
 
   useEffect(() => { void loadConnections(); }, [loadConnections]);
   useEffect(() => {

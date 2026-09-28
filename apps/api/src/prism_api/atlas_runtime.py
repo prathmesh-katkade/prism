@@ -33,6 +33,7 @@ from prism_api_contracts import (
     AtlasRunResponse,
     AtlasSpecialistId,
     AtlasSpecialistIdentity,
+    AtlasSqlAnalysis,
     AtlasStepKind,
     AtlasStepState,
     AtlasStructuredPlan,
@@ -44,6 +45,7 @@ from prism_api_contracts import (
 
 from .atlas_candidate_runtime import resolve_deep_ollama_model
 from .atlas_deep_refinement_store import DurableAtlasDeepRefinementStore
+from .atlas_execution_policy import current_policy
 from .atlas_guardrail_context import evaluate_request
 from .atlas_run_admission import AtlasRunAdmission
 from .atlas_safety_policy import OPERATIONAL_SAFETY_POLICY
@@ -90,24 +92,19 @@ SPECIALISTS: tuple[AtlasSpecialistIdentity, ...] = (
         role="Data quality and cleaning readiness",
     ),
     AtlasSpecialistIdentity(
+        specialist=AtlasSpecialistId.QUERY,
+        display_name="Query",
+        role="Schema-validated SQL execution and recorded query results",
+    ),
+    AtlasSpecialistIdentity(
         specialist=AtlasSpecialistId.STAT,
         display_name="Stat",
         role="Statistical methodology and experiment review",
     ),
     AtlasSpecialistIdentity(
-        specialist=AtlasSpecialistId.RESEARCHER,
-        display_name="Researcher",
-        role="Citation-backed, allowlisted public-web retrieval",
-    ),
-    AtlasSpecialistIdentity(
-        specialist=AtlasSpecialistId.LIBRARIAN,
-        display_name="Librarian",
-        role="Project knowledge and durable memory retrieval",
-    ),
-    AtlasSpecialistIdentity(
         specialist=AtlasSpecialistId.AUDITOR,
         display_name="Auditor",
-        role="Independent evidence and methodology verifier",
+        role="Deterministic evidence checks and recorded objections",
     ),
 )
 
@@ -267,6 +264,7 @@ TOOL_REGISTRY: dict[str, set[AtlasStepKind]] = {
     "atlas.methodology_review": {AtlasStepKind.METHODOLOGY_REVIEW},
     "atlas.evidence_audit": {AtlasStepKind.AUDIT_EVIDENCE},
     "sql_lab.review_required": {AtlasStepKind.SQL_QUESTION},
+    "sql_lab.local_aggregate": {AtlasStepKind.SQL_QUESTION},
     "stats.declared_analysis_required": {AtlasStepKind.STATISTICAL_ANALYSIS},
     "forecast.declared_time_column_required": {AtlasStepKind.FORECAST},
     "ml.declared_target_required": {AtlasStepKind.MACHINE_LEARNING},
@@ -280,6 +278,7 @@ EXECUTABLE_TOOLS = {
     "overview.quality_review",
     "atlas.methodology_review",
     "atlas.evidence_audit",
+    "sql_lab.local_aggregate",
 }
 
 # _validated_proposal (below) always rejects a model-proposed step of either
@@ -300,7 +299,7 @@ def _build_allowed_step_pairs() -> tuple[tuple[str, str], ...]:
         (kind.value, tool_name)
         for tool_name, kinds in TOOL_REGISTRY.items()
         for kind in kinds
-        if kind not in _EXCLUDED_PROPOSAL_KINDS
+        if kind not in _EXCLUDED_PROPOSAL_KINDS and tool_name != "sql_lab.local_aggregate"
     ]
     return tuple(sorted(pairs))
 
@@ -389,37 +388,37 @@ class DynamicAtlasPlanner:
         ),
         "forecast": (
             AtlasStepKind.FORECAST,
-            AtlasSpecialistId.ORACLE,
+            AtlasSpecialistId.ATLAS,
             "forecast.declared_time_column_required",
             "Forecasting requires an explicit time column and horizon.",
         ),
         "classif": (
             AtlasStepKind.MACHINE_LEARNING,
-            AtlasSpecialistId.FORGE,
+            AtlasSpecialistId.ATLAS,
             "ml.declared_target_required",
             "Modeling requires an explicit outcome/target and evaluation design.",
         ),
         "regression": (
             AtlasStepKind.MACHINE_LEARNING,
-            AtlasSpecialistId.FORGE,
+            AtlasSpecialistId.ATLAS,
             "ml.declared_target_required",
             "Modeling requires an explicit outcome/target and evaluation design.",
         ),
         "machine learning": (
             AtlasStepKind.MACHINE_LEARNING,
-            AtlasSpecialistId.FORGE,
+            AtlasSpecialistId.ATLAS,
             "ml.declared_target_required",
             "Modeling requires an explicit outcome/target and evaluation design.",
         ),
         "visual": (
             AtlasStepKind.VISUALIZATION,
-            AtlasSpecialistId.LENS,
+            AtlasSpecialistId.ATLAS,
             "visualize.declared_spec_required",
             "Visualization requires a declared analytical question and chart specification.",
         ),
         "chart": (
             AtlasStepKind.VISUALIZATION,
-            AtlasSpecialistId.LENS,
+            AtlasSpecialistId.ATLAS,
             "visualize.declared_spec_required",
             "Visualization requires a declared analytical question and chart specification.",
         ),
@@ -437,19 +436,19 @@ class DynamicAtlasPlanner:
         ),
         "python": (
             AtlasStepKind.PYTHON_ANALYSIS,
-            AtlasSpecialistId.FORGE,
+            AtlasSpecialistId.ATLAS,
             "atlas.sandbox.approved_request_required",
             "Custom Python requires a separately approved, constrained sandbox request.",
         ),
         "research": (
             AtlasStepKind.RESEARCH,
-            AtlasSpecialistId.RESEARCHER,
+            AtlasSpecialistId.ATLAS,
             "research.allowlisted_source_required",
             "Research requires a specific allowlisted HTTPS source and citation review.",
         ),
         "web": (
             AtlasStepKind.RESEARCH,
-            AtlasSpecialistId.RESEARCHER,
+            AtlasSpecialistId.ATLAS,
             "research.allowlisted_source_required",
             "Research requires a specific allowlisted HTTPS source and citation review.",
         ),
@@ -486,6 +485,16 @@ class DynamicAtlasPlanner:
                         expected_evidence=["declared_context", "dataset_revision"],
                     )
                 )
+        if request.sql_analysis is not None and AtlasStepKind.SQL_QUESTION not in used:
+            steps.append(AtlasPlanStep(
+                step_id=AtlasStepKind.SQL_QUESTION.value,
+                title="Run a bounded aggregate",
+                kind=AtlasStepKind.SQL_QUESTION,
+                specialist=AtlasSpecialistId.QUERY,
+                tool_name="sql_lab.local_aggregate",
+                rationale="Execute a typed, schema-validated aggregate over the uploaded dataset.",
+                dependencies=["profile"], expected_evidence=["dataset_revision", "tool_output"],
+            ))
         if (
             any(
                 word in objective
@@ -525,6 +534,7 @@ class DynamicAtlasPlanner:
             created_at=datetime.now(timezone.utc),
             steps=steps,
         )
+        requested_sql_step = next((step for step in steps if step.kind is AtlasStepKind.SQL_QUESTION), None)
         if proposal:
             proposed = self._validated_proposal(proposal)
             if proposed:
@@ -532,6 +542,22 @@ class DynamicAtlasPlanner:
                 # skeleton; malformed or hallucinated declarations are discarded.
                 steps = [steps[0], *proposed, steps[-1].model_copy(update={"dependencies": [item.step_id for item in [steps[0], *proposed]]})]
                 plan = plan.model_copy(update={"steps": steps})
+        if request.sql_analysis is not None:
+            if not any(step.kind is AtlasStepKind.SQL_QUESTION for step in plan.steps):
+                assert requested_sql_step is not None
+                sql_step = requested_sql_step
+                plan = plan.model_copy(update={"steps": [
+                    *plan.steps[:-1], sql_step,
+                    plan.steps[-1].model_copy(update={"dependencies": [*plan.steps[-1].dependencies, sql_step.step_id]}),
+                ]})
+            plan = plan.model_copy(update={"steps": [
+                step.model_copy(update={
+                    "tool_name": "sql_lab.local_aggregate",
+                    "tool_args": request.sql_analysis.model_dump(mode="json"),
+                    "expected_evidence": ["dataset_revision", "tool_output"],
+                }) if step.kind is AtlasStepKind.SQL_QUESTION else step
+                for step in plan.steps
+            ]})
         self.validate(plan)
         return plan
 
@@ -542,12 +568,12 @@ class DynamicAtlasPlanner:
             AtlasStepKind.SQL_QUESTION: AtlasSpecialistId.QUERY,
             AtlasStepKind.METHODOLOGY_REVIEW: AtlasSpecialistId.STAT,
             AtlasStepKind.STATISTICAL_ANALYSIS: AtlasSpecialistId.STAT,
-            AtlasStepKind.FORECAST: AtlasSpecialistId.ORACLE,
-            AtlasStepKind.MACHINE_LEARNING: AtlasSpecialistId.FORGE,
-            AtlasStepKind.VISUALIZATION: AtlasSpecialistId.LENS,
+            AtlasStepKind.FORECAST: AtlasSpecialistId.ATLAS,
+            AtlasStepKind.MACHINE_LEARNING: AtlasSpecialistId.ATLAS,
+            AtlasStepKind.VISUALIZATION: AtlasSpecialistId.ATLAS,
             AtlasStepKind.EXPLAIN_HISTORY: AtlasSpecialistId.AUDITOR,
-            AtlasStepKind.PYTHON_ANALYSIS: AtlasSpecialistId.FORGE,
-            AtlasStepKind.RESEARCH: AtlasSpecialistId.RESEARCHER,
+            AtlasStepKind.PYTHON_ANALYSIS: AtlasSpecialistId.ATLAS,
+            AtlasStepKind.RESEARCH: AtlasSpecialistId.ATLAS,
             AtlasStepKind.AUDIT_EVIDENCE: AtlasSpecialistId.AUDITOR,
         }
         accepted: list[AtlasPlanStep] = []
@@ -555,7 +581,7 @@ class DynamicAtlasPlanner:
             try:
                 kind = AtlasStepKind(str(item["kind"]))
                 tool = str(item["tool_name"])
-                if tool not in TOOL_REGISTRY or kind not in TOOL_REGISTRY[tool] or kind in {AtlasStepKind.PROFILE_DATASET, AtlasStepKind.AUDIT_EVIDENCE}:
+                if tool not in TOOL_REGISTRY or kind not in TOOL_REGISTRY[tool] or tool == "sql_lab.local_aggregate" or kind in {AtlasStepKind.PROFILE_DATASET, AtlasStepKind.AUDIT_EVIDENCE}:
                     continue
                 accepted.append(AtlasPlanStep(step_id=f"model_{kind.value}", title=str(item.get("title", kind.value))[:240], kind=kind, specialist=specialists[kind], tool_name=tool, rationale=str(item.get("rationale", "Provider proposal validated against Atlas tool registry."))[:1000], dependencies=["profile"], expected_evidence=["declared_context", "dataset_revision"]))
             except (KeyError, ValueError, TypeError):
@@ -665,6 +691,7 @@ class AtlasRunStore:
                     "prompt_schema_version": "atlas-plan-v1",
                     "raw_dataset_sent": False,
                     "guardrail_decision": guardrail.metadata(),
+                    "execution_policy_version": current_policy().version,
                     "model_proposal": model_proposal,
                     "model_proposal_steps_accepted": model_proposal_steps_accepted,
                 },
@@ -1109,6 +1136,7 @@ def _complete_step(
     step: AtlasPlanStep,
     evidence: list[AtlasEvidenceReference],
     conclusion: AtlasCouncilConclusion,
+    output: Optional[dict[str, object]] = None,
 ) -> None:
     run = _replace_step(runs.get(run_id), step.step_id, AtlasStepState.COMPLETED, evidence=evidence)
     run = run.model_copy(
@@ -1123,7 +1151,7 @@ def _complete_step(
         AtlasRunEventType.STEP_COMPLETED,
         specialist=step.specialist,
         step_id=step.step_id,
-        payload={"evidence_ids": [item.evidence_id for item in evidence]},
+        payload={"evidence_ids": [item.evidence_id for item in evidence], **({"output": output} if output else {})},
     )
     runs.append_event(
         run_id,
@@ -1192,6 +1220,14 @@ def execute(run_id: str) -> None:
             if runs.cancelled(run_id):
                 _cancel_run(run_id)
                 return
+            policy = current_policy()
+            if not policy.permits(step.tool_name):
+                reason = f"Tool {step.tool_name} is disabled by execution policy {policy.version}."
+                runs.update(_replace_step(runs.get(run_id), step.step_id, AtlasStepState.BLOCKED, error=reason))
+                runs.append_event(run_id, AtlasRunEventType.STEP_COMPLETED,
+                                  specialist=step.specialist, step_id=step.step_id,
+                                  payload={"state": "blocked", "reason": reason, "policy_version": policy.version})
+                continue
             current = _replace_step(runs.get(run_id), step.step_id, AtlasStepState.RUNNING)
             runs.update(current)
             runs.append_event(
@@ -1199,7 +1235,7 @@ def execute(run_id: str) -> None:
                 AtlasRunEventType.STEP_STARTED,
                 specialist=step.specialist,
                 step_id=step.step_id,
-                payload={"tool": step.tool_name},
+                payload={"tool": step.tool_name, "policy_version": policy.version},
             )
             if step.tool_name not in EXECUTABLE_TOOLS:
                 reason = _blocked_reason(step.kind)
@@ -1215,6 +1251,55 @@ def execute(run_id: str) -> None:
                     step_id=step.step_id,
                     payload={"state": "blocked", "reason": reason},
                 )
+                continue
+            if step.tool_name == "sql_lab.local_aggregate":
+                from .atlas_sql_adapter import execute_aggregate
+
+                def should_stop_sql(tool_name: str = step.tool_name) -> bool:
+                    return runs.cancelled(run_id) or not current_policy().permits(tool_name)
+
+                try:
+                    output = execute_aggregate(
+                        run_id, step.step_id, current.plan.dataset_id,
+                        AtlasSqlAnalysis.model_validate(step.tool_args),
+                        should_stop_sql,
+                    )
+                except (ValueError, RuntimeError, TimeoutError) as error:
+                    reason = str(error)[:1000]
+                    runs.update(_replace_step(runs.get(run_id), step.step_id, AtlasStepState.BLOCKED, error=reason))
+                    runs.append_event(run_id, AtlasRunEventType.STEP_COMPLETED,
+                                      specialist=step.specialist, step_id=step.step_id,
+                                      payload={"state": "blocked", "reason": reason})
+                    continue
+                if output["execution_state"] != "succeeded":
+                    reason = f"SQL {output['execution_state']}: {output['error'] or 'no result'}"[:1000]
+                    runs.update(_replace_step(runs.get(run_id), step.step_id, AtlasStepState.BLOCKED, error=reason))
+                    runs.append_event(run_id, AtlasRunEventType.STEP_COMPLETED,
+                                      specialist=step.specialist, step_id=step.step_id,
+                                      payload={"state": "blocked", "reason": reason, "output": output})
+                    if runs.cancelled(run_id):
+                        _cancel_run(run_id)
+                        return
+                    continue
+                if runs.cancelled(run_id):
+                    runs.append_event(run_id, AtlasRunEventType.STEP_COMPLETED,
+                                      specialist=step.specialist, step_id=step.step_id,
+                                      payload={"state": "cancelled", "output": output})
+                    _cancel_run(run_id)
+                    return
+                evidence = [AtlasEvidenceReference(
+                    evidence_id=f"sql:{output['sql_run_id']}", kind="tool_output",
+                    summary=f"SQL Lab aggregate: {len(cast(list[object], output['rows']))} recorded result rows.",
+                    dataset_id=current.plan.dataset_id,
+                    dataset_revision=cast(int, output["dataset_revision"]),
+                    source_fingerprint=cast(str, output["source_fingerprint"]),
+                )]
+                conclusion = AtlasCouncilConclusion(
+                    specialist=AtlasSpecialistId.QUERY,
+                    conclusion=f"Executed the recorded aggregate in SQL Lab; {len(cast(list[object], output['rows']))} result rows. Inspect evidence {evidence[0].evidence_id} for the exact query and bounded values.",
+                    confidence="high", evidence=evidence,
+                )
+                _complete_step(run_id, step, evidence, conclusion, output=output)
                 continue
             profile = get_profile(current.plan.dataset_id)
             evidence = _evidence(
@@ -1270,6 +1355,12 @@ def execute(run_id: str) -> None:
         ]
         answer = f"Atlas completed a deterministic first-pass assessment of {profile.dataset.source_name}: {profile.quality.n_rows:,} rows × {profile.quality.n_cols} columns, health {profile.health.total}/100, and {profile.quality.total_missing_pct:.2f}% missing cells."
         uncertainty = "This is a profile and methodology review, not a causal conclusion, statistical result, or trained model."
+        sql_outputs = [event.payload.get("output") for event in finished.events
+                       if event.type is AtlasRunEventType.STEP_COMPLETED and isinstance(event.payload.get("output"), dict)]
+        if sql_outputs:
+            sql_output = cast(dict[str, object], sql_outputs[-1])
+            answer += f" Recorded SQL result {sql_output['sql_run_id']}: {json.dumps(sql_output['rows'], default=str)[:2000]}. Evidence sql:{sql_output['sql_run_id']}."
+            uncertainty = "The SQL aggregate is descriptive and bounded to 100 result rows; it does not establish causality or statistical significance."
         if isinstance(guard, dict) and guard.get("evidence"):
             answer += " Evidence arbitration: " + json.dumps(guard["evidence"], sort_keys=True)
         if blocked:

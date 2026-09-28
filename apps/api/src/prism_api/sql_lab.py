@@ -17,7 +17,7 @@ from threading import RLock
 from typing import Any, cast
 
 import pandas as pd
-from fastapi import APIRouter, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from prism_api_contracts import (
     AtlasEvidence,
     AtlasSqlAction,
@@ -58,12 +58,13 @@ from prism_sql_lab_runtime import (
 )
 
 from .analytical_objects import register_query_result
+from .atlas_authorization import require_local_owner
 from .overview import StoredDataset
 from .overview import store as overview_store
 from .sql_jobs import QueryJob, runtime
 from .transport import ServerSentEvent, sse_response
 
-router = APIRouter(prefix="/api/v1/sql-lab", tags=["sql-lab"])
+router = APIRouter(prefix="/api/v1/sql-lab", tags=["sql-lab"], dependencies=[Depends(require_local_owner)])
 RESULT_PAGE_LIMIT = 1_000
 
 
