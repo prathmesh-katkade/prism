@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { AtlasRunEvent, AtlasRunResponse, OverviewProfileResponse } from "@prism/api-contracts";
+import type { AtlasRunEvent, AtlasRunResponse, OverviewDataset, OverviewProfileResponse } from "@prism/api-contracts";
 import { apiUrl } from "../config/api";
 import type { InspectorObjectState } from "../state/shell-model";
 
@@ -63,6 +63,13 @@ export function AtlasInvestigation({ datasetId, initialRunId, onSelectContext, o
   const [aggregate, setAggregate] = useState<"none" | "count" | "sum" | "avg" | "min" | "max">("none");
   const [measure, setMeasure] = useState("");
   const [groupBy, setGroupBy] = useState("");
+  const [groupSource, setGroupSource] = useState<"data" | "joined">("data");
+  const [registeredSources, setRegisteredSources] = useState<OverviewDataset[]>([]);
+  const [joinDatasetId, setJoinDatasetId] = useState("");
+  const [joinColumns, setJoinColumns] = useState<string[]>([]);
+  const [joinLeftKey, setJoinLeftKey] = useState("");
+  const [joinRightKey, setJoinRightKey] = useState("");
+  const [joinCardinality, setJoinCardinality] = useState<"" | "many_to_one" | "one_to_one">("");
   const [statMethod, setStatMethod] = useState<"" | "ttest" | "anova" | "chi2" | "pearson">("");
   const [statColumnA, setStatColumnA] = useState("");
   const [statColumnB, setStatColumnB] = useState("");
@@ -78,6 +85,26 @@ export function AtlasInvestigation({ datasetId, initialRunId, onSelectContext, o
       .catch(() => { if (active) setColumns([]); });
     return () => { active = false; };
   }, [datasetId]);
+
+  useEffect(() => {
+    if (!datasetId) { setRegisteredSources([]); return; }
+    let active = true;
+    fetch(apiUrl("/api/v1/overview/datasets"))
+      .then((response) => response.ok ? response.json() as Promise<OverviewDataset[]> : [])
+      .then((sources) => { if (active) setRegisteredSources(sources.filter((source) => source.dataset_id !== datasetId)); })
+      .catch(() => { if (active) setRegisteredSources([]); });
+    return () => { active = false; };
+  }, [datasetId]);
+
+  useEffect(() => {
+    if (!joinDatasetId) { setJoinColumns([]); return; }
+    let active = true;
+    fetch(apiUrl(`/api/v1/overview/datasets/${encodeURIComponent(joinDatasetId)}/profile`))
+      .then((response) => response.ok ? response.json() as Promise<OverviewProfileResponse> : null)
+      .then((profile) => { if (active) setJoinColumns(profile?.columns.map((column) => column.name) ?? []); })
+      .catch(() => { if (active) setJoinColumns([]); });
+    return () => { active = false; };
+  }, [joinDatasetId]);
 
   useEffect(() => {
     if (!initialRunId) return;
@@ -129,7 +156,11 @@ export function AtlasInvestigation({ datasetId, initialRunId, onSelectContext, o
     if (!datasetId || !objective.trim() || starting) return;
     setStarting(true); setError(null); setSample(false); setRun(null); setNotes([]);
     try {
-      const sql_analysis = aggregate === "none" ? undefined : { aggregate, ...(aggregate === "count" ? {} : { measure }), ...(groupBy ? { group_by: groupBy } : {}) };
+      const sql_analysis = aggregate === "none" ? undefined : { aggregate, ...(aggregate === "count" ? {} : { measure }),
+        ...(groupBy ? { group_by: groupBy, group_source: groupSource } : {}),
+        ...(joinDatasetId ? { join_dataset_id: joinDatasetId, join_left_key: joinLeftKey,
+          join_right_key: joinRightKey, join_cardinality: joinCardinality } : {}),
+      };
       const response = await fetch(apiUrl("/api/v1/atlas/runs"), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ dataset_id: datasetId, objective: objective.trim(), idempotency_key: crypto.randomUUID(), sql_analysis }) });
       if (!response.ok) throw new Error("Atlas did not accept the investigation.");
       const accepted = await response.json() as AtlasRunResponse;
@@ -207,13 +238,21 @@ export function AtlasInvestigation({ datasetId, initialRunId, onSelectContext, o
     {view === "activity" && (run || sample) ? <section className="atlas-section"><h2>Recorded event log</h2><p>Stepping selects an event. Historical state reconstruction is unavailable.</p>{events.length ? <><div className="atlas-replay"><button type="button" disabled={eventIndex === 0} onClick={() => setEventIndex((value) => value - 1)}>Previous event</button><span>Event {eventIndex + 1} of {events.length}</span><button type="button" disabled={eventIndex >= events.length - 1} onClick={() => setEventIndex((value) => value + 1)}>Next event</button></div><ol className="atlas-event-list">{events.map((event, index) => <li key={event.id}><button type="button" aria-current={eventIndex === index ? "step" : undefined} onClick={() => setEventIndex(index)}><span>{String(index + 1).padStart(2, "0")}</span>{event.label}</button></li>)}</ol></> : <p>No event journal entries were recorded.</p>}</section> : null}
     <form className="atlas-new-run" onSubmit={(event) => { event.preventDefault(); void start(); }}>
       <label htmlFor="atlas-objective">Investigation objective</label>
-      <div><input id="atlas-objective" value={objective} onChange={(event) => setObjective(event.target.value)} placeholder={datasetId ? "Ask about the active dataset" : "Select a dataset to begin"} disabled={!datasetId || starting} /><button type="submit" disabled={!datasetId || !objective.trim() || starting || (aggregate !== "none" && aggregate !== "count" && !measure)}>{starting ? "Starting…" : "Run investigation"}</button></div>
+      <div><input id="atlas-objective" value={objective} onChange={(event) => setObjective(event.target.value)} placeholder={datasetId ? "Ask about the active dataset" : "Select a dataset to begin"} disabled={!datasetId || starting} /><button type="submit" disabled={!datasetId || !objective.trim() || starting || (aggregate !== "none" && aggregate !== "count" && !measure) || Boolean(joinDatasetId && (!joinLeftKey || !joinRightKey || !joinCardinality))}>{starting ? "Starting…" : "Run investigation"}</button></div>
       <label htmlFor="atlas-aggregate">Optional SQL aggregate</label>
       <select id="atlas-aggregate" value={aggregate} onChange={(event) => setAggregate(event.target.value as typeof aggregate)} disabled={!datasetId || starting}>
         <option value="none">No SQL calculation</option><option value="count">Count rows</option><option value="sum">Sum</option><option value="avg">Average</option><option value="min">Minimum</option><option value="max">Maximum</option>
       </select>
       {aggregate !== "none" && aggregate !== "count" ? <><label htmlFor="atlas-measure">Measure column</label><select id="atlas-measure" value={measure} onChange={(event) => setMeasure(event.target.value)}><option value="">Choose a column</option>{columns.map((column) => <option key={column} value={column}>{column}</option>)}</select></> : null}
-      {aggregate !== "none" ? <><label htmlFor="atlas-group">Group by column</label><select id="atlas-group" value={groupBy} onChange={(event) => setGroupBy(event.target.value)}><option value="">All rows</option>{columns.map((column) => <option key={column} value={column}>{column}</option>)}</select><p>Atlas will execute this bounded aggregate through SQL Lab and record the exact query.</p></> : null}
+      {aggregate !== "none" ? <>
+        <label htmlFor="atlas-join-source">Optional registered join source</label>
+        <select id="atlas-join-source" value={joinDatasetId} onChange={(event) => { setJoinDatasetId(event.target.value); setJoinRightKey(""); setGroupBy(""); setGroupSource("data"); }}><option value="">Single uploaded dataset</option>{registeredSources.map((source) => <option key={source.dataset_id} value={source.dataset_id}>{source.source_name} · revision {source.revision}</option>)}</select>
+        {joinDatasetId ? <><label htmlFor="atlas-join-left">Active dataset key</label><select id="atlas-join-left" value={joinLeftKey} onChange={(event) => setJoinLeftKey(event.target.value)}><option value="">Choose a key</option>{columns.map((column) => <option key={column} value={column}>{column}</option>)}</select>
+          <label htmlFor="atlas-join-right">Joined dataset key</label><select id="atlas-join-right" value={joinRightKey} onChange={(event) => setJoinRightKey(event.target.value)}><option value="">Choose a key</option>{joinColumns.map((column) => <option key={column} value={column}>{column}</option>)}</select>
+          <label htmlFor="atlas-join-cardinality">Declared join cardinality</label><select id="atlas-join-cardinality" value={joinCardinality} onChange={(event) => setJoinCardinality(event.target.value as typeof joinCardinality)}><option value="">Choose cardinality</option><option value="many_to_one">Many left rows to one right row</option><option value="one_to_one">One to one</option></select>
+          <p>The server verifies that the joined key is unique before summing active-dataset measures. Only inner joins are available.</p></> : null}
+        <label htmlFor="atlas-group-source">Group source</label><select id="atlas-group-source" value={groupSource} onChange={(event) => { setGroupSource(event.target.value as typeof groupSource); setGroupBy(""); }}><option value="data">Active dataset</option>{joinDatasetId ? <option value="joined">Joined dataset</option> : null}</select>
+        <label htmlFor="atlas-group">Group by column</label><select id="atlas-group" value={groupBy} onChange={(event) => setGroupBy(event.target.value)}><option value="">All rows</option>{(groupSource === "data" ? columns : joinColumns).map((column) => <option key={column} value={column}>{column}</option>)}</select><p>Atlas will execute this bounded aggregate through SQL Lab and record the exact query.</p></> : null}
       {error ? <p role="alert">{error}</p> : null}
     </form>
   </section>;

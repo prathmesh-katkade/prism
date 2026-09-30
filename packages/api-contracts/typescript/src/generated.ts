@@ -1007,6 +1007,11 @@ export interface AtlasSqlAnalysis {
   group_by?: string;
   filter_column?: string;
   filter_value?: string | number | boolean;
+  join_dataset_id?: string;
+  join_left_key?: string;
+  join_right_key?: string;
+  join_cardinality?: "many_to_one" | "one_to_one";
+  group_source?: "data" | "joined";
 }
 
 export interface AtlasSqlRequest {

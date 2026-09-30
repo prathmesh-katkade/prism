@@ -115,6 +115,7 @@ def execute_local_query(
     timeout_ms: int = 30_000,
     on_connection: Optional[Callable[[Any], object]] = None,
     max_result_rows: Optional[int] = None,
+    additional_frames: Optional[dict[str, pd.DataFrame]] = None,
 ) -> tuple[pd.DataFrame | None, str | None, int]:
     """Execute against a short-lived DuckDB connection, preserving legacy table name `data`."""
     started = time.perf_counter()
@@ -134,6 +135,10 @@ def execute_local_query(
             if bool(on_connection(connection.interrupt)):
                 return None, "Query cancelled before execution.", int((time.perf_counter() - started) * 1000)
         connection.register("data", frame)
+        for table_name, extra_frame in (additional_frames or {}).items():
+            if table_name != "joined":
+                return None, "Unregistered local table name.", int((time.perf_counter() - started) * 1000)
+            connection.register(table_name, extra_frame)
         # DuckDB does not expose a portable statement timeout setting. The API records this
         # limitation and applies its timeout policy at the job boundary instead.
         executable_sql = sql

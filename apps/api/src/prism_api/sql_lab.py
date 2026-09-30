@@ -7,6 +7,7 @@ import hashlib
 import json
 import math
 import os
+import re
 import sqlite3
 import uuid
 from collections.abc import AsyncIterator
@@ -79,6 +80,7 @@ class StoredRun:
 class ConnectionTarget:
     connection: SqlConnectionSummary
     dataset: StoredDataset | None = None
+    secondary_dataset: StoredDataset | None = None
     sqlite_path: Path | None = None
     external_source: ExternalSource | None = field(default=None, repr=False)
 
@@ -335,6 +337,21 @@ def _unavailable_connections(configured: set[SqlSourceType]) -> list[SqlConnecti
 
 
 def _connection(connection_id: str) -> ConnectionTarget:
+    if connection_id.startswith("localjoin:"):
+        parts = connection_id.split(":")
+        if len(parts) != 3 or not all(re.fullmatch(r"ds_[0-9a-f]{32}", part) for part in parts[1:]) or parts[1] == parts[2]:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="SQL Lab join source was not found.")
+        left = overview_store.get(parts[1])
+        right = overview_store.get(parts[2])
+        connection = _local_connection(left).model_copy(update={
+            "connection_id": connection_id,
+            "label": f"{left.dataset.source_name} + {right.dataset.source_name} · local join",
+            "source_fingerprint": _fingerprint({
+                "left": [left.dataset.dataset_id, left.dataset.revision, left.source_fingerprint],
+                "right": [right.dataset.dataset_id, right.dataset.revision, right.source_fingerprint],
+            }),
+        })
+        return ConnectionTarget(connection=connection, dataset=left, secondary_dataset=right)
     if connection_id.startswith("local:"):
         dataset_id = connection_id.removeprefix("local:")
         if not dataset_id:
@@ -393,8 +410,19 @@ def _schema(target: ConnectionTarget) -> SqlSchemaResponse:
         )
         for column in schema_for_frame(target.dataset.frame)
     ]
-    fingerprint = _fingerprint({"source": target.dataset.source_fingerprint, "columns": [column.model_dump() for column in columns]})
-    return SqlSchemaResponse(connection=connection, tables=[SqlTable(name="data", columns=columns)], schema_fingerprint=fingerprint)
+    tables = [SqlTable(name="data", columns=columns)]
+    if target.secondary_dataset is not None:
+        tables.append(SqlTable(name="joined", columns=[
+            SqlColumn(name=str(column["name"]), data_type=str(column["data_type"]), nullable=bool(column["nullable"]),
+                      sample_count=cast(int, column["sample_count"]))
+            for column in schema_for_frame(target.secondary_dataset.frame)
+        ]))
+    fingerprint = (
+        _fingerprint({"source": connection.source_fingerprint, "tables": [table.model_dump() for table in tables]})
+        if target.secondary_dataset is not None
+        else _fingerprint({"source": target.dataset.source_fingerprint, "columns": [column.model_dump() for column in columns]})
+    )
+    return SqlSchemaResponse(connection=connection, tables=tables, schema_fingerprint=fingerprint)
 
 
 def _provenance(connection: SqlConnectionSummary, schema: SqlSchemaResponse, request: SqlRunRequest, result: pd.DataFrame | None = None) -> SqlProvenance:
@@ -460,6 +488,7 @@ def execute_query(request: SqlRunRequest) -> SqlRunResponse:
             result, error, duration_ms = execute_local_query(
                 target.dataset.frame, request.sql, request.parameters, request.timeout_ms, job.attach_interrupt,
                 max_result_rows=request.result_limit + 1,
+                additional_frames={"joined": target.secondary_dataset.frame} if target.secondary_dataset is not None else None,
             )
         elif target.sqlite_path is not None:
             result, error, duration_ms = execute_sqlite_query(
@@ -490,7 +519,10 @@ def execute_query(request: SqlRunRequest) -> SqlRunResponse:
                 "provenance": _provenance(connection, schema, request, kept),
             })
             if target.dataset is not None:
-                register_query_result(target.dataset, request, completed)
+                if target.secondary_dataset is not None:
+                    register_query_result(target.dataset, request, completed, secondary=target.secondary_dataset)
+                else:
+                    register_query_result(target.dataset, request, completed)
             # Mark a run visible as succeeded only after its immutable evidence
             # record is committed.  Otherwise a fast client can observe a
             # terminal run before lineage/history can resolve its object.

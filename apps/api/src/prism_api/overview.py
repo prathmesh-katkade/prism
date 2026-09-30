@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any, cast
 
 import pandas as pd
-from fastapi import APIRouter, File, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from prism_api_contracts import (
     AtlasEvidence,
     AtlasOverviewAction,
@@ -24,6 +24,7 @@ from prism_api_contracts import (
 )
 from prism_overview_analytics import ANALYTICS_SERVICE_VERSION, build_overview
 
+from .atlas_authorization import require_local_owner
 from .durable_dataset_store import DurableDatasetStore
 from .durable_dataset_store import StoredDataset as DurableStoredDataset
 
@@ -58,6 +59,9 @@ class DatasetStore:
         self._datasets[dataset.dataset_id] = stored
         self._history[dataset.dataset_id] = [stored]
         return dataset
+
+    def list_current(self, limit: int = 100) -> list[OverviewDataset]:
+        return [item.dataset for item in list(self._datasets.values())[-limit:][::-1]]
 
     def get(self, dataset_id: str) -> StoredDataset:
         dataset = self._datasets.get(dataset_id)
@@ -194,6 +198,11 @@ async def upload_dataset(file: UploadFile = File(...)) -> OverviewDataset:  # no
     source_name = file.filename or "uploaded-dataset.csv"
     frame = _read_upload(contents, source_name)
     return store.put(frame, source_name, hashlib.sha256(contents).hexdigest())
+
+
+@router.get("/datasets", response_model=list[OverviewDataset], dependencies=[Depends(require_local_owner)])
+def list_datasets() -> list[OverviewDataset]:
+    return store.list_current(limit=100)
 
 
 @router.get("/datasets/{dataset_id}/profile", response_model=OverviewProfileResponse)

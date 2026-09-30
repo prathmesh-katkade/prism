@@ -94,6 +94,27 @@ class DurableDatasetStore:
             connection.execute(insert(_revisions).values(dataset_id=dataset.dataset_id, revision=0, source_fingerprint=source_fingerprint, source_name=source_name, row_count=len(frame), column_count=len(frame.columns), frame_json=self._frame_json(frame), is_active=True, activated_at=datetime.now(timezone.utc)))
         return dataset
 
+    def list_current(self, limit: int = 100) -> list[OverviewDataset]:
+        """List active dataset heads without returning stored rows or abandoned revisions."""
+        with self.engine.connect() as connection:
+            rows = connection.execute(
+                select(_revisions).where(_revisions.c.is_active.is_(True))
+                .order_by(desc(_revisions.c.activated_at), desc(_revisions.c.revision))
+                .limit(max(1, limit * 4))
+            ).mappings().all()
+        heads: dict[str, OverviewDataset] = {}
+        for row in rows:
+            dataset_id = str(row["dataset_id"])
+            if dataset_id not in heads:
+                heads[dataset_id] = OverviewDataset(
+                    dataset_id=dataset_id, revision=row["revision"],
+                    source_name=row["source_name"], source_fingerprint=row["source_fingerprint"],
+                    row_count=row["row_count"], column_count=row["column_count"],
+                )
+            if len(heads) >= limit:
+                break
+        return list(heads.values())
+
     def get(self, dataset_id: str) -> StoredDataset:
         # Active rows form the retained revision branch. Its highest revision
         # is the head even when the database truncates activation timestamps

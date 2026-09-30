@@ -1144,6 +1144,11 @@ class AtlasSqlAnalysis(ContractModel):
     group_by: Optional[str] = Field(default=None, min_length=1, max_length=200)
     filter_column: Optional[str] = Field(default=None, min_length=1, max_length=200)
     filter_value: Optional[str | int | float | bool] = None
+    join_dataset_id: Optional[str] = Field(default=None, min_length=1, max_length=255)
+    join_left_key: Optional[str] = Field(default=None, min_length=1, max_length=200)
+    join_right_key: Optional[str] = Field(default=None, min_length=1, max_length=200)
+    join_cardinality: Optional[Literal["many_to_one", "one_to_one"]] = None
+    group_source: Literal["data", "joined"] = "data"
 
 
 class AtlasStatAnalysis(ContractModel):

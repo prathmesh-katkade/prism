@@ -236,6 +236,7 @@ def register_query_result(
     stored: StoredDataset,
     request: SqlRunRequest,
     response: SqlRunResponse,
+    secondary: StoredDataset | None = None,
 ) -> AnalyticalObject:
     """Record a completed native SQL Lab run against the local in-memory dataset connection.
 
@@ -249,6 +250,9 @@ def register_query_result(
     """
     producer = Producer(service="sql-lab", version=response.provenance.service_version)
     ref, parent_refs = _derived_from(stored)
+    if secondary is not None:
+        secondary_revision = ensure_dataset_revision(_dataset_ref(secondary))
+        parent_refs = [*parent_refs, ParentRef(object_id=secondary_revision.object_id, relation="derived_from")]
     record = AnalyticalObject(
         object_id=f"sql_{response.run_id}",
         kind=ObjectKind.QUERY_RESULT,

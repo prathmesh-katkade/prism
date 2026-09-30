@@ -38,6 +38,10 @@ export function QueryStudio({ onSelectContext, initialSql, initialParameters, in
       const response = await fetch(apiUrl("/api/v1/sql-lab/connections"));
       if (!response.ok) throw new Error("SQL source metadata is unavailable.");
       const next = await response.json() as SqlConnectionSummary[];
+      if (initialConnectionId?.startsWith("localjoin:") && !next.some((item) => item.connection_id === initialConnectionId)) {
+        const joined = await loadJson<SqlSchemaResponse>(`/api/v1/sql-lab/connections/${encodeURIComponent(initialConnectionId)}/schema`);
+        next.unshift(joined.connection);
+      }
       setConnections(next); setSnippets(await loadJson<SqlSnippet[]>("/api/v1/sql-lab/snippets"));
       const first = next.find((item) => item.status === "ready" && item.connection_id === initialConnectionId) ?? next.find((item) => item.status === "ready") ?? null;
       if (!first) { setState("empty"); return; }

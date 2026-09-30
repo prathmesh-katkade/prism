@@ -1471,11 +1471,20 @@ def execute(run_id: str) -> None:
                     return
                 evidence = [AtlasEvidenceReference(
                     evidence_id=f"sql:{output['sql_run_id']}", kind="tool_output",
-                    summary=f"SQL Lab aggregate: {len(cast(list[object], output['rows']))} recorded result rows.",
+                    summary=f"SQL Lab aggregate: {len(cast(list[object], output['rows']))} recorded result rows" +
+                    (f"; joined source {output['joined_dataset_id']} revision {output['joined_dataset_revision']}." if output.get("joined_dataset_id") else "."),
                     dataset_id=current.plan.dataset_id,
                     dataset_revision=cast(int, output["dataset_revision"]),
                     source_fingerprint=cast(str, output["source_fingerprint"]),
                 )]
+                if output.get("joined_dataset_id"):
+                    evidence.append(AtlasEvidenceReference(
+                        evidence_id=f"dataset:{output['joined_dataset_id']}:r{output['joined_dataset_revision']}",
+                        kind="dataset_revision", summary="Registered joined dataset revision.",
+                        dataset_id=cast(str, output["joined_dataset_id"]),
+                        dataset_revision=cast(int, output["joined_dataset_revision"]),
+                        source_fingerprint=cast(str, output["joined_source_fingerprint"]),
+                    ))
                 conclusion = AtlasCouncilConclusion(
                     specialist=AtlasSpecialistId.QUERY,
                     conclusion=f"Executed the recorded aggregate in SQL Lab; {len(cast(list[object], output['rows']))} result rows. Inspect evidence {evidence[0].evidence_id} for the exact query and bounded values.",
