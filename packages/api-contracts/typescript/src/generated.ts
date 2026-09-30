@@ -906,6 +906,7 @@ export interface AtlasRunResponse {
   council?: AtlasCouncilConclusion[];
   events?: AtlasRunEvent[];
   clarifications?: AtlasClarification[];
+  messages?: AtlasSpecialistMessage[];
   cancellation_requested?: boolean;
   created_at?: string;
   updated_at?: string;
@@ -982,6 +983,20 @@ export interface AtlasSpecialistIdentity {
   role: string;
   visible?: boolean;
   speaks_to_user?: boolean;
+}
+
+export interface AtlasSpecialistMessage {
+  message_id: string;
+  sequence: number;
+  specialist: AtlasSpecialistId;
+  task_id: string;
+  kind: "computed_observation" | "proposal" | "objection" | "resolution" | "human_note";
+  origin: "deterministic_service" | "model" | "human";
+  content: string;
+  input_refs?: string[];
+  reply_to?: string;
+  model_binding?: string;
+  occurred_at: string;
 }
 
 export type AtlasSqlAction = "explain_query" | "optimize_query" | "debug_error" | "inspect_plan" | "generate_sql" | "compare_queries" | "explain_selection" | "trace_lineage" | "convert_result";

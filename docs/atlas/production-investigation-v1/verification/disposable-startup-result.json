@@ -3,7 +3,7 @@
   "backup_sha256_before": "03bbc35cb97e84abc1a92d54a9f5fbeb3592d5b208c6d0c01d397afddfcc6afc",
   "dataset": {
     "column_count": 2,
-    "dataset_id": "ds_96969582ffd04e008740599402f30306",
+    "dataset_id": "ds_bfcd6ab6984a47a98b90406f5854ab8c",
     "revision": 0,
     "row_count": 3,
     "source_fingerprint": "c44eddb50f695f51ea869120eda2a950ab4d9fdd5cc34577c40cb725b9f90d31",
@@ -31,7 +31,7 @@
     "tier": "fast"
   },
   "run_after_execution": {
-    "answer": "Atlas completed a deterministic first-pass assessment of atlas-fixture.csv: 3 rows \u00d7 2 columns, health 94/100, and 0.00% missing cells. Recorded SQL result run_a367bbe3ba9047ae8fd190f5f6d5f8b1: [{\"group_value\": \"east\", \"result_value\": 7.0}, {\"group_value\": \"west\", \"result_value\": 15.0}]. Evidence sql:run_a367bbe3ba9047ae8fd190f5f6d5f8b1.",
+    "answer": "Atlas completed a deterministic first-pass assessment of atlas-fixture.csv: 3 rows \u00d7 2 columns, health 94/100, and 0.00% missing cells. Recorded SQL result run_e34414b0d62242c5b8139195e09916fd: [{\"group_value\": \"east\", \"result_value\": 7.0}, {\"group_value\": \"west\", \"result_value\": 15.0}]. Evidence sql:run_e34414b0d62242c5b8139195e09916fd.",
     "cancellation_requested": false,
     "clarifications": [],
     "council": [
@@ -40,17 +40,17 @@
         "confidence": "high",
         "evidence": [
           {
-            "dataset_id": "ds_96969582ffd04e008740599402f30306",
+            "dataset_id": "ds_bfcd6ab6984a47a98b90406f5854ab8c",
             "dataset_revision": 0,
-            "evidence_id": "dataset:ds_96969582ffd04e008740599402f30306:r0",
+            "evidence_id": "dataset:ds_bfcd6ab6984a47a98b90406f5854ab8c:r0",
             "kind": "dataset_revision",
             "source_fingerprint": "c44eddb50f695f51ea869120eda2a950ab4d9fdd5cc34577c40cb725b9f90d31",
             "summary": "Active DatasetStore revision."
           },
           {
-            "dataset_id": "ds_96969582ffd04e008740599402f30306",
+            "dataset_id": "ds_bfcd6ab6984a47a98b90406f5854ab8c",
             "dataset_revision": 0,
-            "evidence_id": "overview:ds_96969582ffd04e008740599402f30306:r0",
+            "evidence_id": "overview:ds_bfcd6ab6984a47a98b90406f5854ab8c:r0",
             "kind": "overview_profile",
             "source_fingerprint": "c44eddb50f695f51ea869120eda2a950ab4d9fdd5cc34577c40cb725b9f90d31",
             "summary": "Overview profile: 3 rows, 2 columns, health 94/100."
@@ -60,13 +60,13 @@
         "specialist": "scout"
       },
       {
-        "conclusion": "Executed the recorded aggregate in SQL Lab; 2 result rows. Inspect evidence sql:run_a367bbe3ba9047ae8fd190f5f6d5f8b1 for the exact query and bounded values.",
+        "conclusion": "Executed the recorded aggregate in SQL Lab; 2 result rows. Inspect evidence sql:run_e34414b0d62242c5b8139195e09916fd for the exact query and bounded values.",
         "confidence": "high",
         "evidence": [
           {
-            "dataset_id": "ds_96969582ffd04e008740599402f30306",
+            "dataset_id": "ds_bfcd6ab6984a47a98b90406f5854ab8c",
             "dataset_revision": 0,
-            "evidence_id": "sql:run_a367bbe3ba9047ae8fd190f5f6d5f8b1",
+            "evidence_id": "sql:run_e34414b0d62242c5b8139195e09916fd",
             "kind": "tool_output",
             "source_fingerprint": "c44eddb50f695f51ea869120eda2a950ab4d9fdd5cc34577c40cb725b9f90d31",
             "summary": "SQL Lab aggregate: 2 recorded result rows."
@@ -80,20 +80,28 @@
         "confidence": "high",
         "evidence": [
           {
-            "dataset_id": "ds_96969582ffd04e008740599402f30306",
+            "dataset_id": "ds_bfcd6ab6984a47a98b90406f5854ab8c",
             "dataset_revision": 0,
-            "evidence_id": "dataset:ds_96969582ffd04e008740599402f30306:r0",
+            "evidence_id": "dataset:ds_bfcd6ab6984a47a98b90406f5854ab8c:r0",
             "kind": "dataset_revision",
             "source_fingerprint": "c44eddb50f695f51ea869120eda2a950ab4d9fdd5cc34577c40cb725b9f90d31",
             "summary": "Active DatasetStore revision."
           },
           {
-            "dataset_id": "ds_96969582ffd04e008740599402f30306",
+            "dataset_id": "ds_bfcd6ab6984a47a98b90406f5854ab8c",
             "dataset_revision": 0,
-            "evidence_id": "overview:ds_96969582ffd04e008740599402f30306:r0",
+            "evidence_id": "overview:ds_bfcd6ab6984a47a98b90406f5854ab8c:r0",
             "kind": "overview_profile",
             "source_fingerprint": "c44eddb50f695f51ea869120eda2a950ab4d9fdd5cc34577c40cb725b9f90d31",
             "summary": "Overview profile: 3 rows, 2 columns, health 94/100."
+          },
+          {
+            "dataset_id": "ds_bfcd6ab6984a47a98b90406f5854ab8c",
+            "dataset_revision": 0,
+            "evidence_id": "sql:run_e34414b0d62242c5b8139195e09916fd",
+            "kind": "tool_output",
+            "source_fingerprint": "c44eddb50f695f51ea869120eda2a950ab4d9fdd5cc34577c40cb725b9f90d31",
+            "summary": "SQL Lab aggregate: 2 recorded result rows."
           }
         ],
         "objections": [
@@ -102,23 +110,23 @@
         "specialist": "auditor"
       }
     ],
-    "created_at": "2026-09-28T10:11:02.076749Z",
+    "created_at": "2026-09-30T16:32:28.324545Z",
     "events": [
       {
-        "event_id": "evt_f8d7fedf08614ee4998d8aab02e7c0b6",
-        "occurred_at": "2026-09-28T10:11:02.088791",
+        "event_id": "evt_845133e9ed424f86b3c5ac8aaa37e522",
+        "occurred_at": "2026-09-30T16:32:28.327052",
         "payload": {
-          "dataset_id": "ds_96969582ffd04e008740599402f30306"
+          "dataset_id": "ds_bfcd6ab6984a47a98b90406f5854ab8c"
         },
-        "run_id": "atlas_c1706004d9d04eb3b626ff05052aa42d",
+        "run_id": "atlas_fce4eb862f3b41948b3f17e5ce390802",
         "sequence": 1,
         "specialist": null,
         "step_id": null,
         "type": "run_created"
       },
       {
-        "event_id": "evt_78b0383bc43a4b34ac7fe44467f6f1c5",
-        "occurred_at": "2026-09-28T10:11:02.100833",
+        "event_id": "evt_1bc8b7a5d7b74a2dbb04afec4161ac21",
+        "occurred_at": "2026-09-30T16:32:28.331258",
         "payload": {
           "deep_refinement_requested": false,
           "execution_policy_version": "atlas-execution-v1",
@@ -138,85 +146,85 @@
           "model_proposal_steps_accepted": 0,
           "model_tier": "fast",
           "model_tier_reason": "deterministic_provider",
-          "plan_id": "plan_d6e8d3193087447e9b0711687aecc4fd",
+          "plan_id": "plan_772a4bbde6094269bfa37abad77ed330",
           "prompt_schema_version": "atlas-plan-v1",
           "provider": "deterministic",
           "raw_dataset_sent": false,
           "requested_tier": "fast",
           "source_run_id": null
         },
-        "run_id": "atlas_c1706004d9d04eb3b626ff05052aa42d",
+        "run_id": "atlas_fce4eb862f3b41948b3f17e5ce390802",
         "sequence": 2,
         "specialist": null,
         "step_id": null,
         "type": "plan_created"
       },
       {
-        "event_id": "evt_1ec1c624538c4d7e9f59d2a8e94472ea",
-        "occurred_at": "2026-09-28T10:11:02.179601",
+        "event_id": "evt_646f4be14a4c4fd6989f0c7febaf7111",
+        "occurred_at": "2026-09-30T16:32:28.339752",
         "payload": {
           "policy_version": "atlas-execution-v1",
           "tool": "overview.profile"
         },
-        "run_id": "atlas_c1706004d9d04eb3b626ff05052aa42d",
+        "run_id": "atlas_fce4eb862f3b41948b3f17e5ce390802",
         "sequence": 3,
         "specialist": "scout",
         "step_id": "profile",
         "type": "step_started"
       },
       {
-        "event_id": "evt_17715278e64f403d90ff860c813f62fc",
-        "occurred_at": "2026-09-28T10:11:02.251345",
+        "event_id": "evt_d9fda756790948049e02ee0cef0b7394",
+        "occurred_at": "2026-09-30T16:32:28.349519",
         "payload": {
           "evidence_ids": [
-            "dataset:ds_96969582ffd04e008740599402f30306:r0",
-            "overview:ds_96969582ffd04e008740599402f30306:r0"
+            "dataset:ds_bfcd6ab6984a47a98b90406f5854ab8c:r0",
+            "overview:ds_bfcd6ab6984a47a98b90406f5854ab8c:r0"
           ]
         },
-        "run_id": "atlas_c1706004d9d04eb3b626ff05052aa42d",
+        "run_id": "atlas_fce4eb862f3b41948b3f17e5ce390802",
         "sequence": 4,
         "specialist": "scout",
         "step_id": "profile",
         "type": "step_completed"
       },
       {
-        "event_id": "evt_5ea9c22b96514bd894332d81b0af95c2",
-        "occurred_at": "2026-09-28T10:11:02.272910",
+        "event_id": "evt_e1abb9dbf0244e4696a20772fd2feddb",
+        "occurred_at": "2026-09-30T16:32:28.352507",
         "payload": {
           "confidence": "high",
           "objections": []
         },
-        "run_id": "atlas_c1706004d9d04eb3b626ff05052aa42d",
+        "run_id": "atlas_fce4eb862f3b41948b3f17e5ce390802",
         "sequence": 5,
         "specialist": "scout",
         "step_id": "profile",
         "type": "council_conclusion"
       },
       {
-        "event_id": "evt_92bac98898db4f64ab04403177840f27",
-        "occurred_at": "2026-09-28T10:11:02.310036",
+        "event_id": "evt_bc2ceac5191c4a81877ac75ec7e41e14",
+        "occurred_at": "2026-09-30T16:32:28.358816",
         "payload": {
           "policy_version": "atlas-execution-v1",
           "tool": "sql_lab.local_aggregate"
         },
-        "run_id": "atlas_c1706004d9d04eb3b626ff05052aa42d",
+        "run_id": "atlas_fce4eb862f3b41948b3f17e5ce390802",
         "sequence": 6,
         "specialist": "query",
         "step_id": "sql_question",
         "type": "step_started"
       },
       {
-        "event_id": "evt_0cc51533a7c84a1a8dec730e45113e97",
-        "occurred_at": "2026-09-28T10:11:02.550826",
+        "event_id": "evt_5916695d505e40d39229c8057db84d99",
+        "occurred_at": "2026-09-30T16:32:28.402600",
         "payload": {
           "evidence_ids": [
-            "sql:run_a367bbe3ba9047ae8fd190f5f6d5f8b1"
+            "sql:run_e34414b0d62242c5b8139195e09916fd"
           ],
           "output": {
-            "connection_id": "local:ds_96969582ffd04e008740599402f30306",
-            "dataset_id": "ds_96969582ffd04e008740599402f30306",
+            "connection_id": "local:ds_bfcd6ab6984a47a98b90406f5854ab8c",
+            "dataset_id": "ds_bfcd6ab6984a47a98b90406f5854ab8c",
             "dataset_revision": 0,
-            "duration_ms": 45,
+            "duration_ms": 9,
             "error": null,
             "execution_state": "succeeded",
             "parameters": {},
@@ -234,80 +242,81 @@
             ],
             "source_fingerprint": "c44eddb50f695f51ea869120eda2a950ab4d9fdd5cc34577c40cb725b9f90d31",
             "sql": "SELECT \"region\" AS group_value, SUM(\"revenue\") AS result_value FROM \"data\" GROUP BY \"region\" ORDER BY \"region\" LIMIT 100",
-            "sql_run_id": "run_a367bbe3ba9047ae8fd190f5f6d5f8b1",
+            "sql_run_id": "run_e34414b0d62242c5b8139195e09916fd",
             "truncated": false
           }
         },
-        "run_id": "atlas_c1706004d9d04eb3b626ff05052aa42d",
+        "run_id": "atlas_fce4eb862f3b41948b3f17e5ce390802",
         "sequence": 7,
         "specialist": "query",
         "step_id": "sql_question",
         "type": "step_completed"
       },
       {
-        "event_id": "evt_1da2c0fd23cc40438dd974facfa20808",
-        "occurred_at": "2026-09-28T10:11:02.558853",
+        "event_id": "evt_3b68fbf99e8140b989a29b205ecd3c35",
+        "occurred_at": "2026-09-30T16:32:28.405244",
         "payload": {
           "confidence": "high",
           "objections": []
         },
-        "run_id": "atlas_c1706004d9d04eb3b626ff05052aa42d",
+        "run_id": "atlas_fce4eb862f3b41948b3f17e5ce390802",
         "sequence": 8,
         "specialist": "query",
         "step_id": "sql_question",
         "type": "council_conclusion"
       },
       {
-        "event_id": "evt_539fe190d55749f2a28a10067de39a61",
-        "occurred_at": "2026-09-28T10:11:02.577920",
+        "event_id": "evt_2cb48a88d72d45879b1dfeaab3b684a3",
+        "occurred_at": "2026-09-30T16:32:28.412139",
         "payload": {
           "policy_version": "atlas-execution-v1",
           "tool": "atlas.evidence_audit"
         },
-        "run_id": "atlas_c1706004d9d04eb3b626ff05052aa42d",
+        "run_id": "atlas_fce4eb862f3b41948b3f17e5ce390802",
         "sequence": 9,
         "specialist": "auditor",
         "step_id": "audit",
         "type": "step_started"
       },
       {
-        "event_id": "evt_bd9b9c2d070d4f159d26c2699c1352f5",
-        "occurred_at": "2026-09-28T10:11:02.629087",
+        "event_id": "evt_2f4a595d05da420ebc25d518ccb12cc2",
+        "occurred_at": "2026-09-30T16:32:28.423771",
         "payload": {
           "evidence_ids": [
-            "dataset:ds_96969582ffd04e008740599402f30306:r0",
-            "overview:ds_96969582ffd04e008740599402f30306:r0"
+            "dataset:ds_bfcd6ab6984a47a98b90406f5854ab8c:r0",
+            "overview:ds_bfcd6ab6984a47a98b90406f5854ab8c:r0",
+            "sql:run_e34414b0d62242c5b8139195e09916fd"
           ]
         },
-        "run_id": "atlas_c1706004d9d04eb3b626ff05052aa42d",
+        "run_id": "atlas_fce4eb862f3b41948b3f17e5ce390802",
         "sequence": 10,
         "specialist": "auditor",
         "step_id": "audit",
         "type": "step_completed"
       },
       {
-        "event_id": "evt_e41f1fdfbbf14bfb9121dcbefbc47008",
-        "occurred_at": "2026-09-28T10:11:02.644139",
+        "event_id": "evt_46ba319d0cea46f1893137ca978bb190",
+        "occurred_at": "2026-09-30T16:32:28.426784",
         "payload": {
           "confidence": "high",
           "objections": [
             "No web research, raw-row provider transfer, arbitrary Python execution, or model training occurred."
           ]
         },
-        "run_id": "atlas_c1706004d9d04eb3b626ff05052aa42d",
+        "run_id": "atlas_fce4eb862f3b41948b3f17e5ce390802",
         "sequence": 11,
         "specialist": "auditor",
         "step_id": "audit",
         "type": "council_conclusion"
       },
       {
-        "event_id": "evt_d72d7972e3c24a049568dd56aa63e1be",
-        "occurred_at": "2026-09-28T10:11:02.674243",
+        "event_id": "evt_c4c1ef7707c94ad5955a5bd9e831d026",
+        "occurred_at": "2026-09-30T16:32:28.432318",
         "payload": {
           "answer_grounded": true,
           "blocked_steps": 0
         },
-        "run_id": "atlas_c1706004d9d04eb3b626ff05052aa42d",
+        "run_id": "atlas_fce4eb862f3b41948b3f17e5ce390802",
         "sequence": 12,
         "specialist": "atlas",
         "step_id": null,
@@ -316,35 +325,119 @@
     ],
     "evidence": [
       {
-        "dataset_id": "ds_96969582ffd04e008740599402f30306",
+        "dataset_id": "ds_bfcd6ab6984a47a98b90406f5854ab8c",
         "dataset_revision": 0,
-        "evidence_id": "dataset:ds_96969582ffd04e008740599402f30306:r0",
+        "evidence_id": "dataset:ds_bfcd6ab6984a47a98b90406f5854ab8c:r0",
         "kind": "dataset_revision",
         "source_fingerprint": "c44eddb50f695f51ea869120eda2a950ab4d9fdd5cc34577c40cb725b9f90d31",
         "summary": "Active DatasetStore revision."
       },
       {
-        "dataset_id": "ds_96969582ffd04e008740599402f30306",
+        "dataset_id": "ds_bfcd6ab6984a47a98b90406f5854ab8c",
         "dataset_revision": 0,
-        "evidence_id": "overview:ds_96969582ffd04e008740599402f30306:r0",
+        "evidence_id": "overview:ds_bfcd6ab6984a47a98b90406f5854ab8c:r0",
         "kind": "overview_profile",
         "source_fingerprint": "c44eddb50f695f51ea869120eda2a950ab4d9fdd5cc34577c40cb725b9f90d31",
         "summary": "Overview profile: 3 rows, 2 columns, health 94/100."
       },
       {
-        "dataset_id": "ds_96969582ffd04e008740599402f30306",
+        "dataset_id": "ds_bfcd6ab6984a47a98b90406f5854ab8c",
         "dataset_revision": 0,
-        "evidence_id": "sql:run_a367bbe3ba9047ae8fd190f5f6d5f8b1",
+        "evidence_id": "sql:run_e34414b0d62242c5b8139195e09916fd",
         "kind": "tool_output",
         "source_fingerprint": "c44eddb50f695f51ea869120eda2a950ab4d9fdd5cc34577c40cb725b9f90d31",
         "summary": "SQL Lab aggregate: 2 recorded result rows."
       }
     ],
+    "messages": [
+      {
+        "content": "Profiled atlas-fixture.csv: 3 rows \u00d7 2 columns; health score 94/100 and missingness 0.00%.",
+        "input_refs": [
+          "dataset:ds_bfcd6ab6984a47a98b90406f5854ab8c:r0",
+          "overview:ds_bfcd6ab6984a47a98b90406f5854ab8c:r0"
+        ],
+        "kind": "computed_observation",
+        "message_id": "msg_f92795bd64404152aec9d79701d3d498",
+        "model_binding": null,
+        "occurred_at": "2026-09-30T16:32:28.346653Z",
+        "origin": "deterministic_service",
+        "reply_to": null,
+        "sequence": 1,
+        "specialist": "scout",
+        "task_id": "profile"
+      },
+      {
+        "content": "Executed the recorded aggregate in SQL Lab; 2 result rows. Inspect evidence sql:run_e34414b0d62242c5b8139195e09916fd for the exact query and bounded values.",
+        "input_refs": [
+          "sql:run_e34414b0d62242c5b8139195e09916fd"
+        ],
+        "kind": "computed_observation",
+        "message_id": "msg_0998efb072db420396893bb22d58093c",
+        "model_binding": null,
+        "occurred_at": "2026-09-30T16:32:28.399602Z",
+        "origin": "deterministic_service",
+        "reply_to": "msg_f92795bd64404152aec9d79701d3d498",
+        "sequence": 2,
+        "specialist": "query",
+        "task_id": "sql_question"
+      },
+      {
+        "content": "Deterministic evidence audit found the active DatasetStore revision, Overview profile, and recorded SQL Lab aggregate. This is a provenance check, not independent model corroboration.",
+        "input_refs": [
+          "dataset:ds_bfcd6ab6984a47a98b90406f5854ab8c:r0",
+          "overview:ds_bfcd6ab6984a47a98b90406f5854ab8c:r0",
+          "sql:run_e34414b0d62242c5b8139195e09916fd"
+        ],
+        "kind": "computed_observation",
+        "message_id": "msg_d644b10803c84957b0b94f0d35fa4fa4",
+        "model_binding": null,
+        "occurred_at": "2026-09-30T16:32:28.421127Z",
+        "origin": "deterministic_service",
+        "reply_to": "msg_0998efb072db420396893bb22d58093c",
+        "sequence": 3,
+        "specialist": "auditor",
+        "task_id": "audit"
+      },
+      {
+        "content": "No web research, raw-row provider transfer, arbitrary Python execution, or model training occurred.",
+        "input_refs": [
+          "dataset:ds_bfcd6ab6984a47a98b90406f5854ab8c:r0",
+          "overview:ds_bfcd6ab6984a47a98b90406f5854ab8c:r0",
+          "sql:run_e34414b0d62242c5b8139195e09916fd"
+        ],
+        "kind": "objection",
+        "message_id": "msg_2e1c1cca87c44dcbaebb3f750ee08edb",
+        "model_binding": null,
+        "occurred_at": "2026-09-30T16:32:28.421127Z",
+        "origin": "deterministic_service",
+        "reply_to": "msg_d644b10803c84957b0b94f0d35fa4fa4",
+        "sequence": 4,
+        "specialist": "auditor",
+        "task_id": "audit"
+      },
+      {
+        "content": "Atlas completed a deterministic first-pass assessment of atlas-fixture.csv: 3 rows \u00d7 2 columns, health 94/100, and 0.00% missing cells. Recorded SQL result run_e34414b0d62242c5b8139195e09916fd: [{\"group_value\": \"east\", \"result_value\": 7.0}, {\"group_value\": \"west\", \"result_value\": 15.0}]. Evidence sql:run_e34414b0d62242c5b8139195e09916fd.",
+        "input_refs": [
+          "dataset:ds_bfcd6ab6984a47a98b90406f5854ab8c:r0",
+          "overview:ds_bfcd6ab6984a47a98b90406f5854ab8c:r0",
+          "sql:run_e34414b0d62242c5b8139195e09916fd"
+        ],
+        "kind": "resolution",
+        "message_id": "msg_7100a25a15934e4f8da1c927b4ed4d8e",
+        "model_binding": null,
+        "occurred_at": "2026-09-30T16:32:28.432318Z",
+        "origin": "deterministic_service",
+        "reply_to": "msg_2e1c1cca87c44dcbaebb3f750ee08edb",
+        "sequence": 5,
+        "specialist": "atlas",
+        "task_id": "synthesis"
+      }
+    ],
     "plan": {
-      "created_at": "2026-09-28T10:11:02.076749Z",
-      "dataset_id": "ds_96969582ffd04e008740599402f30306",
+      "created_at": "2026-09-30T16:32:28.324545Z",
+      "dataset_id": "ds_bfcd6ab6984a47a98b90406f5854ab8c",
       "objective": "Sum revenue by region using SQL",
-      "plan_id": "plan_d6e8d3193087447e9b0711687aecc4fd",
+      "plan_id": "plan_772a4bbde6094269bfa37abad77ed330",
       "provider": "deterministic",
       "state": "completed",
       "steps": [
@@ -354,17 +447,17 @@
           "error": null,
           "evidence": [
             {
-              "dataset_id": "ds_96969582ffd04e008740599402f30306",
+              "dataset_id": "ds_bfcd6ab6984a47a98b90406f5854ab8c",
               "dataset_revision": 0,
-              "evidence_id": "dataset:ds_96969582ffd04e008740599402f30306:r0",
+              "evidence_id": "dataset:ds_bfcd6ab6984a47a98b90406f5854ab8c:r0",
               "kind": "dataset_revision",
               "source_fingerprint": "c44eddb50f695f51ea869120eda2a950ab4d9fdd5cc34577c40cb725b9f90d31",
               "summary": "Active DatasetStore revision."
             },
             {
-              "dataset_id": "ds_96969582ffd04e008740599402f30306",
+              "dataset_id": "ds_bfcd6ab6984a47a98b90406f5854ab8c",
               "dataset_revision": 0,
-              "evidence_id": "overview:ds_96969582ffd04e008740599402f30306:r0",
+              "evidence_id": "overview:ds_bfcd6ab6984a47a98b90406f5854ab8c:r0",
               "kind": "overview_profile",
               "source_fingerprint": "c44eddb50f695f51ea869120eda2a950ab4d9fdd5cc34577c40cb725b9f90d31",
               "summary": "Overview profile: 3 rows, 2 columns, health 94/100."
@@ -393,9 +486,9 @@
           "error": null,
           "evidence": [
             {
-              "dataset_id": "ds_96969582ffd04e008740599402f30306",
+              "dataset_id": "ds_bfcd6ab6984a47a98b90406f5854ab8c",
               "dataset_revision": 0,
-              "evidence_id": "sql:run_a367bbe3ba9047ae8fd190f5f6d5f8b1",
+              "evidence_id": "sql:run_e34414b0d62242c5b8139195e09916fd",
               "kind": "tool_output",
               "source_fingerprint": "c44eddb50f695f51ea869120eda2a950ab4d9fdd5cc34577c40cb725b9f90d31",
               "summary": "SQL Lab aggregate: 2 recorded result rows."
@@ -431,20 +524,28 @@
           "error": null,
           "evidence": [
             {
-              "dataset_id": "ds_96969582ffd04e008740599402f30306",
+              "dataset_id": "ds_bfcd6ab6984a47a98b90406f5854ab8c",
               "dataset_revision": 0,
-              "evidence_id": "dataset:ds_96969582ffd04e008740599402f30306:r0",
+              "evidence_id": "dataset:ds_bfcd6ab6984a47a98b90406f5854ab8c:r0",
               "kind": "dataset_revision",
               "source_fingerprint": "c44eddb50f695f51ea869120eda2a950ab4d9fdd5cc34577c40cb725b9f90d31",
               "summary": "Active DatasetStore revision."
             },
             {
-              "dataset_id": "ds_96969582ffd04e008740599402f30306",
+              "dataset_id": "ds_bfcd6ab6984a47a98b90406f5854ab8c",
               "dataset_revision": 0,
-              "evidence_id": "overview:ds_96969582ffd04e008740599402f30306:r0",
+              "evidence_id": "overview:ds_bfcd6ab6984a47a98b90406f5854ab8c:r0",
               "kind": "overview_profile",
               "source_fingerprint": "c44eddb50f695f51ea869120eda2a950ab4d9fdd5cc34577c40cb725b9f90d31",
               "summary": "Overview profile: 3 rows, 2 columns, health 94/100."
+            },
+            {
+              "dataset_id": "ds_bfcd6ab6984a47a98b90406f5854ab8c",
+              "dataset_revision": 0,
+              "evidence_id": "sql:run_e34414b0d62242c5b8139195e09916fd",
+              "kind": "tool_output",
+              "source_fingerprint": "c44eddb50f695f51ea869120eda2a950ab4d9fdd5cc34577c40cb725b9f90d31",
+              "summary": "SQL Lab aggregate: 2 recorded result rows."
             }
           ],
           "expected_evidence": [
@@ -464,12 +565,12 @@
         }
       ]
     },
-    "run_id": "atlas_c1706004d9d04eb3b626ff05052aa42d",
+    "run_id": "atlas_fce4eb862f3b41948b3f17e5ce390802",
     "uncertainty": "The SQL aggregate is descriptive and bounded to 100 result rows; it does not establish causality or statistical significance.",
-    "updated_at": "2026-09-28T10:11:02.690299Z"
+    "updated_at": "2026-09-30T16:32:28.435663Z"
   },
   "run_after_restart": {
-    "answer": "Atlas completed a deterministic first-pass assessment of atlas-fixture.csv: 3 rows \u00d7 2 columns, health 94/100, and 0.00% missing cells. Recorded SQL result run_a367bbe3ba9047ae8fd190f5f6d5f8b1: [{\"group_value\": \"east\", \"result_value\": 7.0}, {\"group_value\": \"west\", \"result_value\": 15.0}]. Evidence sql:run_a367bbe3ba9047ae8fd190f5f6d5f8b1.",
+    "answer": "Atlas completed a deterministic first-pass assessment of atlas-fixture.csv: 3 rows \u00d7 2 columns, health 94/100, and 0.00% missing cells. Recorded SQL result run_e34414b0d62242c5b8139195e09916fd: [{\"group_value\": \"east\", \"result_value\": 7.0}, {\"group_value\": \"west\", \"result_value\": 15.0}]. Evidence sql:run_e34414b0d62242c5b8139195e09916fd.",
     "cancellation_requested": false,
     "clarifications": [],
     "council": [
@@ -478,17 +579,17 @@
         "confidence": "high",
         "evidence": [
           {
-            "dataset_id": "ds_96969582ffd04e008740599402f30306",
+            "dataset_id": "ds_bfcd6ab6984a47a98b90406f5854ab8c",
             "dataset_revision": 0,
-            "evidence_id": "dataset:ds_96969582ffd04e008740599402f30306:r0",
+            "evidence_id": "dataset:ds_bfcd6ab6984a47a98b90406f5854ab8c:r0",
             "kind": "dataset_revision",
             "source_fingerprint": "c44eddb50f695f51ea869120eda2a950ab4d9fdd5cc34577c40cb725b9f90d31",
             "summary": "Active DatasetStore revision."
           },
           {
-            "dataset_id": "ds_96969582ffd04e008740599402f30306",
+            "dataset_id": "ds_bfcd6ab6984a47a98b90406f5854ab8c",
             "dataset_revision": 0,
-            "evidence_id": "overview:ds_96969582ffd04e008740599402f30306:r0",
+            "evidence_id": "overview:ds_bfcd6ab6984a47a98b90406f5854ab8c:r0",
             "kind": "overview_profile",
             "source_fingerprint": "c44eddb50f695f51ea869120eda2a950ab4d9fdd5cc34577c40cb725b9f90d31",
             "summary": "Overview profile: 3 rows, 2 columns, health 94/100."
@@ -498,13 +599,13 @@
         "specialist": "scout"
       },
       {
-        "conclusion": "Executed the recorded aggregate in SQL Lab; 2 result rows. Inspect evidence sql:run_a367bbe3ba9047ae8fd190f5f6d5f8b1 for the exact query and bounded values.",
+        "conclusion": "Executed the recorded aggregate in SQL Lab; 2 result rows. Inspect evidence sql:run_e34414b0d62242c5b8139195e09916fd for the exact query and bounded values.",
         "confidence": "high",
         "evidence": [
           {
-            "dataset_id": "ds_96969582ffd04e008740599402f30306",
+            "dataset_id": "ds_bfcd6ab6984a47a98b90406f5854ab8c",
             "dataset_revision": 0,
-            "evidence_id": "sql:run_a367bbe3ba9047ae8fd190f5f6d5f8b1",
+            "evidence_id": "sql:run_e34414b0d62242c5b8139195e09916fd",
             "kind": "tool_output",
             "source_fingerprint": "c44eddb50f695f51ea869120eda2a950ab4d9fdd5cc34577c40cb725b9f90d31",
             "summary": "SQL Lab aggregate: 2 recorded result rows."
@@ -518,20 +619,28 @@
         "confidence": "high",
         "evidence": [
           {
-            "dataset_id": "ds_96969582ffd04e008740599402f30306",
+            "dataset_id": "ds_bfcd6ab6984a47a98b90406f5854ab8c",
             "dataset_revision": 0,
-            "evidence_id": "dataset:ds_96969582ffd04e008740599402f30306:r0",
+            "evidence_id": "dataset:ds_bfcd6ab6984a47a98b90406f5854ab8c:r0",
             "kind": "dataset_revision",
             "source_fingerprint": "c44eddb50f695f51ea869120eda2a950ab4d9fdd5cc34577c40cb725b9f90d31",
             "summary": "Active DatasetStore revision."
           },
           {
-            "dataset_id": "ds_96969582ffd04e008740599402f30306",
+            "dataset_id": "ds_bfcd6ab6984a47a98b90406f5854ab8c",
             "dataset_revision": 0,
-            "evidence_id": "overview:ds_96969582ffd04e008740599402f30306:r0",
+            "evidence_id": "overview:ds_bfcd6ab6984a47a98b90406f5854ab8c:r0",
             "kind": "overview_profile",
             "source_fingerprint": "c44eddb50f695f51ea869120eda2a950ab4d9fdd5cc34577c40cb725b9f90d31",
             "summary": "Overview profile: 3 rows, 2 columns, health 94/100."
+          },
+          {
+            "dataset_id": "ds_bfcd6ab6984a47a98b90406f5854ab8c",
+            "dataset_revision": 0,
+            "evidence_id": "sql:run_e34414b0d62242c5b8139195e09916fd",
+            "kind": "tool_output",
+            "source_fingerprint": "c44eddb50f695f51ea869120eda2a950ab4d9fdd5cc34577c40cb725b9f90d31",
+            "summary": "SQL Lab aggregate: 2 recorded result rows."
           }
         ],
         "objections": [
@@ -540,23 +649,23 @@
         "specialist": "auditor"
       }
     ],
-    "created_at": "2026-09-28T10:11:02.076749Z",
+    "created_at": "2026-09-30T16:32:28.324545Z",
     "events": [
       {
-        "event_id": "evt_f8d7fedf08614ee4998d8aab02e7c0b6",
-        "occurred_at": "2026-09-28T10:11:02.088791",
+        "event_id": "evt_845133e9ed424f86b3c5ac8aaa37e522",
+        "occurred_at": "2026-09-30T16:32:28.327052",
         "payload": {
-          "dataset_id": "ds_96969582ffd04e008740599402f30306"
+          "dataset_id": "ds_bfcd6ab6984a47a98b90406f5854ab8c"
         },
-        "run_id": "atlas_c1706004d9d04eb3b626ff05052aa42d",
+        "run_id": "atlas_fce4eb862f3b41948b3f17e5ce390802",
         "sequence": 1,
         "specialist": null,
         "step_id": null,
         "type": "run_created"
       },
       {
-        "event_id": "evt_78b0383bc43a4b34ac7fe44467f6f1c5",
-        "occurred_at": "2026-09-28T10:11:02.100833",
+        "event_id": "evt_1bc8b7a5d7b74a2dbb04afec4161ac21",
+        "occurred_at": "2026-09-30T16:32:28.331258",
         "payload": {
           "deep_refinement_requested": false,
           "execution_policy_version": "atlas-execution-v1",
@@ -576,85 +685,85 @@
           "model_proposal_steps_accepted": 0,
           "model_tier": "fast",
           "model_tier_reason": "deterministic_provider",
-          "plan_id": "plan_d6e8d3193087447e9b0711687aecc4fd",
+          "plan_id": "plan_772a4bbde6094269bfa37abad77ed330",
           "prompt_schema_version": "atlas-plan-v1",
           "provider": "deterministic",
           "raw_dataset_sent": false,
           "requested_tier": "fast",
           "source_run_id": null
         },
-        "run_id": "atlas_c1706004d9d04eb3b626ff05052aa42d",
+        "run_id": "atlas_fce4eb862f3b41948b3f17e5ce390802",
         "sequence": 2,
         "specialist": null,
         "step_id": null,
         "type": "plan_created"
       },
       {
-        "event_id": "evt_1ec1c624538c4d7e9f59d2a8e94472ea",
-        "occurred_at": "2026-09-28T10:11:02.179601",
+        "event_id": "evt_646f4be14a4c4fd6989f0c7febaf7111",
+        "occurred_at": "2026-09-30T16:32:28.339752",
         "payload": {
           "policy_version": "atlas-execution-v1",
           "tool": "overview.profile"
         },
-        "run_id": "atlas_c1706004d9d04eb3b626ff05052aa42d",
+        "run_id": "atlas_fce4eb862f3b41948b3f17e5ce390802",
         "sequence": 3,
         "specialist": "scout",
         "step_id": "profile",
         "type": "step_started"
       },
       {
-        "event_id": "evt_17715278e64f403d90ff860c813f62fc",
-        "occurred_at": "2026-09-28T10:11:02.251345",
+        "event_id": "evt_d9fda756790948049e02ee0cef0b7394",
+        "occurred_at": "2026-09-30T16:32:28.349519",
         "payload": {
           "evidence_ids": [
-            "dataset:ds_96969582ffd04e008740599402f30306:r0",
-            "overview:ds_96969582ffd04e008740599402f30306:r0"
+            "dataset:ds_bfcd6ab6984a47a98b90406f5854ab8c:r0",
+            "overview:ds_bfcd6ab6984a47a98b90406f5854ab8c:r0"
           ]
         },
-        "run_id": "atlas_c1706004d9d04eb3b626ff05052aa42d",
+        "run_id": "atlas_fce4eb862f3b41948b3f17e5ce390802",
         "sequence": 4,
         "specialist": "scout",
         "step_id": "profile",
         "type": "step_completed"
       },
       {
-        "event_id": "evt_5ea9c22b96514bd894332d81b0af95c2",
-        "occurred_at": "2026-09-28T10:11:02.272910",
+        "event_id": "evt_e1abb9dbf0244e4696a20772fd2feddb",
+        "occurred_at": "2026-09-30T16:32:28.352507",
         "payload": {
           "confidence": "high",
           "objections": []
         },
-        "run_id": "atlas_c1706004d9d04eb3b626ff05052aa42d",
+        "run_id": "atlas_fce4eb862f3b41948b3f17e5ce390802",
         "sequence": 5,
         "specialist": "scout",
         "step_id": "profile",
         "type": "council_conclusion"
       },
       {
-        "event_id": "evt_92bac98898db4f64ab04403177840f27",
-        "occurred_at": "2026-09-28T10:11:02.310036",
+        "event_id": "evt_bc2ceac5191c4a81877ac75ec7e41e14",
+        "occurred_at": "2026-09-30T16:32:28.358816",
         "payload": {
           "policy_version": "atlas-execution-v1",
           "tool": "sql_lab.local_aggregate"
         },
-        "run_id": "atlas_c1706004d9d04eb3b626ff05052aa42d",
+        "run_id": "atlas_fce4eb862f3b41948b3f17e5ce390802",
         "sequence": 6,
         "specialist": "query",
         "step_id": "sql_question",
         "type": "step_started"
       },
       {
-        "event_id": "evt_0cc51533a7c84a1a8dec730e45113e97",
-        "occurred_at": "2026-09-28T10:11:02.550826",
+        "event_id": "evt_5916695d505e40d39229c8057db84d99",
+        "occurred_at": "2026-09-30T16:32:28.402600",
         "payload": {
           "evidence_ids": [
-            "sql:run_a367bbe3ba9047ae8fd190f5f6d5f8b1"
+            "sql:run_e34414b0d62242c5b8139195e09916fd"
           ],
           "output": {
-            "connection_id": "local:ds_96969582ffd04e008740599402f30306",
-            "dataset_id": "ds_96969582ffd04e008740599402f30306",
+            "connection_id": "local:ds_bfcd6ab6984a47a98b90406f5854ab8c",
+            "dataset_id": "ds_bfcd6ab6984a47a98b90406f5854ab8c",
             "dataset_revision": 0,
-            "duration_ms": 45,
+            "duration_ms": 9,
             "error": null,
             "execution_state": "succeeded",
             "parameters": {},
@@ -672,80 +781,81 @@
             ],
             "source_fingerprint": "c44eddb50f695f51ea869120eda2a950ab4d9fdd5cc34577c40cb725b9f90d31",
             "sql": "SELECT \"region\" AS group_value, SUM(\"revenue\") AS result_value FROM \"data\" GROUP BY \"region\" ORDER BY \"region\" LIMIT 100",
-            "sql_run_id": "run_a367bbe3ba9047ae8fd190f5f6d5f8b1",
+            "sql_run_id": "run_e34414b0d62242c5b8139195e09916fd",
             "truncated": false
           }
         },
-        "run_id": "atlas_c1706004d9d04eb3b626ff05052aa42d",
+        "run_id": "atlas_fce4eb862f3b41948b3f17e5ce390802",
         "sequence": 7,
         "specialist": "query",
         "step_id": "sql_question",
         "type": "step_completed"
       },
       {
-        "event_id": "evt_1da2c0fd23cc40438dd974facfa20808",
-        "occurred_at": "2026-09-28T10:11:02.558853",
+        "event_id": "evt_3b68fbf99e8140b989a29b205ecd3c35",
+        "occurred_at": "2026-09-30T16:32:28.405244",
         "payload": {
           "confidence": "high",
           "objections": []
         },
-        "run_id": "atlas_c1706004d9d04eb3b626ff05052aa42d",
+        "run_id": "atlas_fce4eb862f3b41948b3f17e5ce390802",
         "sequence": 8,
         "specialist": "query",
         "step_id": "sql_question",
         "type": "council_conclusion"
       },
       {
-        "event_id": "evt_539fe190d55749f2a28a10067de39a61",
-        "occurred_at": "2026-09-28T10:11:02.577920",
+        "event_id": "evt_2cb48a88d72d45879b1dfeaab3b684a3",
+        "occurred_at": "2026-09-30T16:32:28.412139",
         "payload": {
           "policy_version": "atlas-execution-v1",
           "tool": "atlas.evidence_audit"
         },
-        "run_id": "atlas_c1706004d9d04eb3b626ff05052aa42d",
+        "run_id": "atlas_fce4eb862f3b41948b3f17e5ce390802",
         "sequence": 9,
         "specialist": "auditor",
         "step_id": "audit",
         "type": "step_started"
       },
       {
-        "event_id": "evt_bd9b9c2d070d4f159d26c2699c1352f5",
-        "occurred_at": "2026-09-28T10:11:02.629087",
+        "event_id": "evt_2f4a595d05da420ebc25d518ccb12cc2",
+        "occurred_at": "2026-09-30T16:32:28.423771",
         "payload": {
           "evidence_ids": [
-            "dataset:ds_96969582ffd04e008740599402f30306:r0",
-            "overview:ds_96969582ffd04e008740599402f30306:r0"
+            "dataset:ds_bfcd6ab6984a47a98b90406f5854ab8c:r0",
+            "overview:ds_bfcd6ab6984a47a98b90406f5854ab8c:r0",
+            "sql:run_e34414b0d62242c5b8139195e09916fd"
           ]
         },
-        "run_id": "atlas_c1706004d9d04eb3b626ff05052aa42d",
+        "run_id": "atlas_fce4eb862f3b41948b3f17e5ce390802",
         "sequence": 10,
         "specialist": "auditor",
         "step_id": "audit",
         "type": "step_completed"
       },
       {
-        "event_id": "evt_e41f1fdfbbf14bfb9121dcbefbc47008",
-        "occurred_at": "2026-09-28T10:11:02.644139",
+        "event_id": "evt_46ba319d0cea46f1893137ca978bb190",
+        "occurred_at": "2026-09-30T16:32:28.426784",
         "payload": {
           "confidence": "high",
           "objections": [
             "No web research, raw-row provider transfer, arbitrary Python execution, or model training occurred."
           ]
         },
-        "run_id": "atlas_c1706004d9d04eb3b626ff05052aa42d",
+        "run_id": "atlas_fce4eb862f3b41948b3f17e5ce390802",
         "sequence": 11,
         "specialist": "auditor",
         "step_id": "audit",
         "type": "council_conclusion"
       },
       {
-        "event_id": "evt_d72d7972e3c24a049568dd56aa63e1be",
-        "occurred_at": "2026-09-28T10:11:02.674243",
+        "event_id": "evt_c4c1ef7707c94ad5955a5bd9e831d026",
+        "occurred_at": "2026-09-30T16:32:28.432318",
         "payload": {
           "answer_grounded": true,
           "blocked_steps": 0
         },
-        "run_id": "atlas_c1706004d9d04eb3b626ff05052aa42d",
+        "run_id": "atlas_fce4eb862f3b41948b3f17e5ce390802",
         "sequence": 12,
         "specialist": "atlas",
         "step_id": null,
@@ -754,35 +864,119 @@
     ],
     "evidence": [
       {
-        "dataset_id": "ds_96969582ffd04e008740599402f30306",
+        "dataset_id": "ds_bfcd6ab6984a47a98b90406f5854ab8c",
         "dataset_revision": 0,
-        "evidence_id": "dataset:ds_96969582ffd04e008740599402f30306:r0",
+        "evidence_id": "dataset:ds_bfcd6ab6984a47a98b90406f5854ab8c:r0",
         "kind": "dataset_revision",
         "source_fingerprint": "c44eddb50f695f51ea869120eda2a950ab4d9fdd5cc34577c40cb725b9f90d31",
         "summary": "Active DatasetStore revision."
       },
       {
-        "dataset_id": "ds_96969582ffd04e008740599402f30306",
+        "dataset_id": "ds_bfcd6ab6984a47a98b90406f5854ab8c",
         "dataset_revision": 0,
-        "evidence_id": "overview:ds_96969582ffd04e008740599402f30306:r0",
+        "evidence_id": "overview:ds_bfcd6ab6984a47a98b90406f5854ab8c:r0",
         "kind": "overview_profile",
         "source_fingerprint": "c44eddb50f695f51ea869120eda2a950ab4d9fdd5cc34577c40cb725b9f90d31",
         "summary": "Overview profile: 3 rows, 2 columns, health 94/100."
       },
       {
-        "dataset_id": "ds_96969582ffd04e008740599402f30306",
+        "dataset_id": "ds_bfcd6ab6984a47a98b90406f5854ab8c",
         "dataset_revision": 0,
-        "evidence_id": "sql:run_a367bbe3ba9047ae8fd190f5f6d5f8b1",
+        "evidence_id": "sql:run_e34414b0d62242c5b8139195e09916fd",
         "kind": "tool_output",
         "source_fingerprint": "c44eddb50f695f51ea869120eda2a950ab4d9fdd5cc34577c40cb725b9f90d31",
         "summary": "SQL Lab aggregate: 2 recorded result rows."
       }
     ],
+    "messages": [
+      {
+        "content": "Profiled atlas-fixture.csv: 3 rows \u00d7 2 columns; health score 94/100 and missingness 0.00%.",
+        "input_refs": [
+          "dataset:ds_bfcd6ab6984a47a98b90406f5854ab8c:r0",
+          "overview:ds_bfcd6ab6984a47a98b90406f5854ab8c:r0"
+        ],
+        "kind": "computed_observation",
+        "message_id": "msg_f92795bd64404152aec9d79701d3d498",
+        "model_binding": null,
+        "occurred_at": "2026-09-30T16:32:28.346653Z",
+        "origin": "deterministic_service",
+        "reply_to": null,
+        "sequence": 1,
+        "specialist": "scout",
+        "task_id": "profile"
+      },
+      {
+        "content": "Executed the recorded aggregate in SQL Lab; 2 result rows. Inspect evidence sql:run_e34414b0d62242c5b8139195e09916fd for the exact query and bounded values.",
+        "input_refs": [
+          "sql:run_e34414b0d62242c5b8139195e09916fd"
+        ],
+        "kind": "computed_observation",
+        "message_id": "msg_0998efb072db420396893bb22d58093c",
+        "model_binding": null,
+        "occurred_at": "2026-09-30T16:32:28.399602Z",
+        "origin": "deterministic_service",
+        "reply_to": "msg_f92795bd64404152aec9d79701d3d498",
+        "sequence": 2,
+        "specialist": "query",
+        "task_id": "sql_question"
+      },
+      {
+        "content": "Deterministic evidence audit found the active DatasetStore revision, Overview profile, and recorded SQL Lab aggregate. This is a provenance check, not independent model corroboration.",
+        "input_refs": [
+          "dataset:ds_bfcd6ab6984a47a98b90406f5854ab8c:r0",
+          "overview:ds_bfcd6ab6984a47a98b90406f5854ab8c:r0",
+          "sql:run_e34414b0d62242c5b8139195e09916fd"
+        ],
+        "kind": "computed_observation",
+        "message_id": "msg_d644b10803c84957b0b94f0d35fa4fa4",
+        "model_binding": null,
+        "occurred_at": "2026-09-30T16:32:28.421127Z",
+        "origin": "deterministic_service",
+        "reply_to": "msg_0998efb072db420396893bb22d58093c",
+        "sequence": 3,
+        "specialist": "auditor",
+        "task_id": "audit"
+      },
+      {
+        "content": "No web research, raw-row provider transfer, arbitrary Python execution, or model training occurred.",
+        "input_refs": [
+          "dataset:ds_bfcd6ab6984a47a98b90406f5854ab8c:r0",
+          "overview:ds_bfcd6ab6984a47a98b90406f5854ab8c:r0",
+          "sql:run_e34414b0d62242c5b8139195e09916fd"
+        ],
+        "kind": "objection",
+        "message_id": "msg_2e1c1cca87c44dcbaebb3f750ee08edb",
+        "model_binding": null,
+        "occurred_at": "2026-09-30T16:32:28.421127Z",
+        "origin": "deterministic_service",
+        "reply_to": "msg_d644b10803c84957b0b94f0d35fa4fa4",
+        "sequence": 4,
+        "specialist": "auditor",
+        "task_id": "audit"
+      },
+      {
+        "content": "Atlas completed a deterministic first-pass assessment of atlas-fixture.csv: 3 rows \u00d7 2 columns, health 94/100, and 0.00% missing cells. Recorded SQL result run_e34414b0d62242c5b8139195e09916fd: [{\"group_value\": \"east\", \"result_value\": 7.0}, {\"group_value\": \"west\", \"result_value\": 15.0}]. Evidence sql:run_e34414b0d62242c5b8139195e09916fd.",
+        "input_refs": [
+          "dataset:ds_bfcd6ab6984a47a98b90406f5854ab8c:r0",
+          "overview:ds_bfcd6ab6984a47a98b90406f5854ab8c:r0",
+          "sql:run_e34414b0d62242c5b8139195e09916fd"
+        ],
+        "kind": "resolution",
+        "message_id": "msg_7100a25a15934e4f8da1c927b4ed4d8e",
+        "model_binding": null,
+        "occurred_at": "2026-09-30T16:32:28.432318Z",
+        "origin": "deterministic_service",
+        "reply_to": "msg_2e1c1cca87c44dcbaebb3f750ee08edb",
+        "sequence": 5,
+        "specialist": "atlas",
+        "task_id": "synthesis"
+      }
+    ],
     "plan": {
-      "created_at": "2026-09-28T10:11:02.076749Z",
-      "dataset_id": "ds_96969582ffd04e008740599402f30306",
+      "created_at": "2026-09-30T16:32:28.324545Z",
+      "dataset_id": "ds_bfcd6ab6984a47a98b90406f5854ab8c",
       "objective": "Sum revenue by region using SQL",
-      "plan_id": "plan_d6e8d3193087447e9b0711687aecc4fd",
+      "plan_id": "plan_772a4bbde6094269bfa37abad77ed330",
       "provider": "deterministic",
       "state": "completed",
       "steps": [
@@ -792,17 +986,17 @@
           "error": null,
           "evidence": [
             {
-              "dataset_id": "ds_96969582ffd04e008740599402f30306",
+              "dataset_id": "ds_bfcd6ab6984a47a98b90406f5854ab8c",
               "dataset_revision": 0,
-              "evidence_id": "dataset:ds_96969582ffd04e008740599402f30306:r0",
+              "evidence_id": "dataset:ds_bfcd6ab6984a47a98b90406f5854ab8c:r0",
               "kind": "dataset_revision",
               "source_fingerprint": "c44eddb50f695f51ea869120eda2a950ab4d9fdd5cc34577c40cb725b9f90d31",
               "summary": "Active DatasetStore revision."
             },
             {
-              "dataset_id": "ds_96969582ffd04e008740599402f30306",
+              "dataset_id": "ds_bfcd6ab6984a47a98b90406f5854ab8c",
               "dataset_revision": 0,
-              "evidence_id": "overview:ds_96969582ffd04e008740599402f30306:r0",
+              "evidence_id": "overview:ds_bfcd6ab6984a47a98b90406f5854ab8c:r0",
               "kind": "overview_profile",
               "source_fingerprint": "c44eddb50f695f51ea869120eda2a950ab4d9fdd5cc34577c40cb725b9f90d31",
               "summary": "Overview profile: 3 rows, 2 columns, health 94/100."
@@ -831,9 +1025,9 @@
           "error": null,
           "evidence": [
             {
-              "dataset_id": "ds_96969582ffd04e008740599402f30306",
+              "dataset_id": "ds_bfcd6ab6984a47a98b90406f5854ab8c",
               "dataset_revision": 0,
-              "evidence_id": "sql:run_a367bbe3ba9047ae8fd190f5f6d5f8b1",
+              "evidence_id": "sql:run_e34414b0d62242c5b8139195e09916fd",
               "kind": "tool_output",
               "source_fingerprint": "c44eddb50f695f51ea869120eda2a950ab4d9fdd5cc34577c40cb725b9f90d31",
               "summary": "SQL Lab aggregate: 2 recorded result rows."
@@ -869,20 +1063,28 @@
           "error": null,
           "evidence": [
             {
-              "dataset_id": "ds_96969582ffd04e008740599402f30306",
+              "dataset_id": "ds_bfcd6ab6984a47a98b90406f5854ab8c",
               "dataset_revision": 0,
-              "evidence_id": "dataset:ds_96969582ffd04e008740599402f30306:r0",
+              "evidence_id": "dataset:ds_bfcd6ab6984a47a98b90406f5854ab8c:r0",
               "kind": "dataset_revision",
               "source_fingerprint": "c44eddb50f695f51ea869120eda2a950ab4d9fdd5cc34577c40cb725b9f90d31",
               "summary": "Active DatasetStore revision."
             },
             {
-              "dataset_id": "ds_96969582ffd04e008740599402f30306",
+              "dataset_id": "ds_bfcd6ab6984a47a98b90406f5854ab8c",
               "dataset_revision": 0,
-              "evidence_id": "overview:ds_96969582ffd04e008740599402f30306:r0",
+              "evidence_id": "overview:ds_bfcd6ab6984a47a98b90406f5854ab8c:r0",
               "kind": "overview_profile",
               "source_fingerprint": "c44eddb50f695f51ea869120eda2a950ab4d9fdd5cc34577c40cb725b9f90d31",
               "summary": "Overview profile: 3 rows, 2 columns, health 94/100."
+            },
+            {
+              "dataset_id": "ds_bfcd6ab6984a47a98b90406f5854ab8c",
+              "dataset_revision": 0,
+              "evidence_id": "sql:run_e34414b0d62242c5b8139195e09916fd",
+              "kind": "tool_output",
+              "source_fingerprint": "c44eddb50f695f51ea869120eda2a950ab4d9fdd5cc34577c40cb725b9f90d31",
+              "summary": "SQL Lab aggregate: 2 recorded result rows."
             }
           ],
           "expected_evidence": [
@@ -902,21 +1104,21 @@
         }
       ]
     },
-    "run_id": "atlas_c1706004d9d04eb3b626ff05052aa42d",
+    "run_id": "atlas_fce4eb862f3b41948b3f17e5ce390802",
     "uncertainty": "The SQL aggregate is descriptive and bounded to 100 result rows; it does not establish causality or statistical significance.",
-    "updated_at": "2026-09-28T10:11:02.690299Z"
+    "updated_at": "2026-09-30T16:32:28.435663Z"
   },
-  "run_id": "atlas_c1706004d9d04eb3b626ff05052aa42d",
+  "run_id": "atlas_fce4eb862f3b41948b3f17e5ce390802",
   "stat_dataset": {
     "column_count": 2,
-    "dataset_id": "ds_5f42ecf9f6e44df094abac2d88af9ca8",
+    "dataset_id": "ds_bcd416175a5848cc8b78f0285ab54126",
     "revision": 0,
     "row_count": 5,
     "source_fingerprint": "38de863180f2016bb70783e2d40515248d86a2ee4463ccf6f915f0095660219b",
     "source_name": "atlas-stat-fixture.csv"
   },
   "stat_run_after_resume": {
-    "answer": "Atlas completed a deterministic first-pass assessment of atlas-stat-fixture.csv: 5 rows \u00d7 2 columns, health 100/100, and 0.00% missing cells. Stats Lab pearson: Significant correlation detected (p<0.0001, large effect, Pearson r=1.00). Evidence stat:atlas_17c6a83a2b3a47099c57e8c413b36042:statistical_analysis.",
+    "answer": "Atlas completed a deterministic first-pass assessment of atlas-stat-fixture.csv: 5 rows \u00d7 2 columns, health 100/100, and 0.00% missing cells. Stats Lab pearson: Significant correlation detected (p<0.0001, large effect, Pearson r=1.00). Evidence stat:atlas_7bd7347efffb4ac697f2bb748e51eaa9:statistical_analysis.",
     "cancellation_requested": false,
     "clarifications": [
       {
@@ -926,10 +1128,10 @@
           "design": "linear_association",
           "test": "pearson"
         },
-        "answered_at": "2026-09-28T10:11:12.779168Z",
-        "created_at": "2026-09-28T10:11:02.938144Z",
+        "answered_at": "2026-09-30T16:32:30.690576Z",
+        "created_at": "2026-09-30T16:32:28.543431Z",
         "prompt": "Which two columns, statistical method, and study design should Stat use? Choose a supported Stats Lab procedure; no method or design will be guessed.",
-        "question_id": "clarify:atlas_17c6a83a2b3a47099c57e8c413b36042:statistical_analysis",
+        "question_id": "clarify:atlas_7bd7347efffb4ac697f2bb748e51eaa9:statistical_analysis",
         "state": "answered",
         "step_id": "statistical_analysis"
       }
@@ -940,17 +1142,17 @@
         "confidence": "high",
         "evidence": [
           {
-            "dataset_id": "ds_5f42ecf9f6e44df094abac2d88af9ca8",
+            "dataset_id": "ds_bcd416175a5848cc8b78f0285ab54126",
             "dataset_revision": 0,
-            "evidence_id": "dataset:ds_5f42ecf9f6e44df094abac2d88af9ca8:r0",
+            "evidence_id": "dataset:ds_bcd416175a5848cc8b78f0285ab54126:r0",
             "kind": "dataset_revision",
             "source_fingerprint": "38de863180f2016bb70783e2d40515248d86a2ee4463ccf6f915f0095660219b",
             "summary": "Active DatasetStore revision."
           },
           {
-            "dataset_id": "ds_5f42ecf9f6e44df094abac2d88af9ca8",
+            "dataset_id": "ds_bcd416175a5848cc8b78f0285ab54126",
             "dataset_revision": 0,
-            "evidence_id": "overview:ds_5f42ecf9f6e44df094abac2d88af9ca8:r0",
+            "evidence_id": "overview:ds_bcd416175a5848cc8b78f0285ab54126:r0",
             "kind": "overview_profile",
             "source_fingerprint": "38de863180f2016bb70783e2d40515248d86a2ee4463ccf6f915f0095660219b",
             "summary": "Overview profile: 5 rows, 2 columns, health 100/100."
@@ -960,13 +1162,13 @@
         "specialist": "scout"
       },
       {
-        "conclusion": "Significant correlation detected (p<0.0001, large effect, Pearson r=1.00). This test found statistically significant evidence of a correlation in this sample. Statistical significance is not the same as practical importance or causation \u2014 read it together with the effect size, the assumption warnings below, and domain context. Evidence stat:atlas_17c6a83a2b3a47099c57e8c413b36042:statistical_analysis records the declared design, sample size, exclusions, and limitations.",
+        "conclusion": "Significant correlation detected (p<0.0001, large effect, Pearson r=1.00). This test found statistically significant evidence of a correlation in this sample. Statistical significance is not the same as practical importance or causation \u2014 read it together with the effect size, the assumption warnings below, and domain context. Evidence stat:atlas_7bd7347efffb4ac697f2bb748e51eaa9:statistical_analysis records the declared design, sample size, exclusions, and limitations.",
         "confidence": "high",
         "evidence": [
           {
-            "dataset_id": "ds_5f42ecf9f6e44df094abac2d88af9ca8",
+            "dataset_id": "ds_bcd416175a5848cc8b78f0285ab54126",
             "dataset_revision": 0,
-            "evidence_id": "stat:atlas_17c6a83a2b3a47099c57e8c413b36042:statistical_analysis",
+            "evidence_id": "stat:atlas_7bd7347efffb4ac697f2bb748e51eaa9:statistical_analysis",
             "kind": "tool_output",
             "source_fingerprint": "38de863180f2016bb70783e2d40515248d86a2ee4463ccf6f915f0095660219b",
             "summary": "Stats Lab pearson: statistic 1.0, p=0.0; 5 analyzed, 0 excluded."
@@ -980,20 +1182,28 @@
         "confidence": "high",
         "evidence": [
           {
-            "dataset_id": "ds_5f42ecf9f6e44df094abac2d88af9ca8",
+            "dataset_id": "ds_bcd416175a5848cc8b78f0285ab54126",
             "dataset_revision": 0,
-            "evidence_id": "dataset:ds_5f42ecf9f6e44df094abac2d88af9ca8:r0",
+            "evidence_id": "dataset:ds_bcd416175a5848cc8b78f0285ab54126:r0",
             "kind": "dataset_revision",
             "source_fingerprint": "38de863180f2016bb70783e2d40515248d86a2ee4463ccf6f915f0095660219b",
             "summary": "Active DatasetStore revision."
           },
           {
-            "dataset_id": "ds_5f42ecf9f6e44df094abac2d88af9ca8",
+            "dataset_id": "ds_bcd416175a5848cc8b78f0285ab54126",
             "dataset_revision": 0,
-            "evidence_id": "overview:ds_5f42ecf9f6e44df094abac2d88af9ca8:r0",
+            "evidence_id": "overview:ds_bcd416175a5848cc8b78f0285ab54126:r0",
             "kind": "overview_profile",
             "source_fingerprint": "38de863180f2016bb70783e2d40515248d86a2ee4463ccf6f915f0095660219b",
             "summary": "Overview profile: 5 rows, 2 columns, health 100/100."
+          },
+          {
+            "dataset_id": "ds_bcd416175a5848cc8b78f0285ab54126",
+            "dataset_revision": 0,
+            "evidence_id": "stat:atlas_7bd7347efffb4ac697f2bb748e51eaa9:statistical_analysis",
+            "kind": "tool_output",
+            "source_fingerprint": "38de863180f2016bb70783e2d40515248d86a2ee4463ccf6f915f0095660219b",
+            "summary": "Stats Lab pearson: statistic 1.0, p=0.0; 5 analyzed, 0 excluded."
           }
         ],
         "objections": [
@@ -1006,20 +1216,28 @@
         "confidence": "high",
         "evidence": [
           {
-            "dataset_id": "ds_5f42ecf9f6e44df094abac2d88af9ca8",
+            "dataset_id": "ds_bcd416175a5848cc8b78f0285ab54126",
             "dataset_revision": 0,
-            "evidence_id": "dataset:ds_5f42ecf9f6e44df094abac2d88af9ca8:r0",
+            "evidence_id": "dataset:ds_bcd416175a5848cc8b78f0285ab54126:r0",
             "kind": "dataset_revision",
             "source_fingerprint": "38de863180f2016bb70783e2d40515248d86a2ee4463ccf6f915f0095660219b",
             "summary": "Active DatasetStore revision."
           },
           {
-            "dataset_id": "ds_5f42ecf9f6e44df094abac2d88af9ca8",
+            "dataset_id": "ds_bcd416175a5848cc8b78f0285ab54126",
             "dataset_revision": 0,
-            "evidence_id": "overview:ds_5f42ecf9f6e44df094abac2d88af9ca8:r0",
+            "evidence_id": "overview:ds_bcd416175a5848cc8b78f0285ab54126:r0",
             "kind": "overview_profile",
             "source_fingerprint": "38de863180f2016bb70783e2d40515248d86a2ee4463ccf6f915f0095660219b",
             "summary": "Overview profile: 5 rows, 2 columns, health 100/100."
+          },
+          {
+            "dataset_id": "ds_bcd416175a5848cc8b78f0285ab54126",
+            "dataset_revision": 0,
+            "evidence_id": "stat:atlas_7bd7347efffb4ac697f2bb748e51eaa9:statistical_analysis",
+            "kind": "tool_output",
+            "source_fingerprint": "38de863180f2016bb70783e2d40515248d86a2ee4463ccf6f915f0095660219b",
+            "summary": "Stats Lab pearson: statistic 1.0, p=0.0; 5 analyzed, 0 excluded."
           }
         ],
         "objections": [
@@ -1028,23 +1246,23 @@
         "specialist": "auditor"
       }
     ],
-    "created_at": "2026-09-28T10:11:02.769570Z",
+    "created_at": "2026-09-30T16:32:28.485155Z",
     "events": [
       {
-        "event_id": "evt_7ca7b210be084510843a7ca9f5dbf385",
-        "occurred_at": "2026-09-28T10:11:02.789639",
+        "event_id": "evt_ef8b61ae23a449e7bfc99a27bee9c8f8",
+        "occurred_at": "2026-09-30T16:32:28.488216",
         "payload": {
-          "dataset_id": "ds_5f42ecf9f6e44df094abac2d88af9ca8"
+          "dataset_id": "ds_bcd416175a5848cc8b78f0285ab54126"
         },
-        "run_id": "atlas_17c6a83a2b3a47099c57e8c413b36042",
+        "run_id": "atlas_7bd7347efffb4ac697f2bb748e51eaa9",
         "sequence": 1,
         "specialist": null,
         "step_id": null,
         "type": "run_created"
       },
       {
-        "event_id": "evt_cf1c3023ebab4ba78b36a8ed247bfe80",
-        "occurred_at": "2026-09-28T10:11:02.811713",
+        "event_id": "evt_3df009c5eef6452490af88e4f1900279",
+        "occurred_at": "2026-09-30T16:32:28.491023",
         "payload": {
           "deep_refinement_requested": false,
           "execution_policy_version": "atlas-execution-v1",
@@ -1064,76 +1282,76 @@
           "model_proposal_steps_accepted": 0,
           "model_tier": "fast",
           "model_tier_reason": "deterministic_provider",
-          "plan_id": "plan_1456f6ff30f249e58d5849fc7304463a",
+          "plan_id": "plan_393a99e62d9045df9953a8f9e9ac3059",
           "prompt_schema_version": "atlas-plan-v1",
           "provider": "deterministic",
           "raw_dataset_sent": false,
           "requested_tier": "deep",
           "source_run_id": null
         },
-        "run_id": "atlas_17c6a83a2b3a47099c57e8c413b36042",
+        "run_id": "atlas_7bd7347efffb4ac697f2bb748e51eaa9",
         "sequence": 2,
         "specialist": null,
         "step_id": null,
         "type": "plan_created"
       },
       {
-        "event_id": "evt_f7f48ae4ba7844bd82b0d2a26a3b167a",
-        "occurred_at": "2026-09-28T10:11:02.852352",
+        "event_id": "evt_cccf0bc273e941f8b6edcf782d53b79c",
+        "occurred_at": "2026-09-30T16:32:28.528743",
         "payload": {
           "policy_version": "atlas-execution-v1",
           "tool": "overview.profile"
         },
-        "run_id": "atlas_17c6a83a2b3a47099c57e8c413b36042",
+        "run_id": "atlas_7bd7347efffb4ac697f2bb748e51eaa9",
         "sequence": 3,
         "specialist": "scout",
         "step_id": "profile",
         "type": "step_started"
       },
       {
-        "event_id": "evt_96efe4c822884b4e95f4796fa28d4c6d",
-        "occurred_at": "2026-09-28T10:11:02.916571",
+        "event_id": "evt_3b217b2a6bfa456186e80e4c784061f7",
+        "occurred_at": "2026-09-30T16:32:28.537753",
         "payload": {
           "evidence_ids": [
-            "dataset:ds_5f42ecf9f6e44df094abac2d88af9ca8:r0",
-            "overview:ds_5f42ecf9f6e44df094abac2d88af9ca8:r0"
+            "dataset:ds_bcd416175a5848cc8b78f0285ab54126:r0",
+            "overview:ds_bcd416175a5848cc8b78f0285ab54126:r0"
           ]
         },
-        "run_id": "atlas_17c6a83a2b3a47099c57e8c413b36042",
+        "run_id": "atlas_7bd7347efffb4ac697f2bb748e51eaa9",
         "sequence": 4,
         "specialist": "scout",
         "step_id": "profile",
         "type": "step_completed"
       },
       {
-        "event_id": "evt_dacba225c0b94a7f9be05e55d86be34e",
-        "occurred_at": "2026-09-28T10:11:02.930116",
+        "event_id": "evt_9d2d41de06ad4ff0bd685707139972b3",
+        "occurred_at": "2026-09-30T16:32:28.540545",
         "payload": {
           "confidence": "high",
           "objections": []
         },
-        "run_id": "atlas_17c6a83a2b3a47099c57e8c413b36042",
+        "run_id": "atlas_7bd7347efffb4ac697f2bb748e51eaa9",
         "sequence": 5,
         "specialist": "scout",
         "step_id": "profile",
         "type": "council_conclusion"
       },
       {
-        "event_id": "evt_e6cbf3c801c6462b9b6ce378d257ca16",
-        "occurred_at": "2026-09-28T10:11:02.953196",
+        "event_id": "evt_3f7c981c737846d4a6b0438734314166",
+        "occurred_at": "2026-09-30T16:32:28.546628",
         "payload": {
           "prompt": "Which two columns, statistical method, and study design should Stat use? Choose a supported Stats Lab procedure; no method or design will be guessed.",
-          "question_id": "clarify:atlas_17c6a83a2b3a47099c57e8c413b36042:statistical_analysis"
+          "question_id": "clarify:atlas_7bd7347efffb4ac697f2bb748e51eaa9:statistical_analysis"
         },
-        "run_id": "atlas_17c6a83a2b3a47099c57e8c413b36042",
+        "run_id": "atlas_7bd7347efffb4ac697f2bb748e51eaa9",
         "sequence": 6,
         "specialist": "atlas",
         "step_id": "statistical_analysis",
         "type": "clarification_requested"
       },
       {
-        "event_id": "evt_91b6e8d9802b44419daf48e2e1ee3e92",
-        "occurred_at": "2026-09-28T10:11:12.794220",
+        "event_id": "evt_340923f202724f3b8928f4caad29d356",
+        "occurred_at": "2026-09-30T16:32:30.693557",
         "payload": {
           "answer": {
             "col_a": "exposure",
@@ -1141,43 +1359,45 @@
             "design": "linear_association",
             "test": "pearson"
           },
-          "question_id": "clarify:atlas_17c6a83a2b3a47099c57e8c413b36042:statistical_analysis"
+          "question_id": "clarify:atlas_7bd7347efffb4ac697f2bb748e51eaa9:statistical_analysis"
         },
-        "run_id": "atlas_17c6a83a2b3a47099c57e8c413b36042",
+        "run_id": "atlas_7bd7347efffb4ac697f2bb748e51eaa9",
         "sequence": 7,
         "specialist": "atlas",
         "step_id": "statistical_analysis",
         "type": "clarification_answered"
       },
       {
-        "event_id": "evt_07343d03deee48d9a062f94f444dad6d",
-        "occurred_at": "2026-09-28T10:11:12.859939",
+        "event_id": "evt_b7e1b1442e604ee5ae807708978b5d7c",
+        "occurred_at": "2026-09-30T16:32:30.722630",
         "payload": {
           "policy_version": "atlas-execution-v1",
           "tool": "stats.declared_test"
         },
-        "run_id": "atlas_17c6a83a2b3a47099c57e8c413b36042",
+        "run_id": "atlas_7bd7347efffb4ac697f2bb748e51eaa9",
         "sequence": 8,
         "specialist": "stat",
         "step_id": "statistical_analysis",
         "type": "step_started"
       },
       {
-        "event_id": "evt_c40a4d12fa5b45d6ae9a652ff1824c1e",
-        "occurred_at": "2026-09-28T10:11:12.939700",
+        "event_id": "evt_86033d8c8a6a410891b12191fbf933da",
+        "occurred_at": "2026-09-30T16:32:31.832491",
         "payload": {
           "evidence_ids": [
-            "stat:atlas_17c6a83a2b3a47099c57e8c413b36042:statistical_analysis"
+            "stat:atlas_7bd7347efffb4ac697f2bb748e51eaa9:statistical_analysis"
           ],
           "output": {
             "analyzed_rows": 5,
             "col_a": "exposure",
             "col_b": "outcome",
-            "dataset_id": "ds_5f42ecf9f6e44df094abac2d88af9ca8",
+            "dataset_id": "ds_bcd416175a5848cc8b78f0285ab54126",
             "dataset_revision": 0,
             "design": "linear_association",
+            "duration_ms": 1094,
             "excluded_rows": 0,
-            "execution_ref": "stats:ds_5f42ecf9f6e44df094abac2d88af9ca8:r0:pearson",
+            "execution_ref": "stats_e73257711e4e4919ae7bed66bc535321",
+            "execution_state": "succeeded",
             "input_rows": 5,
             "limitations": [
               "Observational association does not establish causality."
@@ -1211,7 +1431,7 @@
               ],
               "p_value": 0.0,
               "provenance": {
-                "computed_at": "2026-09-28T10:11:12.876997Z",
+                "computed_at": "2026-09-30T16:32:31.803676Z",
                 "dataset_revision": 0,
                 "parameters": {
                   "col_a": "exposure",
@@ -1229,119 +1449,121 @@
             "source_fingerprint": "38de863180f2016bb70783e2d40515248d86a2ee4463ccf6f915f0095660219b"
           }
         },
-        "run_id": "atlas_17c6a83a2b3a47099c57e8c413b36042",
+        "run_id": "atlas_7bd7347efffb4ac697f2bb748e51eaa9",
         "sequence": 9,
         "specialist": "stat",
         "step_id": "statistical_analysis",
         "type": "step_completed"
       },
       {
-        "event_id": "evt_1eab7030f854421d96903f604012866b",
-        "occurred_at": "2026-09-28T10:11:12.966285",
+        "event_id": "evt_391beb6faaaa4d7ba5852edc286aee70",
+        "occurred_at": "2026-09-30T16:32:31.836340",
         "payload": {
           "confidence": "high",
           "objections": []
         },
-        "run_id": "atlas_17c6a83a2b3a47099c57e8c413b36042",
+        "run_id": "atlas_7bd7347efffb4ac697f2bb748e51eaa9",
         "sequence": 10,
         "specialist": "stat",
         "step_id": "statistical_analysis",
         "type": "council_conclusion"
       },
       {
-        "event_id": "evt_4021990609b14bf7acaba4e6f783148c",
-        "occurred_at": "2026-09-28T10:11:12.988362",
+        "event_id": "evt_167c4768dd564ff39c367e5ddcd7c6bf",
+        "occurred_at": "2026-09-30T16:32:31.842509",
         "payload": {
           "policy_version": "atlas-execution-v1",
           "tool": "atlas.methodology_review"
         },
-        "run_id": "atlas_17c6a83a2b3a47099c57e8c413b36042",
+        "run_id": "atlas_7bd7347efffb4ac697f2bb748e51eaa9",
         "sequence": 11,
         "specialist": "stat",
         "step_id": "methodology",
         "type": "step_started"
       },
       {
-        "event_id": "evt_583ce6bb041349d88d320b984ddf229e",
-        "occurred_at": "2026-09-28T10:11:13.075154",
+        "event_id": "evt_bc9bf700302d437591445c9c0cffc4cb",
+        "occurred_at": "2026-09-30T16:32:31.853591",
         "payload": {
           "evidence_ids": [
-            "dataset:ds_5f42ecf9f6e44df094abac2d88af9ca8:r0",
-            "overview:ds_5f42ecf9f6e44df094abac2d88af9ca8:r0"
+            "dataset:ds_bcd416175a5848cc8b78f0285ab54126:r0",
+            "overview:ds_bcd416175a5848cc8b78f0285ab54126:r0",
+            "stat:atlas_7bd7347efffb4ac697f2bb748e51eaa9:statistical_analysis"
           ]
         },
-        "run_id": "atlas_17c6a83a2b3a47099c57e8c413b36042",
+        "run_id": "atlas_7bd7347efffb4ac697f2bb748e51eaa9",
         "sequence": 12,
         "specialist": "stat",
         "step_id": "methodology",
         "type": "step_completed"
       },
       {
-        "event_id": "evt_25a3a66fd1424a78a7eac13834baf947",
-        "occurred_at": "2026-09-28T10:11:13.085688",
+        "event_id": "evt_77423a0ad6db47c08972f8028a2230e5",
+        "occurred_at": "2026-09-30T16:32:31.856688",
         "payload": {
           "confidence": "high",
           "objections": [
             "Do not infer causality, significance, or model performance from a profile alone."
           ]
         },
-        "run_id": "atlas_17c6a83a2b3a47099c57e8c413b36042",
+        "run_id": "atlas_7bd7347efffb4ac697f2bb748e51eaa9",
         "sequence": 13,
         "specialist": "stat",
         "step_id": "methodology",
         "type": "council_conclusion"
       },
       {
-        "event_id": "evt_59cf6b6b44e143e6832f06102bd0dec2",
-        "occurred_at": "2026-09-28T10:11:13.110449",
+        "event_id": "evt_80d31a199b57424fa554fefac07e9365",
+        "occurred_at": "2026-09-30T16:32:31.862705",
         "payload": {
           "policy_version": "atlas-execution-v1",
           "tool": "atlas.evidence_audit"
         },
-        "run_id": "atlas_17c6a83a2b3a47099c57e8c413b36042",
+        "run_id": "atlas_7bd7347efffb4ac697f2bb748e51eaa9",
         "sequence": 14,
         "specialist": "auditor",
         "step_id": "audit",
         "type": "step_started"
       },
       {
-        "event_id": "evt_2419161783354681bbd44475997e46aa",
-        "occurred_at": "2026-09-28T10:11:13.189217",
+        "event_id": "evt_998a8324acca4b17bbd4d2b2c0e54955",
+        "occurred_at": "2026-09-30T16:32:31.873862",
         "payload": {
           "evidence_ids": [
-            "dataset:ds_5f42ecf9f6e44df094abac2d88af9ca8:r0",
-            "overview:ds_5f42ecf9f6e44df094abac2d88af9ca8:r0"
+            "dataset:ds_bcd416175a5848cc8b78f0285ab54126:r0",
+            "overview:ds_bcd416175a5848cc8b78f0285ab54126:r0",
+            "stat:atlas_7bd7347efffb4ac697f2bb748e51eaa9:statistical_analysis"
           ]
         },
-        "run_id": "atlas_17c6a83a2b3a47099c57e8c413b36042",
+        "run_id": "atlas_7bd7347efffb4ac697f2bb748e51eaa9",
         "sequence": 15,
         "specialist": "auditor",
         "step_id": "audit",
         "type": "step_completed"
       },
       {
-        "event_id": "evt_f5a55af143374d69a20b53462bb74149",
-        "occurred_at": "2026-09-28T10:11:13.198745",
+        "event_id": "evt_e425c76a2d43436b883d90b12cbe02cd",
+        "occurred_at": "2026-09-30T16:32:31.877718",
         "payload": {
           "confidence": "high",
           "objections": [
             "No web research, raw-row provider transfer, arbitrary Python execution, or model training occurred."
           ]
         },
-        "run_id": "atlas_17c6a83a2b3a47099c57e8c413b36042",
+        "run_id": "atlas_7bd7347efffb4ac697f2bb748e51eaa9",
         "sequence": 16,
         "specialist": "auditor",
         "step_id": "audit",
         "type": "council_conclusion"
       },
       {
-        "event_id": "evt_1560d612cec1451384b5e5a1d79b99bf",
-        "occurred_at": "2026-09-28T10:11:13.222319",
+        "event_id": "evt_6750723f517a4997babcb39c097ad6d8",
+        "occurred_at": "2026-09-30T16:32:31.885985",
         "payload": {
           "answer_grounded": true,
           "blocked_steps": 0
         },
-        "run_id": "atlas_17c6a83a2b3a47099c57e8c413b36042",
+        "run_id": "atlas_7bd7347efffb4ac697f2bb748e51eaa9",
         "sequence": 17,
         "specialist": "atlas",
         "step_id": null,
@@ -1350,35 +1572,153 @@
     ],
     "evidence": [
       {
-        "dataset_id": "ds_5f42ecf9f6e44df094abac2d88af9ca8",
+        "dataset_id": "ds_bcd416175a5848cc8b78f0285ab54126",
         "dataset_revision": 0,
-        "evidence_id": "dataset:ds_5f42ecf9f6e44df094abac2d88af9ca8:r0",
+        "evidence_id": "dataset:ds_bcd416175a5848cc8b78f0285ab54126:r0",
         "kind": "dataset_revision",
         "source_fingerprint": "38de863180f2016bb70783e2d40515248d86a2ee4463ccf6f915f0095660219b",
         "summary": "Active DatasetStore revision."
       },
       {
-        "dataset_id": "ds_5f42ecf9f6e44df094abac2d88af9ca8",
+        "dataset_id": "ds_bcd416175a5848cc8b78f0285ab54126",
         "dataset_revision": 0,
-        "evidence_id": "overview:ds_5f42ecf9f6e44df094abac2d88af9ca8:r0",
+        "evidence_id": "overview:ds_bcd416175a5848cc8b78f0285ab54126:r0",
         "kind": "overview_profile",
         "source_fingerprint": "38de863180f2016bb70783e2d40515248d86a2ee4463ccf6f915f0095660219b",
         "summary": "Overview profile: 5 rows, 2 columns, health 100/100."
       },
       {
-        "dataset_id": "ds_5f42ecf9f6e44df094abac2d88af9ca8",
+        "dataset_id": "ds_bcd416175a5848cc8b78f0285ab54126",
         "dataset_revision": 0,
-        "evidence_id": "stat:atlas_17c6a83a2b3a47099c57e8c413b36042:statistical_analysis",
+        "evidence_id": "stat:atlas_7bd7347efffb4ac697f2bb748e51eaa9:statistical_analysis",
         "kind": "tool_output",
         "source_fingerprint": "38de863180f2016bb70783e2d40515248d86a2ee4463ccf6f915f0095660219b",
         "summary": "Stats Lab pearson: statistic 1.0, p=0.0; 5 analyzed, 0 excluded."
       }
     ],
+    "messages": [
+      {
+        "content": "Profiled atlas-stat-fixture.csv: 5 rows \u00d7 2 columns; health score 100/100 and missingness 0.00%.",
+        "input_refs": [
+          "dataset:ds_bcd416175a5848cc8b78f0285ab54126:r0",
+          "overview:ds_bcd416175a5848cc8b78f0285ab54126:r0"
+        ],
+        "kind": "computed_observation",
+        "message_id": "msg_8134cacd573e4a8c8cc8a1c50bb7d22f",
+        "model_binding": null,
+        "occurred_at": "2026-09-30T16:32:28.534619Z",
+        "origin": "deterministic_service",
+        "reply_to": null,
+        "sequence": 1,
+        "specialist": "scout",
+        "task_id": "profile"
+      },
+      {
+        "content": "Significant correlation detected (p<0.0001, large effect, Pearson r=1.00). This test found statistically significant evidence of a correlation in this sample. Statistical significance is not the same as practical importance or causation \u2014 read it together with the effect size, the assumption warnings below, and domain context. Evidence stat:atlas_7bd7347efffb4ac697f2bb748e51eaa9:statistical_analysis records the declared design, sample size, exclusions, and limitations.",
+        "input_refs": [
+          "stat:atlas_7bd7347efffb4ac697f2bb748e51eaa9:statistical_analysis"
+        ],
+        "kind": "computed_observation",
+        "message_id": "msg_1f552f5700854d7a98c002daa11e1fe1",
+        "model_binding": null,
+        "occurred_at": "2026-09-30T16:32:31.827838Z",
+        "origin": "deterministic_service",
+        "reply_to": "msg_8134cacd573e4a8c8cc8a1c50bb7d22f",
+        "sequence": 2,
+        "specialist": "stat",
+        "task_id": "statistical_analysis"
+      },
+      {
+        "content": "The declared statistical test ran in Stats Lab. Its recorded method, design, sample size, exclusions, and limitations govern interpretation.",
+        "input_refs": [
+          "dataset:ds_bcd416175a5848cc8b78f0285ab54126:r0",
+          "overview:ds_bcd416175a5848cc8b78f0285ab54126:r0",
+          "stat:atlas_7bd7347efffb4ac697f2bb748e51eaa9:statistical_analysis"
+        ],
+        "kind": "proposal",
+        "message_id": "msg_dde06aeeb93348b1a051836929dbe720",
+        "model_binding": null,
+        "occurred_at": "2026-09-30T16:32:31.850493Z",
+        "origin": "deterministic_service",
+        "reply_to": "msg_8134cacd573e4a8c8cc8a1c50bb7d22f",
+        "sequence": 3,
+        "specialist": "stat",
+        "task_id": "methodology"
+      },
+      {
+        "content": "Do not infer causality, significance, or model performance from a profile alone.",
+        "input_refs": [
+          "dataset:ds_bcd416175a5848cc8b78f0285ab54126:r0",
+          "overview:ds_bcd416175a5848cc8b78f0285ab54126:r0",
+          "stat:atlas_7bd7347efffb4ac697f2bb748e51eaa9:statistical_analysis"
+        ],
+        "kind": "objection",
+        "message_id": "msg_8e345a4560704351a9f38a15360c1ac2",
+        "model_binding": null,
+        "occurred_at": "2026-09-30T16:32:31.850493Z",
+        "origin": "deterministic_service",
+        "reply_to": "msg_dde06aeeb93348b1a051836929dbe720",
+        "sequence": 4,
+        "specialist": "stat",
+        "task_id": "methodology"
+      },
+      {
+        "content": "Deterministic evidence audit found the active DatasetStore revision, Overview profile, and recorded Stats Lab test. This is a provenance check, not independent model corroboration.",
+        "input_refs": [
+          "dataset:ds_bcd416175a5848cc8b78f0285ab54126:r0",
+          "overview:ds_bcd416175a5848cc8b78f0285ab54126:r0",
+          "stat:atlas_7bd7347efffb4ac697f2bb748e51eaa9:statistical_analysis"
+        ],
+        "kind": "computed_observation",
+        "message_id": "msg_d5dba31fb58040889c4bfa1d73723137",
+        "model_binding": null,
+        "occurred_at": "2026-09-30T16:32:31.871291Z",
+        "origin": "deterministic_service",
+        "reply_to": "msg_8e345a4560704351a9f38a15360c1ac2",
+        "sequence": 5,
+        "specialist": "auditor",
+        "task_id": "audit"
+      },
+      {
+        "content": "No web research, raw-row provider transfer, arbitrary Python execution, or model training occurred.",
+        "input_refs": [
+          "dataset:ds_bcd416175a5848cc8b78f0285ab54126:r0",
+          "overview:ds_bcd416175a5848cc8b78f0285ab54126:r0",
+          "stat:atlas_7bd7347efffb4ac697f2bb748e51eaa9:statistical_analysis"
+        ],
+        "kind": "objection",
+        "message_id": "msg_772b54a8c5334673a1c9c9af9864ad76",
+        "model_binding": null,
+        "occurred_at": "2026-09-30T16:32:31.871291Z",
+        "origin": "deterministic_service",
+        "reply_to": "msg_d5dba31fb58040889c4bfa1d73723137",
+        "sequence": 6,
+        "specialist": "auditor",
+        "task_id": "audit"
+      },
+      {
+        "content": "Atlas completed a deterministic first-pass assessment of atlas-stat-fixture.csv: 5 rows \u00d7 2 columns, health 100/100, and 0.00% missing cells. Stats Lab pearson: Significant correlation detected (p<0.0001, large effect, Pearson r=1.00). Evidence stat:atlas_7bd7347efffb4ac697f2bb748e51eaa9:statistical_analysis.",
+        "input_refs": [
+          "dataset:ds_bcd416175a5848cc8b78f0285ab54126:r0",
+          "overview:ds_bcd416175a5848cc8b78f0285ab54126:r0",
+          "stat:atlas_7bd7347efffb4ac697f2bb748e51eaa9:statistical_analysis"
+        ],
+        "kind": "resolution",
+        "message_id": "msg_d70078674aba464194a356646083ee5e",
+        "model_binding": null,
+        "occurred_at": "2026-09-30T16:32:31.885985Z",
+        "origin": "deterministic_service",
+        "reply_to": "msg_772b54a8c5334673a1c9c9af9864ad76",
+        "sequence": 7,
+        "specialist": "atlas",
+        "task_id": "synthesis"
+      }
+    ],
     "plan": {
-      "created_at": "2026-09-28T10:11:02.769570Z",
-      "dataset_id": "ds_5f42ecf9f6e44df094abac2d88af9ca8",
+      "created_at": "2026-09-30T16:32:28.485155Z",
+      "dataset_id": "ds_bcd416175a5848cc8b78f0285ab54126",
       "objective": "Test correlation significance",
-      "plan_id": "plan_1456f6ff30f249e58d5849fc7304463a",
+      "plan_id": "plan_393a99e62d9045df9953a8f9e9ac3059",
       "provider": "deterministic",
       "state": "completed",
       "steps": [
@@ -1388,17 +1728,17 @@
           "error": null,
           "evidence": [
             {
-              "dataset_id": "ds_5f42ecf9f6e44df094abac2d88af9ca8",
+              "dataset_id": "ds_bcd416175a5848cc8b78f0285ab54126",
               "dataset_revision": 0,
-              "evidence_id": "dataset:ds_5f42ecf9f6e44df094abac2d88af9ca8:r0",
+              "evidence_id": "dataset:ds_bcd416175a5848cc8b78f0285ab54126:r0",
               "kind": "dataset_revision",
               "source_fingerprint": "38de863180f2016bb70783e2d40515248d86a2ee4463ccf6f915f0095660219b",
               "summary": "Active DatasetStore revision."
             },
             {
-              "dataset_id": "ds_5f42ecf9f6e44df094abac2d88af9ca8",
+              "dataset_id": "ds_bcd416175a5848cc8b78f0285ab54126",
               "dataset_revision": 0,
-              "evidence_id": "overview:ds_5f42ecf9f6e44df094abac2d88af9ca8:r0",
+              "evidence_id": "overview:ds_bcd416175a5848cc8b78f0285ab54126:r0",
               "kind": "overview_profile",
               "source_fingerprint": "38de863180f2016bb70783e2d40515248d86a2ee4463ccf6f915f0095660219b",
               "summary": "Overview profile: 5 rows, 2 columns, health 100/100."
@@ -1427,9 +1767,9 @@
           "error": null,
           "evidence": [
             {
-              "dataset_id": "ds_5f42ecf9f6e44df094abac2d88af9ca8",
+              "dataset_id": "ds_bcd416175a5848cc8b78f0285ab54126",
               "dataset_revision": 0,
-              "evidence_id": "stat:atlas_17c6a83a2b3a47099c57e8c413b36042:statistical_analysis",
+              "evidence_id": "stat:atlas_7bd7347efffb4ac697f2bb748e51eaa9:statistical_analysis",
               "kind": "tool_output",
               "source_fingerprint": "38de863180f2016bb70783e2d40515248d86a2ee4463ccf6f915f0095660219b",
               "summary": "Stats Lab pearson: statistic 1.0, p=0.0; 5 analyzed, 0 excluded."
@@ -1463,20 +1803,28 @@
           "error": null,
           "evidence": [
             {
-              "dataset_id": "ds_5f42ecf9f6e44df094abac2d88af9ca8",
+              "dataset_id": "ds_bcd416175a5848cc8b78f0285ab54126",
               "dataset_revision": 0,
-              "evidence_id": "dataset:ds_5f42ecf9f6e44df094abac2d88af9ca8:r0",
+              "evidence_id": "dataset:ds_bcd416175a5848cc8b78f0285ab54126:r0",
               "kind": "dataset_revision",
               "source_fingerprint": "38de863180f2016bb70783e2d40515248d86a2ee4463ccf6f915f0095660219b",
               "summary": "Active DatasetStore revision."
             },
             {
-              "dataset_id": "ds_5f42ecf9f6e44df094abac2d88af9ca8",
+              "dataset_id": "ds_bcd416175a5848cc8b78f0285ab54126",
               "dataset_revision": 0,
-              "evidence_id": "overview:ds_5f42ecf9f6e44df094abac2d88af9ca8:r0",
+              "evidence_id": "overview:ds_bcd416175a5848cc8b78f0285ab54126:r0",
               "kind": "overview_profile",
               "source_fingerprint": "38de863180f2016bb70783e2d40515248d86a2ee4463ccf6f915f0095660219b",
               "summary": "Overview profile: 5 rows, 2 columns, health 100/100."
+            },
+            {
+              "dataset_id": "ds_bcd416175a5848cc8b78f0285ab54126",
+              "dataset_revision": 0,
+              "evidence_id": "stat:atlas_7bd7347efffb4ac697f2bb748e51eaa9:statistical_analysis",
+              "kind": "tool_output",
+              "source_fingerprint": "38de863180f2016bb70783e2d40515248d86a2ee4463ccf6f915f0095660219b",
+              "summary": "Stats Lab pearson: statistic 1.0, p=0.0; 5 analyzed, 0 excluded."
             }
           ],
           "expected_evidence": [
@@ -1503,20 +1851,28 @@
           "error": null,
           "evidence": [
             {
-              "dataset_id": "ds_5f42ecf9f6e44df094abac2d88af9ca8",
+              "dataset_id": "ds_bcd416175a5848cc8b78f0285ab54126",
               "dataset_revision": 0,
-              "evidence_id": "dataset:ds_5f42ecf9f6e44df094abac2d88af9ca8:r0",
+              "evidence_id": "dataset:ds_bcd416175a5848cc8b78f0285ab54126:r0",
               "kind": "dataset_revision",
               "source_fingerprint": "38de863180f2016bb70783e2d40515248d86a2ee4463ccf6f915f0095660219b",
               "summary": "Active DatasetStore revision."
             },
             {
-              "dataset_id": "ds_5f42ecf9f6e44df094abac2d88af9ca8",
+              "dataset_id": "ds_bcd416175a5848cc8b78f0285ab54126",
               "dataset_revision": 0,
-              "evidence_id": "overview:ds_5f42ecf9f6e44df094abac2d88af9ca8:r0",
+              "evidence_id": "overview:ds_bcd416175a5848cc8b78f0285ab54126:r0",
               "kind": "overview_profile",
               "source_fingerprint": "38de863180f2016bb70783e2d40515248d86a2ee4463ccf6f915f0095660219b",
               "summary": "Overview profile: 5 rows, 2 columns, health 100/100."
+            },
+            {
+              "dataset_id": "ds_bcd416175a5848cc8b78f0285ab54126",
+              "dataset_revision": 0,
+              "evidence_id": "stat:atlas_7bd7347efffb4ac697f2bb748e51eaa9:statistical_analysis",
+              "kind": "tool_output",
+              "source_fingerprint": "38de863180f2016bb70783e2d40515248d86a2ee4463ccf6f915f0095660219b",
+              "summary": "Stats Lab pearson: statistic 1.0, p=0.0; 5 analyzed, 0 excluded."
             }
           ],
           "expected_evidence": [
@@ -1536,11 +1892,11 @@
         }
       ]
     },
-    "run_id": "atlas_17c6a83a2b3a47099c57e8c413b36042",
+    "run_id": "atlas_7bd7347efffb4ac697f2bb748e51eaa9",
     "uncertainty": "The declared statistical design and exclusions are recorded; the result does not establish causality or model performance.",
-    "updated_at": "2026-09-28T10:11:13.231350Z"
+    "updated_at": "2026-09-30T16:32:31.889518Z"
   },
-  "stat_run_id": "atlas_17c6a83a2b3a47099c57e8c413b36042",
+  "stat_run_id": "atlas_7bd7347efffb4ac697f2bb748e51eaa9",
   "stat_waiting_after_restart": {
     "answer": null,
     "cancellation_requested": false,
@@ -1548,9 +1904,9 @@
       {
         "answer": null,
         "answered_at": null,
-        "created_at": "2026-09-28T10:11:02.938144Z",
+        "created_at": "2026-09-30T16:32:28.543431Z",
         "prompt": "Which two columns, statistical method, and study design should Stat use? Choose a supported Stats Lab procedure; no method or design will be guessed.",
-        "question_id": "clarify:atlas_17c6a83a2b3a47099c57e8c413b36042:statistical_analysis",
+        "question_id": "clarify:atlas_7bd7347efffb4ac697f2bb748e51eaa9:statistical_analysis",
         "state": "open",
         "step_id": "statistical_analysis"
       }
@@ -1561,17 +1917,17 @@
         "confidence": "high",
         "evidence": [
           {
-            "dataset_id": "ds_5f42ecf9f6e44df094abac2d88af9ca8",
+            "dataset_id": "ds_bcd416175a5848cc8b78f0285ab54126",
             "dataset_revision": 0,
-            "evidence_id": "dataset:ds_5f42ecf9f6e44df094abac2d88af9ca8:r0",
+            "evidence_id": "dataset:ds_bcd416175a5848cc8b78f0285ab54126:r0",
             "kind": "dataset_revision",
             "source_fingerprint": "38de863180f2016bb70783e2d40515248d86a2ee4463ccf6f915f0095660219b",
             "summary": "Active DatasetStore revision."
           },
           {
-            "dataset_id": "ds_5f42ecf9f6e44df094abac2d88af9ca8",
+            "dataset_id": "ds_bcd416175a5848cc8b78f0285ab54126",
             "dataset_revision": 0,
-            "evidence_id": "overview:ds_5f42ecf9f6e44df094abac2d88af9ca8:r0",
+            "evidence_id": "overview:ds_bcd416175a5848cc8b78f0285ab54126:r0",
             "kind": "overview_profile",
             "source_fingerprint": "38de863180f2016bb70783e2d40515248d86a2ee4463ccf6f915f0095660219b",
             "summary": "Overview profile: 5 rows, 2 columns, health 100/100."
@@ -1581,23 +1937,23 @@
         "specialist": "scout"
       }
     ],
-    "created_at": "2026-09-28T10:11:02.769570Z",
+    "created_at": "2026-09-30T16:32:28.485155Z",
     "events": [
       {
-        "event_id": "evt_7ca7b210be084510843a7ca9f5dbf385",
-        "occurred_at": "2026-09-28T10:11:02.789639",
+        "event_id": "evt_ef8b61ae23a449e7bfc99a27bee9c8f8",
+        "occurred_at": "2026-09-30T16:32:28.488216",
         "payload": {
-          "dataset_id": "ds_5f42ecf9f6e44df094abac2d88af9ca8"
+          "dataset_id": "ds_bcd416175a5848cc8b78f0285ab54126"
         },
-        "run_id": "atlas_17c6a83a2b3a47099c57e8c413b36042",
+        "run_id": "atlas_7bd7347efffb4ac697f2bb748e51eaa9",
         "sequence": 1,
         "specialist": null,
         "step_id": null,
         "type": "run_created"
       },
       {
-        "event_id": "evt_cf1c3023ebab4ba78b36a8ed247bfe80",
-        "occurred_at": "2026-09-28T10:11:02.811713",
+        "event_id": "evt_3df009c5eef6452490af88e4f1900279",
+        "occurred_at": "2026-09-30T16:32:28.491023",
         "payload": {
           "deep_refinement_requested": false,
           "execution_policy_version": "atlas-execution-v1",
@@ -1617,68 +1973,68 @@
           "model_proposal_steps_accepted": 0,
           "model_tier": "fast",
           "model_tier_reason": "deterministic_provider",
-          "plan_id": "plan_1456f6ff30f249e58d5849fc7304463a",
+          "plan_id": "plan_393a99e62d9045df9953a8f9e9ac3059",
           "prompt_schema_version": "atlas-plan-v1",
           "provider": "deterministic",
           "raw_dataset_sent": false,
           "requested_tier": "deep",
           "source_run_id": null
         },
-        "run_id": "atlas_17c6a83a2b3a47099c57e8c413b36042",
+        "run_id": "atlas_7bd7347efffb4ac697f2bb748e51eaa9",
         "sequence": 2,
         "specialist": null,
         "step_id": null,
         "type": "plan_created"
       },
       {
-        "event_id": "evt_f7f48ae4ba7844bd82b0d2a26a3b167a",
-        "occurred_at": "2026-09-28T10:11:02.852352",
+        "event_id": "evt_cccf0bc273e941f8b6edcf782d53b79c",
+        "occurred_at": "2026-09-30T16:32:28.528743",
         "payload": {
           "policy_version": "atlas-execution-v1",
           "tool": "overview.profile"
         },
-        "run_id": "atlas_17c6a83a2b3a47099c57e8c413b36042",
+        "run_id": "atlas_7bd7347efffb4ac697f2bb748e51eaa9",
         "sequence": 3,
         "specialist": "scout",
         "step_id": "profile",
         "type": "step_started"
       },
       {
-        "event_id": "evt_96efe4c822884b4e95f4796fa28d4c6d",
-        "occurred_at": "2026-09-28T10:11:02.916571",
+        "event_id": "evt_3b217b2a6bfa456186e80e4c784061f7",
+        "occurred_at": "2026-09-30T16:32:28.537753",
         "payload": {
           "evidence_ids": [
-            "dataset:ds_5f42ecf9f6e44df094abac2d88af9ca8:r0",
-            "overview:ds_5f42ecf9f6e44df094abac2d88af9ca8:r0"
+            "dataset:ds_bcd416175a5848cc8b78f0285ab54126:r0",
+            "overview:ds_bcd416175a5848cc8b78f0285ab54126:r0"
           ]
         },
-        "run_id": "atlas_17c6a83a2b3a47099c57e8c413b36042",
+        "run_id": "atlas_7bd7347efffb4ac697f2bb748e51eaa9",
         "sequence": 4,
         "specialist": "scout",
         "step_id": "profile",
         "type": "step_completed"
       },
       {
-        "event_id": "evt_dacba225c0b94a7f9be05e55d86be34e",
-        "occurred_at": "2026-09-28T10:11:02.930116",
+        "event_id": "evt_9d2d41de06ad4ff0bd685707139972b3",
+        "occurred_at": "2026-09-30T16:32:28.540545",
         "payload": {
           "confidence": "high",
           "objections": []
         },
-        "run_id": "atlas_17c6a83a2b3a47099c57e8c413b36042",
+        "run_id": "atlas_7bd7347efffb4ac697f2bb748e51eaa9",
         "sequence": 5,
         "specialist": "scout",
         "step_id": "profile",
         "type": "council_conclusion"
       },
       {
-        "event_id": "evt_e6cbf3c801c6462b9b6ce378d257ca16",
-        "occurred_at": "2026-09-28T10:11:02.953196",
+        "event_id": "evt_3f7c981c737846d4a6b0438734314166",
+        "occurred_at": "2026-09-30T16:32:28.546628",
         "payload": {
           "prompt": "Which two columns, statistical method, and study design should Stat use? Choose a supported Stats Lab procedure; no method or design will be guessed.",
-          "question_id": "clarify:atlas_17c6a83a2b3a47099c57e8c413b36042:statistical_analysis"
+          "question_id": "clarify:atlas_7bd7347efffb4ac697f2bb748e51eaa9:statistical_analysis"
         },
-        "run_id": "atlas_17c6a83a2b3a47099c57e8c413b36042",
+        "run_id": "atlas_7bd7347efffb4ac697f2bb748e51eaa9",
         "sequence": 6,
         "specialist": "atlas",
         "step_id": "statistical_analysis",
@@ -1687,27 +2043,45 @@
     ],
     "evidence": [
       {
-        "dataset_id": "ds_5f42ecf9f6e44df094abac2d88af9ca8",
+        "dataset_id": "ds_bcd416175a5848cc8b78f0285ab54126",
         "dataset_revision": 0,
-        "evidence_id": "dataset:ds_5f42ecf9f6e44df094abac2d88af9ca8:r0",
+        "evidence_id": "dataset:ds_bcd416175a5848cc8b78f0285ab54126:r0",
         "kind": "dataset_revision",
         "source_fingerprint": "38de863180f2016bb70783e2d40515248d86a2ee4463ccf6f915f0095660219b",
         "summary": "Active DatasetStore revision."
       },
       {
-        "dataset_id": "ds_5f42ecf9f6e44df094abac2d88af9ca8",
+        "dataset_id": "ds_bcd416175a5848cc8b78f0285ab54126",
         "dataset_revision": 0,
-        "evidence_id": "overview:ds_5f42ecf9f6e44df094abac2d88af9ca8:r0",
+        "evidence_id": "overview:ds_bcd416175a5848cc8b78f0285ab54126:r0",
         "kind": "overview_profile",
         "source_fingerprint": "38de863180f2016bb70783e2d40515248d86a2ee4463ccf6f915f0095660219b",
         "summary": "Overview profile: 5 rows, 2 columns, health 100/100."
       }
     ],
+    "messages": [
+      {
+        "content": "Profiled atlas-stat-fixture.csv: 5 rows \u00d7 2 columns; health score 100/100 and missingness 0.00%.",
+        "input_refs": [
+          "dataset:ds_bcd416175a5848cc8b78f0285ab54126:r0",
+          "overview:ds_bcd416175a5848cc8b78f0285ab54126:r0"
+        ],
+        "kind": "computed_observation",
+        "message_id": "msg_8134cacd573e4a8c8cc8a1c50bb7d22f",
+        "model_binding": null,
+        "occurred_at": "2026-09-30T16:32:28.534619Z",
+        "origin": "deterministic_service",
+        "reply_to": null,
+        "sequence": 1,
+        "specialist": "scout",
+        "task_id": "profile"
+      }
+    ],
     "plan": {
-      "created_at": "2026-09-28T10:11:02.769570Z",
-      "dataset_id": "ds_5f42ecf9f6e44df094abac2d88af9ca8",
+      "created_at": "2026-09-30T16:32:28.485155Z",
+      "dataset_id": "ds_bcd416175a5848cc8b78f0285ab54126",
       "objective": "Test correlation significance",
-      "plan_id": "plan_1456f6ff30f249e58d5849fc7304463a",
+      "plan_id": "plan_393a99e62d9045df9953a8f9e9ac3059",
       "provider": "deterministic",
       "state": "waiting",
       "steps": [
@@ -1717,17 +2091,17 @@
           "error": null,
           "evidence": [
             {
-              "dataset_id": "ds_5f42ecf9f6e44df094abac2d88af9ca8",
+              "dataset_id": "ds_bcd416175a5848cc8b78f0285ab54126",
               "dataset_revision": 0,
-              "evidence_id": "dataset:ds_5f42ecf9f6e44df094abac2d88af9ca8:r0",
+              "evidence_id": "dataset:ds_bcd416175a5848cc8b78f0285ab54126:r0",
               "kind": "dataset_revision",
               "source_fingerprint": "38de863180f2016bb70783e2d40515248d86a2ee4463ccf6f915f0095660219b",
               "summary": "Active DatasetStore revision."
             },
             {
-              "dataset_id": "ds_5f42ecf9f6e44df094abac2d88af9ca8",
+              "dataset_id": "ds_bcd416175a5848cc8b78f0285ab54126",
               "dataset_revision": 0,
-              "evidence_id": "overview:ds_5f42ecf9f6e44df094abac2d88af9ca8:r0",
+              "evidence_id": "overview:ds_bcd416175a5848cc8b78f0285ab54126:r0",
               "kind": "overview_profile",
               "source_fingerprint": "38de863180f2016bb70783e2d40515248d86a2ee4463ccf6f915f0095660219b",
               "summary": "Overview profile: 5 rows, 2 columns, health 100/100."
@@ -1817,9 +2191,9 @@
         }
       ]
     },
-    "run_id": "atlas_17c6a83a2b3a47099c57e8c413b36042",
+    "run_id": "atlas_7bd7347efffb4ac697f2bb748e51eaa9",
     "uncertainty": "Statistical execution is waiting for declared inputs; completed evidence remains available.",
-    "updated_at": "2026-09-28T10:11:02.939148Z"
+    "updated_at": "2026-09-30T16:32:28.544431Z"
   },
   "stat_waiting_before_restart": {
     "answer": null,
@@ -1828,9 +2202,9 @@
       {
         "answer": null,
         "answered_at": null,
-        "created_at": "2026-09-28T10:11:02.938144Z",
+        "created_at": "2026-09-30T16:32:28.543431Z",
         "prompt": "Which two columns, statistical method, and study design should Stat use? Choose a supported Stats Lab procedure; no method or design will be guessed.",
-        "question_id": "clarify:atlas_17c6a83a2b3a47099c57e8c413b36042:statistical_analysis",
+        "question_id": "clarify:atlas_7bd7347efffb4ac697f2bb748e51eaa9:statistical_analysis",
         "state": "open",
         "step_id": "statistical_analysis"
       }
@@ -1841,17 +2215,17 @@
         "confidence": "high",
         "evidence": [
           {
-            "dataset_id": "ds_5f42ecf9f6e44df094abac2d88af9ca8",
+            "dataset_id": "ds_bcd416175a5848cc8b78f0285ab54126",
             "dataset_revision": 0,
-            "evidence_id": "dataset:ds_5f42ecf9f6e44df094abac2d88af9ca8:r0",
+            "evidence_id": "dataset:ds_bcd416175a5848cc8b78f0285ab54126:r0",
             "kind": "dataset_revision",
             "source_fingerprint": "38de863180f2016bb70783e2d40515248d86a2ee4463ccf6f915f0095660219b",
             "summary": "Active DatasetStore revision."
           },
           {
-            "dataset_id": "ds_5f42ecf9f6e44df094abac2d88af9ca8",
+            "dataset_id": "ds_bcd416175a5848cc8b78f0285ab54126",
             "dataset_revision": 0,
-            "evidence_id": "overview:ds_5f42ecf9f6e44df094abac2d88af9ca8:r0",
+            "evidence_id": "overview:ds_bcd416175a5848cc8b78f0285ab54126:r0",
             "kind": "overview_profile",
             "source_fingerprint": "38de863180f2016bb70783e2d40515248d86a2ee4463ccf6f915f0095660219b",
             "summary": "Overview profile: 5 rows, 2 columns, health 100/100."
@@ -1861,23 +2235,23 @@
         "specialist": "scout"
       }
     ],
-    "created_at": "2026-09-28T10:11:02.769570Z",
+    "created_at": "2026-09-30T16:32:28.485155Z",
     "events": [
       {
-        "event_id": "evt_7ca7b210be084510843a7ca9f5dbf385",
-        "occurred_at": "2026-09-28T10:11:02.789639",
+        "event_id": "evt_ef8b61ae23a449e7bfc99a27bee9c8f8",
+        "occurred_at": "2026-09-30T16:32:28.488216",
         "payload": {
-          "dataset_id": "ds_5f42ecf9f6e44df094abac2d88af9ca8"
+          "dataset_id": "ds_bcd416175a5848cc8b78f0285ab54126"
         },
-        "run_id": "atlas_17c6a83a2b3a47099c57e8c413b36042",
+        "run_id": "atlas_7bd7347efffb4ac697f2bb748e51eaa9",
         "sequence": 1,
         "specialist": null,
         "step_id": null,
         "type": "run_created"
       },
       {
-        "event_id": "evt_cf1c3023ebab4ba78b36a8ed247bfe80",
-        "occurred_at": "2026-09-28T10:11:02.811713",
+        "event_id": "evt_3df009c5eef6452490af88e4f1900279",
+        "occurred_at": "2026-09-30T16:32:28.491023",
         "payload": {
           "deep_refinement_requested": false,
           "execution_policy_version": "atlas-execution-v1",
@@ -1897,68 +2271,68 @@
           "model_proposal_steps_accepted": 0,
           "model_tier": "fast",
           "model_tier_reason": "deterministic_provider",
-          "plan_id": "plan_1456f6ff30f249e58d5849fc7304463a",
+          "plan_id": "plan_393a99e62d9045df9953a8f9e9ac3059",
           "prompt_schema_version": "atlas-plan-v1",
           "provider": "deterministic",
           "raw_dataset_sent": false,
           "requested_tier": "deep",
           "source_run_id": null
         },
-        "run_id": "atlas_17c6a83a2b3a47099c57e8c413b36042",
+        "run_id": "atlas_7bd7347efffb4ac697f2bb748e51eaa9",
         "sequence": 2,
         "specialist": null,
         "step_id": null,
         "type": "plan_created"
       },
       {
-        "event_id": "evt_f7f48ae4ba7844bd82b0d2a26a3b167a",
-        "occurred_at": "2026-09-28T10:11:02.852352",
+        "event_id": "evt_cccf0bc273e941f8b6edcf782d53b79c",
+        "occurred_at": "2026-09-30T16:32:28.528743",
         "payload": {
           "policy_version": "atlas-execution-v1",
           "tool": "overview.profile"
         },
-        "run_id": "atlas_17c6a83a2b3a47099c57e8c413b36042",
+        "run_id": "atlas_7bd7347efffb4ac697f2bb748e51eaa9",
         "sequence": 3,
         "specialist": "scout",
         "step_id": "profile",
         "type": "step_started"
       },
       {
-        "event_id": "evt_96efe4c822884b4e95f4796fa28d4c6d",
-        "occurred_at": "2026-09-28T10:11:02.916571",
+        "event_id": "evt_3b217b2a6bfa456186e80e4c784061f7",
+        "occurred_at": "2026-09-30T16:32:28.537753",
         "payload": {
           "evidence_ids": [
-            "dataset:ds_5f42ecf9f6e44df094abac2d88af9ca8:r0",
-            "overview:ds_5f42ecf9f6e44df094abac2d88af9ca8:r0"
+            "dataset:ds_bcd416175a5848cc8b78f0285ab54126:r0",
+            "overview:ds_bcd416175a5848cc8b78f0285ab54126:r0"
           ]
         },
-        "run_id": "atlas_17c6a83a2b3a47099c57e8c413b36042",
+        "run_id": "atlas_7bd7347efffb4ac697f2bb748e51eaa9",
         "sequence": 4,
         "specialist": "scout",
         "step_id": "profile",
         "type": "step_completed"
       },
       {
-        "event_id": "evt_dacba225c0b94a7f9be05e55d86be34e",
-        "occurred_at": "2026-09-28T10:11:02.930116",
+        "event_id": "evt_9d2d41de06ad4ff0bd685707139972b3",
+        "occurred_at": "2026-09-30T16:32:28.540545",
         "payload": {
           "confidence": "high",
           "objections": []
         },
-        "run_id": "atlas_17c6a83a2b3a47099c57e8c413b36042",
+        "run_id": "atlas_7bd7347efffb4ac697f2bb748e51eaa9",
         "sequence": 5,
         "specialist": "scout",
         "step_id": "profile",
         "type": "council_conclusion"
       },
       {
-        "event_id": "evt_e6cbf3c801c6462b9b6ce378d257ca16",
-        "occurred_at": "2026-09-28T10:11:02.953196",
+        "event_id": "evt_3f7c981c737846d4a6b0438734314166",
+        "occurred_at": "2026-09-30T16:32:28.546628",
         "payload": {
           "prompt": "Which two columns, statistical method, and study design should Stat use? Choose a supported Stats Lab procedure; no method or design will be guessed.",
-          "question_id": "clarify:atlas_17c6a83a2b3a47099c57e8c413b36042:statistical_analysis"
+          "question_id": "clarify:atlas_7bd7347efffb4ac697f2bb748e51eaa9:statistical_analysis"
         },
-        "run_id": "atlas_17c6a83a2b3a47099c57e8c413b36042",
+        "run_id": "atlas_7bd7347efffb4ac697f2bb748e51eaa9",
         "sequence": 6,
         "specialist": "atlas",
         "step_id": "statistical_analysis",
@@ -1967,27 +2341,45 @@
     ],
     "evidence": [
       {
-        "dataset_id": "ds_5f42ecf9f6e44df094abac2d88af9ca8",
+        "dataset_id": "ds_bcd416175a5848cc8b78f0285ab54126",
         "dataset_revision": 0,
-        "evidence_id": "dataset:ds_5f42ecf9f6e44df094abac2d88af9ca8:r0",
+        "evidence_id": "dataset:ds_bcd416175a5848cc8b78f0285ab54126:r0",
         "kind": "dataset_revision",
         "source_fingerprint": "38de863180f2016bb70783e2d40515248d86a2ee4463ccf6f915f0095660219b",
         "summary": "Active DatasetStore revision."
       },
       {
-        "dataset_id": "ds_5f42ecf9f6e44df094abac2d88af9ca8",
+        "dataset_id": "ds_bcd416175a5848cc8b78f0285ab54126",
         "dataset_revision": 0,
-        "evidence_id": "overview:ds_5f42ecf9f6e44df094abac2d88af9ca8:r0",
+        "evidence_id": "overview:ds_bcd416175a5848cc8b78f0285ab54126:r0",
         "kind": "overview_profile",
         "source_fingerprint": "38de863180f2016bb70783e2d40515248d86a2ee4463ccf6f915f0095660219b",
         "summary": "Overview profile: 5 rows, 2 columns, health 100/100."
       }
     ],
+    "messages": [
+      {
+        "content": "Profiled atlas-stat-fixture.csv: 5 rows \u00d7 2 columns; health score 100/100 and missingness 0.00%.",
+        "input_refs": [
+          "dataset:ds_bcd416175a5848cc8b78f0285ab54126:r0",
+          "overview:ds_bcd416175a5848cc8b78f0285ab54126:r0"
+        ],
+        "kind": "computed_observation",
+        "message_id": "msg_8134cacd573e4a8c8cc8a1c50bb7d22f",
+        "model_binding": null,
+        "occurred_at": "2026-09-30T16:32:28.534619Z",
+        "origin": "deterministic_service",
+        "reply_to": null,
+        "sequence": 1,
+        "specialist": "scout",
+        "task_id": "profile"
+      }
+    ],
     "plan": {
-      "created_at": "2026-09-28T10:11:02.769570Z",
-      "dataset_id": "ds_5f42ecf9f6e44df094abac2d88af9ca8",
+      "created_at": "2026-09-30T16:32:28.485155Z",
+      "dataset_id": "ds_bcd416175a5848cc8b78f0285ab54126",
       "objective": "Test correlation significance",
-      "plan_id": "plan_1456f6ff30f249e58d5849fc7304463a",
+      "plan_id": "plan_393a99e62d9045df9953a8f9e9ac3059",
       "provider": "deterministic",
       "state": "waiting",
       "steps": [
@@ -1997,17 +2389,17 @@
           "error": null,
           "evidence": [
             {
-              "dataset_id": "ds_5f42ecf9f6e44df094abac2d88af9ca8",
+              "dataset_id": "ds_bcd416175a5848cc8b78f0285ab54126",
               "dataset_revision": 0,
-              "evidence_id": "dataset:ds_5f42ecf9f6e44df094abac2d88af9ca8:r0",
+              "evidence_id": "dataset:ds_bcd416175a5848cc8b78f0285ab54126:r0",
               "kind": "dataset_revision",
               "source_fingerprint": "38de863180f2016bb70783e2d40515248d86a2ee4463ccf6f915f0095660219b",
               "summary": "Active DatasetStore revision."
             },
             {
-              "dataset_id": "ds_5f42ecf9f6e44df094abac2d88af9ca8",
+              "dataset_id": "ds_bcd416175a5848cc8b78f0285ab54126",
               "dataset_revision": 0,
-              "evidence_id": "overview:ds_5f42ecf9f6e44df094abac2d88af9ca8:r0",
+              "evidence_id": "overview:ds_bcd416175a5848cc8b78f0285ab54126:r0",
               "kind": "overview_profile",
               "source_fingerprint": "38de863180f2016bb70783e2d40515248d86a2ee4463ccf6f915f0095660219b",
               "summary": "Overview profile: 5 rows, 2 columns, health 100/100."
@@ -2097,8 +2489,8 @@
         }
       ]
     },
-    "run_id": "atlas_17c6a83a2b3a47099c57e8c413b36042",
+    "run_id": "atlas_7bd7347efffb4ac697f2bb748e51eaa9",
     "uncertainty": "Statistical execution is waiting for declared inputs; completed evidence remains available.",
-    "updated_at": "2026-09-28T10:11:02.939148Z"
+    "updated_at": "2026-09-30T16:32:28.544431Z"
   }
 }

@@ -38,6 +38,10 @@ def test_typed_aggregate_is_executed_and_recorded_with_exact_query(tmp_path, mon
     assert output["dataset_revision"] == 0
     assert output["sql_run_id"] in completed.answer
     assert any(item.evidence_id == f"sql:{output['sql_run_id']}" for item in completed.evidence)
+    query_message = next(message for message in completed.messages if message.specialist.value == "query")
+    assert query_message.kind == "computed_observation"
+    assert query_message.input_refs == [f"sql:{output['sql_run_id']}"]
+    assert query_message.model_binding is None
     recovered = atlas_runtime.AtlasRunStore(DurableAtlasRunStore(f"sqlite:///{(tmp_path / 'atlas.sqlite').as_posix()}"))
     assert any(event.payload.get("output") == output for event in recovered.get(run.run_id).events)
 

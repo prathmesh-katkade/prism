@@ -37,7 +37,7 @@ from prism_overview_analytics import ANALYTICS_SERVICE_VERSION, detect_column_ty
 # difference between a real latency regression and normal process warmup.
 from scipy import stats as scipy_stats
 
-from .analytical_objects import register_statistical_test
+from .analytical_objects import register_statistical_test as register_statistical_test
 from .overview import StoredDataset
 from .overview import store as overview_store
 
@@ -315,8 +315,8 @@ def _run_pearson(stored: StoredDataset, col_a: str, col_b: str) -> StatTestResul
     )
 
 
-def run_test(stored: StoredDataset, request: StatTestRequest) -> StatTestResult:
-    """Dispatch to the right test based on a (typically suggest_test-derived) request."""
+def compute_test(stored: StoredDataset, request: StatTestRequest) -> StatTestResult:
+    """Compute a tested procedure without writing an analytical object."""
     result: StatTestResult
     if request.test is StatTestKind.TTEST:
         if not request.numeric_col or not request.cat_col:
@@ -332,6 +332,12 @@ def run_test(stored: StoredDataset, request: StatTestRequest) -> StatTestResult:
         result = _run_pearson(stored, request.col_a, request.col_b)
     else:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported test.")
+    return result
+
+
+def run_test(stored: StoredDataset, request: StatTestRequest) -> StatTestResult:
+    """Compute and register the result for the regular Stats Lab API."""
+    result = compute_test(stored, request)
     register_statistical_test(stored, result)
     return result
 

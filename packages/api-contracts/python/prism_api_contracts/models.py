@@ -1174,6 +1174,22 @@ class AtlasClarification(ContractModel):
     answered_at: Optional[datetime] = None
 
 
+class AtlasSpecialistMessage(ContractModel):
+    """A persisted contribution with explicit origin, never a step-label transcript."""
+
+    message_id: str = Field(min_length=1, max_length=120)
+    sequence: int = Field(ge=1)
+    specialist: AtlasSpecialistId
+    task_id: str = Field(min_length=1, max_length=120)
+    kind: Literal["computed_observation", "proposal", "objection", "resolution", "human_note"]
+    origin: Literal["deterministic_service", "model", "human"]
+    content: str = Field(min_length=1, max_length=2_000)
+    input_refs: list[str] = Field(default_factory=list, max_length=20)
+    reply_to: Optional[str] = Field(default=None, max_length=120)
+    model_binding: Optional[str] = Field(default=None, max_length=240)
+    occurred_at: datetime
+
+
 class AtlasRunResponse(ContractModel):
     run_id: str = Field(min_length=1, max_length=120)
     plan: AtlasStructuredPlan
@@ -1183,6 +1199,7 @@ class AtlasRunResponse(ContractModel):
     council: list[AtlasCouncilConclusion] = Field(default_factory=list)
     events: list[AtlasRunEvent] = Field(default_factory=list)
     clarifications: list[AtlasClarification] = Field(default_factory=list)
+    messages: list[AtlasSpecialistMessage] = Field(default_factory=list)
     cancellation_requested: bool = False
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None

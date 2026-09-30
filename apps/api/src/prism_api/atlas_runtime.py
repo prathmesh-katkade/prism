@@ -34,6 +34,7 @@ from prism_api_contracts import (
     AtlasRunResponse,
     AtlasSpecialistId,
     AtlasSpecialistIdentity,
+    AtlasSpecialistMessage,
     AtlasSqlAnalysis,
     AtlasStatAnalysis,
     AtlasStepKind,
@@ -499,7 +500,11 @@ class DynamicAtlasPlanner:
                 rationale="Execute a typed, schema-validated aggregate over the uploaded dataset.",
                 dependencies=["profile"], expected_evidence=["dataset_revision", "tool_output"],
             ))
-        if request.stat_analysis is not None or any(word in objective for word in ("statistic", "significance", "hypothesis", "compare", "correlation")):
+        statistical_intent = any(word in objective for word in (
+            "statistic", "significance", "hypothesis", "correlation", "t-test", "anova",
+            "chi-square", "p value", "group means", "compare means", "difference in means",
+        ))
+        if request.stat_analysis is not None or statistical_intent:
             steps.append(AtlasPlanStep(
                 step_id=AtlasStepKind.STATISTICAL_ANALYSIS.value,
                 title="Run a declared statistical test",
@@ -618,6 +623,8 @@ class DynamicAtlasPlanner:
     @staticmethod
     def validate(plan: AtlasStructuredPlan) -> None:
         ids = {step.step_id for step in plan.steps}
+        if len(ids) != len(plan.steps):
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Atlas plan has duplicate step identities.")
         for step in plan.steps:
             if (
                 step.tool_name not in TOOL_REGISTRY
@@ -629,6 +636,23 @@ class DynamicAtlasPlanner:
                     status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                     detail=f"Atlas plan has an undeclared tool or invalid dependency: {step.step_id}.",
                 )
+        DynamicAtlasPlanner.ordered_steps(plan)
+
+    @staticmethod
+    def ordered_steps(plan: AtlasStructuredPlan) -> list[AtlasPlanStep]:
+        """Stable topological order; dependencies never dispatch after dependents."""
+        remaining = list(plan.steps)
+        ordered: list[AtlasPlanStep] = []
+        completed: set[str] = set()
+        while remaining:
+            ready = [step for step in remaining if set(step.dependencies).issubset(completed)]
+            if not ready:
+                raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                                    detail="Atlas plan dependencies contain a cycle or missing step.")
+            ordered.extend(ready)
+            completed.update(step.step_id for step in ready)
+            remaining = [step for step in remaining if step not in ready]
+        return ordered
 
 
 class AtlasRunStore:
@@ -1166,10 +1190,30 @@ def _complete_step(
     output: Optional[dict[str, object]] = None,
 ) -> None:
     run = _replace_step(runs.get(run_id), step.step_id, AtlasStepState.COMPLETED, evidence=evidence)
+    reply = next((item.message_id for item in reversed(run.messages)
+                  if item.task_id in step.dependencies), None)
+    references = [item.evidence_id for item in evidence]
+    kind = "proposal" if step.kind is AtlasStepKind.METHODOLOGY_REVIEW and not output else "computed_observation"
+    contribution = AtlasSpecialistMessage(
+        message_id=f"msg_{uuid.uuid4().hex}", sequence=len(run.messages) + 1,
+        specialist=conclusion.specialist, task_id=step.step_id, kind=kind,
+        origin="deterministic_service", content=conclusion.conclusion,
+        input_refs=references, reply_to=reply, occurred_at=datetime.now(timezone.utc),
+    )
+    messages = [*run.messages, contribution]
+    for objection in conclusion.objections:
+        messages.append(AtlasSpecialistMessage(
+            message_id=f"msg_{uuid.uuid4().hex}", sequence=len(messages) + 1,
+            specialist=conclusion.specialist, task_id=step.step_id, kind="objection",
+            origin="deterministic_service", content=objection,
+            input_refs=references, reply_to=contribution.message_id,
+            occurred_at=datetime.now(timezone.utc),
+        ))
     run = run.model_copy(
         update={
             "council": [*run.council, conclusion],
             "evidence": [*run.evidence, *[item for item in evidence if item not in run.evidence]],
+            "messages": messages,
         }
     )
     runs.update(run)
@@ -1338,11 +1382,22 @@ def execute(run_id: str) -> None:
                 "uncertainty": "No requested analysis or code was executed. Verified input declarations are required.",
             }))
             return
-        for step in runs.get(run_id).plan.steps:
+        for step in DynamicAtlasPlanner.ordered_steps(runs.get(run_id).plan):
             if runs.cancelled(run_id):
                 _cancel_run(run_id)
                 return
-            if step.state in {AtlasStepState.COMPLETED, AtlasStepState.BLOCKED}:
+            current_steps = {item.step_id: item for item in runs.get(run_id).plan.steps}
+            current_step = current_steps[step.step_id]
+            if current_step.state in {AtlasStepState.COMPLETED, AtlasStepState.BLOCKED}:
+                continue
+            unsatisfied = [dependency for dependency in step.dependencies
+                           if current_steps[dependency].state is not AtlasStepState.COMPLETED]
+            if unsatisfied:
+                reason = "Dependencies did not complete: " + ", ".join(unsatisfied)
+                runs.update(_replace_step(runs.get(run_id), step.step_id, AtlasStepState.BLOCKED, error=reason))
+                runs.append_event(run_id, AtlasRunEventType.STEP_COMPLETED,
+                                  specialist=step.specialist, step_id=step.step_id,
+                                  payload={"state": "blocked", "reason": reason, "dependencies": unsatisfied})
                 continue
             if step.tool_name == "stats.declared_analysis_required":
                 _wait_for_stat_input(run_id, step)
@@ -1432,16 +1487,28 @@ def execute(run_id: str) -> None:
                 from .atlas_stat_adapter import execute_declared_test
 
                 try:
+                    def should_stop_stat(tool_name: str = step.tool_name) -> bool:
+                        return runs.cancelled(run_id) or not current_policy().permits(tool_name)
+
                     output = execute_declared_test(
-                        current.plan.dataset_id, AtlasStatAnalysis.model_validate(step.tool_args)
+                        current.plan.dataset_id, AtlasStatAnalysis.model_validate(step.tool_args), should_stop_stat,
                     )
-                except ValueError as error:
+                except (ValueError, RuntimeError, TimeoutError) as error:
+                    if runs.cancelled(run_id):
+                        _cancel_run(run_id)
+                        return
                     reason = str(error)[:1000]
                     runs.update(_replace_step(runs.get(run_id), step.step_id, AtlasStepState.BLOCKED, error=reason))
                     runs.append_event(run_id, AtlasRunEventType.STEP_COMPLETED,
                                       specialist=step.specialist, step_id=step.step_id,
-                                      payload={"state": "blocked", "reason": reason})
+                                      payload={"state": "timed_out" if isinstance(error, TimeoutError) else "blocked", "reason": reason})
                     continue
+                if runs.cancelled(run_id):
+                    runs.append_event(run_id, AtlasRunEventType.STEP_COMPLETED,
+                                      specialist=step.specialist, step_id=step.step_id,
+                                      payload={"state": "cancelled", "output": output})
+                    _cancel_run(run_id)
+                    return
                 result = cast(dict[str, object], output["result"])
                 evidence = [AtlasEvidenceReference(
                     evidence_id=f"stat:{run_id}:{step.step_id}", kind="tool_output",
@@ -1486,6 +1553,8 @@ def execute(run_id: str) -> None:
                     item.tool_name == "stats.declared_test" and item.state is AtlasStepState.COMPLETED
                     for item in runs.get(run_id).plan.steps
                 )
+                if completed_stat:
+                    evidence = [*evidence, *[item for item in runs.get(run_id).evidence if item.evidence_id.startswith("stat:")]]
                 conclusion = AtlasCouncilConclusion(
                     specialist=AtlasSpecialistId.STAT,
                     conclusion=(
@@ -1500,6 +1569,7 @@ def execute(run_id: str) -> None:
                     evidence=evidence,
                 )
             else:
+                evidence = list(runs.get(run_id).evidence)
                 completed_tools = {item.tool_name for item in runs.get(run_id).plan.steps if item.state is AtlasStepState.COMPLETED}
                 observed = [name for name in ("SQL Lab aggregate", "Stats Lab test") if
                             (name == "SQL Lab aggregate" and "sql_lab.local_aggregate" in completed_tools)
@@ -1547,6 +1617,17 @@ def execute(run_id: str) -> None:
         if blocked:
             answer += " Requested work was held at the declared safety boundary until required context is supplied."
             uncertainty = " ".join([uncertainty, *blocked])
+        if re.search(r"\b(causal|causality|cause|causes|caused)\b", finished.plan.objective, re.I):
+            answer += " Causal attribution was not performed; no assignment provenance or causal design was supplied."
+            uncertainty += " A descriptive comparison cannot identify a causal effect."
+        synthesis = AtlasSpecialistMessage(
+            message_id=f"msg_{uuid.uuid4().hex}", sequence=len(finished.messages) + 1,
+            specialist=AtlasSpecialistId.ATLAS, task_id="synthesis", kind="resolution",
+            origin="deterministic_service", content=answer[:2000],
+            input_refs=[item.evidence_id for item in finished.evidence[:20]],
+            reply_to=finished.messages[-1].message_id if finished.messages else None,
+            occurred_at=datetime.now(timezone.utc),
+        )
         # Append the terminal event *before* flipping plan.state so a concurrent
         # poller can never observe a COMPLETED/FAILED/CANCELLED plan state
         # whose matching event has not been durably recorded yet -- execute()
@@ -1563,6 +1644,7 @@ def execute(run_id: str) -> None:
                     "plan": finished.plan.model_copy(update={"state": AtlasPlanState.COMPLETED}),
                     "answer": answer,
                     "uncertainty": uncertainty,
+                    "messages": [*finished.messages, synthesis],
                 }
             )
         )

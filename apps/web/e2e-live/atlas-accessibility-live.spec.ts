@@ -68,7 +68,11 @@ test("statistical clarification and evidence remain accessible at narrow width",
   await page.getByRole("button", { name: "Save answer and resume" }).click();
   await expect(page.getByRole("button", { name: "Inspect supporting statistical evidence" })).toBeVisible({ timeout: 20_000 });
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
-  expect(overflow).toBeLessThanOrEqual(1);
+  const overflowing = await page.evaluate(() => [...document.querySelectorAll("body *")]
+    .map((element) => ({ tag: element.tagName, className: String(element.className).slice(0, 80), right: Math.round(element.getBoundingClientRect().right) }))
+    .filter((element) => element.right > document.documentElement.clientWidth + 1)
+    .slice(0, 8));
+  expect(overflow, JSON.stringify(overflowing)).toBeLessThanOrEqual(1);
   expect(await seriousViolations(page, ".atlas-investigation")).toEqual([]);
   if (mobile) await page.screenshot({ path: "docs/atlas/production-investigation-v1/verification/atlas-stat-mobile.png", fullPage: true });
 });

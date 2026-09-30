@@ -106,4 +106,29 @@ describe("Atlas investigation", () => {
       method: "POST", body: JSON.stringify({ test: "ttest", col_a: "outcome", col_b: "group", design: "independent_groups" }),
     })));
   });
+
+  it("shows persisted specialist provenance and reply links", async () => {
+    const withMessages = { ...recorded, messages: [{
+      message_id: "msg-query", sequence: 1, specialist: "query", task_id: "sql",
+      kind: "computed_observation", origin: "deterministic_service",
+      content: "Counted two matching rows.", input_refs: ["sql:run-1"], reply_to: null,
+      model_binding: null, occurred_at: "2026-09-27T00:00:03Z",
+    }, {
+      message_id: "msg-audit", sequence: 2, specialist: "auditor", task_id: "audit",
+      kind: "objection", origin: "deterministic_service",
+      content: "Assignment provenance is missing.", input_refs: ["sql:run-1"], reply_to: "msg-query",
+      model_binding: null, occurred_at: "2026-09-27T00:00:04Z",
+    }] };
+    vi.stubGlobal("fetch", vi.fn(async (input: string | URL) => new Response(
+      JSON.stringify(String(input).endsWith("/interventions") ? [] : withMessages), { status: 200 },
+    )));
+    render(<AtlasInvestigation datasetId="dataset-1" initialRunId="atlas-recorded" onSelectContext={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText("Can we attribute the change?")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /Collaboration/ }));
+    const exchange = screen.getByRole("heading", { name: "Recorded exchange" }).closest("section")!;
+    expect(within(exchange).getByText("Counted two matching rows.")).toBeInTheDocument();
+    expect(within(exchange).getByText("Assignment provenance is missing.")).toBeInTheDocument();
+    expect(within(exchange).getByText(/Reply to msg-query/)).toBeInTheDocument();
+    expect(within(exchange).getAllByText(/Model: none/)).toHaveLength(2);
+  });
 });

@@ -26,7 +26,8 @@ test("Atlas shows a real run, preserves its refusal, and persists a targeted hum
   await expect(page.getByLabel("Contextual inspector")).toContainText("Recorded in run atlas_");
   await page.getByRole("button", { name: /Collaboration/ }).click();
   await expect(page.getByRole("heading", { name: "Work map" })).toBeVisible();
-  await expect(page.getByText(/reply links unavailable for historical records/)).toBeVisible();
+  await expect(page.getByText("Persisted specialist contributions and human notes")).toBeVisible();
+  await expect(page.getByText(/Model: none/).first()).toBeVisible();
   await page.getByLabel("Challenge a selected record or request a check").fill("Check exclusions before relying on the profile.");
   await page.getByRole("button", { name: "Save intervention" }).click();
   await expect(page.getByText("Saved as a human note. No check was executed.")).toBeVisible();
