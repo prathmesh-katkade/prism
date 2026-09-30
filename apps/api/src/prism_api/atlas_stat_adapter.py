@@ -112,7 +112,11 @@ def execute_declared_test(dataset_id: str, analysis: AtlasStatAnalysis,
     if before.revision != after.revision or before.source_fingerprint != after.source_fingerprint:
         raise ValueError("Dataset revision changed during statistical execution; result is stale.")
     analytical_object = stats.register_statistical_test(stored, result)
-    analyzed = result.n if result.n is not None else sum(result.groups.values())
+    analyzed = (
+        result.n if result.n is not None
+        else sum(result.groups.values()) if result.groups
+        else len(selected.dropna())
+    )
     return {
         "execution_ref": analytical_object.object_id,
         "policy_version": POLICY_VERSION,

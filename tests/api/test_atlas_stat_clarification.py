@@ -163,3 +163,32 @@ def test_stat_worker_timeout_and_active_cancel_do_not_register_evidence(tmp_path
     with pytest.raises(RuntimeError, match="cancelled or disabled while active"):
         atlas_stat_adapter.execute_declared_test(dataset.dataset_id, analysis, cancel_after_dispatch)
     assert registered == []
+
+
+@pytest.mark.parametrize(("frame", "method", "design", "expected_statistic", "analyzed", "excluded"), [
+    # Welch t: (1.5 - 3.5) / sqrt(0.5/2 + 0.5/2) = -sqrt(8).
+    (pd.DataFrame({"group": ["A", "A", "B", "B", "B"], "value": [1.0, 2.0, 3.0, 4.0, None]}),
+     StatTestKind.TTEST, "independent_groups", -(8 ** 0.5), 4, 1),
+    # One-way ANOVA: between MS = 16, within MS = 1/3, so F = 48.
+    (pd.DataFrame({"group": ["A"] * 4 + ["B"] * 4 + ["C"] * 4,
+                   "value": [1, 2, 1, 2, 3, 4, 3, 4, 5, 6, 5, 6]}),
+     StatTestKind.ANOVA, "one_way_groups", 48.0, 12, 0),
+    # 2x2 diagonal counts of 20: Yates-corrected chi-square is 4*9.5²/10 = 36.1.
+    (pd.DataFrame({"group": ["A"] * 20 + ["B"] * 20, "value": ["X"] * 20 + ["Y"] * 20}),
+     StatTestKind.CHI2, "categorical_association", 36.1, 40, 0),
+])
+def test_supported_statistical_methods_match_independent_fixture_arithmetic(
+    tmp_path, monkeypatch, frame, method, design, expected_statistic, analyzed, excluded,
+) -> None:  # type: ignore[no-untyped-def]
+    _url, datasets, _paired, _run_store = _setup(tmp_path, monkeypatch)
+    dataset = datasets.put(frame, "method-fixture.csv", "f" * 64)
+    analysis = AtlasStatAnalysis(test=method, col_a="group", col_b="value", design=design)
+    output = atlas_stat_adapter.execute_declared_test(dataset.dataset_id, analysis, lambda: False)
+    assert output["method"] == method.value
+    assert output["design"] == design
+    assert output["result"]["statistic"] == pytest.approx(expected_statistic)
+    assert output["analyzed_rows"] == analyzed, output
+    assert output["excluded_rows"] == excluded
+    assert output["dataset_revision"] == 0
+    assert output["execution_ref"] == "stats_test_object"
+    assert output["limitations"]
