@@ -38,14 +38,14 @@ def await_ready(client: httpx.Client, process: subprocess.Popen[bytes]) -> None:
     raise TimeoutError("API did not become ready within 20 seconds")
 
 
-def launch(root: Path, environment_file: Path, log_path: Path, port: int) -> tuple[subprocess.Popen[bytes], object]:
+def launch(root: Path, environment_file: Path, log_path: Path, port: int, *, provider: str = "deterministic") -> tuple[subprocess.Popen[bytes], object]:
     log = log_path.open("wb")
     process = subprocess.Popen(
         [sys.executable, "-m", "uvicorn", "prism_api.main:app", "--app-dir", "apps/api/src",
          "--env-file", str(environment_file), "--host", "127.0.0.1", "--port", str(port)],
         cwd=root, stdout=log, stderr=subprocess.STDOUT,
         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-        env={**os.environ, "PRISM_AI_PROVIDER": "deterministic"},
+        env={**os.environ, "PRISM_AI_PROVIDER": provider},
     )
     return process, log
 

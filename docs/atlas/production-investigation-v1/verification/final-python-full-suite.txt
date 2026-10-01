@@ -1,0 +1,90 @@
+..........................s............................................. [  5%]
+........................ss.............................................. [ 11%]
+........................................................................ [ 17%]
+........................................................................ [ 23%]
+........................................................................ [ 29%]
+........................................................................ [ 35%]
+........................................................................ [ 40%]
+........................................................................ [ 46%]
+....................................ssss................................ [ 52%]
+........................................................................ [ 58%]
+........................................................................ [ 64%]
+........................................................................ [ 70%]
+........................................................................ [ 75%]
+........................................................................ [ 81%]
+........................................................................ [ 87%]
+........................................................................ [ 93%]
+........................................................................ [ 99%]
+.........                                                                [100%]
+============================== warnings summary ===============================
+.venv\Lib\site-packages\starlette\testclient.py:40
+  C:\Users\Admin\source\repos\prism-production\.venv\Lib\site-packages\starlette\testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]
+
+tests/api/test_forecasting.py: 8 warnings
+tests/api/test_phase8b_registry_producers.py: 1 warning
+tests/api/test_phase8f_reproduction.py: 2 warnings
+tests/api/test_phase8h_integration_flows.py: 2 warnings
+  C:\Users\Admin\source\repos\prism-production\.venv\Lib\site-packages\statsmodels\base\model.py:607: ConvergenceWarning: Maximum Likelihood optimization failed to converge. Check mle_retvals
+    warnings.warn("Maximum Likelihood optimization failed to "
+
+tests/api/test_mllab.py::test_baseline_smote_reports_before_and_after_class_counts
+  C:\Users\Admin\source\repos\prism-production\.venv\Lib\site-packages\sklearn\base.py:474: FutureWarning: `BaseEstimator._validate_data` is deprecated in 1.6 and will be removed in 1.7. Use `sklearn.utils.validation.validate_data` instead. This function becomes public and is part of the scikit-learn developer API.
+    warnings.warn(
+
+tests/api/test_mllab.py::test_baseline_smote_reports_before_and_after_class_counts
+  C:\Users\Admin\source\repos\prism-production\.venv\Lib\site-packages\sklearn\utils\_tags.py:354: DeprecationWarning: The SMOTE or classes from which it inherits use `_get_tags` and `_more_tags`. Please define the `__sklearn_tags__` method, or inherit from `sklearn.base.BaseEstimator` and/or other appropriate mixins such as `sklearn.base.TransformerMixin`, `sklearn.base.ClassifierMixin`, `sklearn.base.RegressorMixin`, and `sklearn.base.OutlierMixin`. From scikit-learn 1.7, not defining `__sklearn_tags__` will raise an error.
+    warnings.warn(
+
+tests/api/test_mllab.py::test_shap_returns_global_importance_for_the_random_forest
+  C:\Users\Admin\source\repos\prism-production\.venv\Lib\site-packages\matplotlib\_fontconfig_pattern.py:64: PyparsingDeprecationWarning: 'oneOf' deprecated - use 'one_of'
+    prop = Group((name + Suppress("=") + comma_separated(value)) | oneOf(_CONSTANTS))
+
+tests/api/test_mllab.py::test_shap_returns_global_importance_for_the_random_forest
+tests/api/test_mllab.py::test_shap_returns_global_importance_for_the_random_forest
+tests/api/test_mllab.py::test_shap_returns_global_importance_for_the_random_forest
+tests/api/test_mllab.py::test_shap_returns_global_importance_for_the_random_forest
+tests/api/test_mllab.py::test_shap_returns_global_importance_for_the_random_forest
+tests/api/test_mllab.py::test_shap_returns_global_importance_for_the_random_forest
+  C:\Users\Admin\source\repos\prism-production\.venv\Lib\site-packages\matplotlib\_fontconfig_pattern.py:85: PyparsingDeprecationWarning: 'parseString' deprecated - use 'parse_string'
+    parse = parser.parseString(pattern)
+
+tests/api/test_mllab.py::test_shap_returns_global_importance_for_the_random_forest
+tests/api/test_mllab.py::test_shap_returns_global_importance_for_the_random_forest
+tests/api/test_mllab.py::test_shap_returns_global_importance_for_the_random_forest
+tests/api/test_mllab.py::test_shap_returns_global_importance_for_the_random_forest
+tests/api/test_mllab.py::test_shap_returns_global_importance_for_the_random_forest
+tests/api/test_mllab.py::test_shap_returns_global_importance_for_the_random_forest
+  C:\Users\Admin\source\repos\prism-production\.venv\Lib\site-packages\matplotlib\_fontconfig_pattern.py:89: PyparsingDeprecationWarning: 'resetCache' deprecated - use 'reset_cache'
+    parser.resetCache()
+
+tests/api/test_mllab.py::test_shap_returns_global_importance_for_the_random_forest
+  C:\Users\Admin\source\repos\prism-production\.venv\Lib\site-packages\matplotlib\_mathtext.py:45: PyparsingDeprecationWarning: 'enablePackrat' deprecated - use 'enable_packrat'
+    ParserElement.enablePackrat()
+
+tests/test_detector_runner.py::test_run_all_detectors_runs_both_on_a_fresh_dataset
+tests/test_detector_runner.py::test_run_all_detectors_skips_anomaly_already_computed_this_session
+tests/test_detector_runner.py::test_run_all_detectors_never_raises_on_malformed_column_types
+tests/test_detector_runner.py::test_run_all_detectors_feeds_orchestrator_to_non_silent_result
+tests/test_hypothesis_sweep.py::test_annotate_power_skips_nonsignificant_rows
+tests/test_hypothesis_sweep.py::test_annotate_power_covers_significant_anova_row
+tests/test_hypothesis_sweep.py::test_annotate_power_covers_significant_chi2_row
+tests/test_hypothesis_sweep.py::test_annotate_power_covers_significant_pearson_row
+tests/test_hypothesis_sweep.py::test_annotate_power_end_to_end_covers_all_four_families_with_readable_prose
+  C:\Users\Admin\source\repos\prism-production\.venv\Lib\site-packages\statsmodels\stats\power.py:524: ConvergenceWarning: 
+  Failed to converge on a solution.
+  
+    warnings.warn(convergence_doc, ConvergenceWarning)
+
+tests/test_hypothesis_sweep.py::test_cross_check_categorical_interactions_flags_planted_effect_modification
+tests/test_hypothesis_sweep.py::test_cross_check_categorical_interactions_respects_top_k_cap
+  C:\Users\Admin\source\repos\prism-production\.venv\Lib\site-packages\statsmodels\regression\_tools.py:121: RuntimeWarning: divide by zero encountered in scalar divide
+    scale = np.dot(wresid, wresid) / df_resid
+
+tests/test_hypothesis_sweep.py::test_cross_check_categorical_interactions_flags_planted_effect_modification
+tests/test_hypothesis_sweep.py::test_cross_check_categorical_interactions_respects_top_k_cap
+  C:\Users\Admin\source\repos\prism-production\.venv\Lib\site-packages\statsmodels\genmod\generalized_linear_model.py:1342: PerfectSeparationWarning: Perfect separation or prediction detected, parameter may not be identified
+    warnings.warn(msg, category=PerfectSeparationWarning)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+1226 passed, 7 skipped, 43 warnings in 83.58s (0:01:23)

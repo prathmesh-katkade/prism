@@ -65,6 +65,7 @@ test("declared two-source join keeps the sales grain and opens its query in SQL 
   await page.getByRole("button", { name: "Run investigation" }).click();
   await expect(page.getByText(/Recorded SQL result run_/)).toBeVisible({ timeout: 20_000 });
   await expect(page.getByText(/"group_value": "east", "result_value": 7\.0.*"group_value": "west", "result_value": 15\.0/)).toBeVisible();
+  await expect(page.getByText(/Inner join matched 3 of 3 active rows and excluded 0 unmatched rows/)).toBeVisible();
   await page.getByRole("button", { name: "Inspect supporting SQL evidence" }).click();
   await page.getByRole("button", { name: /SQL Lab aggregate/ }).click();
   await expect(page.getByText(/INNER JOIN "joined"/)).toBeVisible();

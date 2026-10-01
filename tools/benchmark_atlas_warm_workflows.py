@@ -49,7 +49,8 @@ def run_one(client: httpx.Client, dataset_id: str, kind: str, index: int) -> dic
         }})
     started = time.perf_counter()
     response = client.post("/api/v1/atlas/runs", json=request)
-    response.raise_for_status()
+    if response.is_error:
+        raise RuntimeError(f"Atlas admission HTTP {response.status_code}: {response.text[:1000]}")
     run_id = response.json()["run_id"]
     for _ in range(400):
         response = client.get(f"/api/v1/atlas/runs/{run_id}")
@@ -75,6 +76,7 @@ def run_one(client: httpx.Client, dataset_id: str, kind: str, index: int) -> dic
     elif output["result"]["statistic"] != 1.0 or output["analyzed_rows"] != 5 or output["excluded_rows"] != 0:
         raise AssertionError(f"Incorrect Pearson result in {run_id}")
     events = run["events"]
+    plan_event = next((event for event in events if event["type"] == "plan_created"), None)
     return {
         "kind": kind, "run_id": run_id, "dataset_id": dataset_id, "state": run["plan"]["state"],
         "total_ms": total_ms,
@@ -84,6 +86,8 @@ def run_one(client: httpx.Client, dataset_id: str, kind: str, index: int) -> dic
         "review_ms": duration(events, "step_started", "step_completed", "audit"),
         "tool_reported_ms": output.get("duration_ms"),
         "execution_ref": output.get("sql_run_id") or output.get("execution_ref"),
+        "provider": plan_event["payload"].get("provider") if plan_event else None,
+        "model_proposal": plan_event["payload"].get("model_proposal") if plan_event else None,
     }
 
 
@@ -97,6 +101,7 @@ def main() -> None:
     parser.add_argument("backup", type=Path)
     parser.add_argument("output_dir", type=Path)
     parser.add_argument("--port", type=int, default=8771)
+    parser.add_argument("--provider", choices=("deterministic", "ollama"), default="deterministic")
     args = parser.parse_args()
     backup = args.backup.resolve(strict=True)
     output_dir = args.output_dir.resolve()
@@ -111,10 +116,10 @@ def main() -> None:
         environment_file.write_text(
             f"PRISM_ANALYTICAL_HISTORY_DATABASE_URL=sqlite:///{database.as_posix()}\n"
             f"PRISM_SQL_METADATA_PATH={str(temp / 'sql-lab.sqlite')}\n"
-            "PRISM_REQUIRE_DURABLE_HISTORY=true\nPRISM_AI_PROVIDER=deterministic\n",
+            f"PRISM_REQUIRE_DURABLE_HISTORY=true\nPRISM_AI_PROVIDER={args.provider}\n",
             encoding="utf-8",
         )
-        process, log = launch(root, environment_file, output_dir / "warm-api.log", args.port)
+        process, log = launch(root, environment_file, output_dir / "warm-api.log", args.port, provider=args.provider)
         try:
             with httpx.Client(base_url=f"http://127.0.0.1:{args.port}", timeout=15) as client:
                 await_ready(client, process)
@@ -134,7 +139,7 @@ def main() -> None:
         values = [cast(float, item["total_ms"]) for item in samples]
         result = {
             "sample_count": len(samples), "fixture": "10 SQL aggregation + 10 declared Pearson, sequential",
-            "provider": "deterministic", "warmup_runs_excluded": 2, "human_wait_ms": 0,
+            "provider": args.provider, "warmup_runs_excluded": 2, "human_wait_ms": 0,
             "cold_start_excluded": True, "p95_method": "nearest rank", "target_ms": 60_000,
             "total_p50_ms": percentile(values, 0.5), "total_p95_ms": percentile(values, 0.95),
             "total_max_ms": max(values), "passed_target": percentile(values, 0.95) <= 60_000,

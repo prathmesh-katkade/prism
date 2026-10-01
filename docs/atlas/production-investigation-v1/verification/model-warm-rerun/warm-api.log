@@ -1,0 +1,657 @@
+INFO:     Loading environment from 'C:\Users\Admin\AppData\Local\Temp\prism-atlas-benchmark-igfzb19r\api.env'
+INFO:     Started server process [11912]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8779 (Press CTRL+C to quit)
+2026-10-02 03:03:10,259 INFO prism_api request_completed request_id=req_f6115e656e5b47d98b1a8e10e97f7ac5 method=GET path=/api/v1/platform/ready status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/platform/ready HTTP/1.1" 200 OK
+2026-10-02 03:03:10,261 INFO prism_api request_completed request_id=req_d5cf0f40706b4860927639773ac5ce2a method=GET path=/api/v1/atlas/promotion/current status=200 duration_ms=2.0
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/promotion/current HTTP/1.1" 200 OK
+2026-10-02 03:03:10,270 INFO prism_api request_completed request_id=req_c201f79d8c544d079323d60ce9420e8a method=POST path=/api/v1/overview/datasets status=201 duration_ms=7.4
+INFO:     127.0.0.1:61939 - "POST /api/v1/overview/datasets HTTP/1.1" 201 Created
+2026-10-02 03:03:10,277 INFO prism_api request_completed request_id=req_6ed110d489994a69a110cb75f9c262c1 method=POST path=/api/v1/overview/datasets status=201 duration_ms=5.8
+INFO:     127.0.0.1:61939 - "POST /api/v1/overview/datasets HTTP/1.1" 201 Created
+2026-10-02 03:03:15,354 INFO prism_api request_completed request_id=req_94b122cd50bd47cc88673ee66fa00060 method=POST path=/api/v1/atlas/runs status=202 duration_ms=5075.8
+INFO:     127.0.0.1:61939 - "POST /api/v1/atlas/runs HTTP/1.1" 202 Accepted
+2026-10-02 03:03:15,357 INFO prism_api request_completed request_id=req_b3e00963603f4d178a2e894b1bf3e2fe method=GET path=/api/v1/atlas/runs/atlas_ff2561f21e51449697a74f93452b42ec status=200 duration_ms=1.8
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_ff2561f21e51449697a74f93452b42ec HTTP/1.1" 200 OK
+2026-10-02 03:03:15,414 INFO prism_api request_completed request_id=req_3637bc65907144f0887c4c0499602ece method=GET path=/api/v1/atlas/runs/atlas_ff2561f21e51449697a74f93452b42ec status=200 duration_ms=3.0
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_ff2561f21e51449697a74f93452b42ec HTTP/1.1" 200 OK
+2026-10-02 03:03:15,466 INFO prism_api request_completed request_id=req_8215841b1a654aac85156b629585ab17 method=GET path=/api/v1/atlas/runs/atlas_ff2561f21e51449697a74f93452b42ec status=200 duration_ms=1.7
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_ff2561f21e51449697a74f93452b42ec HTTP/1.1" 200 OK
+2026-10-02 03:03:16,134 INFO prism_api request_completed request_id=req_5ee5d7ba7c5f481b90615d302ae00e38 method=POST path=/api/v1/atlas/runs status=202 duration_ms=667.0
+INFO:     127.0.0.1:61939 - "POST /api/v1/atlas/runs HTTP/1.1" 202 Accepted
+2026-10-02 03:03:16,136 INFO prism_api request_completed request_id=req_b1a7484826a04d9e9e2b9d4cf69ad34b method=GET path=/api/v1/atlas/runs/atlas_ada19f79dc1642569259eff8656d88a7 status=200 duration_ms=1.0
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_ada19f79dc1642569259eff8656d88a7 HTTP/1.1" 200 OK
+2026-10-02 03:03:16,189 INFO prism_api request_completed request_id=req_7931e991a60c4e968d3f3a7c3481a6e1 method=GET path=/api/v1/atlas/runs/atlas_ada19f79dc1642569259eff8656d88a7 status=200 duration_ms=1.4
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_ada19f79dc1642569259eff8656d88a7 HTTP/1.1" 200 OK
+2026-10-02 03:03:16,241 INFO prism_api request_completed request_id=req_b292aa27cd844e828b0bc9728beea175 method=GET path=/api/v1/atlas/runs/atlas_ada19f79dc1642569259eff8656d88a7 status=200 duration_ms=1.8
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_ada19f79dc1642569259eff8656d88a7 HTTP/1.1" 200 OK
+2026-10-02 03:03:16,295 INFO prism_api request_completed request_id=req_f35ec3cd365a43d6a2d29319d9060978 method=GET path=/api/v1/atlas/runs/atlas_ada19f79dc1642569259eff8656d88a7 status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_ada19f79dc1642569259eff8656d88a7 HTTP/1.1" 200 OK
+2026-10-02 03:03:16,348 INFO prism_api request_completed request_id=req_b97a04e02cec46b2a064728732c581cd method=GET path=/api/v1/atlas/runs/atlas_ada19f79dc1642569259eff8656d88a7 status=200 duration_ms=1.5
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_ada19f79dc1642569259eff8656d88a7 HTTP/1.1" 200 OK
+2026-10-02 03:03:16,401 INFO prism_api request_completed request_id=req_ca94d38f2c4e441cbab9fde9f7f66af9 method=GET path=/api/v1/atlas/runs/atlas_ada19f79dc1642569259eff8656d88a7 status=200 duration_ms=1.5
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_ada19f79dc1642569259eff8656d88a7 HTTP/1.1" 200 OK
+2026-10-02 03:03:16,454 INFO prism_api request_completed request_id=req_99dd092bf14345a7a97b50a526e08bbf method=GET path=/api/v1/atlas/runs/atlas_ada19f79dc1642569259eff8656d88a7 status=200 duration_ms=1.5
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_ada19f79dc1642569259eff8656d88a7 HTTP/1.1" 200 OK
+2026-10-02 03:03:16,507 INFO prism_api request_completed request_id=req_3c190d55e9c446b39cdab53fae6a0f94 method=GET path=/api/v1/atlas/runs/atlas_ada19f79dc1642569259eff8656d88a7 status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_ada19f79dc1642569259eff8656d88a7 HTTP/1.1" 200 OK
+2026-10-02 03:03:16,560 INFO prism_api request_completed request_id=req_410feb30ec3d451a815040489e0b5772 method=GET path=/api/v1/atlas/runs/atlas_ada19f79dc1642569259eff8656d88a7 status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_ada19f79dc1642569259eff8656d88a7 HTTP/1.1" 200 OK
+2026-10-02 03:03:16,615 INFO prism_api request_completed request_id=req_baff7a1450dc4453804f77ad1aa288ae method=GET path=/api/v1/atlas/runs/atlas_ada19f79dc1642569259eff8656d88a7 status=200 duration_ms=2.1
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_ada19f79dc1642569259eff8656d88a7 HTTP/1.1" 200 OK
+2026-10-02 03:03:16,668 INFO prism_api request_completed request_id=req_16a195b6451842faa17806c71edf3af4 method=GET path=/api/v1/atlas/runs/atlas_ada19f79dc1642569259eff8656d88a7 status=200 duration_ms=2.0
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_ada19f79dc1642569259eff8656d88a7 HTTP/1.1" 200 OK
+2026-10-02 03:03:16,721 INFO prism_api request_completed request_id=req_f0768b1cf04f4df997f052ca6e917955 method=GET path=/api/v1/atlas/runs/atlas_ada19f79dc1642569259eff8656d88a7 status=200 duration_ms=1.5
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_ada19f79dc1642569259eff8656d88a7 HTTP/1.1" 200 OK
+2026-10-02 03:03:16,775 INFO prism_api request_completed request_id=req_24164cb3d3ad437fb46874cc541aa394 method=GET path=/api/v1/atlas/runs/atlas_ada19f79dc1642569259eff8656d88a7 status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_ada19f79dc1642569259eff8656d88a7 HTTP/1.1" 200 OK
+2026-10-02 03:03:16,828 INFO prism_api request_completed request_id=req_6fef6b0747064a558b5da16fbd2f9dba method=GET path=/api/v1/atlas/runs/atlas_ada19f79dc1642569259eff8656d88a7 status=200 duration_ms=1.5
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_ada19f79dc1642569259eff8656d88a7 HTTP/1.1" 200 OK
+2026-10-02 03:03:16,880 INFO prism_api request_completed request_id=req_66c436d16a2f41809b1eb4b3630b4f15 method=GET path=/api/v1/atlas/runs/atlas_ada19f79dc1642569259eff8656d88a7 status=200 duration_ms=1.5
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_ada19f79dc1642569259eff8656d88a7 HTTP/1.1" 200 OK
+2026-10-02 03:03:16,933 INFO prism_api request_completed request_id=req_efe0ce28f1c34376a87188f3aa9e995f method=GET path=/api/v1/atlas/runs/atlas_ada19f79dc1642569259eff8656d88a7 status=200 duration_ms=2.0
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_ada19f79dc1642569259eff8656d88a7 HTTP/1.1" 200 OK
+2026-10-02 03:03:16,987 INFO prism_api request_completed request_id=req_ac36947bdbe2422e9689ab9b076220d9 method=GET path=/api/v1/atlas/runs/atlas_ada19f79dc1642569259eff8656d88a7 status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_ada19f79dc1642569259eff8656d88a7 HTTP/1.1" 200 OK
+2026-10-02 03:03:17,040 INFO prism_api request_completed request_id=req_4691244a9bdf4c20af4fa7eb9327600a method=GET path=/api/v1/atlas/runs/atlas_ada19f79dc1642569259eff8656d88a7 status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_ada19f79dc1642569259eff8656d88a7 HTTP/1.1" 200 OK
+2026-10-02 03:03:17,093 INFO prism_api request_completed request_id=req_5410ef1f4b6e40f49502eab147dc9935 method=GET path=/api/v1/atlas/runs/atlas_ada19f79dc1642569259eff8656d88a7 status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_ada19f79dc1642569259eff8656d88a7 HTTP/1.1" 200 OK
+2026-10-02 03:03:17,146 INFO prism_api request_completed request_id=req_f1c953cf7b0f4ff697c479bc5a276140 method=GET path=/api/v1/atlas/runs/atlas_ada19f79dc1642569259eff8656d88a7 status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_ada19f79dc1642569259eff8656d88a7 HTTP/1.1" 200 OK
+2026-10-02 03:03:17,199 INFO prism_api request_completed request_id=req_d1f45204623a42cd82b89d57d0dba728 method=GET path=/api/v1/atlas/runs/atlas_ada19f79dc1642569259eff8656d88a7 status=200 duration_ms=1.4
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_ada19f79dc1642569259eff8656d88a7 HTTP/1.1" 200 OK
+2026-10-02 03:03:17,252 INFO prism_api request_completed request_id=req_4c429f37aa8e44289dc50aa131f63f8c method=GET path=/api/v1/atlas/runs/atlas_ada19f79dc1642569259eff8656d88a7 status=200 duration_ms=1.4
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_ada19f79dc1642569259eff8656d88a7 HTTP/1.1" 200 OK
+2026-10-02 03:03:17,306 INFO prism_api request_completed request_id=req_bfee9a65daba436584c19e2e5798a383 method=GET path=/api/v1/atlas/runs/atlas_ada19f79dc1642569259eff8656d88a7 status=200 duration_ms=2.4
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_ada19f79dc1642569259eff8656d88a7 HTTP/1.1" 200 OK
+2026-10-02 03:03:17,359 INFO prism_api request_completed request_id=req_c94b8b29e4cf45039778a54761178e0c method=GET path=/api/v1/atlas/runs/atlas_ada19f79dc1642569259eff8656d88a7 status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_ada19f79dc1642569259eff8656d88a7 HTTP/1.1" 200 OK
+2026-10-02 03:03:17,957 INFO prism_api request_completed request_id=req_ea528716f89440c697aaf62a72900fed method=POST path=/api/v1/atlas/runs status=202 duration_ms=596.5
+INFO:     127.0.0.1:61939 - "POST /api/v1/atlas/runs HTTP/1.1" 202 Accepted
+2026-10-02 03:03:17,959 INFO prism_api request_completed request_id=req_8e3cce108d9a430a9dd5d907345366d9 method=GET path=/api/v1/atlas/runs/atlas_bb2586f577f64a7ba968f8bbc9029927 status=200 duration_ms=1.7
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_bb2586f577f64a7ba968f8bbc9029927 HTTP/1.1" 200 OK
+2026-10-02 03:03:18,015 INFO prism_api request_completed request_id=req_a795fc032f1448b9bc6ddf635942bddb method=GET path=/api/v1/atlas/runs/atlas_bb2586f577f64a7ba968f8bbc9029927 status=200 duration_ms=3.3
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_bb2586f577f64a7ba968f8bbc9029927 HTTP/1.1" 200 OK
+2026-10-02 03:03:18,069 INFO prism_api request_completed request_id=req_336d44b2bd5349adad29772f219d8fa7 method=GET path=/api/v1/atlas/runs/atlas_bb2586f577f64a7ba968f8bbc9029927 status=200 duration_ms=3.1
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_bb2586f577f64a7ba968f8bbc9029927 HTTP/1.1" 200 OK
+2026-10-02 03:03:18,122 INFO prism_api request_completed request_id=req_993cb1db117c4a11b0b3ad897820a113 method=GET path=/api/v1/atlas/runs/atlas_bb2586f577f64a7ba968f8bbc9029927 status=200 duration_ms=1.4
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_bb2586f577f64a7ba968f8bbc9029927 HTTP/1.1" 200 OK
+2026-10-02 03:03:18,794 INFO prism_api request_completed request_id=req_c2070473d13742918b7c39e2e4931bca method=POST path=/api/v1/atlas/runs status=202 duration_ms=670.8
+INFO:     127.0.0.1:61939 - "POST /api/v1/atlas/runs HTTP/1.1" 202 Accepted
+2026-10-02 03:03:18,797 INFO prism_api request_completed request_id=req_5ab9f7db99ed45b0bef54ea6123a81ef method=GET path=/api/v1/atlas/runs/atlas_74b55909f414431eb3fecd824e4280e8 status=200 duration_ms=1.1
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_74b55909f414431eb3fecd824e4280e8 HTTP/1.1" 200 OK
+2026-10-02 03:03:18,850 INFO prism_api request_completed request_id=req_3469fc70513740f786db817abbe54a07 method=GET path=/api/v1/atlas/runs/atlas_74b55909f414431eb3fecd824e4280e8 status=200 duration_ms=1.7
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_74b55909f414431eb3fecd824e4280e8 HTTP/1.1" 200 OK
+2026-10-02 03:03:18,902 INFO prism_api request_completed request_id=req_a599ac154a2244a287e54a6e344344b7 method=GET path=/api/v1/atlas/runs/atlas_74b55909f414431eb3fecd824e4280e8 status=200 duration_ms=1.8
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_74b55909f414431eb3fecd824e4280e8 HTTP/1.1" 200 OK
+2026-10-02 03:03:18,956 INFO prism_api request_completed request_id=req_d2e9503e64864a85bd9972f4bc087cbe method=GET path=/api/v1/atlas/runs/atlas_74b55909f414431eb3fecd824e4280e8 status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_74b55909f414431eb3fecd824e4280e8 HTTP/1.1" 200 OK
+2026-10-02 03:03:19,009 INFO prism_api request_completed request_id=req_bdd5dc97459444a6bc64dcedea1156a2 method=GET path=/api/v1/atlas/runs/atlas_74b55909f414431eb3fecd824e4280e8 status=200 duration_ms=1.5
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_74b55909f414431eb3fecd824e4280e8 HTTP/1.1" 200 OK
+2026-10-02 03:03:19,062 INFO prism_api request_completed request_id=req_656721547a094c5da669e56b4e1beb02 method=GET path=/api/v1/atlas/runs/atlas_74b55909f414431eb3fecd824e4280e8 status=200 duration_ms=1.4
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_74b55909f414431eb3fecd824e4280e8 HTTP/1.1" 200 OK
+2026-10-02 03:03:19,114 INFO prism_api request_completed request_id=req_d645504166d443efbbe37f4f1f22e133 method=GET path=/api/v1/atlas/runs/atlas_74b55909f414431eb3fecd824e4280e8 status=200 duration_ms=1.4
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_74b55909f414431eb3fecd824e4280e8 HTTP/1.1" 200 OK
+2026-10-02 03:03:19,168 INFO prism_api request_completed request_id=req_497d417ec7564dd08390cf195c0e1f08 method=GET path=/api/v1/atlas/runs/atlas_74b55909f414431eb3fecd824e4280e8 status=200 duration_ms=2.1
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_74b55909f414431eb3fecd824e4280e8 HTTP/1.1" 200 OK
+2026-10-02 03:03:19,220 INFO prism_api request_completed request_id=req_ca8ddc97a21a4db49f719ee83f283016 method=GET path=/api/v1/atlas/runs/atlas_74b55909f414431eb3fecd824e4280e8 status=200 duration_ms=1.3
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_74b55909f414431eb3fecd824e4280e8 HTTP/1.1" 200 OK
+2026-10-02 03:03:19,273 INFO prism_api request_completed request_id=req_7f3502f4a2d44835a838f126c7e5ce08 method=GET path=/api/v1/atlas/runs/atlas_74b55909f414431eb3fecd824e4280e8 status=200 duration_ms=1.4
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_74b55909f414431eb3fecd824e4280e8 HTTP/1.1" 200 OK
+2026-10-02 03:03:19,327 INFO prism_api request_completed request_id=req_94a1edf42db14d68b48d2dfb1805bf54 method=GET path=/api/v1/atlas/runs/atlas_74b55909f414431eb3fecd824e4280e8 status=200 duration_ms=2.0
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_74b55909f414431eb3fecd824e4280e8 HTTP/1.1" 200 OK
+2026-10-02 03:03:19,380 INFO prism_api request_completed request_id=req_12e7aff3803a47ef8aa7ea8dde21c9b2 method=GET path=/api/v1/atlas/runs/atlas_74b55909f414431eb3fecd824e4280e8 status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_74b55909f414431eb3fecd824e4280e8 HTTP/1.1" 200 OK
+2026-10-02 03:03:19,433 INFO prism_api request_completed request_id=req_d4a5c582bd524ed7bf66cb2085af5ec9 method=GET path=/api/v1/atlas/runs/atlas_74b55909f414431eb3fecd824e4280e8 status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_74b55909f414431eb3fecd824e4280e8 HTTP/1.1" 200 OK
+2026-10-02 03:03:19,487 INFO prism_api request_completed request_id=req_b828e0359f6a45eaacc46eea6d8c8937 method=GET path=/api/v1/atlas/runs/atlas_74b55909f414431eb3fecd824e4280e8 status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_74b55909f414431eb3fecd824e4280e8 HTTP/1.1" 200 OK
+2026-10-02 03:03:19,539 INFO prism_api request_completed request_id=req_3ce094b124bc4ffb8a5220656e8f837f method=GET path=/api/v1/atlas/runs/atlas_74b55909f414431eb3fecd824e4280e8 status=200 duration_ms=1.5
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_74b55909f414431eb3fecd824e4280e8 HTTP/1.1" 200 OK
+2026-10-02 03:03:19,593 INFO prism_api request_completed request_id=req_320c8b0af50e47868ebe9272fb0c8199 method=GET path=/api/v1/atlas/runs/atlas_74b55909f414431eb3fecd824e4280e8 status=200 duration_ms=1.7
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_74b55909f414431eb3fecd824e4280e8 HTTP/1.1" 200 OK
+2026-10-02 03:03:19,646 INFO prism_api request_completed request_id=req_88794b19e6e84040b977a3ad071d2ce1 method=GET path=/api/v1/atlas/runs/atlas_74b55909f414431eb3fecd824e4280e8 status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_74b55909f414431eb3fecd824e4280e8 HTTP/1.1" 200 OK
+2026-10-02 03:03:19,699 INFO prism_api request_completed request_id=req_b2b349b04aa544658ec9afeab7086ebc method=GET path=/api/v1/atlas/runs/atlas_74b55909f414431eb3fecd824e4280e8 status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_74b55909f414431eb3fecd824e4280e8 HTTP/1.1" 200 OK
+2026-10-02 03:03:19,753 INFO prism_api request_completed request_id=req_84bf767a3e2f4404be44e44056be1a7a method=GET path=/api/v1/atlas/runs/atlas_74b55909f414431eb3fecd824e4280e8 status=200 duration_ms=2.3
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_74b55909f414431eb3fecd824e4280e8 HTTP/1.1" 200 OK
+2026-10-02 03:03:19,806 INFO prism_api request_completed request_id=req_7a61a674757e4b829011e7d1e0e9e7d8 method=GET path=/api/v1/atlas/runs/atlas_74b55909f414431eb3fecd824e4280e8 status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_74b55909f414431eb3fecd824e4280e8 HTTP/1.1" 200 OK
+2026-10-02 03:03:19,860 INFO prism_api request_completed request_id=req_7beea94238444ab4abcba018a8b7227a method=GET path=/api/v1/atlas/runs/atlas_74b55909f414431eb3fecd824e4280e8 status=200 duration_ms=1.5
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_74b55909f414431eb3fecd824e4280e8 HTTP/1.1" 200 OK
+2026-10-02 03:03:19,911 INFO prism_api request_completed request_id=req_f745ea7fbc3849679e30be698937d678 method=GET path=/api/v1/atlas/runs/atlas_74b55909f414431eb3fecd824e4280e8 status=200 duration_ms=1.4
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_74b55909f414431eb3fecd824e4280e8 HTTP/1.1" 200 OK
+2026-10-02 03:03:19,965 INFO prism_api request_completed request_id=req_6e94f6ffe5b740b2b03e8f7d92efc3f7 method=GET path=/api/v1/atlas/runs/atlas_74b55909f414431eb3fecd824e4280e8 status=200 duration_ms=2.1
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_74b55909f414431eb3fecd824e4280e8 HTTP/1.1" 200 OK
+2026-10-02 03:03:20,019 INFO prism_api request_completed request_id=req_c8aa55d9a11c417e9f0c08ebea8a2cb6 method=GET path=/api/v1/atlas/runs/atlas_74b55909f414431eb3fecd824e4280e8 status=200 duration_ms=1.3
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_74b55909f414431eb3fecd824e4280e8 HTTP/1.1" 200 OK
+2026-10-02 03:03:20,613 INFO prism_api request_completed request_id=req_622f57b29b41452dbc708025c9f0d7ff method=POST path=/api/v1/atlas/runs status=202 duration_ms=593.8
+INFO:     127.0.0.1:61939 - "POST /api/v1/atlas/runs HTTP/1.1" 202 Accepted
+2026-10-02 03:03:20,616 INFO prism_api request_completed request_id=req_870678ec462145929da92be2f29b6f54 method=GET path=/api/v1/atlas/runs/atlas_328bdbe32b9a4c64bf46eb0b4f7ffa23 status=200 duration_ms=1.9
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_328bdbe32b9a4c64bf46eb0b4f7ffa23 HTTP/1.1" 200 OK
+2026-10-02 03:03:20,670 INFO prism_api request_completed request_id=req_e71b9ba90bac4eadad240daa72529723 method=GET path=/api/v1/atlas/runs/atlas_328bdbe32b9a4c64bf46eb0b4f7ffa23 status=200 duration_ms=2.0
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_328bdbe32b9a4c64bf46eb0b4f7ffa23 HTTP/1.1" 200 OK
+2026-10-02 03:03:20,737 INFO prism_api request_completed request_id=req_fd619146e5f94646b5db5054f30e66e9 method=GET path=/api/v1/atlas/runs/atlas_328bdbe32b9a4c64bf46eb0b4f7ffa23 status=200 duration_ms=14.9
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_328bdbe32b9a4c64bf46eb0b4f7ffa23 HTTP/1.1" 200 OK
+2026-10-02 03:03:21,437 INFO prism_api request_completed request_id=req_6043ac3be9164e02a44f1957fb2d7058 method=POST path=/api/v1/atlas/runs status=202 duration_ms=700.4
+INFO:     127.0.0.1:61939 - "POST /api/v1/atlas/runs HTTP/1.1" 202 Accepted
+2026-10-02 03:03:21,439 INFO prism_api request_completed request_id=req_0d3fd5c4e6284855830e1e976ce0b3e9 method=GET path=/api/v1/atlas/runs/atlas_29aa10bcd1a248838cf81bdd48aa4928 status=200 duration_ms=1.1
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_29aa10bcd1a248838cf81bdd48aa4928 HTTP/1.1" 200 OK
+2026-10-02 03:03:21,492 INFO prism_api request_completed request_id=req_2260503213db4fbfa0633884fb280b74 method=GET path=/api/v1/atlas/runs/atlas_29aa10bcd1a248838cf81bdd48aa4928 status=200 duration_ms=1.4
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_29aa10bcd1a248838cf81bdd48aa4928 HTTP/1.1" 200 OK
+2026-10-02 03:03:21,545 INFO prism_api request_completed request_id=req_90157ef8faf7453e97965ddb677e7eeb method=GET path=/api/v1/atlas/runs/atlas_29aa10bcd1a248838cf81bdd48aa4928 status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_29aa10bcd1a248838cf81bdd48aa4928 HTTP/1.1" 200 OK
+2026-10-02 03:03:21,598 INFO prism_api request_completed request_id=req_055a834e524145519fff8581af032110 method=GET path=/api/v1/atlas/runs/atlas_29aa10bcd1a248838cf81bdd48aa4928 status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_29aa10bcd1a248838cf81bdd48aa4928 HTTP/1.1" 200 OK
+2026-10-02 03:03:21,652 INFO prism_api request_completed request_id=req_1f67257a96bc42a1973228a0de0685a7 method=GET path=/api/v1/atlas/runs/atlas_29aa10bcd1a248838cf81bdd48aa4928 status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_29aa10bcd1a248838cf81bdd48aa4928 HTTP/1.1" 200 OK
+2026-10-02 03:03:21,704 INFO prism_api request_completed request_id=req_b1fdcb46fc4042f4a413cbbda31684bd method=GET path=/api/v1/atlas/runs/atlas_29aa10bcd1a248838cf81bdd48aa4928 status=200 duration_ms=1.4
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_29aa10bcd1a248838cf81bdd48aa4928 HTTP/1.1" 200 OK
+2026-10-02 03:03:21,756 INFO prism_api request_completed request_id=req_992abb5af1bd41c5944da8824ed0044d method=GET path=/api/v1/atlas/runs/atlas_29aa10bcd1a248838cf81bdd48aa4928 status=200 duration_ms=1.4
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_29aa10bcd1a248838cf81bdd48aa4928 HTTP/1.1" 200 OK
+2026-10-02 03:03:21,809 INFO prism_api request_completed request_id=req_3d7609698edb46749e08f566c2faea93 method=GET path=/api/v1/atlas/runs/atlas_29aa10bcd1a248838cf81bdd48aa4928 status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_29aa10bcd1a248838cf81bdd48aa4928 HTTP/1.1" 200 OK
+2026-10-02 03:03:21,862 INFO prism_api request_completed request_id=req_ce8aaee340c34a3884fc7bcec2c49085 method=GET path=/api/v1/atlas/runs/atlas_29aa10bcd1a248838cf81bdd48aa4928 status=200 duration_ms=1.4
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_29aa10bcd1a248838cf81bdd48aa4928 HTTP/1.1" 200 OK
+2026-10-02 03:03:21,915 INFO prism_api request_completed request_id=req_b7d76f9f9edc480eb75897dcb3f5421b method=GET path=/api/v1/atlas/runs/atlas_29aa10bcd1a248838cf81bdd48aa4928 status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_29aa10bcd1a248838cf81bdd48aa4928 HTTP/1.1" 200 OK
+2026-10-02 03:03:21,969 INFO prism_api request_completed request_id=req_56d5913d4d2b40b482633f97d77bb8b7 method=GET path=/api/v1/atlas/runs/atlas_29aa10bcd1a248838cf81bdd48aa4928 status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_29aa10bcd1a248838cf81bdd48aa4928 HTTP/1.1" 200 OK
+2026-10-02 03:03:22,021 INFO prism_api request_completed request_id=req_ee16e1b361e24350be8a692f28205773 method=GET path=/api/v1/atlas/runs/atlas_29aa10bcd1a248838cf81bdd48aa4928 status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_29aa10bcd1a248838cf81bdd48aa4928 HTTP/1.1" 200 OK
+2026-10-02 03:03:22,074 INFO prism_api request_completed request_id=req_58413ad96b4a45a3a2301de8a6bbac7d method=GET path=/api/v1/atlas/runs/atlas_29aa10bcd1a248838cf81bdd48aa4928 status=200 duration_ms=1.7
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_29aa10bcd1a248838cf81bdd48aa4928 HTTP/1.1" 200 OK
+2026-10-02 03:03:22,128 INFO prism_api request_completed request_id=req_6dc11bd99adb4a2da5fba94fabda676d method=GET path=/api/v1/atlas/runs/atlas_29aa10bcd1a248838cf81bdd48aa4928 status=200 duration_ms=1.5
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_29aa10bcd1a248838cf81bdd48aa4928 HTTP/1.1" 200 OK
+2026-10-02 03:03:22,181 INFO prism_api request_completed request_id=req_add30b3704f446468106d19cb0cfa371 method=GET path=/api/v1/atlas/runs/atlas_29aa10bcd1a248838cf81bdd48aa4928 status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_29aa10bcd1a248838cf81bdd48aa4928 HTTP/1.1" 200 OK
+2026-10-02 03:03:22,233 INFO prism_api request_completed request_id=req_62b46211119d40b0b1a5688d20148291 method=GET path=/api/v1/atlas/runs/atlas_29aa10bcd1a248838cf81bdd48aa4928 status=200 duration_ms=1.8
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_29aa10bcd1a248838cf81bdd48aa4928 HTTP/1.1" 200 OK
+2026-10-02 03:03:22,287 INFO prism_api request_completed request_id=req_a8613c55f5ef401d82ccb54f8003aea3 method=GET path=/api/v1/atlas/runs/atlas_29aa10bcd1a248838cf81bdd48aa4928 status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_29aa10bcd1a248838cf81bdd48aa4928 HTTP/1.1" 200 OK
+2026-10-02 03:03:22,340 INFO prism_api request_completed request_id=req_d3a4c9e5be7c43f782a1d6c578b55e6c method=GET path=/api/v1/atlas/runs/atlas_29aa10bcd1a248838cf81bdd48aa4928 status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_29aa10bcd1a248838cf81bdd48aa4928 HTTP/1.1" 200 OK
+2026-10-02 03:03:22,394 INFO prism_api request_completed request_id=req_4b3ea9bf399244a1b24018eaf69313c3 method=GET path=/api/v1/atlas/runs/atlas_29aa10bcd1a248838cf81bdd48aa4928 status=200 duration_ms=2.2
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_29aa10bcd1a248838cf81bdd48aa4928 HTTP/1.1" 200 OK
+2026-10-02 03:03:22,447 INFO prism_api request_completed request_id=req_751b2d98fcf945a0869688aa66d10e75 method=GET path=/api/v1/atlas/runs/atlas_29aa10bcd1a248838cf81bdd48aa4928 status=200 duration_ms=1.5
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_29aa10bcd1a248838cf81bdd48aa4928 HTTP/1.1" 200 OK
+2026-10-02 03:03:22,500 INFO prism_api request_completed request_id=req_1b9b1e8dd0744454a1796c8f82303deb method=GET path=/api/v1/atlas/runs/atlas_29aa10bcd1a248838cf81bdd48aa4928 status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_29aa10bcd1a248838cf81bdd48aa4928 HTTP/1.1" 200 OK
+2026-10-02 03:03:22,553 INFO prism_api request_completed request_id=req_5d28b18f06a24507833f749262c32292 method=GET path=/api/v1/atlas/runs/atlas_29aa10bcd1a248838cf81bdd48aa4928 status=200 duration_ms=1.5
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_29aa10bcd1a248838cf81bdd48aa4928 HTTP/1.1" 200 OK
+2026-10-02 03:03:22,626 INFO prism_api request_completed request_id=req_75d6c99147834d938b40a06b4dbfcbad method=GET path=/api/v1/atlas/runs/atlas_29aa10bcd1a248838cf81bdd48aa4928 status=200 duration_ms=20.8
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_29aa10bcd1a248838cf81bdd48aa4928 HTTP/1.1" 200 OK
+2026-10-02 03:03:23,201 INFO prism_api request_completed request_id=req_4b1937956b564a169df53dfb74e9fda7 method=POST path=/api/v1/atlas/runs status=202 duration_ms=574.8
+INFO:     127.0.0.1:61939 - "POST /api/v1/atlas/runs HTTP/1.1" 202 Accepted
+2026-10-02 03:03:23,205 INFO prism_api request_completed request_id=req_53cf1b5c55e24702b9e0cc7f057745fb method=GET path=/api/v1/atlas/runs/atlas_226a36d80a9849d1a0c97867970dfd80 status=200 duration_ms=2.9
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_226a36d80a9849d1a0c97867970dfd80 HTTP/1.1" 200 OK
+2026-10-02 03:03:23,259 INFO prism_api request_completed request_id=req_901f52aaaf4948aa91e07131d207985d method=GET path=/api/v1/atlas/runs/atlas_226a36d80a9849d1a0c97867970dfd80 status=200 duration_ms=1.7
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_226a36d80a9849d1a0c97867970dfd80 HTTP/1.1" 200 OK
+2026-10-02 03:03:23,312 INFO prism_api request_completed request_id=req_fef221c5e98147719b2a7e1d651c2bf3 method=GET path=/api/v1/atlas/runs/atlas_226a36d80a9849d1a0c97867970dfd80 status=200 duration_ms=2.3
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_226a36d80a9849d1a0c97867970dfd80 HTTP/1.1" 200 OK
+2026-10-02 03:03:23,367 INFO prism_api request_completed request_id=req_1ca45236e22a4a81baef577a08905326 method=GET path=/api/v1/atlas/runs/atlas_226a36d80a9849d1a0c97867970dfd80 status=200 duration_ms=1.9
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_226a36d80a9849d1a0c97867970dfd80 HTTP/1.1" 200 OK
+2026-10-02 03:03:24,043 INFO prism_api request_completed request_id=req_2ddcc78be9a34823b28ba4fa9a553dc9 method=POST path=/api/v1/atlas/runs status=202 duration_ms=675.0
+INFO:     127.0.0.1:61939 - "POST /api/v1/atlas/runs HTTP/1.1" 202 Accepted
+2026-10-02 03:03:24,045 INFO prism_api request_completed request_id=req_9d307e4c6c7e4ef48d65c3148bf45d5c method=GET path=/api/v1/atlas/runs/atlas_96c5e1cf0db549be9b1f56ca2e8fc0a5 status=200 duration_ms=1.1
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_96c5e1cf0db549be9b1f56ca2e8fc0a5 HTTP/1.1" 200 OK
+2026-10-02 03:03:24,097 INFO prism_api request_completed request_id=req_7523f5dccf43459ab339a387e54c71d0 method=GET path=/api/v1/atlas/runs/atlas_96c5e1cf0db549be9b1f56ca2e8fc0a5 status=200 duration_ms=1.4
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_96c5e1cf0db549be9b1f56ca2e8fc0a5 HTTP/1.1" 200 OK
+2026-10-02 03:03:24,150 INFO prism_api request_completed request_id=req_ab7d83d608ae44a4b91d1163426a1a06 method=GET path=/api/v1/atlas/runs/atlas_96c5e1cf0db549be9b1f56ca2e8fc0a5 status=200 duration_ms=1.8
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_96c5e1cf0db549be9b1f56ca2e8fc0a5 HTTP/1.1" 200 OK
+2026-10-02 03:03:24,203 INFO prism_api request_completed request_id=req_0dd5492f06464b8f861f01db8259ba5e method=GET path=/api/v1/atlas/runs/atlas_96c5e1cf0db549be9b1f56ca2e8fc0a5 status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_96c5e1cf0db549be9b1f56ca2e8fc0a5 HTTP/1.1" 200 OK
+2026-10-02 03:03:24,256 INFO prism_api request_completed request_id=req_f54ba50e98614d019963752b049bd6c9 method=GET path=/api/v1/atlas/runs/atlas_96c5e1cf0db549be9b1f56ca2e8fc0a5 status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_96c5e1cf0db549be9b1f56ca2e8fc0a5 HTTP/1.1" 200 OK
+2026-10-02 03:03:24,309 INFO prism_api request_completed request_id=req_22e0be7c003d4f38be885189486e9f0e method=GET path=/api/v1/atlas/runs/atlas_96c5e1cf0db549be9b1f56ca2e8fc0a5 status=200 duration_ms=1.3
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_96c5e1cf0db549be9b1f56ca2e8fc0a5 HTTP/1.1" 200 OK
+2026-10-02 03:03:24,362 INFO prism_api request_completed request_id=req_c8608e15e6c140fb89c3581f302052c7 method=GET path=/api/v1/atlas/runs/atlas_96c5e1cf0db549be9b1f56ca2e8fc0a5 status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_96c5e1cf0db549be9b1f56ca2e8fc0a5 HTTP/1.1" 200 OK
+2026-10-02 03:03:24,415 INFO prism_api request_completed request_id=req_55573a7a024c4ef5ac97483c7ff65654 method=GET path=/api/v1/atlas/runs/atlas_96c5e1cf0db549be9b1f56ca2e8fc0a5 status=200 duration_ms=1.5
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_96c5e1cf0db549be9b1f56ca2e8fc0a5 HTTP/1.1" 200 OK
+2026-10-02 03:03:24,468 INFO prism_api request_completed request_id=req_c6c1c7b9942a48aca025ab1dfb5f8168 method=GET path=/api/v1/atlas/runs/atlas_96c5e1cf0db549be9b1f56ca2e8fc0a5 status=200 duration_ms=1.3
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_96c5e1cf0db549be9b1f56ca2e8fc0a5 HTTP/1.1" 200 OK
+2026-10-02 03:03:24,521 INFO prism_api request_completed request_id=req_21099c1ecef44a408feecb84d5f9bc18 method=GET path=/api/v1/atlas/runs/atlas_96c5e1cf0db549be9b1f56ca2e8fc0a5 status=200 duration_ms=1.3
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_96c5e1cf0db549be9b1f56ca2e8fc0a5 HTTP/1.1" 200 OK
+2026-10-02 03:03:24,574 INFO prism_api request_completed request_id=req_8235841b18844be3bf9f85c3ba174e2f method=GET path=/api/v1/atlas/runs/atlas_96c5e1cf0db549be9b1f56ca2e8fc0a5 status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_96c5e1cf0db549be9b1f56ca2e8fc0a5 HTTP/1.1" 200 OK
+2026-10-02 03:03:24,627 INFO prism_api request_completed request_id=req_84e28605afa1436281e027e588f5ffe2 method=GET path=/api/v1/atlas/runs/atlas_96c5e1cf0db549be9b1f56ca2e8fc0a5 status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_96c5e1cf0db549be9b1f56ca2e8fc0a5 HTTP/1.1" 200 OK
+2026-10-02 03:03:24,680 INFO prism_api request_completed request_id=req_80dae55677ae4101a401ce2b69d347bc method=GET path=/api/v1/atlas/runs/atlas_96c5e1cf0db549be9b1f56ca2e8fc0a5 status=200 duration_ms=1.7
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_96c5e1cf0db549be9b1f56ca2e8fc0a5 HTTP/1.1" 200 OK
+2026-10-02 03:03:24,732 INFO prism_api request_completed request_id=req_66c2e9cadb8e4690b7c9aa4279e26b6b method=GET path=/api/v1/atlas/runs/atlas_96c5e1cf0db549be9b1f56ca2e8fc0a5 status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_96c5e1cf0db549be9b1f56ca2e8fc0a5 HTTP/1.1" 200 OK
+2026-10-02 03:03:24,786 INFO prism_api request_completed request_id=req_0b91c82af1fd4739b3bb0ece6e93b46e method=GET path=/api/v1/atlas/runs/atlas_96c5e1cf0db549be9b1f56ca2e8fc0a5 status=200 duration_ms=1.5
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_96c5e1cf0db549be9b1f56ca2e8fc0a5 HTTP/1.1" 200 OK
+2026-10-02 03:03:24,839 INFO prism_api request_completed request_id=req_e5b7b27e06b74d8a83ac309c7853a4f3 method=GET path=/api/v1/atlas/runs/atlas_96c5e1cf0db549be9b1f56ca2e8fc0a5 status=200 duration_ms=1.9
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_96c5e1cf0db549be9b1f56ca2e8fc0a5 HTTP/1.1" 200 OK
+2026-10-02 03:03:24,893 INFO prism_api request_completed request_id=req_afbeb39d8f9b42ef95c619a34cca68ad method=GET path=/api/v1/atlas/runs/atlas_96c5e1cf0db549be9b1f56ca2e8fc0a5 status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_96c5e1cf0db549be9b1f56ca2e8fc0a5 HTTP/1.1" 200 OK
+2026-10-02 03:03:24,945 INFO prism_api request_completed request_id=req_327d8421873a413c8f07db5677a9c9ad method=GET path=/api/v1/atlas/runs/atlas_96c5e1cf0db549be9b1f56ca2e8fc0a5 status=200 duration_ms=1.5
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_96c5e1cf0db549be9b1f56ca2e8fc0a5 HTTP/1.1" 200 OK
+2026-10-02 03:03:24,999 INFO prism_api request_completed request_id=req_4aae085f3e1e4e95b90a31ab1f24ad94 method=GET path=/api/v1/atlas/runs/atlas_96c5e1cf0db549be9b1f56ca2e8fc0a5 status=200 duration_ms=1.5
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_96c5e1cf0db549be9b1f56ca2e8fc0a5 HTTP/1.1" 200 OK
+2026-10-02 03:03:25,052 INFO prism_api request_completed request_id=req_52603cd26d034696bebc10e7e775681f method=GET path=/api/v1/atlas/runs/atlas_96c5e1cf0db549be9b1f56ca2e8fc0a5 status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_96c5e1cf0db549be9b1f56ca2e8fc0a5 HTTP/1.1" 200 OK
+2026-10-02 03:03:25,105 INFO prism_api request_completed request_id=req_1ea4654151e845a4a56546361dc4afc1 method=GET path=/api/v1/atlas/runs/atlas_96c5e1cf0db549be9b1f56ca2e8fc0a5 status=200 duration_ms=1.5
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_96c5e1cf0db549be9b1f56ca2e8fc0a5 HTTP/1.1" 200 OK
+2026-10-02 03:03:25,157 INFO prism_api request_completed request_id=req_9c788730444a427fa108dab952588796 method=GET path=/api/v1/atlas/runs/atlas_96c5e1cf0db549be9b1f56ca2e8fc0a5 status=200 duration_ms=1.5
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_96c5e1cf0db549be9b1f56ca2e8fc0a5 HTTP/1.1" 200 OK
+2026-10-02 03:03:25,230 INFO prism_api request_completed request_id=req_4e8c9ead4b3e4080afcba08dea1e3169 method=GET path=/api/v1/atlas/runs/atlas_96c5e1cf0db549be9b1f56ca2e8fc0a5 status=200 duration_ms=21.1
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_96c5e1cf0db549be9b1f56ca2e8fc0a5 HTTP/1.1" 200 OK
+2026-10-02 03:03:25,283 INFO prism_api request_completed request_id=req_30c88c785f524346a650831322fa9573 method=GET path=/api/v1/atlas/runs/atlas_96c5e1cf0db549be9b1f56ca2e8fc0a5 status=200 duration_ms=1.4
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_96c5e1cf0db549be9b1f56ca2e8fc0a5 HTTP/1.1" 200 OK
+2026-10-02 03:03:25,866 INFO prism_api request_completed request_id=req_16273cdb0f834cf3841e9fa2de7ada41 method=POST path=/api/v1/atlas/runs status=202 duration_ms=583.0
+INFO:     127.0.0.1:61939 - "POST /api/v1/atlas/runs HTTP/1.1" 202 Accepted
+2026-10-02 03:03:25,869 INFO prism_api request_completed request_id=req_cb445750e8c946e8a4f9a297fb8d2f87 method=GET path=/api/v1/atlas/runs/atlas_dee922e3d2b7473bac51d6b267ef7e03 status=200 duration_ms=2.0
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_dee922e3d2b7473bac51d6b267ef7e03 HTTP/1.1" 200 OK
+2026-10-02 03:03:25,923 INFO prism_api request_completed request_id=req_9261c546816348baa161fe155111306e method=GET path=/api/v1/atlas/runs/atlas_dee922e3d2b7473bac51d6b267ef7e03 status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_dee922e3d2b7473bac51d6b267ef7e03 HTTP/1.1" 200 OK
+2026-10-02 03:03:25,976 INFO prism_api request_completed request_id=req_ea9ff24263334d50a938a564905d4d40 method=GET path=/api/v1/atlas/runs/atlas_dee922e3d2b7473bac51d6b267ef7e03 status=200 duration_ms=2.1
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_dee922e3d2b7473bac51d6b267ef7e03 HTTP/1.1" 200 OK
+2026-10-02 03:03:26,029 INFO prism_api request_completed request_id=req_a2293766f3524ecb8cc3673b01021972 method=GET path=/api/v1/atlas/runs/atlas_dee922e3d2b7473bac51d6b267ef7e03 status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_dee922e3d2b7473bac51d6b267ef7e03 HTTP/1.1" 200 OK
+2026-10-02 03:03:26,694 INFO prism_api request_completed request_id=req_a748823fe30f41a99db1096b9d059506 method=POST path=/api/v1/atlas/runs status=202 duration_ms=663.5
+INFO:     127.0.0.1:61939 - "POST /api/v1/atlas/runs HTTP/1.1" 202 Accepted
+2026-10-02 03:03:26,696 INFO prism_api request_completed request_id=req_606a9656ede04b65ad9409e902c49380 method=GET path=/api/v1/atlas/runs/atlas_3193bc00f9534c8f8ebefa98aba36a90 status=200 duration_ms=1.2
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_3193bc00f9534c8f8ebefa98aba36a90 HTTP/1.1" 200 OK
+2026-10-02 03:03:26,749 INFO prism_api request_completed request_id=req_7acd661cd4c14618992143da27cb4067 method=GET path=/api/v1/atlas/runs/atlas_3193bc00f9534c8f8ebefa98aba36a90 status=200 duration_ms=1.3
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_3193bc00f9534c8f8ebefa98aba36a90 HTTP/1.1" 200 OK
+2026-10-02 03:03:26,802 INFO prism_api request_completed request_id=req_aff9f94edfee47e6b225f936201fd32e method=GET path=/api/v1/atlas/runs/atlas_3193bc00f9534c8f8ebefa98aba36a90 status=200 duration_ms=1.7
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_3193bc00f9534c8f8ebefa98aba36a90 HTTP/1.1" 200 OK
+2026-10-02 03:03:26,855 INFO prism_api request_completed request_id=req_3b109e460a074a3cbfff60ef730b5c15 method=GET path=/api/v1/atlas/runs/atlas_3193bc00f9534c8f8ebefa98aba36a90 status=200 duration_ms=1.8
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_3193bc00f9534c8f8ebefa98aba36a90 HTTP/1.1" 200 OK
+2026-10-02 03:03:26,908 INFO prism_api request_completed request_id=req_22e864b673824b7884634ebaacbbe993 method=GET path=/api/v1/atlas/runs/atlas_3193bc00f9534c8f8ebefa98aba36a90 status=200 duration_ms=1.7
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_3193bc00f9534c8f8ebefa98aba36a90 HTTP/1.1" 200 OK
+2026-10-02 03:03:26,962 INFO prism_api request_completed request_id=req_26bfb0ab4fa1428a9897481ea155f91f method=GET path=/api/v1/atlas/runs/atlas_3193bc00f9534c8f8ebefa98aba36a90 status=200 duration_ms=1.9
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_3193bc00f9534c8f8ebefa98aba36a90 HTTP/1.1" 200 OK
+2026-10-02 03:03:27,015 INFO prism_api request_completed request_id=req_4c5af8003191403ab0777496fb8291b2 method=GET path=/api/v1/atlas/runs/atlas_3193bc00f9534c8f8ebefa98aba36a90 status=200 duration_ms=1.4
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_3193bc00f9534c8f8ebefa98aba36a90 HTTP/1.1" 200 OK
+2026-10-02 03:03:27,069 INFO prism_api request_completed request_id=req_88bca821a5424199ba0189fcfd2b513a method=GET path=/api/v1/atlas/runs/atlas_3193bc00f9534c8f8ebefa98aba36a90 status=200 duration_ms=1.7
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_3193bc00f9534c8f8ebefa98aba36a90 HTTP/1.1" 200 OK
+2026-10-02 03:03:27,121 INFO prism_api request_completed request_id=req_91640e36b1aa4ae2946e394deb236059 method=GET path=/api/v1/atlas/runs/atlas_3193bc00f9534c8f8ebefa98aba36a90 status=200 duration_ms=1.3
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_3193bc00f9534c8f8ebefa98aba36a90 HTTP/1.1" 200 OK
+2026-10-02 03:03:27,173 INFO prism_api request_completed request_id=req_2f033dc41a664d14872a53b04bbc49f9 method=GET path=/api/v1/atlas/runs/atlas_3193bc00f9534c8f8ebefa98aba36a90 status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_3193bc00f9534c8f8ebefa98aba36a90 HTTP/1.1" 200 OK
+2026-10-02 03:03:27,226 INFO prism_api request_completed request_id=req_b42d10ee4b694bd891f2116f784557d5 method=GET path=/api/v1/atlas/runs/atlas_3193bc00f9534c8f8ebefa98aba36a90 status=200 duration_ms=1.5
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_3193bc00f9534c8f8ebefa98aba36a90 HTTP/1.1" 200 OK
+2026-10-02 03:03:27,279 INFO prism_api request_completed request_id=req_36ad1706ae3b412b8b386657fc2757ee method=GET path=/api/v1/atlas/runs/atlas_3193bc00f9534c8f8ebefa98aba36a90 status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_3193bc00f9534c8f8ebefa98aba36a90 HTTP/1.1" 200 OK
+2026-10-02 03:03:27,333 INFO prism_api request_completed request_id=req_60d543038929475d89297a9591880d77 method=GET path=/api/v1/atlas/runs/atlas_3193bc00f9534c8f8ebefa98aba36a90 status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_3193bc00f9534c8f8ebefa98aba36a90 HTTP/1.1" 200 OK
+2026-10-02 03:03:27,386 INFO prism_api request_completed request_id=req_fd1763b59e4e446f8b47dba6b2f0d0a7 method=GET path=/api/v1/atlas/runs/atlas_3193bc00f9534c8f8ebefa98aba36a90 status=200 duration_ms=1.5
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_3193bc00f9534c8f8ebefa98aba36a90 HTTP/1.1" 200 OK
+2026-10-02 03:03:27,438 INFO prism_api request_completed request_id=req_28ed00af462642e497c4264d9ede2c85 method=GET path=/api/v1/atlas/runs/atlas_3193bc00f9534c8f8ebefa98aba36a90 status=200 duration_ms=1.7
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_3193bc00f9534c8f8ebefa98aba36a90 HTTP/1.1" 200 OK
+2026-10-02 03:03:27,492 INFO prism_api request_completed request_id=req_7d61ef7a093a461ab2f9a39c067378d8 method=GET path=/api/v1/atlas/runs/atlas_3193bc00f9534c8f8ebefa98aba36a90 status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_3193bc00f9534c8f8ebefa98aba36a90 HTTP/1.1" 200 OK
+2026-10-02 03:03:27,545 INFO prism_api request_completed request_id=req_269146f24da942cb879228da98a546df method=GET path=/api/v1/atlas/runs/atlas_3193bc00f9534c8f8ebefa98aba36a90 status=200 duration_ms=1.5
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_3193bc00f9534c8f8ebefa98aba36a90 HTTP/1.1" 200 OK
+2026-10-02 03:03:27,598 INFO prism_api request_completed request_id=req_f8320b5384514c3393b1f426e5f3841e method=GET path=/api/v1/atlas/runs/atlas_3193bc00f9534c8f8ebefa98aba36a90 status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_3193bc00f9534c8f8ebefa98aba36a90 HTTP/1.1" 200 OK
+2026-10-02 03:03:27,652 INFO prism_api request_completed request_id=req_ecbee04569e745bab55e06fb5dbd40a2 method=GET path=/api/v1/atlas/runs/atlas_3193bc00f9534c8f8ebefa98aba36a90 status=200 duration_ms=2.1
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_3193bc00f9534c8f8ebefa98aba36a90 HTTP/1.1" 200 OK
+2026-10-02 03:03:27,705 INFO prism_api request_completed request_id=req_22417c6d36b5466eb9ce179b846a29e6 method=GET path=/api/v1/atlas/runs/atlas_3193bc00f9534c8f8ebefa98aba36a90 status=200 duration_ms=1.5
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_3193bc00f9534c8f8ebefa98aba36a90 HTTP/1.1" 200 OK
+2026-10-02 03:03:27,758 INFO prism_api request_completed request_id=req_14cccdcafe964e15bc7ad516190869ee method=GET path=/api/v1/atlas/runs/atlas_3193bc00f9534c8f8ebefa98aba36a90 status=200 duration_ms=1.4
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_3193bc00f9534c8f8ebefa98aba36a90 HTTP/1.1" 200 OK
+2026-10-02 03:03:27,811 INFO prism_api request_completed request_id=req_93afa735fff344fd8635d4baaaecf0d7 method=GET path=/api/v1/atlas/runs/atlas_3193bc00f9534c8f8ebefa98aba36a90 status=200 duration_ms=2.0
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_3193bc00f9534c8f8ebefa98aba36a90 HTTP/1.1" 200 OK
+2026-10-02 03:03:27,864 INFO prism_api request_completed request_id=req_ba98b34113d8437eb6206ce463c76480 method=GET path=/api/v1/atlas/runs/atlas_3193bc00f9534c8f8ebefa98aba36a90 status=200 duration_ms=2.4
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_3193bc00f9534c8f8ebefa98aba36a90 HTTP/1.1" 200 OK
+2026-10-02 03:03:27,918 INFO prism_api request_completed request_id=req_d12e98d5483049ca8fbac47e9d6b2ad2 method=GET path=/api/v1/atlas/runs/atlas_3193bc00f9534c8f8ebefa98aba36a90 status=200 duration_ms=1.4
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_3193bc00f9534c8f8ebefa98aba36a90 HTTP/1.1" 200 OK
+2026-10-02 03:03:28,511 INFO prism_api request_completed request_id=req_2faf30d04ce64b0a8b15cf47d69b1372 method=POST path=/api/v1/atlas/runs status=202 duration_ms=591.6
+INFO:     127.0.0.1:61939 - "POST /api/v1/atlas/runs HTTP/1.1" 202 Accepted
+2026-10-02 03:03:28,513 INFO prism_api request_completed request_id=req_da1f532457fb40d69e594f98685931c4 method=GET path=/api/v1/atlas/runs/atlas_99eb53e5003e454db26cae036865ea54 status=200 duration_ms=1.9
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_99eb53e5003e454db26cae036865ea54 HTTP/1.1" 200 OK
+2026-10-02 03:03:28,567 INFO prism_api request_completed request_id=req_2bfd2bf9430c4891b7eff9f333cc08b5 method=GET path=/api/v1/atlas/runs/atlas_99eb53e5003e454db26cae036865ea54 status=200 duration_ms=1.8
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_99eb53e5003e454db26cae036865ea54 HTTP/1.1" 200 OK
+2026-10-02 03:03:28,620 INFO prism_api request_completed request_id=req_e739d9406fc64248b699b878846dd64f method=GET path=/api/v1/atlas/runs/atlas_99eb53e5003e454db26cae036865ea54 status=200 duration_ms=2.2
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_99eb53e5003e454db26cae036865ea54 HTTP/1.1" 200 OK
+2026-10-02 03:03:28,673 INFO prism_api request_completed request_id=req_db90364e2d69404b83d3f722e85d03ea method=GET path=/api/v1/atlas/runs/atlas_99eb53e5003e454db26cae036865ea54 status=200 duration_ms=2.0
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_99eb53e5003e454db26cae036865ea54 HTTP/1.1" 200 OK
+2026-10-02 03:03:29,344 INFO prism_api request_completed request_id=req_acb8c527ed7441b29435ab239c1f25fc method=POST path=/api/v1/atlas/runs status=202 duration_ms=669.4
+INFO:     127.0.0.1:61939 - "POST /api/v1/atlas/runs HTTP/1.1" 202 Accepted
+2026-10-02 03:03:29,346 INFO prism_api request_completed request_id=req_7ec60848b8744f6ba816b102c3e02885 method=GET path=/api/v1/atlas/runs/atlas_6f5a60158e294a7ca23eef99ca14fe86 status=200 duration_ms=1.1
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_6f5a60158e294a7ca23eef99ca14fe86 HTTP/1.1" 200 OK
+2026-10-02 03:03:29,399 INFO prism_api request_completed request_id=req_38e51e46e4654a09b4830e810d5d4bda method=GET path=/api/v1/atlas/runs/atlas_6f5a60158e294a7ca23eef99ca14fe86 status=200 duration_ms=1.4
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_6f5a60158e294a7ca23eef99ca14fe86 HTTP/1.1" 200 OK
+2026-10-02 03:03:29,451 INFO prism_api request_completed request_id=req_043129901eeb41a9bc899edb7525648c method=GET path=/api/v1/atlas/runs/atlas_6f5a60158e294a7ca23eef99ca14fe86 status=200 duration_ms=1.7
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_6f5a60158e294a7ca23eef99ca14fe86 HTTP/1.1" 200 OK
+2026-10-02 03:03:29,505 INFO prism_api request_completed request_id=req_7ec84fc0809c4f828abf473e5648fec9 method=GET path=/api/v1/atlas/runs/atlas_6f5a60158e294a7ca23eef99ca14fe86 status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_6f5a60158e294a7ca23eef99ca14fe86 HTTP/1.1" 200 OK
+2026-10-02 03:03:29,557 INFO prism_api request_completed request_id=req_de8ca313f319457cbad2fd619c84e98d method=GET path=/api/v1/atlas/runs/atlas_6f5a60158e294a7ca23eef99ca14fe86 status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_6f5a60158e294a7ca23eef99ca14fe86 HTTP/1.1" 200 OK
+2026-10-02 03:03:29,610 INFO prism_api request_completed request_id=req_76e8d41dd816475daf0f4b0ae325240e method=GET path=/api/v1/atlas/runs/atlas_6f5a60158e294a7ca23eef99ca14fe86 status=200 duration_ms=1.7
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_6f5a60158e294a7ca23eef99ca14fe86 HTTP/1.1" 200 OK
+2026-10-02 03:03:29,663 INFO prism_api request_completed request_id=req_ece9356311ef4e66a3b209cdf571df01 method=GET path=/api/v1/atlas/runs/atlas_6f5a60158e294a7ca23eef99ca14fe86 status=200 duration_ms=1.4
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_6f5a60158e294a7ca23eef99ca14fe86 HTTP/1.1" 200 OK
+2026-10-02 03:03:29,717 INFO prism_api request_completed request_id=req_1500233d1d314e09a04e60c439bcac2f method=GET path=/api/v1/atlas/runs/atlas_6f5a60158e294a7ca23eef99ca14fe86 status=200 duration_ms=1.7
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_6f5a60158e294a7ca23eef99ca14fe86 HTTP/1.1" 200 OK
+2026-10-02 03:03:29,769 INFO prism_api request_completed request_id=req_9a8e645b7378439d8027d1fe9f59aab2 method=GET path=/api/v1/atlas/runs/atlas_6f5a60158e294a7ca23eef99ca14fe86 status=200 duration_ms=1.3
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_6f5a60158e294a7ca23eef99ca14fe86 HTTP/1.1" 200 OK
+2026-10-02 03:03:29,822 INFO prism_api request_completed request_id=req_0729ee4c814846bd8bbb00165dff4b94 method=GET path=/api/v1/atlas/runs/atlas_6f5a60158e294a7ca23eef99ca14fe86 status=200 duration_ms=1.5
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_6f5a60158e294a7ca23eef99ca14fe86 HTTP/1.1" 200 OK
+2026-10-02 03:03:29,876 INFO prism_api request_completed request_id=req_8d770e7f3df9427ebd766222649340c9 method=GET path=/api/v1/atlas/runs/atlas_6f5a60158e294a7ca23eef99ca14fe86 status=200 duration_ms=1.8
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_6f5a60158e294a7ca23eef99ca14fe86 HTTP/1.1" 200 OK
+2026-10-02 03:03:29,929 INFO prism_api request_completed request_id=req_70e79e1ee1104beebb53804af26a79fd method=GET path=/api/v1/atlas/runs/atlas_6f5a60158e294a7ca23eef99ca14fe86 status=200 duration_ms=1.7
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_6f5a60158e294a7ca23eef99ca14fe86 HTTP/1.1" 200 OK
+2026-10-02 03:03:29,983 INFO prism_api request_completed request_id=req_44e971851d7941308e0c2ebaee2a9071 method=GET path=/api/v1/atlas/runs/atlas_6f5a60158e294a7ca23eef99ca14fe86 status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_6f5a60158e294a7ca23eef99ca14fe86 HTTP/1.1" 200 OK
+2026-10-02 03:03:30,036 INFO prism_api request_completed request_id=req_eb1a758392114c14bf4ba6d9e7452fc3 method=GET path=/api/v1/atlas/runs/atlas_6f5a60158e294a7ca23eef99ca14fe86 status=200 duration_ms=1.5
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_6f5a60158e294a7ca23eef99ca14fe86 HTTP/1.1" 200 OK
+2026-10-02 03:03:30,089 INFO prism_api request_completed request_id=req_03c7a9b686f64b96bf37a63e7adb73ce method=GET path=/api/v1/atlas/runs/atlas_6f5a60158e294a7ca23eef99ca14fe86 status=200 duration_ms=1.5
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_6f5a60158e294a7ca23eef99ca14fe86 HTTP/1.1" 200 OK
+2026-10-02 03:03:30,141 INFO prism_api request_completed request_id=req_a502c37df7b248569db78c988cbe64b5 method=GET path=/api/v1/atlas/runs/atlas_6f5a60158e294a7ca23eef99ca14fe86 status=200 duration_ms=1.7
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_6f5a60158e294a7ca23eef99ca14fe86 HTTP/1.1" 200 OK
+2026-10-02 03:03:30,194 INFO prism_api request_completed request_id=req_5629e6103dcc4749a83eb9f6ab1bfa63 method=GET path=/api/v1/atlas/runs/atlas_6f5a60158e294a7ca23eef99ca14fe86 status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_6f5a60158e294a7ca23eef99ca14fe86 HTTP/1.1" 200 OK
+2026-10-02 03:03:30,247 INFO prism_api request_completed request_id=req_ad671d3d396c4f37836fd26f9a586534 method=GET path=/api/v1/atlas/runs/atlas_6f5a60158e294a7ca23eef99ca14fe86 status=200 duration_ms=1.7
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_6f5a60158e294a7ca23eef99ca14fe86 HTTP/1.1" 200 OK
+2026-10-02 03:03:30,301 INFO prism_api request_completed request_id=req_06db4217240641ffaff4940512f84515 method=GET path=/api/v1/atlas/runs/atlas_6f5a60158e294a7ca23eef99ca14fe86 status=200 duration_ms=1.8
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_6f5a60158e294a7ca23eef99ca14fe86 HTTP/1.1" 200 OK
+2026-10-02 03:03:30,354 INFO prism_api request_completed request_id=req_7ec5205e36584e87840bbb80e0e5894e method=GET path=/api/v1/atlas/runs/atlas_6f5a60158e294a7ca23eef99ca14fe86 status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_6f5a60158e294a7ca23eef99ca14fe86 HTTP/1.1" 200 OK
+2026-10-02 03:03:30,407 INFO prism_api request_completed request_id=req_af862594d64c4062946e32fd1bfc58e5 method=GET path=/api/v1/atlas/runs/atlas_6f5a60158e294a7ca23eef99ca14fe86 status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_6f5a60158e294a7ca23eef99ca14fe86 HTTP/1.1" 200 OK
+2026-10-02 03:03:30,460 INFO prism_api request_completed request_id=req_ae10b545d5a24fc5955e313ec7739019 method=GET path=/api/v1/atlas/runs/atlas_6f5a60158e294a7ca23eef99ca14fe86 status=200 duration_ms=1.5
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_6f5a60158e294a7ca23eef99ca14fe86 HTTP/1.1" 200 OK
+2026-10-02 03:03:30,514 INFO prism_api request_completed request_id=req_5efe7ad5701846fe9a7622c3d9e9b806 method=GET path=/api/v1/atlas/runs/atlas_6f5a60158e294a7ca23eef99ca14fe86 status=200 duration_ms=2.0
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_6f5a60158e294a7ca23eef99ca14fe86 HTTP/1.1" 200 OK
+2026-10-02 03:03:30,567 INFO prism_api request_completed request_id=req_f7e587d5965f4ea696ca0e8f690a5972 method=GET path=/api/v1/atlas/runs/atlas_6f5a60158e294a7ca23eef99ca14fe86 status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_6f5a60158e294a7ca23eef99ca14fe86 HTTP/1.1" 200 OK
+2026-10-02 03:03:31,164 INFO prism_api request_completed request_id=req_ab4f4b626b8e46cca5430a86312d2dd6 method=POST path=/api/v1/atlas/runs status=202 duration_ms=596.0
+INFO:     127.0.0.1:61939 - "POST /api/v1/atlas/runs HTTP/1.1" 202 Accepted
+2026-10-02 03:03:31,167 INFO prism_api request_completed request_id=req_fd295b548e3d4759a00dd227914b24d8 method=GET path=/api/v1/atlas/runs/atlas_9f214b8c8ee24226bef75df97c25f2b0 status=200 duration_ms=2.0
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_9f214b8c8ee24226bef75df97c25f2b0 HTTP/1.1" 200 OK
+2026-10-02 03:03:31,219 INFO prism_api request_completed request_id=req_21a39f75301a448293fa7b569aef988e method=GET path=/api/v1/atlas/runs/atlas_9f214b8c8ee24226bef75df97c25f2b0 status=200 duration_ms=1.4
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_9f214b8c8ee24226bef75df97c25f2b0 HTTP/1.1" 200 OK
+2026-10-02 03:03:31,291 INFO prism_api request_completed request_id=req_5caa520194104097bddd44e6aadf6ad7 method=GET path=/api/v1/atlas/runs/atlas_9f214b8c8ee24226bef75df97c25f2b0 status=200 duration_ms=21.0
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_9f214b8c8ee24226bef75df97c25f2b0 HTTP/1.1" 200 OK
+2026-10-02 03:03:31,961 INFO prism_api request_completed request_id=req_c49e4a12177d4ea5b62eed42883a2f71 method=POST path=/api/v1/atlas/runs status=202 duration_ms=668.2
+INFO:     127.0.0.1:61939 - "POST /api/v1/atlas/runs HTTP/1.1" 202 Accepted
+2026-10-02 03:03:31,963 INFO prism_api request_completed request_id=req_67918b7b3e074bcb8b10de8ec01cb7b4 method=GET path=/api/v1/atlas/runs/atlas_c1cb454053684947893a5018eb636eaa status=200 duration_ms=1.1
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_c1cb454053684947893a5018eb636eaa HTTP/1.1" 200 OK
+2026-10-02 03:03:32,016 INFO prism_api request_completed request_id=req_f285fd1e756a45c5bc8138f38eceff61 method=GET path=/api/v1/atlas/runs/atlas_c1cb454053684947893a5018eb636eaa status=200 duration_ms=1.4
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_c1cb454053684947893a5018eb636eaa HTTP/1.1" 200 OK
+2026-10-02 03:03:32,069 INFO prism_api request_completed request_id=req_17e686f229f3489cbdb9fdbd1fc6253f method=GET path=/api/v1/atlas/runs/atlas_c1cb454053684947893a5018eb636eaa status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_c1cb454053684947893a5018eb636eaa HTTP/1.1" 200 OK
+2026-10-02 03:03:32,123 INFO prism_api request_completed request_id=req_8a551152fac647b0904bc4b35258b6a3 method=GET path=/api/v1/atlas/runs/atlas_c1cb454053684947893a5018eb636eaa status=200 duration_ms=1.7
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_c1cb454053684947893a5018eb636eaa HTTP/1.1" 200 OK
+2026-10-02 03:03:32,175 INFO prism_api request_completed request_id=req_46ae6fa68c9543c1918cc78f72ba4989 method=GET path=/api/v1/atlas/runs/atlas_c1cb454053684947893a5018eb636eaa status=200 duration_ms=1.7
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_c1cb454053684947893a5018eb636eaa HTTP/1.1" 200 OK
+2026-10-02 03:03:32,228 INFO prism_api request_completed request_id=req_3f9c41e8b9af46cb9596c007757597f1 method=GET path=/api/v1/atlas/runs/atlas_c1cb454053684947893a5018eb636eaa status=200 duration_ms=1.3
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_c1cb454053684947893a5018eb636eaa HTTP/1.1" 200 OK
+2026-10-02 03:03:32,281 INFO prism_api request_completed request_id=req_2907b5722a9f47aa9043f4d827fe68a0 method=GET path=/api/v1/atlas/runs/atlas_c1cb454053684947893a5018eb636eaa status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_c1cb454053684947893a5018eb636eaa HTTP/1.1" 200 OK
+2026-10-02 03:03:32,335 INFO prism_api request_completed request_id=req_25620be67d4e4c9ba16abaf3893bcd84 method=GET path=/api/v1/atlas/runs/atlas_c1cb454053684947893a5018eb636eaa status=200 duration_ms=1.4
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_c1cb454053684947893a5018eb636eaa HTTP/1.1" 200 OK
+2026-10-02 03:03:32,387 INFO prism_api request_completed request_id=req_0f44637c64104cf3af50081902dfde9e method=GET path=/api/v1/atlas/runs/atlas_c1cb454053684947893a5018eb636eaa status=200 duration_ms=1.5
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_c1cb454053684947893a5018eb636eaa HTTP/1.1" 200 OK
+2026-10-02 03:03:32,441 INFO prism_api request_completed request_id=req_0d70a949ec4043cc96f6f9a20f6d1c55 method=GET path=/api/v1/atlas/runs/atlas_c1cb454053684947893a5018eb636eaa status=200 duration_ms=1.5
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_c1cb454053684947893a5018eb636eaa HTTP/1.1" 200 OK
+2026-10-02 03:03:32,493 INFO prism_api request_completed request_id=req_80de1355a7af4b9896d7ee636dbb0fd6 method=GET path=/api/v1/atlas/runs/atlas_c1cb454053684947893a5018eb636eaa status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_c1cb454053684947893a5018eb636eaa HTTP/1.1" 200 OK
+2026-10-02 03:03:32,546 INFO prism_api request_completed request_id=req_b0b3f25ecd2e4c2a87ae2fcd4ff17ed3 method=GET path=/api/v1/atlas/runs/atlas_c1cb454053684947893a5018eb636eaa status=200 duration_ms=1.5
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_c1cb454053684947893a5018eb636eaa HTTP/1.1" 200 OK
+2026-10-02 03:03:32,599 INFO prism_api request_completed request_id=req_f5c1fb9b651e4e2881f1e9fe7d2c7d03 method=GET path=/api/v1/atlas/runs/atlas_c1cb454053684947893a5018eb636eaa status=200 duration_ms=1.8
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_c1cb454053684947893a5018eb636eaa HTTP/1.1" 200 OK
+2026-10-02 03:03:32,652 INFO prism_api request_completed request_id=req_4c63dcc757b64c14809a5445d80a6380 method=GET path=/api/v1/atlas/runs/atlas_c1cb454053684947893a5018eb636eaa status=200 duration_ms=1.5
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_c1cb454053684947893a5018eb636eaa HTTP/1.1" 200 OK
+2026-10-02 03:03:32,705 INFO prism_api request_completed request_id=req_a42ddb7c5fb64e10bb8b8f023ec5294f method=GET path=/api/v1/atlas/runs/atlas_c1cb454053684947893a5018eb636eaa status=200 duration_ms=1.7
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_c1cb454053684947893a5018eb636eaa HTTP/1.1" 200 OK
+2026-10-02 03:03:32,759 INFO prism_api request_completed request_id=req_ed609af129c54059a370ce726abf7b3e method=GET path=/api/v1/atlas/runs/atlas_c1cb454053684947893a5018eb636eaa status=200 duration_ms=2.1
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_c1cb454053684947893a5018eb636eaa HTTP/1.1" 200 OK
+2026-10-02 03:03:32,813 INFO prism_api request_completed request_id=req_102604c75ec8458a9d75d399df176556 method=GET path=/api/v1/atlas/runs/atlas_c1cb454053684947893a5018eb636eaa status=200 duration_ms=1.8
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_c1cb454053684947893a5018eb636eaa HTTP/1.1" 200 OK
+2026-10-02 03:03:32,866 INFO prism_api request_completed request_id=req_36ff8d60c849406b927d9d9107350c80 method=GET path=/api/v1/atlas/runs/atlas_c1cb454053684947893a5018eb636eaa status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_c1cb454053684947893a5018eb636eaa HTTP/1.1" 200 OK
+2026-10-02 03:03:32,919 INFO prism_api request_completed request_id=req_1e384e2366604804b6b8b58640104767 method=GET path=/api/v1/atlas/runs/atlas_c1cb454053684947893a5018eb636eaa status=200 duration_ms=1.8
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_c1cb454053684947893a5018eb636eaa HTTP/1.1" 200 OK
+2026-10-02 03:03:32,972 INFO prism_api request_completed request_id=req_b44e385665c44c16850bfc5dd1a061c2 method=GET path=/api/v1/atlas/runs/atlas_c1cb454053684947893a5018eb636eaa status=200 duration_ms=1.5
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_c1cb454053684947893a5018eb636eaa HTTP/1.1" 200 OK
+2026-10-02 03:03:33,025 INFO prism_api request_completed request_id=req_e08db11260654ab6a318828997b3f359 method=GET path=/api/v1/atlas/runs/atlas_c1cb454053684947893a5018eb636eaa status=200 duration_ms=1.5
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_c1cb454053684947893a5018eb636eaa HTTP/1.1" 200 OK
+2026-10-02 03:03:33,078 INFO prism_api request_completed request_id=req_634044dc8d234ef59c67540758d33d82 method=GET path=/api/v1/atlas/runs/atlas_c1cb454053684947893a5018eb636eaa status=200 duration_ms=1.5
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_c1cb454053684947893a5018eb636eaa HTTP/1.1" 200 OK
+2026-10-02 03:03:33,136 INFO prism_api request_completed request_id=req_0c3e2b0a56c7405faa3d689d295158dd method=GET path=/api/v1/atlas/runs/atlas_c1cb454053684947893a5018eb636eaa status=200 duration_ms=6.3
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_c1cb454053684947893a5018eb636eaa HTTP/1.1" 200 OK
+2026-10-02 03:03:33,713 INFO prism_api request_completed request_id=req_c456c6f0e3e14a46b63a88ca1f89d7c6 method=POST path=/api/v1/atlas/runs status=202 duration_ms=576.2
+INFO:     127.0.0.1:61939 - "POST /api/v1/atlas/runs HTTP/1.1" 202 Accepted
+2026-10-02 03:03:33,716 INFO prism_api request_completed request_id=req_0f1bac2ea4af4dbd8e161506a04189d8 method=GET path=/api/v1/atlas/runs/atlas_ef91201b949e43d9b76e648408332ea9 status=200 duration_ms=2.5
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_ef91201b949e43d9b76e648408332ea9 HTTP/1.1" 200 OK
+2026-10-02 03:03:33,769 INFO prism_api request_completed request_id=req_b91841b02c6d403e8ee6b1adfb744408 method=GET path=/api/v1/atlas/runs/atlas_ef91201b949e43d9b76e648408332ea9 status=200 duration_ms=1.5
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_ef91201b949e43d9b76e648408332ea9 HTTP/1.1" 200 OK
+2026-10-02 03:03:33,849 INFO prism_api request_completed request_id=req_053df406ad8449e39349663b0613bb99 method=GET path=/api/v1/atlas/runs/atlas_ef91201b949e43d9b76e648408332ea9 status=200 duration_ms=28.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_ef91201b949e43d9b76e648408332ea9 HTTP/1.1" 200 OK
+2026-10-02 03:03:34,533 INFO prism_api request_completed request_id=req_3289a54258fe47bb827d2799a8a4ac18 method=POST path=/api/v1/atlas/runs status=202 duration_ms=683.0
+INFO:     127.0.0.1:61939 - "POST /api/v1/atlas/runs HTTP/1.1" 202 Accepted
+2026-10-02 03:03:34,535 INFO prism_api request_completed request_id=req_d8d829928b4e4844afa9e9fb981ea88e method=GET path=/api/v1/atlas/runs/atlas_9f5b5c7d93084a519748fb7cb0435a5e status=200 duration_ms=1.1
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_9f5b5c7d93084a519748fb7cb0435a5e HTTP/1.1" 200 OK
+2026-10-02 03:03:34,587 INFO prism_api request_completed request_id=req_5e30bf68e8fd4da19cf72bbc8926b8f0 method=GET path=/api/v1/atlas/runs/atlas_9f5b5c7d93084a519748fb7cb0435a5e status=200 duration_ms=1.3
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_9f5b5c7d93084a519748fb7cb0435a5e HTTP/1.1" 200 OK
+2026-10-02 03:03:34,640 INFO prism_api request_completed request_id=req_655a7b6403144cd388806334b9c78318 method=GET path=/api/v1/atlas/runs/atlas_9f5b5c7d93084a519748fb7cb0435a5e status=200 duration_ms=1.5
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_9f5b5c7d93084a519748fb7cb0435a5e HTTP/1.1" 200 OK
+2026-10-02 03:03:34,693 INFO prism_api request_completed request_id=req_34a7cd4b2cef408391e56330fbf856e3 method=GET path=/api/v1/atlas/runs/atlas_9f5b5c7d93084a519748fb7cb0435a5e status=200 duration_ms=1.5
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_9f5b5c7d93084a519748fb7cb0435a5e HTTP/1.1" 200 OK
+2026-10-02 03:03:34,746 INFO prism_api request_completed request_id=req_c8e3a340c7074a3b8352b5fad9229305 method=GET path=/api/v1/atlas/runs/atlas_9f5b5c7d93084a519748fb7cb0435a5e status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_9f5b5c7d93084a519748fb7cb0435a5e HTTP/1.1" 200 OK
+2026-10-02 03:03:34,800 INFO prism_api request_completed request_id=req_e72c216500564ee6979c3eb2ea07e38f method=GET path=/api/v1/atlas/runs/atlas_9f5b5c7d93084a519748fb7cb0435a5e status=200 duration_ms=1.4
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_9f5b5c7d93084a519748fb7cb0435a5e HTTP/1.1" 200 OK
+2026-10-02 03:03:34,852 INFO prism_api request_completed request_id=req_bdb9bd4fc985435aa36024b1b638dc89 method=GET path=/api/v1/atlas/runs/atlas_9f5b5c7d93084a519748fb7cb0435a5e status=200 duration_ms=1.5
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_9f5b5c7d93084a519748fb7cb0435a5e HTTP/1.1" 200 OK
+2026-10-02 03:03:34,905 INFO prism_api request_completed request_id=req_43eac4437e134cddbbbbd74de35897d0 method=GET path=/api/v1/atlas/runs/atlas_9f5b5c7d93084a519748fb7cb0435a5e status=200 duration_ms=1.5
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_9f5b5c7d93084a519748fb7cb0435a5e HTTP/1.1" 200 OK
+2026-10-02 03:03:34,958 INFO prism_api request_completed request_id=req_2cf90a975daa4a3caf0d116efb6e8119 method=GET path=/api/v1/atlas/runs/atlas_9f5b5c7d93084a519748fb7cb0435a5e status=200 duration_ms=1.4
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_9f5b5c7d93084a519748fb7cb0435a5e HTTP/1.1" 200 OK
+2026-10-02 03:03:35,012 INFO prism_api request_completed request_id=req_3017272f3a27492d90c96df323cc5819 method=GET path=/api/v1/atlas/runs/atlas_9f5b5c7d93084a519748fb7cb0435a5e status=200 duration_ms=1.5
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_9f5b5c7d93084a519748fb7cb0435a5e HTTP/1.1" 200 OK
+2026-10-02 03:03:35,065 INFO prism_api request_completed request_id=req_ae716fd6a6654bf6b715927502e9a31f method=GET path=/api/v1/atlas/runs/atlas_9f5b5c7d93084a519748fb7cb0435a5e status=200 duration_ms=2.1
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_9f5b5c7d93084a519748fb7cb0435a5e HTTP/1.1" 200 OK
+2026-10-02 03:03:35,118 INFO prism_api request_completed request_id=req_f8ba4524d81a4b27a2f37008a76ffef9 method=GET path=/api/v1/atlas/runs/atlas_9f5b5c7d93084a519748fb7cb0435a5e status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_9f5b5c7d93084a519748fb7cb0435a5e HTTP/1.1" 200 OK
+2026-10-02 03:03:35,172 INFO prism_api request_completed request_id=req_082cf96161134dce875d65f9ef483b06 method=GET path=/api/v1/atlas/runs/atlas_9f5b5c7d93084a519748fb7cb0435a5e status=200 duration_ms=1.7
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_9f5b5c7d93084a519748fb7cb0435a5e HTTP/1.1" 200 OK
+2026-10-02 03:03:35,225 INFO prism_api request_completed request_id=req_60bb6463062f4d13a17e549ec75c3e84 method=GET path=/api/v1/atlas/runs/atlas_9f5b5c7d93084a519748fb7cb0435a5e status=200 duration_ms=1.8
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_9f5b5c7d93084a519748fb7cb0435a5e HTTP/1.1" 200 OK
+2026-10-02 03:03:35,278 INFO prism_api request_completed request_id=req_0051ee5d3ff54cd3801186d203ed774b method=GET path=/api/v1/atlas/runs/atlas_9f5b5c7d93084a519748fb7cb0435a5e status=200 duration_ms=1.5
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_9f5b5c7d93084a519748fb7cb0435a5e HTTP/1.1" 200 OK
+2026-10-02 03:03:35,330 INFO prism_api request_completed request_id=req_1e679daa37aa41778a888e19c764c47c method=GET path=/api/v1/atlas/runs/atlas_9f5b5c7d93084a519748fb7cb0435a5e status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_9f5b5c7d93084a519748fb7cb0435a5e HTTP/1.1" 200 OK
+2026-10-02 03:03:35,383 INFO prism_api request_completed request_id=req_d38344bcf43d465bbe9cc67f187123ea method=GET path=/api/v1/atlas/runs/atlas_9f5b5c7d93084a519748fb7cb0435a5e status=200 duration_ms=1.7
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_9f5b5c7d93084a519748fb7cb0435a5e HTTP/1.1" 200 OK
+2026-10-02 03:03:35,437 INFO prism_api request_completed request_id=req_9aee68c2adf4442e9cff4999b73fb828 method=GET path=/api/v1/atlas/runs/atlas_9f5b5c7d93084a519748fb7cb0435a5e status=200 duration_ms=1.5
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_9f5b5c7d93084a519748fb7cb0435a5e HTTP/1.1" 200 OK
+2026-10-02 03:03:35,490 INFO prism_api request_completed request_id=req_96f634e6e4834319ace66c3e71e5aa08 method=GET path=/api/v1/atlas/runs/atlas_9f5b5c7d93084a519748fb7cb0435a5e status=200 duration_ms=1.7
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_9f5b5c7d93084a519748fb7cb0435a5e HTTP/1.1" 200 OK
+2026-10-02 03:03:35,544 INFO prism_api request_completed request_id=req_21af4dcb77714cfaa8b58db468e56195 method=GET path=/api/v1/atlas/runs/atlas_9f5b5c7d93084a519748fb7cb0435a5e status=200 duration_ms=1.4
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_9f5b5c7d93084a519748fb7cb0435a5e HTTP/1.1" 200 OK
+2026-10-02 03:03:35,595 INFO prism_api request_completed request_id=req_3f3de10942a342a8874228b227901884 method=GET path=/api/v1/atlas/runs/atlas_9f5b5c7d93084a519748fb7cb0435a5e status=200 duration_ms=1.4
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_9f5b5c7d93084a519748fb7cb0435a5e HTTP/1.1" 200 OK
+2026-10-02 03:03:35,650 INFO prism_api request_completed request_id=req_12ae6b854a5046ceb7f65efcd6e4d113 method=GET path=/api/v1/atlas/runs/atlas_9f5b5c7d93084a519748fb7cb0435a5e status=200 duration_ms=2.1
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_9f5b5c7d93084a519748fb7cb0435a5e HTTP/1.1" 200 OK
+2026-10-02 03:03:35,704 INFO prism_api request_completed request_id=req_292007f2130d416c86e7b55e887e30b3 method=GET path=/api/v1/atlas/runs/atlas_9f5b5c7d93084a519748fb7cb0435a5e status=200 duration_ms=1.5
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_9f5b5c7d93084a519748fb7cb0435a5e HTTP/1.1" 200 OK
+2026-10-02 03:03:36,290 INFO prism_api request_completed request_id=req_7abfeeb5d57845a8a303ace76fa8d8ae method=POST path=/api/v1/atlas/runs status=202 duration_ms=585.5
+INFO:     127.0.0.1:61939 - "POST /api/v1/atlas/runs HTTP/1.1" 202 Accepted
+2026-10-02 03:03:36,293 INFO prism_api request_completed request_id=req_bcbfba757cf147aea2e9c367fe901f7a method=GET path=/api/v1/atlas/runs/atlas_fb8ec5f151bb4f00ac7829f06979ef66 status=200 duration_ms=1.9
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_fb8ec5f151bb4f00ac7829f06979ef66 HTTP/1.1" 200 OK
+2026-10-02 03:03:36,346 INFO prism_api request_completed request_id=req_3b46ddbda8654b648b9491312c79c148 method=GET path=/api/v1/atlas/runs/atlas_fb8ec5f151bb4f00ac7829f06979ef66 status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_fb8ec5f151bb4f00ac7829f06979ef66 HTTP/1.1" 200 OK
+2026-10-02 03:03:36,428 INFO prism_api request_completed request_id=req_4118302a1d34407c88bda280816c9b0b method=GET path=/api/v1/atlas/runs/atlas_fb8ec5f151bb4f00ac7829f06979ef66 status=200 duration_ms=29.7
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_fb8ec5f151bb4f00ac7829f06979ef66 HTTP/1.1" 200 OK
+2026-10-02 03:03:37,099 INFO prism_api request_completed request_id=req_a86b37fc45a74c38b8435d941af4bbf8 method=POST path=/api/v1/atlas/runs status=202 duration_ms=669.9
+INFO:     127.0.0.1:61939 - "POST /api/v1/atlas/runs HTTP/1.1" 202 Accepted
+2026-10-02 03:03:37,101 INFO prism_api request_completed request_id=req_d55d5eaf73964111b2c7461799178944 method=GET path=/api/v1/atlas/runs/atlas_cd65c66b8593408a977ebfc86006411c status=200 duration_ms=1.1
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_cd65c66b8593408a977ebfc86006411c HTTP/1.1" 200 OK
+2026-10-02 03:03:37,154 INFO prism_api request_completed request_id=req_5fb6c8d176fa44e2a33f665fb9429227 method=GET path=/api/v1/atlas/runs/atlas_cd65c66b8593408a977ebfc86006411c status=200 duration_ms=1.3
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_cd65c66b8593408a977ebfc86006411c HTTP/1.1" 200 OK
+2026-10-02 03:03:37,207 INFO prism_api request_completed request_id=req_09efaaceac0942528c8edf9a61152587 method=GET path=/api/v1/atlas/runs/atlas_cd65c66b8593408a977ebfc86006411c status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_cd65c66b8593408a977ebfc86006411c HTTP/1.1" 200 OK
+2026-10-02 03:03:37,260 INFO prism_api request_completed request_id=req_5c5a4da24c2140729f4e129057d856d7 method=GET path=/api/v1/atlas/runs/atlas_cd65c66b8593408a977ebfc86006411c status=200 duration_ms=1.5
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_cd65c66b8593408a977ebfc86006411c HTTP/1.1" 200 OK
+2026-10-02 03:03:37,313 INFO prism_api request_completed request_id=req_fa33e00d06364cf1b7671a0dc9f2c9cf method=GET path=/api/v1/atlas/runs/atlas_cd65c66b8593408a977ebfc86006411c status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_cd65c66b8593408a977ebfc86006411c HTTP/1.1" 200 OK
+2026-10-02 03:03:37,365 INFO prism_api request_completed request_id=req_5fdbf74039a342aca94a3f3ac729bd34 method=GET path=/api/v1/atlas/runs/atlas_cd65c66b8593408a977ebfc86006411c status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_cd65c66b8593408a977ebfc86006411c HTTP/1.1" 200 OK
+2026-10-02 03:03:37,419 INFO prism_api request_completed request_id=req_5909f446f7984639ba01c6807daee9e1 method=GET path=/api/v1/atlas/runs/atlas_cd65c66b8593408a977ebfc86006411c status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_cd65c66b8593408a977ebfc86006411c HTTP/1.1" 200 OK
+2026-10-02 03:03:37,473 INFO prism_api request_completed request_id=req_1ab8c4af475f41f1bc1cd33127b46174 method=GET path=/api/v1/atlas/runs/atlas_cd65c66b8593408a977ebfc86006411c status=200 duration_ms=1.5
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_cd65c66b8593408a977ebfc86006411c HTTP/1.1" 200 OK
+2026-10-02 03:03:37,525 INFO prism_api request_completed request_id=req_c395dcecaa5746d68bb42d6ce4020cff method=GET path=/api/v1/atlas/runs/atlas_cd65c66b8593408a977ebfc86006411c status=200 duration_ms=1.5
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_cd65c66b8593408a977ebfc86006411c HTTP/1.1" 200 OK
+2026-10-02 03:03:37,578 INFO prism_api request_completed request_id=req_2f65214009d542ca907ccc74b1a8a7b4 method=GET path=/api/v1/atlas/runs/atlas_cd65c66b8593408a977ebfc86006411c status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_cd65c66b8593408a977ebfc86006411c HTTP/1.1" 200 OK
+2026-10-02 03:03:37,631 INFO prism_api request_completed request_id=req_9b431c91a9584c5ca65027f51ab7dadd method=GET path=/api/v1/atlas/runs/atlas_cd65c66b8593408a977ebfc86006411c status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_cd65c66b8593408a977ebfc86006411c HTTP/1.1" 200 OK
+2026-10-02 03:03:37,684 INFO prism_api request_completed request_id=req_c048ed98050b4cbbbec284fe6ee10032 method=GET path=/api/v1/atlas/runs/atlas_cd65c66b8593408a977ebfc86006411c status=200 duration_ms=1.5
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_cd65c66b8593408a977ebfc86006411c HTTP/1.1" 200 OK
+2026-10-02 03:03:37,737 INFO prism_api request_completed request_id=req_ae61edbecdc44d8182d8ddcf176e3c2c method=GET path=/api/v1/atlas/runs/atlas_cd65c66b8593408a977ebfc86006411c status=200 duration_ms=1.8
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_cd65c66b8593408a977ebfc86006411c HTTP/1.1" 200 OK
+2026-10-02 03:03:37,790 INFO prism_api request_completed request_id=req_89ff7e287d294b18aa51ab9226a5ebdd method=GET path=/api/v1/atlas/runs/atlas_cd65c66b8593408a977ebfc86006411c status=200 duration_ms=1.5
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_cd65c66b8593408a977ebfc86006411c HTTP/1.1" 200 OK
+2026-10-02 03:03:37,843 INFO prism_api request_completed request_id=req_0b09d941485048c2b18ac16e4f8598ca method=GET path=/api/v1/atlas/runs/atlas_cd65c66b8593408a977ebfc86006411c status=200 duration_ms=1.5
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_cd65c66b8593408a977ebfc86006411c HTTP/1.1" 200 OK
+2026-10-02 03:03:37,896 INFO prism_api request_completed request_id=req_62921ee3bf7e4ad1bd1f220fb21c32be method=GET path=/api/v1/atlas/runs/atlas_cd65c66b8593408a977ebfc86006411c status=200 duration_ms=1.7
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_cd65c66b8593408a977ebfc86006411c HTTP/1.1" 200 OK
+2026-10-02 03:03:37,949 INFO prism_api request_completed request_id=req_48322551106843f98fde029baac78a3b method=GET path=/api/v1/atlas/runs/atlas_cd65c66b8593408a977ebfc86006411c status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_cd65c66b8593408a977ebfc86006411c HTTP/1.1" 200 OK
+2026-10-02 03:03:38,002 INFO prism_api request_completed request_id=req_4b26fa67082c44a5b3835e29fdf8f6ff method=GET path=/api/v1/atlas/runs/atlas_cd65c66b8593408a977ebfc86006411c status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_cd65c66b8593408a977ebfc86006411c HTTP/1.1" 200 OK
+2026-10-02 03:03:38,056 INFO prism_api request_completed request_id=req_d905f32c09b941b19a943d928d06d3a8 method=GET path=/api/v1/atlas/runs/atlas_cd65c66b8593408a977ebfc86006411c status=200 duration_ms=1.7
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_cd65c66b8593408a977ebfc86006411c HTTP/1.1" 200 OK
+2026-10-02 03:03:38,109 INFO prism_api request_completed request_id=req_05a79adb702649a486b1fb6923df1226 method=GET path=/api/v1/atlas/runs/atlas_cd65c66b8593408a977ebfc86006411c status=200 duration_ms=1.5
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_cd65c66b8593408a977ebfc86006411c HTTP/1.1" 200 OK
+2026-10-02 03:03:38,162 INFO prism_api request_completed request_id=req_3d637f2fdc104d50b3c70da985871373 method=GET path=/api/v1/atlas/runs/atlas_cd65c66b8593408a977ebfc86006411c status=200 duration_ms=1.4
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_cd65c66b8593408a977ebfc86006411c HTTP/1.1" 200 OK
+2026-10-02 03:03:38,215 INFO prism_api request_completed request_id=req_0e9efc9e46be4c7b83f15f0d83598fe1 method=GET path=/api/v1/atlas/runs/atlas_cd65c66b8593408a977ebfc86006411c status=200 duration_ms=1.8
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_cd65c66b8593408a977ebfc86006411c HTTP/1.1" 200 OK
+2026-10-02 03:03:38,297 INFO prism_api request_completed request_id=req_9990d8700757461198cb214951fda080 method=GET path=/api/v1/atlas/runs/atlas_cd65c66b8593408a977ebfc86006411c status=200 duration_ms=29.8
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_cd65c66b8593408a977ebfc86006411c HTTP/1.1" 200 OK
+2026-10-02 03:03:38,878 INFO prism_api request_completed request_id=req_ae373f1d4ac74018858ff5cfcaf4df38 method=POST path=/api/v1/atlas/runs status=202 duration_ms=580.5
+INFO:     127.0.0.1:61939 - "POST /api/v1/atlas/runs HTTP/1.1" 202 Accepted
+2026-10-02 03:03:38,882 INFO prism_api request_completed request_id=req_c678f14686b14e82939b8db913575654 method=GET path=/api/v1/atlas/runs/atlas_17dcfa6ce18b49668784fcdf8f12c609 status=200 duration_ms=2.9
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_17dcfa6ce18b49668784fcdf8f12c609 HTTP/1.1" 200 OK
+2026-10-02 03:03:38,935 INFO prism_api request_completed request_id=req_3aadc1974af84a9dbc2437e65fee2e58 method=GET path=/api/v1/atlas/runs/atlas_17dcfa6ce18b49668784fcdf8f12c609 status=200 duration_ms=1.5
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_17dcfa6ce18b49668784fcdf8f12c609 HTTP/1.1" 200 OK
+2026-10-02 03:03:38,989 INFO prism_api request_completed request_id=req_9e00e7b14b304760abed56e14e5e9ec8 method=GET path=/api/v1/atlas/runs/atlas_17dcfa6ce18b49668784fcdf8f12c609 status=200 duration_ms=2.5
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_17dcfa6ce18b49668784fcdf8f12c609 HTTP/1.1" 200 OK
+2026-10-02 03:03:39,043 INFO prism_api request_completed request_id=req_c1525f777db94a4284b29ce3334d01dc method=GET path=/api/v1/atlas/runs/atlas_17dcfa6ce18b49668784fcdf8f12c609 status=200 duration_ms=1.4
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_17dcfa6ce18b49668784fcdf8f12c609 HTTP/1.1" 200 OK
+2026-10-02 03:03:39,720 INFO prism_api request_completed request_id=req_5c6f4e7cea7e45b890bfc1d8cf7cf71a method=POST path=/api/v1/atlas/runs status=202 duration_ms=676.7
+INFO:     127.0.0.1:61939 - "POST /api/v1/atlas/runs HTTP/1.1" 202 Accepted
+2026-10-02 03:03:39,722 INFO prism_api request_completed request_id=req_9be388186e634697b185a676e21ad77e method=GET path=/api/v1/atlas/runs/atlas_b81248f0299240889ddb8b2695be4c8e status=200 duration_ms=1.1
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_b81248f0299240889ddb8b2695be4c8e HTTP/1.1" 200 OK
+2026-10-02 03:03:39,775 INFO prism_api request_completed request_id=req_fd765b9737cb4016bef5fec501aadf5a method=GET path=/api/v1/atlas/runs/atlas_b81248f0299240889ddb8b2695be4c8e status=200 duration_ms=1.4
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_b81248f0299240889ddb8b2695be4c8e HTTP/1.1" 200 OK
+2026-10-02 03:03:39,828 INFO prism_api request_completed request_id=req_60d41cabc2e44ce9bdb6b5692f6286af method=GET path=/api/v1/atlas/runs/atlas_b81248f0299240889ddb8b2695be4c8e status=200 duration_ms=1.8
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_b81248f0299240889ddb8b2695be4c8e HTTP/1.1" 200 OK
+2026-10-02 03:03:39,881 INFO prism_api request_completed request_id=req_e730047b5a734128a6c3ed7f97d1e2a7 method=GET path=/api/v1/atlas/runs/atlas_b81248f0299240889ddb8b2695be4c8e status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_b81248f0299240889ddb8b2695be4c8e HTTP/1.1" 200 OK
+2026-10-02 03:03:39,934 INFO prism_api request_completed request_id=req_0fb8a7e474f84842bb94ef04a3a1289b method=GET path=/api/v1/atlas/runs/atlas_b81248f0299240889ddb8b2695be4c8e status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_b81248f0299240889ddb8b2695be4c8e HTTP/1.1" 200 OK
+2026-10-02 03:03:39,987 INFO prism_api request_completed request_id=req_5fe8986059d84476892b15a63574ae7a method=GET path=/api/v1/atlas/runs/atlas_b81248f0299240889ddb8b2695be4c8e status=200 duration_ms=1.5
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_b81248f0299240889ddb8b2695be4c8e HTTP/1.1" 200 OK
+2026-10-02 03:03:40,040 INFO prism_api request_completed request_id=req_1b1687824b5e4a5481deb1f13a972c06 method=GET path=/api/v1/atlas/runs/atlas_b81248f0299240889ddb8b2695be4c8e status=200 duration_ms=1.5
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_b81248f0299240889ddb8b2695be4c8e HTTP/1.1" 200 OK
+2026-10-02 03:03:40,093 INFO prism_api request_completed request_id=req_4a996c0d883f47a9a9b639c632d2a529 method=GET path=/api/v1/atlas/runs/atlas_b81248f0299240889ddb8b2695be4c8e status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_b81248f0299240889ddb8b2695be4c8e HTTP/1.1" 200 OK
+2026-10-02 03:03:40,146 INFO prism_api request_completed request_id=req_a54a5d8eb3c5457f8707b08e91909c4a method=GET path=/api/v1/atlas/runs/atlas_b81248f0299240889ddb8b2695be4c8e status=200 duration_ms=1.4
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_b81248f0299240889ddb8b2695be4c8e HTTP/1.1" 200 OK
+2026-10-02 03:03:40,200 INFO prism_api request_completed request_id=req_e15a645d86c64bea9052342cc2eb21d3 method=GET path=/api/v1/atlas/runs/atlas_b81248f0299240889ddb8b2695be4c8e status=200 duration_ms=1.5
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_b81248f0299240889ddb8b2695be4c8e HTTP/1.1" 200 OK
+2026-10-02 03:03:40,252 INFO prism_api request_completed request_id=req_1b6e8f08875f44359b1ff639ba821097 method=GET path=/api/v1/atlas/runs/atlas_b81248f0299240889ddb8b2695be4c8e status=200 duration_ms=1.7
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_b81248f0299240889ddb8b2695be4c8e HTTP/1.1" 200 OK
+2026-10-02 03:03:40,305 INFO prism_api request_completed request_id=req_181ae3c56fd245a0ab0c08c858c38eb4 method=GET path=/api/v1/atlas/runs/atlas_b81248f0299240889ddb8b2695be4c8e status=200 duration_ms=2.1
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_b81248f0299240889ddb8b2695be4c8e HTTP/1.1" 200 OK
+2026-10-02 03:03:40,359 INFO prism_api request_completed request_id=req_88fd9b795441462d861a4d62783892af method=GET path=/api/v1/atlas/runs/atlas_b81248f0299240889ddb8b2695be4c8e status=200 duration_ms=2.0
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_b81248f0299240889ddb8b2695be4c8e HTTP/1.1" 200 OK
+2026-10-02 03:03:40,413 INFO prism_api request_completed request_id=req_cfb296bec56e42f48ecebc6626c5aa4a method=GET path=/api/v1/atlas/runs/atlas_b81248f0299240889ddb8b2695be4c8e status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_b81248f0299240889ddb8b2695be4c8e HTTP/1.1" 200 OK
+2026-10-02 03:03:40,465 INFO prism_api request_completed request_id=req_50d6df6fa8d041bcb2d7b405b76ef61c method=GET path=/api/v1/atlas/runs/atlas_b81248f0299240889ddb8b2695be4c8e status=200 duration_ms=1.5
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_b81248f0299240889ddb8b2695be4c8e HTTP/1.1" 200 OK
+2026-10-02 03:03:40,518 INFO prism_api request_completed request_id=req_ac704a9d348241808f19d7a6723b13d9 method=GET path=/api/v1/atlas/runs/atlas_b81248f0299240889ddb8b2695be4c8e status=200 duration_ms=1.5
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_b81248f0299240889ddb8b2695be4c8e HTTP/1.1" 200 OK
+2026-10-02 03:03:40,571 INFO prism_api request_completed request_id=req_f962266ee37445b182d0aedbac251acf method=GET path=/api/v1/atlas/runs/atlas_b81248f0299240889ddb8b2695be4c8e status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_b81248f0299240889ddb8b2695be4c8e HTTP/1.1" 200 OK
+2026-10-02 03:03:40,625 INFO prism_api request_completed request_id=req_ec9116deb9514c86bee0fbf5d33ecd44 method=GET path=/api/v1/atlas/runs/atlas_b81248f0299240889ddb8b2695be4c8e status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_b81248f0299240889ddb8b2695be4c8e HTTP/1.1" 200 OK
+2026-10-02 03:03:40,679 INFO prism_api request_completed request_id=req_d1d6767a18c94fd2b77583f8848ab2bf method=GET path=/api/v1/atlas/runs/atlas_b81248f0299240889ddb8b2695be4c8e status=200 duration_ms=1.9
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_b81248f0299240889ddb8b2695be4c8e HTTP/1.1" 200 OK
+2026-10-02 03:03:40,731 INFO prism_api request_completed request_id=req_a702c64d006a42849a40d4c147a26861 method=GET path=/api/v1/atlas/runs/atlas_b81248f0299240889ddb8b2695be4c8e status=200 duration_ms=1.5
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_b81248f0299240889ddb8b2695be4c8e HTTP/1.1" 200 OK
+2026-10-02 03:03:40,784 INFO prism_api request_completed request_id=req_2617d65bd9824a7cba4ff50311f4057f method=GET path=/api/v1/atlas/runs/atlas_b81248f0299240889ddb8b2695be4c8e status=200 duration_ms=1.8
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_b81248f0299240889ddb8b2695be4c8e HTTP/1.1" 200 OK
+2026-10-02 03:03:40,837 INFO prism_api request_completed request_id=req_d7f57bc1eaf148f899e8ba641a34e23b method=GET path=/api/v1/atlas/runs/atlas_b81248f0299240889ddb8b2695be4c8e status=200 duration_ms=1.5
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_b81248f0299240889ddb8b2695be4c8e HTTP/1.1" 200 OK
+2026-10-02 03:03:40,963 INFO prism_api request_completed request_id=req_459aede8c3f44b609eeb4b9da2d12274 method=GET path=/api/v1/atlas/runs/atlas_b81248f0299240889ddb8b2695be4c8e status=200 duration_ms=74.0
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_b81248f0299240889ddb8b2695be4c8e HTTP/1.1" 200 OK
+2026-10-02 03:03:41,017 INFO prism_api request_completed request_id=req_db6045e6911945d1a6ad1acf7ee63ccc method=GET path=/api/v1/atlas/runs/atlas_b81248f0299240889ddb8b2695be4c8e status=200 duration_ms=2.0
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_b81248f0299240889ddb8b2695be4c8e HTTP/1.1" 200 OK
+2026-10-02 03:03:41,599 INFO prism_api request_completed request_id=req_931ec92cb4f34459a85c38cfdd83b313 method=POST path=/api/v1/atlas/runs status=202 duration_ms=580.2
+INFO:     127.0.0.1:61939 - "POST /api/v1/atlas/runs HTTP/1.1" 202 Accepted
+2026-10-02 03:03:41,601 INFO prism_api request_completed request_id=req_be955666b86045058cf422dcb5a6e5c9 method=GET path=/api/v1/atlas/runs/atlas_f145b14349da47b0912483b728a1b8d9 status=200 duration_ms=2.0
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_f145b14349da47b0912483b728a1b8d9 HTTP/1.1" 200 OK
+2026-10-02 03:03:41,654 INFO prism_api request_completed request_id=req_a58a751fcb684272905d7df9f7965a5a method=GET path=/api/v1/atlas/runs/atlas_f145b14349da47b0912483b728a1b8d9 status=200 duration_ms=1.7
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_f145b14349da47b0912483b728a1b8d9 HTTP/1.1" 200 OK
+2026-10-02 03:03:41,709 INFO prism_api request_completed request_id=req_3abc3b1541b64139925f072c5a2ff53b method=GET path=/api/v1/atlas/runs/atlas_f145b14349da47b0912483b728a1b8d9 status=200 duration_ms=2.4
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_f145b14349da47b0912483b728a1b8d9 HTTP/1.1" 200 OK
+2026-10-02 03:03:41,763 INFO prism_api request_completed request_id=req_ccbb86ae9174471c8473a1e1f0d3a746 method=GET path=/api/v1/atlas/runs/atlas_f145b14349da47b0912483b728a1b8d9 status=200 duration_ms=1.5
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_f145b14349da47b0912483b728a1b8d9 HTTP/1.1" 200 OK
+2026-10-02 03:03:42,437 INFO prism_api request_completed request_id=req_a9d2b8e9f6cd4d57ac2629dd7964a624 method=POST path=/api/v1/atlas/runs status=202 duration_ms=673.7
+INFO:     127.0.0.1:61939 - "POST /api/v1/atlas/runs HTTP/1.1" 202 Accepted
+2026-10-02 03:03:42,439 INFO prism_api request_completed request_id=req_86acb7e065b24980b29baeb0b189c006 method=GET path=/api/v1/atlas/runs/atlas_4fa9ee5ea74f4e65a9e7787ea950e45c status=200 duration_ms=1.2
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_4fa9ee5ea74f4e65a9e7787ea950e45c HTTP/1.1" 200 OK
+2026-10-02 03:03:42,492 INFO prism_api request_completed request_id=req_bd84601eed4149e7b3ae1c69b0494f1c method=GET path=/api/v1/atlas/runs/atlas_4fa9ee5ea74f4e65a9e7787ea950e45c status=200 duration_ms=1.3
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_4fa9ee5ea74f4e65a9e7787ea950e45c HTTP/1.1" 200 OK
+2026-10-02 03:03:42,544 INFO prism_api request_completed request_id=req_2543cd6d948442e3a8493f65e963ab6e method=GET path=/api/v1/atlas/runs/atlas_4fa9ee5ea74f4e65a9e7787ea950e45c status=200 duration_ms=1.4
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_4fa9ee5ea74f4e65a9e7787ea950e45c HTTP/1.1" 200 OK
+2026-10-02 03:03:42,597 INFO prism_api request_completed request_id=req_2b2cf617d26e47eb8c64dd38ab96aa04 method=GET path=/api/v1/atlas/runs/atlas_4fa9ee5ea74f4e65a9e7787ea950e45c status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_4fa9ee5ea74f4e65a9e7787ea950e45c HTTP/1.1" 200 OK
+2026-10-02 03:03:42,651 INFO prism_api request_completed request_id=req_ca70e38db6be43beaf67670088006399 method=GET path=/api/v1/atlas/runs/atlas_4fa9ee5ea74f4e65a9e7787ea950e45c status=200 duration_ms=1.7
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_4fa9ee5ea74f4e65a9e7787ea950e45c HTTP/1.1" 200 OK
+2026-10-02 03:03:42,703 INFO prism_api request_completed request_id=req_7dca36611bc546ed916369c6d21d3dcd method=GET path=/api/v1/atlas/runs/atlas_4fa9ee5ea74f4e65a9e7787ea950e45c status=200 duration_ms=1.3
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_4fa9ee5ea74f4e65a9e7787ea950e45c HTTP/1.1" 200 OK
+2026-10-02 03:03:42,756 INFO prism_api request_completed request_id=req_df9803d4931342b592ee6aeafcc334f8 method=GET path=/api/v1/atlas/runs/atlas_4fa9ee5ea74f4e65a9e7787ea950e45c status=200 duration_ms=1.4
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_4fa9ee5ea74f4e65a9e7787ea950e45c HTTP/1.1" 200 OK
+2026-10-02 03:03:42,808 INFO prism_api request_completed request_id=req_b5bbc1b738624d23af750704cec067fc method=GET path=/api/v1/atlas/runs/atlas_4fa9ee5ea74f4e65a9e7787ea950e45c status=200 duration_ms=1.5
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_4fa9ee5ea74f4e65a9e7787ea950e45c HTTP/1.1" 200 OK
+2026-10-02 03:03:42,861 INFO prism_api request_completed request_id=req_551862b773484679801585ecf4df0edc method=GET path=/api/v1/atlas/runs/atlas_4fa9ee5ea74f4e65a9e7787ea950e45c status=200 duration_ms=1.8
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_4fa9ee5ea74f4e65a9e7787ea950e45c HTTP/1.1" 200 OK
+2026-10-02 03:03:42,915 INFO prism_api request_completed request_id=req_6bc82693b4a442c693e575cdba905b51 method=GET path=/api/v1/atlas/runs/atlas_4fa9ee5ea74f4e65a9e7787ea950e45c status=200 duration_ms=1.5
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_4fa9ee5ea74f4e65a9e7787ea950e45c HTTP/1.1" 200 OK
+2026-10-02 03:03:42,968 INFO prism_api request_completed request_id=req_cc95c11acaa04308a0889b09ea124a06 method=GET path=/api/v1/atlas/runs/atlas_4fa9ee5ea74f4e65a9e7787ea950e45c status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_4fa9ee5ea74f4e65a9e7787ea950e45c HTTP/1.1" 200 OK
+2026-10-02 03:03:43,021 INFO prism_api request_completed request_id=req_82e5be2dce904785ab361d6663032ae3 method=GET path=/api/v1/atlas/runs/atlas_4fa9ee5ea74f4e65a9e7787ea950e45c status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_4fa9ee5ea74f4e65a9e7787ea950e45c HTTP/1.1" 200 OK
+2026-10-02 03:03:43,074 INFO prism_api request_completed request_id=req_008e86170d4c4c5db3d0367c148fa9a5 method=GET path=/api/v1/atlas/runs/atlas_4fa9ee5ea74f4e65a9e7787ea950e45c status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_4fa9ee5ea74f4e65a9e7787ea950e45c HTTP/1.1" 200 OK
+2026-10-02 03:03:43,127 INFO prism_api request_completed request_id=req_2ce0f816d20f409490022379317a08be method=GET path=/api/v1/atlas/runs/atlas_4fa9ee5ea74f4e65a9e7787ea950e45c status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_4fa9ee5ea74f4e65a9e7787ea950e45c HTTP/1.1" 200 OK
+2026-10-02 03:03:43,179 INFO prism_api request_completed request_id=req_906d6d7501624286b6ba9b866eb3c9a3 method=GET path=/api/v1/atlas/runs/atlas_4fa9ee5ea74f4e65a9e7787ea950e45c status=200 duration_ms=1.5
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_4fa9ee5ea74f4e65a9e7787ea950e45c HTTP/1.1" 200 OK
+2026-10-02 03:03:43,234 INFO prism_api request_completed request_id=req_9011085ca32f448b98ccf20af2e3f23d method=GET path=/api/v1/atlas/runs/atlas_4fa9ee5ea74f4e65a9e7787ea950e45c status=200 duration_ms=2.1
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_4fa9ee5ea74f4e65a9e7787ea950e45c HTTP/1.1" 200 OK
+2026-10-02 03:03:43,287 INFO prism_api request_completed request_id=req_ec34e9e3fa6846a78f3e662a8b292f54 method=GET path=/api/v1/atlas/runs/atlas_4fa9ee5ea74f4e65a9e7787ea950e45c status=200 duration_ms=1.9
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_4fa9ee5ea74f4e65a9e7787ea950e45c HTTP/1.1" 200 OK
+2026-10-02 03:03:43,340 INFO prism_api request_completed request_id=req_d46abb9d2c0d4a1fa6096dd1040e68e4 method=GET path=/api/v1/atlas/runs/atlas_4fa9ee5ea74f4e65a9e7787ea950e45c status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_4fa9ee5ea74f4e65a9e7787ea950e45c HTTP/1.1" 200 OK
+2026-10-02 03:03:43,393 INFO prism_api request_completed request_id=req_fea3e83647184a90943f6de27c26c3a8 method=GET path=/api/v1/atlas/runs/atlas_4fa9ee5ea74f4e65a9e7787ea950e45c status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_4fa9ee5ea74f4e65a9e7787ea950e45c HTTP/1.1" 200 OK
+2026-10-02 03:03:43,446 INFO prism_api request_completed request_id=req_73593154e28040f2b5df70cffdfaf890 method=GET path=/api/v1/atlas/runs/atlas_4fa9ee5ea74f4e65a9e7787ea950e45c status=200 duration_ms=1.7
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_4fa9ee5ea74f4e65a9e7787ea950e45c HTTP/1.1" 200 OK
+2026-10-02 03:03:43,499 INFO prism_api request_completed request_id=req_bc0966652372499fb22ecd568c1b12d6 method=GET path=/api/v1/atlas/runs/atlas_4fa9ee5ea74f4e65a9e7787ea950e45c status=200 duration_ms=1.5
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_4fa9ee5ea74f4e65a9e7787ea950e45c HTTP/1.1" 200 OK
+2026-10-02 03:03:43,552 INFO prism_api request_completed request_id=req_458d6fb0c43d45ba88e58e783fb70e43 method=GET path=/api/v1/atlas/runs/atlas_4fa9ee5ea74f4e65a9e7787ea950e45c status=200 duration_ms=1.5
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_4fa9ee5ea74f4e65a9e7787ea950e45c HTTP/1.1" 200 OK
+2026-10-02 03:03:43,605 INFO prism_api request_completed request_id=req_a058b16f135a44afa1855931e977ef52 method=GET path=/api/v1/atlas/runs/atlas_4fa9ee5ea74f4e65a9e7787ea950e45c status=200 duration_ms=1.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_4fa9ee5ea74f4e65a9e7787ea950e45c HTTP/1.1" 200 OK
+2026-10-02 03:03:43,673 INFO prism_api request_completed request_id=req_c8688e6f4deb46da9ca6ed1254af0ad6 method=GET path=/api/v1/atlas/runs/atlas_4fa9ee5ea74f4e65a9e7787ea950e45c status=200 duration_ms=16.6
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/runs/atlas_4fa9ee5ea74f4e65a9e7787ea950e45c HTTP/1.1" 200 OK
+2026-10-02 03:03:43,675 INFO prism_api request_completed request_id=req_1bca5a5b16a64434bed70bbfaa6f2898 method=GET path=/api/v1/atlas/promotion/current status=200 duration_ms=0.9
+INFO:     127.0.0.1:61939 - "GET /api/v1/atlas/promotion/current HTTP/1.1" 200 OK

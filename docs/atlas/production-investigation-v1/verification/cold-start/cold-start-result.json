@@ -1,0 +1,16 @@
+{
+  "backup_sha256_unchanged": true,
+  "copied_pointer": {
+    "candidate_id": "basemodel_585b7e79e9f195024a57dc9a",
+    "decision_id": "promodecision_f6d2cf373cc54059b4216601ace347af",
+    "event_id": "promo_3ba5ad9dd8aa49eab6266e185a70c032",
+    "is_rollback": false,
+    "previous_candidate_id": "production_env_e77dbfc3de7584a8c502a6f8",
+    "promoted_at": "2026-09-24T05:20:29.980225",
+    "reason": "Round 4 winner qwen3:4b-instruct-2507-q4_K_M: AtlasBench 89/90 (98.9%) vs production 94.4%, 0 critical regressions; warm planner p95 (full-40) 1.70s; 100% GPU residency; 100% valid-JSON; 100% acceptance rate (0/39 rejected); Operational Certification opcert_8418b0e0ca7d49a697641837827fdfd8 passed 22/23 (95.7%), 0 critical failures. decision_id=promodecision_f6d2cf373cc54059b4216601ace347af.",
+    "tier": "fast"
+  },
+  "provider": "ollama",
+  "ready_ms": 3552.67,
+  "sample_count": 1
+}

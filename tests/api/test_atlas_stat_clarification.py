@@ -131,6 +131,24 @@ def test_plan_cycle_fails_before_dispatch(tmp_path, monkeypatch) -> None:  # typ
     assert error.value.status_code == 422
 
 
+def test_model_stat_placeholder_replacement_repairs_audit_dependency(tmp_path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    _url, _datasets, dataset, _run_store = _setup(tmp_path, monkeypatch)
+    request = AtlasRunRequest(
+        dataset_id=dataset.dataset_id, objective="Test correlation significance",
+        stat_analysis=AtlasStatAnalysis(test=StatTestKind.PEARSON, col_a="exposure", col_b="outcome", design="linear_association"),
+    )
+    plan = atlas_runtime.DynamicAtlasPlanner().create(request, AtlasModelProviderName.OLLAMA, proposal=[{
+        "kind": "statistical_analysis", "tool_name": "stats.declared_analysis_required",
+        "title": "Review statistical inputs",
+    }])
+    stat_step = next(step for step in plan.steps if step.kind.value == "statistical_analysis")
+    audit = next(step for step in plan.steps if step.step_id == "audit")
+    assert stat_step.step_id == "statistical_analysis"
+    assert stat_step.tool_name == "stats.declared_test"
+    assert stat_step.step_id in audit.dependencies
+    assert "model_statistical_analysis" not in audit.dependencies
+
+
 def test_descriptive_comparison_with_causal_request_refuses_causality_without_stat_wait(tmp_path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
     _url, _datasets, dataset, run_store = _setup(tmp_path, monkeypatch)
     run = run_store.create(AtlasRunRequest(

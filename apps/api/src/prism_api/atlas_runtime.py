@@ -590,6 +590,15 @@ class DynamicAtlasPlanner:
                     requested_stat_step if step.kind is AtlasStepKind.STATISTICAL_ANALYSIS else step
                     for step in plan.steps
                 ]})
+                # A provider's non-executable statistical placeholder has a
+                # different step ID. The mandatory declared step replaces it;
+                # refresh the final audit edge so it cannot point at the old ID.
+                plan = plan.model_copy(update={"steps": [
+                    *plan.steps[:-1],
+                    plan.steps[-1].model_copy(update={
+                        "dependencies": [item.step_id for item in plan.steps[:-1]],
+                    }),
+                ]})
         self.validate(plan)
         return plan
 
@@ -1472,7 +1481,10 @@ def execute(run_id: str) -> None:
                 evidence = [AtlasEvidenceReference(
                     evidence_id=f"sql:{output['sql_run_id']}", kind="tool_output",
                     summary=f"SQL Lab aggregate: {len(cast(list[object], output['rows']))} recorded result rows" +
-                    (f"; joined source {output['joined_dataset_id']} revision {output['joined_dataset_revision']}." if output.get("joined_dataset_id") else "."),
+                    (f"; joined source {output['joined_dataset_id']} revision {output['joined_dataset_revision']}; "
+                     f"{output['join_matched_rows']} of {output['join_input_rows']} active rows matched, "
+                     f"{output['join_excluded_rows']} excluded by the inner join."
+                     if output.get("joined_dataset_id") else "."),
                     dataset_id=current.plan.dataset_id,
                     dataset_revision=cast(int, output["dataset_revision"]),
                     source_fingerprint=cast(str, output["source_fingerprint"]),
@@ -1609,6 +1621,9 @@ def execute(run_id: str) -> None:
         if sql_outputs:
             sql_output = cast(dict[str, object], sql_outputs[-1])
             answer += f" Recorded SQL result {sql_output['sql_run_id']}: {json.dumps(sql_output['rows'], default=str)[:2000]}. Evidence sql:{sql_output['sql_run_id']}."
+            if sql_output.get("joined_dataset_id"):
+                answer += (f" Inner join matched {sql_output['join_matched_rows']} of {sql_output['join_input_rows']} "
+                           f"active rows and excluded {sql_output['join_excluded_rows']} unmatched rows.")
             uncertainty = "The SQL aggregate is descriptive and bounded to 100 result rows; it does not establish causality or statistical significance."
         stat_events = [event for event in finished.events
                        if event.type is AtlasRunEventType.STEP_COMPLETED and isinstance(event.payload.get("output"), dict)

@@ -43,8 +43,21 @@ test("Atlas record selection and shared inspector work in dark, light, and mobil
   } else {
     await expect(page.getByLabel("Contextual inspector")).toContainText("Recorded in run");
   }
-  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
-  expect(overflow).toBeLessThanOrEqual(1);
+  const measureOverflow = () => page.evaluate(() => ({
+    pixels: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    elements: [...document.querySelectorAll("body *")]
+      .map((element) => ({ tag: element.tagName, className: String(element.className).slice(0, 80),
+        right: Math.round(element.getBoundingClientRect().right), width: Math.round(element.getBoundingClientRect().width) }))
+      .filter((element) => element.right > document.documentElement.clientWidth + 1)
+      .slice(0, 20),
+  }));
+  try {
+    await expect.poll(async () => (await measureOverflow()).pixels, { timeout: 3_000 }).toBeLessThanOrEqual(1);
+  } catch {
+    throw new Error(`Persistent horizontal overflow: ${JSON.stringify(await measureOverflow())}`);
+  }
+  const overflow = await measureOverflow();
+  expect(overflow.pixels, JSON.stringify(overflow.elements)).toBeLessThanOrEqual(1);
 });
 
 test("statistical clarification and evidence remain accessible at narrow width", async ({ page, request }, testInfo) => {

@@ -1,0 +1,9 @@
+INFO:     Loading environment from 'C:\Users\Admin\AppData\Local\Temp\prism-atlas-cold-start-kc2nq4rn\api.env'
+INFO:     Started server process [22180]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8774 (Press CTRL+C to quit)
+2026-09-30 23:13:18,899 INFO prism_api request_completed request_id=req_1ce157e35d8548aba3d9c320147f5259 method=GET path=/api/v1/platform/ready status=200 duration_ms=2.2
+INFO:     127.0.0.1:51015 - "GET /api/v1/platform/ready HTTP/1.1" 200 OK
+2026-09-30 23:13:18,904 INFO prism_api request_completed request_id=req_08202a3a4c334907afc043c20fae5526 method=GET path=/api/v1/atlas/promotion/current status=200 duration_ms=1.8
+INFO:     127.0.0.1:51015 - "GET /api/v1/atlas/promotion/current HTTP/1.1" 200 OK

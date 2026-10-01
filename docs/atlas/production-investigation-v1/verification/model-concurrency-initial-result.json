@@ -1,0 +1,106 @@
+{
+  "backup_sha256_unchanged": true,
+  "model_source": "copied fast production pointer",
+  "parallel": {
+    "errors": [
+      "task 1: HTTPStatusError: Client error '422 Unprocessable Entity' for url 'http://127.0.0.1:8772/api/v1/atlas/runs'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422",
+      "task 3: HTTPStatusError: Client error '422 Unprocessable Entity' for url 'http://127.0.0.1:8772/api/v1/atlas/runs'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+    ],
+    "gpu_baseline_mib": 6332,
+    "gpu_peak_mib": 6364,
+    "gpu_peak_utilization_pct": 99,
+    "gpu_sample_count": 56,
+    "samples": [
+      {
+        "client_queue_ms": 8082.46,
+        "dataset_id": "ds_d22ee5ae14a84982bef7eb2d61facf31",
+        "execution_ref": "run_3b3f57d979f14343b934b9fa26d0a261",
+        "kind": "sql",
+        "model": "qwen3:4b-instruct-2507-q4_K_M",
+        "model_proposal": "accepted",
+        "planning_ms": 7.4,
+        "provider": "ollama",
+        "queue_ms": 19.21,
+        "review_ms": 14.63,
+        "run_id": "atlas_a80af37beff448a5868927deeb67dbfe",
+        "state": "completed",
+        "tool_ms": 88.35,
+        "tool_reported_ms": 13,
+        "total_ms": 16534.99
+      },
+      {
+        "client_queue_ms": 0.11,
+        "dataset_id": "ds_d22ee5ae14a84982bef7eb2d61facf31",
+        "execution_ref": "run_e86ecc47ac154325b04d380d99654ba5",
+        "kind": "sql",
+        "model": "qwen3:4b-instruct-2507-q4_K_M",
+        "model_proposal": "accepted",
+        "planning_ms": 8.3,
+        "provider": "ollama",
+        "queue_ms": 28.64,
+        "review_ms": 12.95,
+        "run_id": "atlas_f73b378376e947f9830ceb5d4a57551a",
+        "state": "completed",
+        "tool_ms": 101.15,
+        "tool_reported_ms": 15,
+        "total_ms": 8080.6
+      }
+    ],
+    "success_count": 2,
+    "task_count": 4,
+    "wall_ms": 33284.29,
+    "workers": 2
+  },
+  "promotion_pointer_unchanged": true,
+  "single": {
+    "errors": [
+      "task 1: HTTPStatusError: Client error '422 Unprocessable Entity' for url 'http://127.0.0.1:8772/api/v1/atlas/runs'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422",
+      "task 3: HTTPStatusError: Client error '422 Unprocessable Entity' for url 'http://127.0.0.1:8772/api/v1/atlas/runs'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/422"
+    ],
+    "gpu_baseline_mib": 6164,
+    "gpu_peak_mib": 6833,
+    "gpu_peak_utilization_pct": 100,
+    "gpu_sample_count": 98,
+    "samples": [
+      {
+        "client_queue_ms": 0.12,
+        "dataset_id": "ds_d22ee5ae14a84982bef7eb2d61facf31",
+        "execution_ref": "run_20379a9adc3347bd978d4c8f6059015e",
+        "kind": "sql",
+        "model": "qwen3:4b-instruct-2507-q4_K_M",
+        "model_proposal": "timed_out",
+        "planning_ms": 6.53,
+        "provider": "ollama",
+        "queue_ms": 25.94,
+        "review_ms": 29.6,
+        "run_id": "atlas_6b203f563f2e4facb9540152d51fc1f8",
+        "state": "completed",
+        "tool_ms": 94.81,
+        "tool_reported_ms": 23,
+        "total_ms": 30539.35
+      },
+      {
+        "client_queue_ms": 39868.77,
+        "dataset_id": "ds_d22ee5ae14a84982bef7eb2d61facf31",
+        "execution_ref": "run_ea63c233da10497aa2e53b375aa15f77",
+        "kind": "sql",
+        "model": "qwen3:4b-instruct-2507-q4_K_M",
+        "model_proposal": "accepted",
+        "planning_ms": 4.6,
+        "provider": "ollama",
+        "queue_ms": 16.91,
+        "review_ms": 13.23,
+        "run_id": "atlas_df951f7c163f40ea92f5531657f9bceb",
+        "state": "completed",
+        "tool_ms": 92.44,
+        "tool_reported_ms": 14,
+        "total_ms": 7943.49
+      }
+    ],
+    "success_count": 2,
+    "task_count": 4,
+    "wall_ms": 57236.4,
+    "workers": 1
+  },
+  "warmup_run_id": "atlas_5f121e5d523a4754943bba7527df907c"
+}

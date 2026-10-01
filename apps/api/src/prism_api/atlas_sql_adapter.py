@@ -40,6 +40,8 @@ def compile_query(dataset_id: str, analysis: AtlasSqlAnalysis) -> SqlRunRequest:
         assert analysis.join_left_key is not None and analysis.join_right_key is not None
         if analysis.join_left_key not in columns or analysis.join_right_key not in right_columns:
             raise ValueError("Both join keys must exist in their registered source schemas.")
+        if dataset.frame[analysis.join_left_key].dtype != right.frame[analysis.join_right_key].dtype:
+            raise ValueError("Join keys must have the same registered data type.")
         if right.frame[analysis.join_right_key].dropna().duplicated().any():
             raise ValueError("The joined key is not unique; a join would multiply left-side measures.")
         if analysis.join_cardinality == "one_to_one" and dataset.frame[analysis.join_left_key].dropna().duplicated().any():
@@ -93,11 +95,20 @@ def compile_query(dataset_id: str, analysis: AtlasSqlAnalysis) -> SqlRunRequest:
 def execute_aggregate(run_id: str, step_id: str, dataset_id: str, analysis: AtlasSqlAnalysis,
                       cancelled: Callable[[], bool]) -> dict[str, object]:
     """Submit once, propagate cancellation, and return bounded durable evidence data."""
-    before = dataset_store.get(dataset_id).dataset
-    joined_before = dataset_store.get(analysis.join_dataset_id).dataset if analysis.join_dataset_id is not None else None
+    left_stored = dataset_store.get(dataset_id)
+    before = left_stored.dataset
+    right_stored = dataset_store.get(analysis.join_dataset_id) if analysis.join_dataset_id is not None else None
+    joined_before = right_stored.dataset if right_stored is not None else None
     query = compile_query(dataset_id, analysis).model_copy(update={
         "client_request_id": f"atlas:{run_id}:{step_id}",
     })
+    join_input_rows = len(left_stored.frame) if right_stored is not None else None
+    join_matched_rows = None
+    if right_stored is not None:
+        assert analysis.join_left_key is not None and analysis.join_right_key is not None
+        left_key = left_stored.frame[analysis.join_left_key]
+        right_key = right_stored.frame[analysis.join_right_key]
+        join_matched_rows = int((left_key.notna() & left_key.isin(right_key.dropna())).sum())
     registered_fingerprint = sql_lab._connection(query.connection_id).connection.source_fingerprint
     submitted = sql_lab.execute_query(query)
     deadline = time.monotonic() + 12
@@ -141,6 +152,9 @@ def execute_aggregate(run_id: str, step_id: str, dataset_id: str, analysis: Atla
         "joined_dataset_revision": joined_before.revision if joined_before is not None else None,
         "joined_source_fingerprint": joined_before.source_fingerprint if joined_before is not None else None,
         "join_cardinality": analysis.join_cardinality,
+        "join_input_rows": join_input_rows,
+        "join_matched_rows": join_matched_rows,
+        "join_excluded_rows": join_input_rows - join_matched_rows if join_input_rows is not None and join_matched_rows is not None else None,
         "connection_id": query.connection_id,
         "sql": query.sql,
         "parameters": query.parameters,
