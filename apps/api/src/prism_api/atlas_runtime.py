@@ -1422,6 +1422,11 @@ def _attempt_specialist_review(
     which review call produced them."""
     if providers.select() is not AtlasModelProviderName.OLLAMA:
         return
+    if runs.cancelled(run_id):
+        # Cancellation must prevent dispatching a *new* review call, the same
+        # way it prevents dispatching a new tool step; it does not reach back
+        # into an already in-flight model call.
+        return
     run = runs.get(run_id)
     evidence_ids = [item.evidence_id for item in evidence]
     evidence_summaries = [item.summary for item in evidence]

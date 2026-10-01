@@ -84,6 +84,15 @@ def test_specialist_review_persists_distinct_grounded_contributions_and_challeng
     completed = run_store.get(run.run_id)
     assert completed.plan.state.value == "completed"
 
+    # Model review can only add messages; it never touches the deterministic
+    # numerical record -- same SQL rows, same answer, win or lose the review.
+    sql_output = next(event.payload["output"] for event in completed.events if "output" in event.payload)
+    assert sql_output["rows"] == [{"group_value": "east", "result_value": 7.0}, {"group_value": "west", "result_value": 15.0}]
+    assert "east" in (completed.answer or "") and "7.0" in (completed.answer or "")
+    # Review only ever appends AtlasSpecialistMessage rows; it has no code
+    # path that constructs or mutates an AtlasEvidenceReference.
+    assert all(item.dataset_id == dataset.dataset_id for item in completed.evidence if item.kind == "tool_output")
+
     model_messages = [message for message in completed.messages if message.origin == "model"]
     specialists = {message.specialist.value for message in model_messages}
     assert specialists == {"query", "auditor"}  # Atlas synthesis review returned nothing grounded -> no model message.
@@ -196,6 +205,34 @@ def test_specialist_review_grounds_claims_and_drops_hallucinated_evidence_refere
         if message.specialist.value == "query" and message.kind == "review_unavailable"
     )
     assert "ungrounded" in query_unavailable.content or "discarded" in query_unavailable.content
+
+
+def test_cancellation_prevents_dispatching_a_new_specialist_review(tmp_path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    dataset, run_store, _url = _setup(tmp_path, monkeypatch)
+    calls: list[object] = []
+
+    def _fake_post(_url, *, json, timeout):  # type: ignore[no-untyped-def]
+        if _plan_shaped(json.get("format")):
+            return _FakeResponse({"steps": []})
+        calls.append(json)
+        raise AssertionError("A review must never be dispatched once cancellation was requested.")
+
+    monkeypatch.setattr(atlas_runtime.httpx, "post", _fake_post)
+    run = run_store.create(_sql_request(dataset.dataset_id), AtlasModelProviderName.DETERMINISTIC)
+    run_store.request_cancel(run.run_id)
+    deterministic_message = atlas_runtime.AtlasSpecialistMessage(
+        message_id="msg_deterministic", sequence=1, specialist=atlas_runtime.AtlasSpecialistId.QUERY,
+        task_id="sql", kind="computed_observation", origin="deterministic_service",
+        content="Executed the recorded aggregate.", input_refs=[], reply_to=None,
+        occurred_at=atlas_runtime.datetime.now(atlas_runtime.timezone.utc),
+    )
+    atlas_runtime._attempt_specialist_review(
+        run.run_id, "sql", atlas_runtime.AtlasSpecialistId.QUERY, "Sum revenue by region using SQL",
+        deterministic_message, [],
+    )
+    assert calls == []
+    completed = run_store.get(run.run_id)
+    assert completed.messages == []
 
 
 def test_specialist_review_is_not_attempted_when_the_production_binding_cannot_be_live_verified(tmp_path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
