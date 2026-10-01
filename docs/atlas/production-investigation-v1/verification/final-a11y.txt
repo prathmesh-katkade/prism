@@ -1,0 +1,5 @@
+
+> prism-platform@0.1.0 a11y:baseline
+> node tools/check-a11y-baseline.mjs
+
+Accessibility baseline: passed

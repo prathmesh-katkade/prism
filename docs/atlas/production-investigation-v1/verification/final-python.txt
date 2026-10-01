@@ -6,7 +6,7 @@
 ........................................................................ [ 68%]
 ........................................................................ [ 80%]
 ........................................................................ [ 91%]
-.........................................ssss.......                     [100%]
+..........................................ssss.......                    [100%]
 ============================== warnings summary ===============================
 .venv\Lib\site-packages\starlette\testclient.py:40
   C:\Users\Admin\source\repos\prism-production\.venv\Lib\site-packages\starlette\testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
@@ -54,4 +54,4 @@ tests/api/test_mllab.py::test_shap_returns_global_importance_for_the_random_fore
     ParserElement.enablePackrat()
 
 -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
-621 passed, 7 skipped, 30 warnings in 73.96s (0:01:13)
+622 passed, 7 skipped, 30 warnings in 69.80s (0:01:09)

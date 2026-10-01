@@ -5,26 +5,25 @@
 
 [1m[46m RUN [49m[22m [36mv3.1.2 [39m[90mC:/Users/Admin/source/repos/prism-production/apps/web[39m
 
- [32m✓[39m src/components/stats-workspace.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[32m 196[2mms[22m[39m
- [32m✓[39m src/components/clean-workspace.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[32m 205[2mms[22m[39m
- [32m✓[39m src/components/forecasting-workspace.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[32m 205[2mms[22m[39m
- [32m✓[39m src/components/query-studio.test.tsx [2m([22m[2m1 test[22m[2m)[22m[32m 268[2mms[22m[39m
- [32m✓[39m src/components/mllab-workspace.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[32m 283[2mms[22m[39m
- [32m✓[39m src/components/evolution-workspace.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 319[2mms[22m[39m
- [32m✓[39m src/components/atlas-investigation.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[33m 720[2mms[22m[39m
- [32m✓[39m src/components/evidence-inspector.test.tsx [2m([22m[2m10 tests[22m[2m)[22m[33m 715[2mms[22m[39m
- [32m✓[39m src/components/atlas-workspace.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 774[2mms[22m[39m
-   [33m[2m✓[22m[39m Atlas workspace[2m > [22mshows a stored deep proposal and opens its accepted child run [33m 412[2mms[22m[39m
- [32m✓[39m src/components/prism-shell.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[33m 870[2mms[22m[39m
- [32m✓[39m src/components/atlas-command-center.test.tsx [2m([22m[2m15 tests[22m[2m)[22m[33m 1065[2mms[22m[39m
- [32m✓[39m src/state/atlas-history-link.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[32m 4[2mms[22m[39m
- [32m✓[39m src/components/visualize-workspace.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[32m 111[2mms[22m[39m
- [32m✓[39m src/components/history-workspace.test.tsx [2m([22m[2m1 test[22m[2m)[22m[32m 69[2mms[22m[39m
- [32m✓[39m src/components/atlas-status-badge.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[32m 118[2mms[22m[39m
- [32m✓[39m src/state/use-atlas-resource.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[32m 240[2mms[22m[39m
+ [32m✓[39m src/components/clean-workspace.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[32m 197[2mms[22m[39m
+ [32m✓[39m src/components/forecasting-workspace.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[32m 197[2mms[22m[39m
+ [32m✓[39m src/components/query-studio.test.tsx [2m([22m[2m1 test[22m[2m)[22m[32m 222[2mms[22m[39m
+ [32m✓[39m src/components/stats-workspace.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[32m 231[2mms[22m[39m
+ [32m✓[39m src/components/evolution-workspace.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[32m 258[2mms[22m[39m
+ [32m✓[39m src/components/mllab-workspace.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[32m 274[2mms[22m[39m
+ [32m✓[39m src/components/atlas-investigation.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[33m 623[2mms[22m[39m
+ [32m✓[39m src/components/evidence-inspector.test.tsx [2m([22m[2m10 tests[22m[2m)[22m[33m 618[2mms[22m[39m
+ [32m✓[39m src/components/atlas-workspace.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 616[2mms[22m[39m
+ [32m✓[39m src/components/prism-shell.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[33m 769[2mms[22m[39m
+ [32m✓[39m src/components/atlas-command-center.test.tsx [2m([22m[2m15 tests[22m[2m)[22m[33m 908[2mms[22m[39m
+ [32m✓[39m src/state/atlas-history-link.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m src/components/visualize-workspace.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[32m 93[2mms[22m[39m
+ [32m✓[39m src/components/atlas-status-badge.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[32m 96[2mms[22m[39m
+ [32m✓[39m src/components/history-workspace.test.tsx [2m([22m[2m1 test[22m[2m)[22m[32m 67[2mms[22m[39m
+ [32m✓[39m src/state/use-atlas-resource.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[32m 236[2mms[22m[39m
 
 [2m Test Files [22m [1m[32m16 passed[39m[22m[90m (16)[39m
 [2m      Tests [22m [1m[32m87 passed[39m[22m[90m (87)[39m
-[2m   Start at [22m 04:14:45
-[2m   Duration [22m 3.36s[2m (transform 1.49s, setup 5.86s, collect 2.82s, tests 6.16s, environment 11.61s, prepare 1.66s)[22m
+[2m   Start at [22m 05:09:01
+[2m   Duration [22m 3.09s[2m (transform 1.27s, setup 5.50s, collect 2.45s, tests 5.41s, environment 10.46s, prepare 1.54s)[22m
 
