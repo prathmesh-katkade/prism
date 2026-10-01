@@ -17,19 +17,20 @@ async function runOnceAndCheckForReview(request: import("@playwright/test").APIR
   } });
   expect(started.status()).toBe(202);
   const run = await started.json() as { run_id: string };
-  let finalRun: { plan: { state: string }; messages: { origin: string }[]; events: { type: string; step_id: string | null }[] } | null = null;
+  type RunState = { plan: { state: string }; messages: { origin: string }[]; events: { type: string; step_id: string | null }[] };
+  let finalRun!: RunState;
   // plan.state flips to "completed" before the best-effort, non-blocking Atlas
   // synthesis review attempt runs; wait for that attempt's own terminal event
   // (always appended, success or failure) rather than just "completed", or
   // this check races a review call that simply hasn't finished yet.
   for (let i = 0; i < 300; i += 1) {
-    finalRun = await (await request.get(`${API}/atlas/runs/${run.run_id}`)).json();
+    finalRun = await (await request.get(`${API}/atlas/runs/${run.run_id}`)).json() as RunState;
     const settled = finalRun.events.some((event) => event.type === "step_completed" && event.step_id === "synthesis");
     if (finalRun.plan.state === "completed" && settled) break;
     if (finalRun.plan.state !== "completed" && finalRun.plan.state !== "running") break;
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
-  if (!finalRun || finalRun.plan.state !== "completed") return null;
+  if (finalRun.plan.state !== "completed") return null;
   if (!finalRun.messages.some((message) => message.origin === "model")) return null;
   return { runId: run.run_id, datasetId: dataset.dataset_id };
 }
