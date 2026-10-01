@@ -990,7 +990,7 @@ export interface AtlasSpecialistMessage {
   sequence: number;
   specialist: AtlasSpecialistId;
   task_id: string;
-  kind: "computed_observation" | "proposal" | "objection" | "resolution" | "human_note";
+  kind: "computed_observation" | "proposal" | "objection" | "resolution" | "human_note" | "review_unavailable";
   origin: "deterministic_service" | "model" | "human";
   content: string;
   input_refs?: string[];

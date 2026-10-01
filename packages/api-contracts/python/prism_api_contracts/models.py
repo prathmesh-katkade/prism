@@ -1186,7 +1186,7 @@ class AtlasSpecialistMessage(ContractModel):
     sequence: int = Field(ge=1)
     specialist: AtlasSpecialistId
     task_id: str = Field(min_length=1, max_length=120)
-    kind: Literal["computed_observation", "proposal", "objection", "resolution", "human_note"]
+    kind: Literal["computed_observation", "proposal", "objection", "resolution", "human_note", "review_unavailable"]
     origin: Literal["deterministic_service", "model", "human"]
     content: str = Field(min_length=1, max_length=2_000)
     input_refs: list[str] = Field(default_factory=list, max_length=20)

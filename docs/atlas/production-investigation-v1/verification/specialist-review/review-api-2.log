@@ -1,0 +1,13 @@
+INFO:     Loading environment from 'C:\Users\Admin\AppData\Local\Temp\prism-atlas-review-01lq6k33\api.env'
+INFO:     Started server process [17052]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8785 (Press CTRL+C to quit)
+2026-10-02 03:47:10,915 INFO prism_api request_completed request_id=req_40fbeee386334de3827887c3f4abf1b4 method=GET path=/api/v1/platform/ready status=200 duration_ms=1.7
+INFO:     127.0.0.1:65127 - "GET /api/v1/platform/ready HTTP/1.1" 200 OK
+2026-10-02 03:47:10,917 INFO prism_api request_completed request_id=req_8b6f9a93dfd744bb9cabc72a99ab624b method=GET path=/api/v1/atlas/promotion/current status=200 duration_ms=1.3
+INFO:     127.0.0.1:65127 - "GET /api/v1/atlas/promotion/current HTTP/1.1" 200 OK
+2026-10-02 03:47:10,928 INFO prism_api request_completed request_id=req_da4c2ceef37748689c549bfb38271775 method=GET path=/api/v1/atlas/runs/atlas_23d04afb0c5349f498481d65bb76c76f status=200 duration_ms=2.3
+INFO:     127.0.0.1:65127 - "GET /api/v1/atlas/runs/atlas_23d04afb0c5349f498481d65bb76c76f HTTP/1.1" 200 OK
+2026-10-02 03:47:10,929 INFO prism_api request_completed request_id=req_ae1e47afe9f049c9bc875fcf5267d209 method=GET path=/api/v1/atlas/runs/atlas_b901ebbf64eb46c0815d7f27b03df40b status=200 duration_ms=1.3
+INFO:     127.0.0.1:65127 - "GET /api/v1/atlas/runs/atlas_b901ebbf64eb46c0815d7f27b03df40b HTTP/1.1" 200 OK

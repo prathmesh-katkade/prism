@@ -131,4 +131,43 @@ describe("Atlas investigation", () => {
     expect(within(exchange).getByText(/Reply to msg-query/)).toBeInTheDocument();
     expect(within(exchange).getAllByText(/Model: none/)).toHaveLength(2);
   });
+
+  it("renders a model-origin specialist review, its objection, and an unavailable review notice", async () => {
+    const withReview = { ...recorded, uncertainty: "Unresolved specialist objection: Not supported by the declared evidence.", messages: [{
+      message_id: "msg-query", sequence: 1, specialist: "query", task_id: "sql",
+      kind: "computed_observation", origin: "deterministic_service",
+      content: "Executed the recorded aggregate.", input_refs: ["sql:run-1"], reply_to: null,
+      model_binding: null, occurred_at: "2026-09-27T00:00:03Z",
+    }, {
+      message_id: "msg-query-review", sequence: 2, specialist: "query", task_id: "sql",
+      kind: "proposal", origin: "model",
+      content: "Revenue is highest in the west region.", input_refs: ["sql:run-1"], reply_to: "msg-query",
+      model_binding: "qwen3:4b-instruct-2507-q4_K_M@sha256:abc123", occurred_at: "2026-09-27T00:00:04Z",
+    }, {
+      message_id: "msg-auditor-objection", sequence: 3, specialist: "auditor", task_id: "audit",
+      kind: "objection", origin: "model",
+      content: "Not supported by the declared evidence.", input_refs: ["sql:run-1"], reply_to: "msg-audit-base",
+      model_binding: "qwen3:4b-instruct-2507-q4_K_M@sha256:abc123", occurred_at: "2026-09-27T00:00:05Z",
+    }, {
+      message_id: "msg-atlas-unavailable", sequence: 4, specialist: "atlas", task_id: "synthesis",
+      kind: "review_unavailable", origin: "deterministic_service",
+      content: "Specialist review by atlas was attempted and timed_out; the deterministic result above is unaffected.",
+      input_refs: [], reply_to: null, model_binding: null, occurred_at: "2026-09-27T00:00:06Z",
+    }] };
+    vi.stubGlobal("fetch", vi.fn(async (input: string | URL) => new Response(
+      JSON.stringify(String(input).endsWith("/interventions") ? [] : withReview), { status: 200 },
+    )));
+    render(<AtlasInvestigation datasetId="dataset-1" initialRunId="atlas-recorded" onSelectContext={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText("Can we attribute the change?")).toBeInTheDocument());
+    expect(screen.getByText("Unresolved specialist objection: Not supported by the declared evidence.", { exact: false })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Collaboration/ }));
+    const exchange = screen.getByRole("heading", { name: "Recorded exchange" }).closest("section")!;
+    expect(within(exchange).getByText("Revenue is highest in the west region.")).toBeInTheDocument();
+    expect(within(exchange).getByText("Not supported by the declared evidence.")).toBeInTheDocument();
+    expect(within(exchange).getByText(/Specialist review by atlas was attempted and timed_out/)).toBeInTheDocument();
+    expect(within(exchange).getAllByText(/Model: qwen3:4b-instruct-2507-q4_K_M@sha256:abc123/)).toHaveLength(2);
+    expect(within(exchange).getByText("proposal | model")).toBeInTheDocument();
+    expect(within(exchange).getByText("objection | model")).toBeInTheDocument();
+    expect(within(exchange).getByText("review unavailable | deterministic service")).toBeInTheDocument();
+  });
 });

@@ -1,0 +1,333 @@
+{
+  "backup_sha256_after": "03bbc35cb97e84abc1a92d54a9f5fbeb3592d5b208c6d0c01d397afddfcc6afc",
+  "backup_sha256_before": "03bbc35cb97e84abc1a92d54a9f5fbeb3592d5b208c6d0c01d397afddfcc6afc",
+  "promotion_pointer_unchanged": true,
+  "sql_review": {
+    "answer": "Atlas completed a deterministic first-pass assessment of review-sql.csv: 3 rows \u00d7 2 columns, health 94/100, and 0.00% missing cells. Recorded SQL result run_fc2993cb7def43f7b4a25533f1cd1587: [{\"group_value\": \"east\", \"result_value\": 7.0}, {\"group_value\": \"west\", \"result_value\": 15.0}]. Evidence sql:run_fc2993cb7def43f7b4a25533f1cd1587.",
+    "message_count": 12,
+    "model_origin_messages": [
+      {
+        "input_refs": [],
+        "kind": "objection",
+        "model_binding": "qwen3:4b-instruct-2507-q4_K_M@0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0",
+        "specialist": "query"
+      },
+      {
+        "input_refs": [],
+        "kind": "objection",
+        "model_binding": "qwen3:4b-instruct-2507-q4_K_M@0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0",
+        "specialist": "query"
+      },
+      {
+        "input_refs": [],
+        "kind": "objection",
+        "model_binding": "qwen3:4b-instruct-2507-q4_K_M@0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0",
+        "specialist": "query"
+      },
+      {
+        "input_refs": [],
+        "kind": "objection",
+        "model_binding": "qwen3:4b-instruct-2507-q4_K_M@0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0",
+        "specialist": "atlas"
+      },
+      {
+        "input_refs": [],
+        "kind": "objection",
+        "model_binding": "qwen3:4b-instruct-2507-q4_K_M@0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0",
+        "specialist": "atlas"
+      }
+    ],
+    "review_events": [
+      {
+        "claim_count": 0,
+        "duration_ms": 4195.79,
+        "limitations": [
+          "The computed conclusion states that '2 result rows' were returned from a SQL Lab aggregate, but the declared evidence summary only confirms '2 recorded result rows' without specifying the content or structure of the data. Therefore, no claim about the actual values or meaning of the result rows can be made without additional evidence.",
+          "The task title requires a named SQL Lab connection and reviewed query before SQL can execute. However, no such connection or query is provided in the declared evidence. Thus, the conclusion that SQL was executed cannot be verified independently, and the claim of execution is unsupported by available evidence.",
+          "The evidence provided does not contain any information about the SQL query itself, the connection details, or the specific aggregate operation performed. Without this, any assertion about the execution of a query or the nature of the result rows is speculative and unverifiable."
+        ],
+        "model_binding": "qwen3:4b-instruct-2507-q4_K_M@0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0",
+        "next_checks": [
+          "Request confirmation of the SQL Lab connection and query details to verify the validity of the execution claim.",
+          "Request the actual SQL query and its output data to assess the content and structure of the result rows.",
+          "Verify whether the SQL Lab connection and query are explicitly declared in the evidence or are inferred from the result alone."
+        ],
+        "objection_count": 3,
+        "status": "ok"
+      },
+      {
+        "claim_count": 0,
+        "duration_ms": 5521.79,
+        "limitations": [
+          "The computed conclusion claims a SQL result with values 7.0 and 15.0 for 'east' and 'west' groups, but the declared evidence summaries do not contain any explicit mention of these values or their grouping. The evidence summaries only state the number of rows, columns, and health score, and the SQL result is not described in detail. Therefore, the claim that the SQL result is [{\"group_value\": \"east\", \"result_value\": 7.0}, {\"group_value\": \"west\", \"result_value\": 15.0}] is unsupported by the declar",
+          "The computed conclusion states 'health 94/100' and '0.00% missing cells', which are consistent with the overview summary, but the evidence summaries do not specify the actual data content or missingness details. Thus, while the health and missingness metrics are supported, the specific values in the SQL result are not supported by the evidence summaries and cannot be validated.",
+          "The task title and computed conclusion are untrusted references and do not constitute valid input for evaluation. The conclusion must be assessed solely against the declared evidence summaries, not against the task title or computed conclusion itself."
+        ],
+        "model_binding": "qwen3:4b-instruct-2507-q4_K_M@0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0",
+        "next_checks": [
+          "Verify whether the SQL result is explicitly documented in any of the declared evidence summaries (e.g., dataset:ds_487a102dca0141008e1550247d188eb6:r0 or sql:run_fc2993cb7def43f7b4a25533f1cd1587) to confirm the presence of the group_value and result_value fields.",
+          "Confirm whether the dataset metadata or overview profile contains any data about the actual values in the SQL result or the structure of the result rows."
+        ],
+        "objection_count": 2,
+        "status": "ok"
+      }
+    ],
+    "review_unavailable_messages": [],
+    "uncertainty": "The SQL aggregate is descriptive and bounded to 100 result rows; it does not establish causality or statistical significance. Unresolved specialist objections: The computed conclusion claims execution of a SQL query and the presence of two result rows, but the declared evidence does not contain the actual SQL query or the connection details required to validate the execution. This constitutes a missing piece of evidence that is necessary to verify the claim. (Model-assisted review using the same production-bound model that may also participate in planning; this is review, not independent corroboration.) The conclusion references '2 result rows' but provides no information about the data within those rows, their structure, or their interpretation. A claim about the content or significance of the result rows is unsupported by the evidence and must be rejected. (Model-assisted review using the same production-bound model that may also participate in planning; this is review, not independent corroboration.) The task title explicitly requires a named SQL Lab connection and reviewed query before SQL can execute. These components are not present in the declared evidence, making the assertion of execution invalid and unsupported. (Model-assisted review using the same production-bound model that may also participate in planning; this is review, not independent corroboration.)"
+  },
+  "sql_review_after_restart": {
+    "answer": "Atlas completed a deterministic first-pass assessment of review-sql.csv: 3 rows \u00d7 2 columns, health 94/100, and 0.00% missing cells. Recorded SQL result run_fc2993cb7def43f7b4a25533f1cd1587: [{\"group_value\": \"east\", \"result_value\": 7.0}, {\"group_value\": \"west\", \"result_value\": 15.0}]. Evidence sql:run_fc2993cb7def43f7b4a25533f1cd1587.",
+    "message_count": 12,
+    "model_origin_messages": [
+      {
+        "input_refs": [],
+        "kind": "objection",
+        "model_binding": "qwen3:4b-instruct-2507-q4_K_M@0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0",
+        "specialist": "query"
+      },
+      {
+        "input_refs": [],
+        "kind": "objection",
+        "model_binding": "qwen3:4b-instruct-2507-q4_K_M@0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0",
+        "specialist": "query"
+      },
+      {
+        "input_refs": [],
+        "kind": "objection",
+        "model_binding": "qwen3:4b-instruct-2507-q4_K_M@0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0",
+        "specialist": "query"
+      },
+      {
+        "input_refs": [],
+        "kind": "objection",
+        "model_binding": "qwen3:4b-instruct-2507-q4_K_M@0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0",
+        "specialist": "atlas"
+      },
+      {
+        "input_refs": [],
+        "kind": "objection",
+        "model_binding": "qwen3:4b-instruct-2507-q4_K_M@0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0",
+        "specialist": "atlas"
+      }
+    ],
+    "review_events": [
+      {
+        "claim_count": 0,
+        "duration_ms": 4195.79,
+        "limitations": [
+          "The computed conclusion states that '2 result rows' were returned from a SQL Lab aggregate, but the declared evidence summary only confirms '2 recorded result rows' without specifying the content or structure of the data. Therefore, no claim about the actual values or meaning of the result rows can be made without additional evidence.",
+          "The task title requires a named SQL Lab connection and reviewed query before SQL can execute. However, no such connection or query is provided in the declared evidence. Thus, the conclusion that SQL was executed cannot be verified independently, and the claim of execution is unsupported by available evidence.",
+          "The evidence provided does not contain any information about the SQL query itself, the connection details, or the specific aggregate operation performed. Without this, any assertion about the execution of a query or the nature of the result rows is speculative and unverifiable."
+        ],
+        "model_binding": "qwen3:4b-instruct-2507-q4_K_M@0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0",
+        "next_checks": [
+          "Request confirmation of the SQL Lab connection and query details to verify the validity of the execution claim.",
+          "Request the actual SQL query and its output data to assess the content and structure of the result rows.",
+          "Verify whether the SQL Lab connection and query are explicitly declared in the evidence or are inferred from the result alone."
+        ],
+        "objection_count": 3,
+        "status": "ok"
+      },
+      {
+        "claim_count": 0,
+        "duration_ms": 5521.79,
+        "limitations": [
+          "The computed conclusion claims a SQL result with values 7.0 and 15.0 for 'east' and 'west' groups, but the declared evidence summaries do not contain any explicit mention of these values or their grouping. The evidence summaries only state the number of rows, columns, and health score, and the SQL result is not described in detail. Therefore, the claim that the SQL result is [{\"group_value\": \"east\", \"result_value\": 7.0}, {\"group_value\": \"west\", \"result_value\": 15.0}] is unsupported by the declar",
+          "The computed conclusion states 'health 94/100' and '0.00% missing cells', which are consistent with the overview summary, but the evidence summaries do not specify the actual data content or missingness details. Thus, while the health and missingness metrics are supported, the specific values in the SQL result are not supported by the evidence summaries and cannot be validated.",
+          "The task title and computed conclusion are untrusted references and do not constitute valid input for evaluation. The conclusion must be assessed solely against the declared evidence summaries, not against the task title or computed conclusion itself."
+        ],
+        "model_binding": "qwen3:4b-instruct-2507-q4_K_M@0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0",
+        "next_checks": [
+          "Verify whether the SQL result is explicitly documented in any of the declared evidence summaries (e.g., dataset:ds_487a102dca0141008e1550247d188eb6:r0 or sql:run_fc2993cb7def43f7b4a25533f1cd1587) to confirm the presence of the group_value and result_value fields.",
+          "Confirm whether the dataset metadata or overview profile contains any data about the actual values in the SQL result or the structure of the result rows."
+        ],
+        "objection_count": 2,
+        "status": "ok"
+      }
+    ],
+    "review_unavailable_messages": [],
+    "uncertainty": "The SQL aggregate is descriptive and bounded to 100 result rows; it does not establish causality or statistical significance. Unresolved specialist objections: The computed conclusion claims execution of a SQL query and the presence of two result rows, but the declared evidence does not contain the actual SQL query or the connection details required to validate the execution. This constitutes a missing piece of evidence that is necessary to verify the claim. (Model-assisted review using the same production-bound model that may also participate in planning; this is review, not independent corroboration.) The conclusion references '2 result rows' but provides no information about the data within those rows, their structure, or their interpretation. A claim about the content or significance of the result rows is unsupported by the evidence and must be rejected. (Model-assisted review using the same production-bound model that may also participate in planning; this is review, not independent corroboration.) The task title explicitly requires a named SQL Lab connection and reviewed query before SQL can execute. These components are not present in the declared evidence, making the assertion of execution invalid and unsupported. (Model-assisted review using the same production-bound model that may also participate in planning; this is review, not independent corroboration.)"
+  },
+  "sql_run_id": "atlas_23d04afb0c5349f498481d65bb76c76f",
+  "stat_review": {
+    "answer": "Atlas completed a deterministic first-pass assessment of review-stat.csv: 5 rows \u00d7 2 columns, health 100/100, and 0.00% missing cells. Stats Lab pearson: Significant correlation detected (p<0.0001, large effect, Pearson r=1.00). Evidence stat:atlas_b901ebbf64eb46c0815d7f27b03df40b:statistical_analysis.",
+    "message_count": 11,
+    "model_origin_messages": [
+      {
+        "input_refs": [
+          "stat:atlas_b901ebbf64eb46c0815d7f27b03df40b:statistical_analysis"
+        ],
+        "kind": "objection",
+        "model_binding": "qwen3:4b-instruct-2507-q4_K_M@0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0",
+        "specialist": "stat"
+      },
+      {
+        "input_refs": [
+          "stat:atlas_b901ebbf64eb46c0815d7f27b03df40b:statistical_analysis"
+        ],
+        "kind": "objection",
+        "model_binding": "qwen3:4b-instruct-2507-q4_K_M@0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0",
+        "specialist": "stat"
+      },
+      {
+        "input_refs": [
+          "stat:atlas_b901ebbf64eb46c0815d7f27b03df40b:statistical_analysis"
+        ],
+        "kind": "objection",
+        "model_binding": "qwen3:4b-instruct-2507-q4_K_M@0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0",
+        "specialist": "stat"
+      },
+      {
+        "input_refs": [
+          "stat:atlas_b901ebbf64eb46c0815d7f27b03df40b:statistical_analysis"
+        ],
+        "kind": "objection",
+        "model_binding": "qwen3:4b-instruct-2507-q4_K_M@0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0",
+        "specialist": "atlas"
+      },
+      {
+        "input_refs": [
+          "overview:ds_e6f0d25d48214eca9c3dfd3c1de5fb3b:r0"
+        ],
+        "kind": "objection",
+        "model_binding": "qwen3:4b-instruct-2507-q4_K_M@0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0",
+        "specialist": "atlas"
+      },
+      {
+        "input_refs": [],
+        "kind": "objection",
+        "model_binding": "qwen3:4b-instruct-2507-q4_K_M@0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0",
+        "specialist": "atlas"
+      }
+    ],
+    "review_events": [
+      {
+        "claim_count": 0,
+        "duration_ms": 7373.34,
+        "limitations": [
+          "The computed conclusion claims a Pearson correlation of 1.00 and a p-value of less than 0.0001, but the declared evidence summary states 'statistic 1.0, p=0.0' with only 5 analyzed data points. A p-value of 0.0 is not a valid statistical value in standard testing; it is typically interpreted as a rounding artifact or a result from a degenerate distribution. This suggests the evidence does not support the reported p < 0.0001 or the large effect size (r=1.00) as stated in the conclusion.",
+          "The evidence summary indicates only 5 analyzed data points, which is insufficient to support a statistically significant correlation with a large effect size. A sample size of 5 is extremely small and would not typically yield a reliable or robust correlation result, especially with a Pearson r of 1.00, which implies perfect linear correlation and is highly unlikely in real-world data with such a small sample.",
+          "The declared evidence does not contain any information about the assumptions of the Pearson correlation test (e.g., linearity, normality, homoscedasticity), nor does it specify any domain context or practical importance. The conclusion references these elements but provides no supporting evidence, making the practical importance or domain relevance claims unsupported."
+        ],
+        "model_binding": "qwen3:4b-instruct-2507-q4_K_M@0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0",
+        "next_checks": [
+          "Verify the validity of the p-value reported as 0.0 in the evidence summary and confirm whether this is a computational artifact or a valid statistical result.",
+          "Assess whether a sample size of 5 is sufficient to support a Pearson correlation test with a claimed significance level of p < 0.0001.",
+          "Confirm whether the Pearson r value of 1.00 is plausible given the sample size and data distribution, and whether the evidence supports such a perfect correlation."
+        ],
+        "objection_count": 3,
+        "status": "ok"
+      },
+      {
+        "claim_count": 0,
+        "duration_ms": 6521.8,
+        "limitations": [
+          "The computed conclusion claims a 'significant correlation detected (p<0.0001, large effect, Pearson r=1.00)' based on evidence that only reports 'statistic 1.0, p=0.0; 5 analyzed, 0 excluded'. The evidence does not specify the p-value as being less than 0.0001 or confirm the effect size as 'large' or the correlation coefficient as exactly 1.00. This constitutes an unsupported claim of statistical significance and effect size.",
+          "The conclusion states 'health 100/100' and '0.00% missing cells' based on the overview summary, which only states '5 rows, 2 columns, health 100/100'. The evidence does not explicitly confirm the absence of missing cells, and the health score is not defined in the provided summary. This is an unsupported inference.",
+          "The evidence does not contain any information about the dataset's structure or content beyond the row/column count and health score. The claim that 'Atlas completed a deterministic first-pass assessment' is not supported by any evidence, as no evidence records the execution of such an assessment."
+        ],
+        "model_binding": "qwen3:4b-instruct-2507-q4_K_M@0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0",
+        "next_checks": [
+          "Verify the actual value of the Pearson correlation coefficient and p-value from the statistical analysis evidence to confirm whether it is exactly 1.00 and whether p < 0.0001.",
+          "Confirm whether the 'health 100/100' metric includes a component for missing data or cell completeness.",
+          "Determine whether any evidence exists that records the execution of a 'first-pass assessment' by Atlas."
+        ],
+        "objection_count": 3,
+        "status": "ok"
+      }
+    ],
+    "review_unavailable_messages": [],
+    "uncertainty": "The declared statistical design and exclusions are recorded; the result does not establish causality or model performance. Unresolved specialist objections: The computed conclusion claims a Pearson correlation of 1.00 and a p-value of less than 0.0001, but the evidence only reports a p-value of 0.0 and a sample size of 5. A p-value of 0.0 is not a valid or meaningful value in standard statistical testing and likely indicates a computational error or degenerate case. The evidence does not support the claim of p < 0.0001. (Model-assisted review using the same production-bound model that may also participate in planning; this is review, not independent corroboration.) The evidence does not contain any information about the assumptions of the Pearson correlation test (e.g., linearity, normality, homoscedasticity), nor does it provide any domain context or practical importance. The conclusion references these elements but lacks supporting evidence, making the practical importance or domain relevance claims unsupported. (Model-assisted review using the same production-bound model that may also participate in planning; this is review, not independent corroboration.) The evidence reports only 5 analyzed data points, which is insufficient to support a statistically significant correlation with a large effect size. A sample size of 5 is extremely small and would not typically yield a reliable or robust correlation result, especially with a Pearson r of 1.00, which implies perfect linear correlation and is highly unlikely in real-world data with such a small sample. (Model-assisted review using the same production-bound model that may also participate in planning; this is review, not independent corroboration.)"
+  },
+  "stat_review_after_restart": {
+    "answer": "Atlas completed a deterministic first-pass assessment of review-stat.csv: 5 rows \u00d7 2 columns, health 100/100, and 0.00% missing cells. Stats Lab pearson: Significant correlation detected (p<0.0001, large effect, Pearson r=1.00). Evidence stat:atlas_b901ebbf64eb46c0815d7f27b03df40b:statistical_analysis.",
+    "message_count": 11,
+    "model_origin_messages": [
+      {
+        "input_refs": [
+          "stat:atlas_b901ebbf64eb46c0815d7f27b03df40b:statistical_analysis"
+        ],
+        "kind": "objection",
+        "model_binding": "qwen3:4b-instruct-2507-q4_K_M@0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0",
+        "specialist": "stat"
+      },
+      {
+        "input_refs": [
+          "stat:atlas_b901ebbf64eb46c0815d7f27b03df40b:statistical_analysis"
+        ],
+        "kind": "objection",
+        "model_binding": "qwen3:4b-instruct-2507-q4_K_M@0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0",
+        "specialist": "stat"
+      },
+      {
+        "input_refs": [
+          "stat:atlas_b901ebbf64eb46c0815d7f27b03df40b:statistical_analysis"
+        ],
+        "kind": "objection",
+        "model_binding": "qwen3:4b-instruct-2507-q4_K_M@0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0",
+        "specialist": "stat"
+      },
+      {
+        "input_refs": [
+          "stat:atlas_b901ebbf64eb46c0815d7f27b03df40b:statistical_analysis"
+        ],
+        "kind": "objection",
+        "model_binding": "qwen3:4b-instruct-2507-q4_K_M@0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0",
+        "specialist": "atlas"
+      },
+      {
+        "input_refs": [
+          "overview:ds_e6f0d25d48214eca9c3dfd3c1de5fb3b:r0"
+        ],
+        "kind": "objection",
+        "model_binding": "qwen3:4b-instruct-2507-q4_K_M@0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0",
+        "specialist": "atlas"
+      },
+      {
+        "input_refs": [],
+        "kind": "objection",
+        "model_binding": "qwen3:4b-instruct-2507-q4_K_M@0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0",
+        "specialist": "atlas"
+      }
+    ],
+    "review_events": [
+      {
+        "claim_count": 0,
+        "duration_ms": 7373.34,
+        "limitations": [
+          "The computed conclusion claims a Pearson correlation of 1.00 and a p-value of less than 0.0001, but the declared evidence summary states 'statistic 1.0, p=0.0' with only 5 analyzed data points. A p-value of 0.0 is not a valid statistical value in standard testing; it is typically interpreted as a rounding artifact or a result from a degenerate distribution. This suggests the evidence does not support the reported p < 0.0001 or the large effect size (r=1.00) as stated in the conclusion.",
+          "The evidence summary indicates only 5 analyzed data points, which is insufficient to support a statistically significant correlation with a large effect size. A sample size of 5 is extremely small and would not typically yield a reliable or robust correlation result, especially with a Pearson r of 1.00, which implies perfect linear correlation and is highly unlikely in real-world data with such a small sample.",
+          "The declared evidence does not contain any information about the assumptions of the Pearson correlation test (e.g., linearity, normality, homoscedasticity), nor does it specify any domain context or practical importance. The conclusion references these elements but provides no supporting evidence, making the practical importance or domain relevance claims unsupported."
+        ],
+        "model_binding": "qwen3:4b-instruct-2507-q4_K_M@0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0",
+        "next_checks": [
+          "Verify the validity of the p-value reported as 0.0 in the evidence summary and confirm whether this is a computational artifact or a valid statistical result.",
+          "Assess whether a sample size of 5 is sufficient to support a Pearson correlation test with a claimed significance level of p < 0.0001.",
+          "Confirm whether the Pearson r value of 1.00 is plausible given the sample size and data distribution, and whether the evidence supports such a perfect correlation."
+        ],
+        "objection_count": 3,
+        "status": "ok"
+      },
+      {
+        "claim_count": 0,
+        "duration_ms": 6521.8,
+        "limitations": [
+          "The computed conclusion claims a 'significant correlation detected (p<0.0001, large effect, Pearson r=1.00)' based on evidence that only reports 'statistic 1.0, p=0.0; 5 analyzed, 0 excluded'. The evidence does not specify the p-value as being less than 0.0001 or confirm the effect size as 'large' or the correlation coefficient as exactly 1.00. This constitutes an unsupported claim of statistical significance and effect size.",
+          "The conclusion states 'health 100/100' and '0.00% missing cells' based on the overview summary, which only states '5 rows, 2 columns, health 100/100'. The evidence does not explicitly confirm the absence of missing cells, and the health score is not defined in the provided summary. This is an unsupported inference.",
+          "The evidence does not contain any information about the dataset's structure or content beyond the row/column count and health score. The claim that 'Atlas completed a deterministic first-pass assessment' is not supported by any evidence, as no evidence records the execution of such an assessment."
+        ],
+        "model_binding": "qwen3:4b-instruct-2507-q4_K_M@0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0",
+        "next_checks": [
+          "Verify the actual value of the Pearson correlation coefficient and p-value from the statistical analysis evidence to confirm whether it is exactly 1.00 and whether p < 0.0001.",
+          "Confirm whether the 'health 100/100' metric includes a component for missing data or cell completeness.",
+          "Determine whether any evidence exists that records the execution of a 'first-pass assessment' by Atlas."
+        ],
+        "objection_count": 3,
+        "status": "ok"
+      }
+    ],
+    "review_unavailable_messages": [],
+    "uncertainty": "The declared statistical design and exclusions are recorded; the result does not establish causality or model performance. Unresolved specialist objections: The computed conclusion claims a Pearson correlation of 1.00 and a p-value of less than 0.0001, but the evidence only reports a p-value of 0.0 and a sample size of 5. A p-value of 0.0 is not a valid or meaningful value in standard statistical testing and likely indicates a computational error or degenerate case. The evidence does not support the claim of p < 0.0001. (Model-assisted review using the same production-bound model that may also participate in planning; this is review, not independent corroboration.) The evidence does not contain any information about the assumptions of the Pearson correlation test (e.g., linearity, normality, homoscedasticity), nor does it provide any domain context or practical importance. The conclusion references these elements but lacks supporting evidence, making the practical importance or domain relevance claims unsupported. (Model-assisted review using the same production-bound model that may also participate in planning; this is review, not independent corroboration.) The evidence reports only 5 analyzed data points, which is insufficient to support a statistically significant correlation with a large effect size. A sample size of 5 is extremely small and would not typically yield a reliable or robust correlation result, especially with a Pearson r of 1.00, which implies perfect linear correlation and is highly unlikely in real-world data with such a small sample. (Model-assisted review using the same production-bound model that may also participate in planning; this is review, not independent corroboration.)"
+  },
+  "stat_run_id": "atlas_b901ebbf64eb46c0815d7f27b03df40b"
+}
