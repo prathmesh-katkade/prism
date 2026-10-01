@@ -7,20 +7,20 @@
 > next build
 
 ▲ Next.js 16.3.3 (Turbopack)
-✓ Running next.config.ts took 106ms
+✓ Running next.config.ts took 22ms
 - Experiments (use with caution):
   ✓ externalDir
 
   Creating an optimized production build ...
-✓ Compiled successfully in 1282ms
+✓ Compiled successfully in 1854ms
   Running TypeScript ...
-  Finished TypeScript in 1256ms ...
+  Finished TypeScript in 2.4s ...
   Collecting page data using 5 workers ...
   Generating static pages using 5 workers (0/4) ...
   Generating static pages using 5 workers (1/4) 
   Generating static pages using 5 workers (2/4) 
   Generating static pages using 5 workers (3/4) 
-✓ Generating static pages using 5 workers (4/4) in 437ms
+✓ Generating static pages using 5 workers (4/4) in 432ms
   Finalizing page optimization ...
 
 Route (app)
