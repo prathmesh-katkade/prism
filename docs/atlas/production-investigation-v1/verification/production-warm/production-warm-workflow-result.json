@@ -1,0 +1,602 @@
+{
+  "backup_sha256_unchanged": true,
+  "cold_start_excluded_from_warm_p95": true,
+  "cold_start_ms": 2200.54,
+  "correctness_failures": 0,
+  "fixture": "10 SQL aggregation + 10 declared Pearson, sequential",
+  "gpu_baseline_mib": 4366,
+  "gpu_peak_mib": 4672,
+  "gpu_peak_utilization_pct": 97,
+  "gpu_sample_count": 265,
+  "human_wait_excluded": true,
+  "inference_policy": "sequential (one in-flight model call at a time; see model-concurrency benchmark)",
+  "model_binding": "qwen3:4b-instruct-2507-q4_K_M@0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0",
+  "model_bindings_used_for_review": [
+    "qwen3:4b-instruct-2507-q4_K_M@0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0"
+  ],
+  "model_origin_messages_total": 59,
+  "models_used_for_plan_proposal": [
+    "qwen3:4b-instruct-2507-q4_K_M"
+  ],
+  "p95_method": "nearest rank",
+  "p95_target_ms": 60000,
+  "passed_target": true,
+  "planning_ms_p50": 5.96,
+  "promotion_pointer_unchanged": true,
+  "queue_ms_p50": 29.61,
+  "review_ms_total_p50": 10586.94,
+  "review_ms_total_p95": 11820.4,
+  "review_unavailable_total": 0,
+  "sample_count": 20,
+  "sample_count_declared": 20,
+  "sample_pairs": 10,
+  "samples": [
+    {
+      "dataset_id": "ds_f8392d0a1adf4a25b2cf6ed8749890a7",
+      "execution_ref": "run_b363d479d5974ca2bb5c0233752c0789",
+      "kind": "sql",
+      "model_bindings_used": [
+        "qwen3:4b-instruct-2507-q4_K_M@0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0"
+      ],
+      "model_origin_message_count": 3,
+      "model_proposal": "accepted",
+      "plan_proposal_model": "qwen3:4b-instruct-2507-q4_K_M",
+      "planning_ms": 3.93,
+      "provider": "ollama",
+      "queue_ms": 9.51,
+      "review_call_count": 1,
+      "review_ms": 12.66,
+      "review_ms_total": 10734.78,
+      "review_statuses": [
+        "ok"
+      ],
+      "review_unavailable_count": 0,
+      "run_id": "atlas_35d1f3568fd0488a83ee855903a60097",
+      "state": "completed",
+      "synthesis_review_ms": null,
+      "synthesis_review_status": null,
+      "tool_ms": 45.95,
+      "tool_reported_ms": 8,
+      "total_ms": 11860.83
+    },
+    {
+      "dataset_id": "ds_0f53bfb38a8c447aaef85c52d28e2622",
+      "execution_ref": "stats_905bc062288e439c97d31a73949ff1de",
+      "kind": "stat",
+      "model_bindings_used": [
+        "qwen3:4b-instruct-2507-q4_K_M@0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0"
+      ],
+      "model_origin_message_count": 3,
+      "model_proposal": "accepted",
+      "plan_proposal_model": "qwen3:4b-instruct-2507-q4_K_M",
+      "planning_ms": 6.73,
+      "provider": "ollama",
+      "queue_ms": 41.21,
+      "review_call_count": 1,
+      "review_ms": 13.8,
+      "review_ms_total": 10586.94,
+      "review_statuses": [
+        "ok"
+      ],
+      "review_unavailable_count": 0,
+      "run_id": "atlas_e7e1c3b036b34c71a9d3b9fb6145551b",
+      "state": "completed",
+      "synthesis_review_ms": null,
+      "synthesis_review_status": null,
+      "tool_ms": 1129.66,
+      "tool_reported_ms": 1109,
+      "total_ms": 12871.31
+    },
+    {
+      "dataset_id": "ds_f8392d0a1adf4a25b2cf6ed8749890a7",
+      "execution_ref": "run_accfb71f40ee4a8f93e2dbc19d4d0a42",
+      "kind": "sql",
+      "model_bindings_used": [
+        "qwen3:4b-instruct-2507-q4_K_M@0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0"
+      ],
+      "model_origin_message_count": 2,
+      "model_proposal": "accepted",
+      "plan_proposal_model": "qwen3:4b-instruct-2507-q4_K_M",
+      "planning_ms": 5.66,
+      "provider": "ollama",
+      "queue_ms": 10.58,
+      "review_call_count": 1,
+      "review_ms": 15.34,
+      "review_ms_total": 9620.5,
+      "review_statuses": [
+        "ok"
+      ],
+      "review_unavailable_count": 0,
+      "run_id": "atlas_19950a5d5d33413394076ed9a5b914af",
+      "state": "completed",
+      "synthesis_review_ms": null,
+      "synthesis_review_status": null,
+      "tool_ms": 45.79,
+      "tool_reported_ms": 9,
+      "total_ms": 10696.65
+    },
+    {
+      "dataset_id": "ds_0f53bfb38a8c447aaef85c52d28e2622",
+      "execution_ref": "stats_c2718ac59e274887a5546b07d44a891b",
+      "kind": "stat",
+      "model_bindings_used": [
+        "qwen3:4b-instruct-2507-q4_K_M@0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0"
+      ],
+      "model_origin_message_count": 3,
+      "model_proposal": "accepted",
+      "plan_proposal_model": "qwen3:4b-instruct-2507-q4_K_M",
+      "planning_ms": 6.55,
+      "provider": "ollama",
+      "queue_ms": 34.1,
+      "review_call_count": 1,
+      "review_ms": 12.26,
+      "review_ms_total": 12688.62,
+      "review_statuses": [
+        "ok"
+      ],
+      "review_unavailable_count": 0,
+      "run_id": "atlas_a73421470ceb46abaf388b68abb788c7",
+      "state": "completed",
+      "synthesis_review_ms": null,
+      "synthesis_review_status": null,
+      "tool_ms": 1116.17,
+      "tool_reported_ms": 1109,
+      "total_ms": 14933.41
+    },
+    {
+      "dataset_id": "ds_f8392d0a1adf4a25b2cf6ed8749890a7",
+      "execution_ref": "run_eb896a23dab44b88aa1b0a468e5c161b",
+      "kind": "sql",
+      "model_bindings_used": [
+        "qwen3:4b-instruct-2507-q4_K_M@0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0"
+      ],
+      "model_origin_message_count": 2,
+      "model_proposal": "accepted",
+      "plan_proposal_model": "qwen3:4b-instruct-2507-q4_K_M",
+      "planning_ms": 3.61,
+      "provider": "ollama",
+      "queue_ms": 13.37,
+      "review_call_count": 1,
+      "review_ms": 15.05,
+      "review_ms_total": 8157.18,
+      "review_statuses": [
+        "ok"
+      ],
+      "review_unavailable_count": 0,
+      "run_id": "atlas_82cfa7cc5c0d4699a045c176ae3c1b65",
+      "state": "completed",
+      "synthesis_review_ms": null,
+      "synthesis_review_status": null,
+      "tool_ms": 45.44,
+      "tool_reported_ms": 8,
+      "total_ms": 9258.58
+    },
+    {
+      "dataset_id": "ds_0f53bfb38a8c447aaef85c52d28e2622",
+      "execution_ref": "stats_37934e3b8db3487b9372f6aaef06671e",
+      "kind": "stat",
+      "model_bindings_used": [
+        "qwen3:4b-instruct-2507-q4_K_M@0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0"
+      ],
+      "model_origin_message_count": 4,
+      "model_proposal": "accepted",
+      "plan_proposal_model": "qwen3:4b-instruct-2507-q4_K_M",
+      "planning_ms": 7.17,
+      "provider": "ollama",
+      "queue_ms": 31.19,
+      "review_call_count": 1,
+      "review_ms": 28.87,
+      "review_ms_total": 11350.05,
+      "review_statuses": [
+        "ok"
+      ],
+      "review_unavailable_count": 0,
+      "run_id": "atlas_28db58ad83824011affd2d7376c2f26d",
+      "state": "completed",
+      "synthesis_review_ms": null,
+      "synthesis_review_status": null,
+      "tool_ms": 1141.89,
+      "tool_reported_ms": 1140,
+      "total_ms": 13612.28
+    },
+    {
+      "dataset_id": "ds_f8392d0a1adf4a25b2cf6ed8749890a7",
+      "execution_ref": "run_de8602da8d474179875b2ec6aaead900",
+      "kind": "sql",
+      "model_bindings_used": [
+        "qwen3:4b-instruct-2507-q4_K_M@0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0"
+      ],
+      "model_origin_message_count": 3,
+      "model_proposal": "accepted",
+      "plan_proposal_model": "qwen3:4b-instruct-2507-q4_K_M",
+      "planning_ms": 5.96,
+      "provider": "ollama",
+      "queue_ms": 19.92,
+      "review_call_count": 1,
+      "review_ms": 15.41,
+      "review_ms_total": 8229.87,
+      "review_statuses": [
+        "ok"
+      ],
+      "review_unavailable_count": 0,
+      "run_id": "atlas_1cb19b37d5344353a15cc686e6429398",
+      "state": "completed",
+      "synthesis_review_ms": null,
+      "synthesis_review_status": null,
+      "tool_ms": 44.45,
+      "tool_reported_ms": 9,
+      "total_ms": 9336.73
+    },
+    {
+      "dataset_id": "ds_0f53bfb38a8c447aaef85c52d28e2622",
+      "execution_ref": "stats_967c76e630794f7c81a7a824eb1e88c1",
+      "kind": "stat",
+      "model_bindings_used": [
+        "qwen3:4b-instruct-2507-q4_K_M@0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0"
+      ],
+      "model_origin_message_count": 4,
+      "model_proposal": "accepted",
+      "plan_proposal_model": "qwen3:4b-instruct-2507-q4_K_M",
+      "planning_ms": 11.04,
+      "provider": "ollama",
+      "queue_ms": 36.54,
+      "review_call_count": 1,
+      "review_ms": 15.69,
+      "review_ms_total": 11258.42,
+      "review_statuses": [
+        "ok"
+      ],
+      "review_unavailable_count": 0,
+      "run_id": "atlas_7e208844cd52448588882eebaab73ca1",
+      "state": "completed",
+      "synthesis_review_ms": null,
+      "synthesis_review_status": null,
+      "tool_ms": 1136.68,
+      "tool_reported_ms": 1125,
+      "total_ms": 13516.64
+    },
+    {
+      "dataset_id": "ds_f8392d0a1adf4a25b2cf6ed8749890a7",
+      "execution_ref": "run_55296dc33f5245c3b2000c28ef37d9ff",
+      "kind": "sql",
+      "model_bindings_used": [
+        "qwen3:4b-instruct-2507-q4_K_M@0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0"
+      ],
+      "model_origin_message_count": 3,
+      "model_proposal": "accepted",
+      "plan_proposal_model": "qwen3:4b-instruct-2507-q4_K_M",
+      "planning_ms": 6.96,
+      "provider": "ollama",
+      "queue_ms": 19.08,
+      "review_call_count": 1,
+      "review_ms": 14.72,
+      "review_ms_total": 9028.64,
+      "review_statuses": [
+        "ok"
+      ],
+      "review_unavailable_count": 0,
+      "run_id": "atlas_a264b46aa97648449ddf032ca4215047",
+      "state": "completed",
+      "synthesis_review_ms": null,
+      "synthesis_review_status": null,
+      "tool_ms": 46.5,
+      "tool_reported_ms": 8,
+      "total_ms": 10119.69
+    },
+    {
+      "dataset_id": "ds_0f53bfb38a8c447aaef85c52d28e2622",
+      "execution_ref": "stats_d5d58f55a35d40c9b57f544e28b40304",
+      "kind": "stat",
+      "model_bindings_used": [
+        "qwen3:4b-instruct-2507-q4_K_M@0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0"
+      ],
+      "model_origin_message_count": 3,
+      "model_proposal": "accepted",
+      "plan_proposal_model": "qwen3:4b-instruct-2507-q4_K_M",
+      "planning_ms": 3.06,
+      "provider": "ollama",
+      "queue_ms": 34.54,
+      "review_call_count": 1,
+      "review_ms": 13.95,
+      "review_ms_total": 9694.19,
+      "review_statuses": [
+        "ok"
+      ],
+      "review_unavailable_count": 0,
+      "run_id": "atlas_e1f5173f375b4842bc2fa3b1ba2b7ec3",
+      "state": "completed",
+      "synthesis_review_ms": null,
+      "synthesis_review_status": null,
+      "tool_ms": 1110.99,
+      "tool_reported_ms": 1094,
+      "total_ms": 11908.52
+    },
+    {
+      "dataset_id": "ds_f8392d0a1adf4a25b2cf6ed8749890a7",
+      "execution_ref": "run_252beef6d96847159a8237df5c542e92",
+      "kind": "sql",
+      "model_bindings_used": [
+        "qwen3:4b-instruct-2507-q4_K_M@0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0"
+      ],
+      "model_origin_message_count": 3,
+      "model_proposal": "accepted",
+      "plan_proposal_model": "qwen3:4b-instruct-2507-q4_K_M",
+      "planning_ms": 6.43,
+      "provider": "ollama",
+      "queue_ms": 21.48,
+      "review_call_count": 1,
+      "review_ms": 14.49,
+      "review_ms_total": 8738.7,
+      "review_statuses": [
+        "ok"
+      ],
+      "review_unavailable_count": 0,
+      "run_id": "atlas_69624ff2266d47e2a1050277d31fafc0",
+      "state": "completed",
+      "synthesis_review_ms": null,
+      "synthesis_review_status": null,
+      "tool_ms": 42.78,
+      "tool_reported_ms": 9,
+      "total_ms": 9816.64
+    },
+    {
+      "dataset_id": "ds_0f53bfb38a8c447aaef85c52d28e2622",
+      "execution_ref": "stats_aaeb69df6e5342a1ac991b3126f953f6",
+      "kind": "stat",
+      "model_bindings_used": [
+        "qwen3:4b-instruct-2507-q4_K_M@0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0"
+      ],
+      "model_origin_message_count": 3,
+      "model_proposal": "accepted",
+      "plan_proposal_model": "qwen3:4b-instruct-2507-q4_K_M",
+      "planning_ms": 4.1,
+      "provider": "ollama",
+      "queue_ms": 37.84,
+      "review_call_count": 1,
+      "review_ms": 14.15,
+      "review_ms_total": 11058.06,
+      "review_statuses": [
+        "ok"
+      ],
+      "review_unavailable_count": 0,
+      "run_id": "atlas_c8e1f3c34f5e451eaa37ec1e79dc847b",
+      "state": "completed",
+      "synthesis_review_ms": null,
+      "synthesis_review_status": null,
+      "tool_ms": 1158.24,
+      "tool_reported_ms": 1140,
+      "total_ms": 13362.3
+    },
+    {
+      "dataset_id": "ds_f8392d0a1adf4a25b2cf6ed8749890a7",
+      "execution_ref": "run_20f64253eae04094b69fd91fd2c5a845",
+      "kind": "sql",
+      "model_bindings_used": [
+        "qwen3:4b-instruct-2507-q4_K_M@0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0"
+      ],
+      "model_origin_message_count": 3,
+      "model_proposal": "accepted",
+      "plan_proposal_model": "qwen3:4b-instruct-2507-q4_K_M",
+      "planning_ms": 6.77,
+      "provider": "ollama",
+      "queue_ms": 29.61,
+      "review_call_count": 1,
+      "review_ms": 14.98,
+      "review_ms_total": 8842.14,
+      "review_statuses": [
+        "ok"
+      ],
+      "review_unavailable_count": 0,
+      "run_id": "atlas_14479ae2b71b4de6b7b95a85c7f175db",
+      "state": "completed",
+      "synthesis_review_ms": null,
+      "synthesis_review_status": null,
+      "tool_ms": 44.58,
+      "tool_reported_ms": 8,
+      "total_ms": 9914.1
+    },
+    {
+      "dataset_id": "ds_0f53bfb38a8c447aaef85c52d28e2622",
+      "execution_ref": "stats_d354163c02704793b812b153223bc2e5",
+      "kind": "stat",
+      "model_bindings_used": [
+        "qwen3:4b-instruct-2507-q4_K_M@0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0"
+      ],
+      "model_origin_message_count": 4,
+      "model_proposal": "accepted",
+      "plan_proposal_model": "qwen3:4b-instruct-2507-q4_K_M",
+      "planning_ms": 3.07,
+      "provider": "ollama",
+      "queue_ms": 31.68,
+      "review_call_count": 1,
+      "review_ms": 12.06,
+      "review_ms_total": 11715.41,
+      "review_statuses": [
+        "ok"
+      ],
+      "review_unavailable_count": 0,
+      "run_id": "atlas_42fce693ea8045e5adee3357d9343fb3",
+      "state": "completed",
+      "synthesis_review_ms": null,
+      "synthesis_review_status": null,
+      "tool_ms": 1133.96,
+      "tool_reported_ms": 1125,
+      "total_ms": 13951.68
+    },
+    {
+      "dataset_id": "ds_f8392d0a1adf4a25b2cf6ed8749890a7",
+      "execution_ref": "run_727de5e54d294e4f819b9d1d361a41ed",
+      "kind": "sql",
+      "model_bindings_used": [
+        "qwen3:4b-instruct-2507-q4_K_M@0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0"
+      ],
+      "model_origin_message_count": 2,
+      "model_proposal": "accepted",
+      "plan_proposal_model": "qwen3:4b-instruct-2507-q4_K_M",
+      "planning_ms": 3.11,
+      "provider": "ollama",
+      "queue_ms": 13.92,
+      "review_call_count": 1,
+      "review_ms": 13.03,
+      "review_ms_total": 11439.38,
+      "review_statuses": [
+        "ok"
+      ],
+      "review_unavailable_count": 0,
+      "run_id": "atlas_3febe6a2dcdd4b5e8da78e81e5480706",
+      "state": "completed",
+      "synthesis_review_ms": null,
+      "synthesis_review_status": null,
+      "tool_ms": 45.2,
+      "tool_reported_ms": 8,
+      "total_ms": 12491.57
+    },
+    {
+      "dataset_id": "ds_0f53bfb38a8c447aaef85c52d28e2622",
+      "execution_ref": "stats_79868703794444f3bd02f401eebc1b57",
+      "kind": "stat",
+      "model_bindings_used": [
+        "qwen3:4b-instruct-2507-q4_K_M@0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0"
+      ],
+      "model_origin_message_count": 3,
+      "model_proposal": "accepted",
+      "plan_proposal_model": "qwen3:4b-instruct-2507-q4_K_M",
+      "planning_ms": 8.24,
+      "provider": "ollama",
+      "queue_ms": 35.01,
+      "review_call_count": 1,
+      "review_ms": 12.6,
+      "review_ms_total": 11774.38,
+      "review_statuses": [
+        "ok"
+      ],
+      "review_unavailable_count": 0,
+      "run_id": "atlas_6696a20ed36b4dbea364cf835ed980f0",
+      "state": "completed",
+      "synthesis_review_ms": null,
+      "synthesis_review_status": null,
+      "tool_ms": 1261.51,
+      "tool_reported_ms": 1250,
+      "total_ms": 14240.97
+    },
+    {
+      "dataset_id": "ds_f8392d0a1adf4a25b2cf6ed8749890a7",
+      "execution_ref": "run_8885f5497c7c4e8b850f26f5f2d9c8af",
+      "kind": "sql",
+      "model_bindings_used": [
+        "qwen3:4b-instruct-2507-q4_K_M@0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0"
+      ],
+      "model_origin_message_count": 3,
+      "model_proposal": "accepted",
+      "plan_proposal_model": "qwen3:4b-instruct-2507-q4_K_M",
+      "planning_ms": 6.77,
+      "provider": "ollama",
+      "queue_ms": 31.79,
+      "review_call_count": 1,
+      "review_ms": 11.68,
+      "review_ms_total": 9681.28,
+      "review_statuses": [
+        "ok"
+      ],
+      "review_unavailable_count": 0,
+      "run_id": "atlas_bb6859cc453c418993ede8848f451751",
+      "state": "completed",
+      "synthesis_review_ms": null,
+      "synthesis_review_status": null,
+      "tool_ms": 45.87,
+      "tool_reported_ms": 9,
+      "total_ms": 10791.0
+    },
+    {
+      "dataset_id": "ds_0f53bfb38a8c447aaef85c52d28e2622",
+      "execution_ref": "stats_d106794960974df1a0367ca3c8821e71",
+      "kind": "stat",
+      "model_bindings_used": [
+        "qwen3:4b-instruct-2507-q4_K_M@0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0"
+      ],
+      "model_origin_message_count": 3,
+      "model_proposal": "accepted",
+      "plan_proposal_model": "qwen3:4b-instruct-2507-q4_K_M",
+      "planning_ms": 3.75,
+      "provider": "ollama",
+      "queue_ms": 19.11,
+      "review_call_count": 1,
+      "review_ms": 16.44,
+      "review_ms_total": 11820.4,
+      "review_statuses": [
+        "ok"
+      ],
+      "review_unavailable_count": 0,
+      "run_id": "atlas_f589047b09594363a931186f31ac25d7",
+      "state": "completed",
+      "synthesis_review_ms": null,
+      "synthesis_review_status": null,
+      "tool_ms": 1141.21,
+      "tool_reported_ms": 1125,
+      "total_ms": 14073.34
+    },
+    {
+      "dataset_id": "ds_f8392d0a1adf4a25b2cf6ed8749890a7",
+      "execution_ref": "run_6c88f09d417e432eb4f2a5b836cbb8d1",
+      "kind": "sql",
+      "model_bindings_used": [
+        "qwen3:4b-instruct-2507-q4_K_M@0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0"
+      ],
+      "model_origin_message_count": 2,
+      "model_proposal": "accepted",
+      "plan_proposal_model": "qwen3:4b-instruct-2507-q4_K_M",
+      "planning_ms": 8.19,
+      "provider": "ollama",
+      "queue_ms": 20.73,
+      "review_call_count": 1,
+      "review_ms": 17.66,
+      "review_ms_total": 8255.65,
+      "review_statuses": [
+        "ok"
+      ],
+      "review_unavailable_count": 0,
+      "run_id": "atlas_45e16ab239e943fca4da22a0324c7234",
+      "state": "completed",
+      "synthesis_review_ms": null,
+      "synthesis_review_status": null,
+      "tool_ms": 46.25,
+      "tool_reported_ms": 10,
+      "total_ms": 9388.16
+    },
+    {
+      "dataset_id": "ds_0f53bfb38a8c447aaef85c52d28e2622",
+      "execution_ref": "stats_d210c4ffa78f4b33bcc1e79190640ee0",
+      "kind": "stat",
+      "model_bindings_used": [
+        "qwen3:4b-instruct-2507-q4_K_M@0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0"
+      ],
+      "model_origin_message_count": 3,
+      "model_proposal": "accepted",
+      "plan_proposal_model": "qwen3:4b-instruct-2507-q4_K_M",
+      "planning_ms": 5.69,
+      "provider": "ollama",
+      "queue_ms": 45.05,
+      "review_call_count": 1,
+      "review_ms": 14.31,
+      "review_ms_total": 10698.76,
+      "review_statuses": [
+        "ok"
+      ],
+      "review_unavailable_count": 0,
+      "run_id": "atlas_879c93ceb89a44b6997a1610921cb479",
+      "state": "completed",
+      "synthesis_review_ms": null,
+      "synthesis_review_status": null,
+      "tool_ms": 1164.74,
+      "tool_reported_ms": 1156,
+      "total_ms": 13000.4
+    }
+  ],
+  "specialist_review_enabled": true,
+  "tool_ms_p50": 46.5,
+  "total_max_ms": 14933.41,
+  "total_mean_ms": 11957.24,
+  "total_p50_ms": 11908.52,
+  "total_p95_ms": 14240.97,
+  "warmup_runs_excluded": 2
+}
