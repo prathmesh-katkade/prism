@@ -1,57 +1,110 @@
 # PRISM Atlas first-release acceptance status
 
-Status: **implemented locally and verified for the bounded desktop workflow; release acceptance remains open**.
-Evidence captured and independently re-verified 2026-10-01 through 2026-10-02 on `atlas/production-investigation-v1`
-(HEAD `9dc031e2502961abec9e9e04b94d392a280a76c6` plus the uncommitted checkpoint described below).
+Status: **implemented and verified for the bounded local desktop workflow, including bounded specialist
+model review; release acceptance remains open pending hosted-deployment verification only.**
+Evidence captured 2026-10-01 through 2026-10-02 on `atlas/production-investigation-v1`, HEAD `16356d0`.
+`origin/main` is unchanged at `02264f0` throughout this work; no merge, tag, or PR was created.
 
 ## Delivered workflow
 
-The implemented path accepts a registered CSV/Excel dataset and objective, creates a validated plan, profiles the data, runs a server-compiled read-only SQL aggregate or a supported typed statistical procedure, records specialist contributions and evidence, and presents the result in the existing PRISM investigation view. SQL aggregation supports a declared two-source inner join with checked keys/cardinality/dtype and reports matched/excluded row counts in both evidence and the answer text. The exact recorded SQL and parameters can be inspected and opened as a SQL Lab draft; edits remain drafts. The UI keeps PRISM navigation, tabs, and shared inspector. Clarification questions persist as waiting runs, survive a store restart, and resume from completed work after an answer. Cancellation, stale dataset revisions, profile-only mode, per-tool disable, timeout, and interrupted tasks have explicit handling and tests.
+The implemented path accepts a registered CSV/Excel dataset and objective, creates a validated plan,
+profiles the data, runs a server-compiled read-only SQL aggregate or a supported typed statistical
+procedure, and presents the result in the existing PRISM investigation view. SQL aggregation supports a
+declared two-source inner join with checked keys/cardinality/dtype and reports matched/excluded row
+counts. The exact recorded SQL and parameters can be inspected and opened as a SQL Lab draft; edits
+remain drafts. Clarification questions persist as waiting runs, survive a store restart, and resume from
+completed work after an answer. Cancellation, stale dataset revisions, profile-only mode, per-tool
+disable, timeout, and interrupted tasks have explicit handling and tests.
 
-Atlas SQL is generated from typed inputs and server-resolved registered sources; model-authored SQL is not executed. Identifiers are schema-checked and quoted, values are bound, the SQL service enforces read-only execution and bounded output/runtime, and external file/network access is disabled at the engine boundary. Prompt-shaped uploaded values and SQL-shaped uploaded identifiers remain quoted data — directly re-verified this round with a dedicated adversarial test (`test_uploaded_sql_instructions_remain_quoted_data_and_cannot_select_operations`). Atlas cannot dispatch mutations through this adapter.
+Atlas SQL is generated from typed inputs and server-resolved registered sources; model-authored SQL is
+never executed. Identifiers are schema-checked and quoted, values are bound, the SQL service enforces
+read-only execution and bounded output/runtime, and external file/network access is disabled at the
+engine boundary. Prompt-shaped uploaded values and SQL-shaped uploaded identifiers remain quoted data.
+The declared procedures are Welch two-sample t test, one-way ANOVA, chi-square independence, and Pearson
+correlation. Causal attribution, ML, forecasting, arbitrary Python, and unrestricted research remain
+outside this release and are refused/unavailable.
 
-The declared procedures are Welch two-sample t test, one-way ANOVA, chi-square independence, and Pearson correlation, backed by PRISM's tested statistical services. Requests without required columns/design details pause for a targeted question. Causal attribution, ML, forecasting, arbitrary Python, and unrestricted research remain outside this release and are refused/unavailable in the Atlas workflow.
+### Deterministic computation vs. model review (new this phase)
+
+**Deterministic service outputs remain the sole authority for every number, p-value, SQL result row, and
+join accounting figure.** Nothing a model says can change `answer`, `uncertainty`, a result row, or an
+evidence record. On top of that unchanged deterministic layer, Atlas now optionally adds bounded,
+schema-validated model review contributions (`apps/api/src/prism_api/atlas_runtime.py`):
+
+- **Query/Stat** interpret the just-computed deterministic result.
+- **Auditor** reviews any model-origin *proposal* claims specifically (not the deterministic record)
+  against the same bounded evidence set and may raise objections.
+- **Atlas** attempts one additional, best-effort, non-blocking synthesis review after the run is already
+  durably completed, so the deterministic answer never waits on it.
+
+Every review call resolves the durably promoted production Ollama binding and live-verifies its exact
+digest against the Ollama daemon before it is used; if that binding cannot be verified right now, review
+is not attempted at all (fail closed, never a silent fallback to another tag). Each call is schema-
+constrained (`REVIEW_RESPONSE_SCHEMA`) to cite only `evidence_ids` from the bounded set it was given; the
+caller independently filters out any claim/objection citing an id outside that set before persisting
+anything. A timeout, invalid/malformed response, ungrounded response, or unverifiable binding is recorded
+as a visible `review_unavailable` message (`origin: "deterministic_service"`) — never fabricated. A
+grounded contribution is persisted with `origin: "model"` and an explicit `model_binding` (`tag@digest`).
+Review calls are strictly sequential (one in-flight at a time); the existing model-concurrency evidence is
+the basis for keeping it that way. No role is required to speak on every run.
 
 ## Frozen acceptance matrix
 
-The workflow acceptance matrix (`08-frozen-workflow-acceptance.md`) was frozen and committed on 2026-09-28 in `4300beb`, **before** any warm end-to-end p95 measurement existed. It is not re-frozen here; this document reports measurements taken against that already-frozen matrix, re-executed in this session rather than merely cited from an earlier run.
+Unchanged from the prior checkpoint: frozen and committed 2026-09-28 in `4300beb`, before any warm
+end-to-end measurement existed. Not re-frozen here.
 
-## Acceptance evidence (freshly re-executed this session unless noted)
+## Acceptance evidence
 
 | Area | Result and retained evidence |
 |---|---|
-| Full Python suite (`pytest -q`, entire `tests/` tree) | `1226 passed, 7 skipped, 43 warnings` (1233 collected); raw: `verification/final-python-full-suite.txt`. This is the whole test tree, broader than the gate subset specified in the runbook below. |
-| Specified focused gate subset (`tests/api tests/contracts tests/migration tests/overview tests/sql_lab`) | `616 passed, 7 skipped, 30 warnings`. This is the exact figure the prior checkpoint reported; it was mislabelled there as "Full Python gate" — it is the named subset, not the whole tree. Both runs pass cleanly; no discrepancy in outcome, only in the original label. |
-| Web unit | 86 passed across 16 files; `verification/final-webunit.txt`. |
-| Live browser (`test:e2e:live`), fresh run this session | 15 passed across desktop and mobile projects against a real uvicorn + Next.js pair; raw: `verification/final-live.txt`. The right-edge overflow regression test was additionally repeated 20× on **both** the desktop and mobile live projects (40 runs total) and passed 40/40, confirming the CSS grid fix (`apps/web/app/prism.css`: `.inspector-data` min-width/overflow-wrap rules) under repetition; raw: `verification/overflow-grid-repeat20.txt`. The earlier failing run that motivated the fix and its diagnosis remain retained in `verification/final-live-rerun.txt` and `verification/overflow-diagnostic.txt`. |
-| Frontend gates | `npm run lint`, `npm run typecheck`, and `npm run build:web` all passed clean (no warnings, no errors). |
-| Python quality gates | Ruff: `All checks passed!` across API, packages, tools, and tests. mypy: `Success: no issues found in 90 source files` (strict, `--follow-imports=skip --allow-subclassing-any --allow-untyped-decorators --no-warn-return-any`). |
-| Repository gates | `tools/check_boundaries.py`: passed. `tools/check_secrets.py`: passed. `tools/generate_typescript_contracts.py --check`: passed (no diff). |
-| Typed execution and security | Independent join fixture gives east=7 and west=15. A fourth unmatched sales row is explicitly excluded and counted (`join_input_rows`/`join_matched_rows`/`join_excluded_rows` = 4/3/1, asserted in `test_declared_many_to_one_join_preserves_left_measure_grain`). Duplicate dimension keys, mismatched join-key dtypes, and SQL/prompt-shaped uploaded identifiers and cell values all fail closed or remain quoted data — covered by `tests/api/test_atlas_sql_adapter.py`, all passing as part of the full suite above. Browser proof: `verification/atlas-join-evidence.png` and `atlas-join-workflow.webm` (both re-captured this checkpoint). |
-| Waiting, restart, cancellation | `test_stat_question_survives_restart_and_resumes_without_reprofiling` verifies persisted waiting state and resumes without repeating profile work (part of the passing full suite). The real API startup driver was independently re-inspected this session via the retained `disposable-startup-result.json`: `backup_sha256_before == backup_sha256_after` and the promotion pointer is byte-identical across both starts (`basemodel_585b7e79e9f195024a57dc9a`), `dataset_revision_after_restart = 0`. Raw: `verification/disposable-startup-result.json`. |
-| Kill switch | Profile-only/per-tool disable tests prove a disabled SQL tool is not newly dispatched while completed profile evidence remains, covered by the passing `tests/api/test_atlas_sql_adapter.py` suite. |
-| Warm latency (default dev model `qwen2.5:3b`, no `PRISM_ATLAS_OLLAMA_MODEL` override) | **Freshly rerun this session** against a new disposable copy of the preserved backup: 20 sequential Ollama-backed runs (10 SQL aggregations, 10 Pearson tests) after 2 excluded warmups. p50 762.73 ms; nearest-rank p95 1,916.14 ms; max 1,975.28 ms. All numerical fixture checks passed; backup hash and promotion pointer unchanged. Raw: `verification/model-warm-rerun/warm-workflow-result.json`. A prior capture of the identical fixture in this same checkout recorded p50 9,276.23 ms / p95 12,547.23 ms / max 14,577.38 ms (`verification/model-warm/`) — the ~10× gap traces to a single ~5.1 s model-load event inside the (excluded) warmup window in the fast run versus apparent repeated reload/contention in the slower one; this is a shared-desktop-GPU warm-state effect, not a code change between runs. Both results clear the proposed 60 s p95 target by a wide margin. |
-| Cold startup | One fresh API process on a disposable backup copy reached readiness in 3,552.67 ms (n=1), reported separately from warm p95; promotion pointer matched the production-pointer readout exactly. Raw: `verification/cold-start/cold-start-result.json` (not rerun this session; internal consistency re-checked against the independently reproduced production-pointer values). |
-| Model concurrency | Re-verified by direct inspection this session (not rerun, to avoid unnecessary GPU load): four real model-backed SQL/stat requests (actual promoted production-tier model `qwen3:4b-instruct-2507-q4_K_M`, copied fast pointer) at one worker took 37,285.87 ms wall time; two workers took 35,646.38 ms (4.4% lower). 4/4 succeeded both ways, 0 errors. GPU peaked 99%/6,688 MiB serial vs 100%/6,752 MiB parallel. Hardware saturates and per-task latency still rises under concurrency, so parallel dispatch remains disabled. Raw: `verification/model-concurrency-result.json`. |
-| Production pointer | Direct read-only SQLite inspection (re-confirmed this session): `integrity_check=ok`, fast pointer `basemodel_585b7e79e9f195024a57dc9a`, rollback candidate `production_env_e77dbfc3de7584a8c502a6f8`, 2 promotion events, no deep pointer, path `C:\Users\Admin\source\repos\prism\apps\api\.prism\runtime\analytical-history.sqlite`. No production database test, promotion, rollback, or pointer mutation was performed; that checkout was left untouched. Raw: `verification/production-pointer-readonly.txt`. |
+| Full Python suite (`pytest -q`, entire `tests/` tree) | `1231 passed, 7 skipped` (1238 collected); raw: `verification/final-python-full-suite.txt`. +5 over the prior checkpoint for the new specialist-review tests. |
+| Specified focused gate subset (`tests/api tests/contracts tests/migration tests/overview tests/sql_lab`) | `621 passed, 7 skipped`; raw: `verification/final-python.txt`. |
+| Specialist review unit tests (`tests/api/test_atlas_specialist_review.py`) | 5/5: distinct grounded contributions with a real unsupported-claim challenge, timeout, malformed response, hallucinated-evidence-reference rejection, and an unverifiable production binding all handled correctly — covered inside the full suite above. |
+| Web unit | 87 passed across 16 files; raw: `verification/final-webunit.txt`. +1 for the model-origin/`review_unavailable` collaboration-view rendering test. |
+| Accessibility baseline (`npm run a11y:baseline`) | Passed — a CI gate not previously run locally in this branch's checkpoints. |
+| Frontend gates | `npm run lint`, `npm run typecheck`, `npm run build:web` all passed clean. |
+| Python quality gates | Ruff: all checks passed. mypy: no issues in 90 source files (strict). |
+| Repository gates | `check_boundaries.py`, `check_secrets.py`, `generate_typescript_contracts.py --check` all passed. |
+| Live browser (SQLite history, default gate) | 15 passed, 1 skipped (the new real-model recording spec, which only runs with `PRISM_AI_PROVIDER=ollama`); raw: `verification/final-live.txt`. Overflow regression repeated 20× on both desktop and mobile projects (40/40); raw: `verification/overflow-grid-repeat20.txt`. |
+| **Real MySQL integration gate** | **Now run for real**, not blocked. With explicit user approval, installed MySQL Community Server 8.4.9 via winget and ran it as a disposable standalone process (own scratch data directory, not a Windows service) bound to `127.0.0.1:3306`, mirroring `.github/workflows/ci.yml`'s `phase-4-live-e2e` job exactly (`prism_phase4`/`prism_history` databases, same seeded `sales` table). `tests/sql_lab/test_mysql_connector_parity.py` + `test_durable_registry.py` + `test_atlas_promotion.py`: **31/31 passed** against the live MySQL connector and a MySQL-backed durable history store (not SQLite, not mocked); raw: `verification/mysql-parity-gate.txt`. Full live Playwright suite with history backed by that same MySQL instance: **15/15 passed**; raw: `verification/mysql-backed-live-e2e.txt`. No production data was touched. |
+| Phase 1: real isolated specialist-review investigation | `tools/verify_atlas_specialist_review.py` — real SQL and Stat investigations through the live-verified production model (`qwen3:4b-instruct-2507-q4_K_M`) against a disposable copy of the preserved backup, restarted once, with every persisted message (deterministic and model-origin alike) confirmed byte-identical before/after restart. Backup hash and promotion pointer unchanged; raw: `verification/specialist-review/specialist-review-result.json`. The real model genuinely challenged the deterministic conclusion's unsupported framing in multiple runs (e.g. "the declared evidence does not contain the actual query text or result data") — not a scripted fixture. |
+| Phase 2: production-model warm performance (**supersedes the dev-model number for latency acceptance**) | `tools/benchmark_atlas_production_warm_workflow.py`: resolved and live-verified `qwen3:4b-instruct-2507-q4_K_M` before launch, pinned it for every model call (plan proposal and every review alike — confirmed via `models_used_for_plan_proposal` and `model_bindings_used_for_review`, both single-valued), with specialist review enabled throughout. 20/20 correct warm runs; p50 **11,908.52 ms**; nearest-rank p95 **14,240.97 ms**; max **14,933.41 ms** — well under the 60 s target. Cold start 2,200.54 ms (n=1, separate). 0 `review_unavailable` outcomes across all 20 runs; 59 model-origin messages persisted. GPU peaked 4,672 MiB / 97% utilization (actual `nvidia-smi` telemetry, not inferred). Backup hash and promotion pointer unchanged. Raw: `verification/production-warm/production-warm-workflow-result.json`. |
+| Prior dev-model warm measurement (retained, historical, **not superseded**) | `qwen2.5:3b`, no specialist review (predates this phase): p50 762.73–9,276.23 ms across two captures on this shared desktop (GPU/model warm-state variance, documented). Raw: `verification/model-warm/`, `verification/model-warm-rerun/`. Kept as historical evidence per instruction, not representative of current production latency. |
+| Model concurrency (historical, unchanged) | 1 worker 37,285.87 ms vs 2 workers 35,646.38 ms wall time; mean per-task latency rises under concurrency; GPU saturates. Parallel dispatch remains disabled — this decision is unchanged and was not re-litigated this phase. Raw: `verification/model-concurrency-result.json`. |
+| Real workflow recording | `apps/web/e2e-live/atlas-specialist-review-workflow-live.spec.ts` (skipped unless `PRISM_AI_PROVIDER=ollama`): a genuine real investigation showing (1) the deterministic SQL computation, (2) a real persisted model-origin specialist contribution, (3) evidence inspection, (4) the exact-query SQL Lab handoff. Screenshots `verification/specialist-review-0{1..4}-*.png`, recording `verification/specialist-review-workflow.webm`. This recording used the scratch dev database's unpromoted fallback model (`qwen2.5:3b`; that database has no promotion pointer); the production-pointer-verified `qwen3:4b-instruct-2507-q4_K_M` binding is what Phase 1/2's tools above actually exercise. |
+| Local startup and restart | Explicit absolute SQLite history URL + disposable backup copy + (for the two tools above) the live-verified production-model binding + durable investigation records across a real process restart + unchanged copied promotion history — all proven by `tools/verify_atlas_disposable_startup.py` (waiting/resumption specifically) and `tools/verify_atlas_specialist_review.py` (production-model binding specifically) in combination; both launch a genuine second `uvicorn` process, not just store construction. UI/API connection is proven separately by the live Playwright suite (not within the same restart cycle as the API-level proof). |
+| CI status | Checked via the GitHub REST API (no `gh`), not the browser: `GET /repos/.../actions/runs?branch=atlas/production-investigation-v1` returns `total_count: 0`. This is not a failure — `.github/workflows/ci.yml` triggers only on `push: branches: [main]` and `pull_request`; this branch has received neither, by instruction. The repo's CI is otherwise active (246 total runs across the repo; most recent `main` run: `failure`, unrelated to this branch). All CI job-equivalent commands were run locally instead, including the MySQL and accessibility-baseline jobs this checkpoint newly covers; see the rows above. |
+| Production pointer | Re-confirmed unchanged and untouched this phase: `integrity_check=ok`, fast pointer `basemodel_585b7e79e9f195024a57dc9a`, rollback candidate `production_env_e77dbfc3de7584a8c502a6f8`, 2 promotion events, no deep pointer. The canonical checkout at `C:\Users\Admin\source\repos\prism` was never written to (read-only `git status` only). |
 
-The Ollama-backed warm runs contain actual recorded executions, including SQL run `run_47c12354790e4f14966c7d35f67bb9c5` in Atlas run `atlas_7335b91eb7bd453f9caf731677dfb3ca` and Pearson execution `stats_85044a1fa8604873afb9aca7d797c407` in Atlas run `atlas_28ff6f040f554b68ba4df53f8d65f124` (prior capture), and SQL run `run_44036a5701a94fe2a0a6d063585ed8dc` / Pearson execution `stats_3fb5016615dc4b79b4fd5139f9c0f84d` (this session's rerun). These are disposable-copy test records, not production history.
+## Artifact reconciliation (this phase)
 
-## Implementation audit against first-release scope (item 3)
-
-A targeted search for unresolved markers in the Atlas runtime, SQL adapter, and SQL Lab runtime packages found none relevant to this release (the only `not implemented` markers are in the unrelated Foundry model-training backend, out of scope here). Test collection across `tests/api` confirms existing, passing coverage for each named concern: authorization failing closed (`test_unauthorized_principal_is_403`, `test_unauthorized_destructive_action_is_critical_without_confirmation`), bounded scheduler/idempotent retry (`test_atlas_foundry_orchestration.py`, `test_atlas_base_model_trust.py`, `test_atlas_corpus_v2_synthetic.py`), refusal placement and evidence scoping fail-closed (`test_atlas_guardrails.py`), evidence links remaining harness-owned rather than bare model claims (`test_atlas_operational_live.py`), and SQL Lab draft immutability (`test_ai_sql_draft_round_trips_only_through_sql_lab_and_back_as_evidence`, `test_ai_sql_draft_rejects_hallucinated_schema_identifiers`). No functional gap requiring new code was found beyond what is already in the uncommitted checkpoint described below; durable execution identity and event chronology are exercised throughout the full suite via `durable_atlas_store` and the event-ordered assertions in `test_atlas_runtime.py` and related files.
+Running the full live/artifacts suite repeatedly regenerates several pre-existing, intentionally-committed
+screenshots/recordings in `docs/atlas/investigation-collaboration/` and
+`docs/atlas/production-investigation-v1/verification/atlas-{sql,join,stat}-*`, plus `apps/web/next-env.d.ts`
+(an auto-managed Next.js file). These are a known side effect of that test design (it captures current
+screenshots as evidence every time it runs), not a defect. Each time this happened, the regenerated bytes
+were archived to the session scratchpad first, then the tracked files were restored to their last
+intentionally-committed version via path-scoped `git checkout --`, so no incidental re-capture noise was
+committed. Nothing was staged with a broad `reset`/`clean`.
 
 ## Startup, backup, and rollback boundary
 
-For local desktop startup, set `PRISM_ANALYTICAL_HISTORY_DATABASE_URL` to an explicit absolute SQLite URL and launch the supported PRISM checkout with `--env-file apps/api/.env`. Hosted deployment must use its configured managed database URL with `PRISM_REQUIRE_DURABLE_HISTORY=true`; hosted deployment is a separate environment. Full startup instructions and observed evidence are in `05-runtime-database-and-launch-boundary.md` and `apps/api/README.md`.
-
-The source database backup is local and excluded from Git at `backups/analytical-history-20260928T065043Z.sqlite`; its SHA-256, recomputed directly against the file in this session, is `03bbc35cb97e84abc1a92d54a9f5fbeb3592d5b208c6d0c01d397afddfcc6afc` — this matches the hash recorded independently inside both `verification/model-warm-rerun/warm-workflow-result.json` and `verification/disposable-startup-result.json`. It remains unchanged after every test run performed this session. Startup and migration testing used disposable copies. Rollback has not been executed; doing so appends a promotion event and requires a separate instruction.
+Unchanged from the prior checkpoint. Backup `backups/analytical-history-20260928T065043Z.sqlite`,
+SHA-256 `03bbc35cb97e84abc1a92d54a9f5fbeb3592d5b208c6d0c01d397afddfcc6afc`, confirmed unchanged after every
+test run this phase, including the production-model benchmark and the real specialist-review investigation.
 
 ## Remaining acceptance blockers
 
-- The real MySQL integration gate could not run on this host, reconfirmed this session: `PRISM_PHASE4_MYSQL_URL` is unset, `docker` and `mysqld` are not on `PATH`, and nothing listens on port 3306. The recorded prior local result is not represented as a current MySQL run.
-- Hosted managed-database deployment, hosted authentication/authorization, and hosted restart behavior have not been exercised. Local desktop production and hosted deployment must not be conflated.
-- The full frozen acceptance matrix spans SQL aggregation/join grain, supported statistics, missing-input resumption, unsupported causal requests, prompt injection/prohibited operations, stale evidence, cancellation/timeout/restart, idempotent retry, tool-disable recovery, specialist provenance, exact-query handoff, and desktop/mobile accessibility. Local suite coverage and results are recorded above; real hosted and MySQL gates remain open.
-- No GitHub workflow run was found for this branch in the prior handoff audit; this session did not invoke `gh` (excluded by instruction) and cannot independently confirm remote CI status. These results are local verification, not remote CI.
+- **Hosted deployment, hosted authentication/authorization, and hosted restart behavior remain
+  unverified and are explicitly out of scope for this local desktop release.** This is the only
+  remaining category of unverified work.
+- No GitHub workflow run exists for this branch, by the repository's own CI trigger configuration
+  (`push: branches: [main]` + `pull_request`) combined with the instruction not to open a PR — not a
+  defect in this work. Local gate-equivalents for every CI job were run and are recorded above.
+- The MySQL instance used for the real integration gate is a disposable local test instance (installed
+  with explicit approval), not the supported hosted managed database; hosted MySQL/managed-database
+  behavior is still unverified, consistent with the hosted-deployment blocker above.
 
-The raw verification output is retained under `verification/`. The sample investigation remains separately labelled from live runs. No GitHub CLI, PR creation, merge, or tag was used. The feature branch is pushed; create/pull link: <https://github.com/prathmesh-katkade/prism/pull/new/atlas/production-investigation-v1>.
+The raw verification output is retained under `verification/`. No GitHub CLI, PR creation, merge, or tag
+was used. The feature branch is pushed; create/pull link:
+<https://github.com/prathmesh-katkade/prism/pull/new/atlas/production-investigation-v1>.
