@@ -506,6 +506,56 @@ class CleanUndoRequest(ContractModel):
     to_revision: int = Field(ge=0)
 
 
+class CleanRecipeStep(ContractModel):
+    """The response/output shape of one recipe step. A distinct
+    CleanRecipeStepUpdate exists for the update request body: FastAPI generates
+    separate "-Input"/"-Output" OpenAPI component schemas (an invalid TypeScript
+    identifier once emitted verbatim) for any single model class referenced from
+    both a request body and a response body, so the two contexts get their own
+    classes instead of sharing this one."""
+
+    step_id: str = Field(min_length=1)
+    request: CleanTransformationRequest
+    enabled: bool
+
+
+class CleanRecipeStepInput(ContractModel):
+    request: CleanTransformationRequest
+    enabled: bool = True
+
+
+class CleanRecipeStepUpdate(ContractModel):
+    step_id: str = Field(min_length=1)
+    request: CleanTransformationRequest
+    enabled: bool
+
+
+class CleanRecipeCreateRequest(ContractModel):
+    name: str = Field(min_length=1, max_length=200)
+    steps: list[CleanRecipeStepInput] = Field(default_factory=list)
+
+
+class CleanRecipeStepsUpdateRequest(ContractModel):
+    steps: list[CleanRecipeStepUpdate] = Field(min_length=1)
+
+
+class CleanRecipe(ContractModel):
+    recipe_id: str = Field(min_length=1)
+    name: str = Field(min_length=1)
+    version: int = Field(ge=1)
+    steps: list[CleanRecipeStep]
+    created_at: datetime
+
+
+class CleanRecipeApplyResponse(ContractModel):
+    dataset: OverviewDataset
+    recipe_id: str
+    recipe_version: int
+    applied_steps: list[CleanTransformation]
+    issues: list[CleanIssue]
+    health: OverviewHealth
+
+
 class AtlasCleanAction(str, Enum):
     EXPLAIN_ISSUE = "explain_issue"
     PROPOSE_FIX = "propose_fix"

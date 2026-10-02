@@ -1329,6 +1329,49 @@ export interface CleanPreviewResponse {
   projected_health: OverviewHealth;
 }
 
+export interface CleanRecipe {
+  recipe_id: string;
+  name: string;
+  version: number;
+  steps: CleanRecipeStep[];
+  created_at: string;
+}
+
+export interface CleanRecipeApplyResponse {
+  dataset: OverviewDataset;
+  recipe_id: string;
+  recipe_version: number;
+  applied_steps: CleanTransformation[];
+  issues: CleanIssue[];
+  health: OverviewHealth;
+}
+
+export interface CleanRecipeCreateRequest {
+  name: string;
+  steps?: CleanRecipeStepInput[];
+}
+
+export interface CleanRecipeStep {
+  step_id: string;
+  request: CleanTransformationRequest;
+  enabled: boolean;
+}
+
+export interface CleanRecipeStepInput {
+  request: CleanTransformationRequest;
+  enabled?: boolean;
+}
+
+export interface CleanRecipeStepUpdate {
+  step_id: string;
+  request: CleanTransformationRequest;
+  enabled: boolean;
+}
+
+export interface CleanRecipeStepsUpdateRequest {
+  steps: CleanRecipeStepUpdate[];
+}
+
 export interface CleanStateResponse {
   dataset: OverviewDataset;
   issues: CleanIssue[];

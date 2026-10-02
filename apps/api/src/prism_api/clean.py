@@ -29,6 +29,11 @@ from prism_api_contracts import (
     CleanIssueKind,
     CleanOperation,
     CleanPreviewResponse,
+    CleanRecipe,
+    CleanRecipeApplyResponse,
+    CleanRecipeCreateRequest,
+    CleanRecipeStep,
+    CleanRecipeStepsUpdateRequest,
     CleanStateResponse,
     CleanTransformation,
     CleanTransformationRequest,
@@ -39,6 +44,7 @@ from prism_api_contracts import (
 from prism_overview_analytics import build_overview
 
 from .analytical_objects import register_clean_transformation, registry
+from .durable_recipe_store import DurableRecipeStore
 from .overview import StoredDataset
 from .overview import store as overview_store
 
@@ -275,16 +281,23 @@ def preview_transformation(dataset_id: str, request: CleanTransformationRequest)
     )
 
 
-@router.post("/datasets/{dataset_id}/apply", response_model=CleanApplyResponse, status_code=status.HTTP_201_CREATED)
-def apply_transformation(dataset_id: str, request: CleanTransformationRequest) -> CleanApplyResponse:
+def _commit_operation(dataset_id: str, request: CleanTransformationRequest, extra_parameters: dict[str, Any] | None = None) -> CleanTransformation:
+    """Run and durably record one operation against a dataset's *current* revision.
+
+    Shared by the single-operation apply endpoint and recipe application, so both go
+    through the exact same validate → compute → append-revision → register path.
+    """
     stored = overview_store.get(dataset_id)
     source_revision = stored.dataset.revision
     updated, affected_rows, affected_columns, warnings = _apply_operation(stored.frame, request)
     fingerprint = _fingerprint(updated)
     dataset = overview_store.add_revision(dataset_id, updated, fingerprint)
+    parameters = request.model_dump(exclude={"operation", "column"}, exclude_none=True)
+    if extra_parameters:
+        parameters.update(extra_parameters)
     transformation = CleanTransformation(
         transformation_id=f"clean_{uuid.uuid4().hex}", operation=request.operation, column=request.column,
-        parameters=request.model_dump(exclude={"operation", "column"}, exclude_none=True),
+        parameters=parameters,
         affected_rows=affected_rows, affected_columns=affected_columns,
         source_revision=source_revision, resulting_revision=dataset.revision,
         source_fingerprint=stored.source_fingerprint, resulting_fingerprint=fingerprint,
@@ -301,7 +314,83 @@ def apply_transformation(dataset_id: str, request: CleanTransformationRequest) -
         # rather than an unhandled exception.
         overview_store.revert(dataset_id, source_revision)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Applying the transformation failed while recording its provenance; no change was made.") from error
-    return CleanApplyResponse(dataset=dataset, transformation=transformation, issues=detect_issues(updated), health=_health(updated))
+    return transformation
+
+
+@router.post("/datasets/{dataset_id}/apply", response_model=CleanApplyResponse, status_code=status.HTTP_201_CREATED)
+def apply_transformation(dataset_id: str, request: CleanTransformationRequest) -> CleanApplyResponse:
+    transformation = _commit_operation(dataset_id, request)
+    updated = overview_store.get(dataset_id)
+    return CleanApplyResponse(dataset=updated.dataset, transformation=transformation, issues=detect_issues(updated.frame), health=_health(updated.frame))
+
+
+recipes = DurableRecipeStore()
+
+
+@router.post("/recipes", response_model=CleanRecipe, status_code=status.HTTP_201_CREATED)
+def create_recipe(request: CleanRecipeCreateRequest) -> CleanRecipe:
+    steps = [CleanRecipeStep(step_id=f"step_{uuid.uuid4().hex}", request=item.request, enabled=item.enabled) for item in request.steps]
+    return recipes.create(request.name, steps)
+
+
+@router.get("/recipes", response_model=list[CleanRecipe])
+def list_recipes() -> list[CleanRecipe]:
+    return recipes.list_latest()
+
+
+@router.get("/recipes/{recipe_id}", response_model=CleanRecipe)
+def get_recipe(recipe_id: str) -> CleanRecipe:
+    return recipes.latest(recipe_id)
+
+
+@router.get("/recipes/{recipe_id}/versions", response_model=list[CleanRecipe])
+def get_recipe_versions(recipe_id: str) -> list[CleanRecipe]:
+    return recipes.versions(recipe_id)
+
+
+@router.put("/recipes/{recipe_id}/steps", response_model=CleanRecipe)
+def update_recipe_steps(recipe_id: str, request: CleanRecipeStepsUpdateRequest) -> CleanRecipe:
+    """Reordering, disabling, or editing steps creates a new version; prior versions —
+    and any analytical records produced by applying them — are never rewritten."""
+    steps = [CleanRecipeStep(step_id=item.step_id, request=item.request, enabled=item.enabled) for item in request.steps]
+    return recipes.new_version(recipe_id, steps)
+
+
+def _dry_run_recipe(frame: pd.DataFrame, steps: list[CleanRecipeStep]) -> None:
+    """Validate the whole enabled chain against the dataset's *current* schema before
+    committing anything. Raises on the first step that would fail, naming which step
+    and why, instead of applying a partial prefix or guessing a column mapping for a
+    schema the recipe no longer matches."""
+    working = frame
+    for index, step in enumerate(steps):
+        if not step.enabled:
+            continue
+        try:
+            working, _, _, _ = _apply_operation(working, step.request)
+        except HTTPException as error:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Recipe step {index + 1} ({step.request.operation.value} on {step.request.column or 'the dataset'}) no longer matches this dataset's schema: {error.detail}",
+            ) from error
+
+
+@router.post("/datasets/{dataset_id}/recipes/{recipe_id}/apply", response_model=CleanRecipeApplyResponse)
+def apply_recipe(dataset_id: str, recipe_id: str) -> CleanRecipeApplyResponse:
+    recipe = recipes.latest(recipe_id)
+    if not any(step.enabled for step in recipe.steps):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="This recipe has no enabled steps to apply.")
+    stored = overview_store.get(dataset_id)
+    _dry_run_recipe(stored.frame, recipe.steps)  # all-or-nothing: the whole chain is validated before any revision is written
+    applied: list[CleanTransformation] = []
+    for index, step in enumerate(recipe.steps):
+        if not step.enabled:
+            continue
+        applied.append(_commit_operation(
+            dataset_id, step.request,
+            extra_parameters={"recipe_id": recipe_id, "recipe_version": recipe.version, "recipe_step_index": index},
+        ))
+    updated = overview_store.get(dataset_id)
+    return CleanRecipeApplyResponse(dataset=updated.dataset, recipe_id=recipe_id, recipe_version=recipe.version, applied_steps=applied, issues=detect_issues(updated.frame), health=_health(updated.frame))
 
 
 @router.post("/datasets/{dataset_id}/undo", response_model=CleanStateResponse)

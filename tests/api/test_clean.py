@@ -189,6 +189,108 @@ def test_apply_reverts_the_revision_it_just_created_if_provenance_registration_f
     assert retried.json()["dataset"]["revision"] == 1
 
 
+def test_recipe_apply_runs_enabled_steps_in_order_and_skips_disabled_ones() -> None:
+    client = TestClient(create_app())
+    dataset_id = _dataset(client)
+
+    created = client.post("/api/v1/clean/recipes", json={
+        "name": "Standard cleanup",
+        "steps": [
+            {"request": {"operation": "drop_duplicates"}, "enabled": True},
+            {"request": {"operation": "trim_whitespace", "column": "label"}, "enabled": False},
+            {"request": {"operation": "fill_missing", "column": "revenue", "fill_strategy": "median"}, "enabled": True},
+        ],
+    })
+    assert created.status_code == 201
+    recipe = created.json()
+    assert recipe["version"] == 1
+    assert len(recipe["steps"]) == 3
+
+    applied = client.post(f"/api/v1/clean/datasets/{dataset_id}/recipes/{recipe['recipe_id']}/apply")
+    assert applied.status_code == 200
+    body = applied.json()
+    assert [step["operation"] for step in body["applied_steps"]] == ["drop_duplicates", "fill_missing"]  # the disabled trim step is skipped
+    assert body["dataset"]["row_count"] == 4  # one exact-duplicate row dropped; fill_missing changes values, not row count
+
+    state = client.get(f"/api/v1/clean/datasets/{dataset_id}/state").json()
+    assert [item["operation"] for item in state["history"]] == ["drop_duplicates", "fill_missing"]
+
+
+def test_recipe_apply_is_all_or_nothing_when_a_step_no_longer_matches_the_schema() -> None:
+    client = TestClient(create_app())
+    dataset_id = _dataset(client)
+
+    created = client.post("/api/v1/clean/recipes", json={
+        "name": "Drops a column that may not exist later",
+        "steps": [
+            {"request": {"operation": "drop_duplicates"}, "enabled": True},
+            {"request": {"operation": "drop_column", "column": "label"}, "enabled": True},
+            {"request": {"operation": "drop_column", "column": "label"}, "enabled": True},  # label is already gone by this point
+        ],
+    })
+    recipe = created.json()
+
+    response = client.post(f"/api/v1/clean/datasets/{dataset_id}/recipes/{recipe['recipe_id']}/apply")
+    assert response.status_code == 409
+    assert "Recipe step 3" in response.json()["detail"]
+    assert "label" in response.json()["detail"]
+
+    # All-or-nothing: no revision was committed, not even for the two valid steps before the mismatch.
+    state = client.get(f"/api/v1/clean/datasets/{dataset_id}/state").json()
+    assert state["dataset"]["revision"] == 0
+    assert state["history"] == []
+
+
+def test_recipe_editing_steps_creates_a_new_version_without_losing_history() -> None:
+    client = TestClient(create_app())
+    created = client.post("/api/v1/clean/recipes", json={"name": "Evolving recipe", "steps": [{"request": {"operation": "drop_duplicates"}, "enabled": True}]})
+    recipe_id = created.json()["recipe_id"]
+
+    updated = client.put(f"/api/v1/clean/recipes/{recipe_id}/steps", json={"steps": [
+        {"step_id": "s1", "request": {"operation": "drop_duplicates"}, "enabled": False},
+        {"step_id": "s2", "request": {"operation": "trim_whitespace", "column": "label"}, "enabled": True},
+    ]})
+    assert updated.status_code == 200
+    assert updated.json()["version"] == 2
+
+    versions = client.get(f"/api/v1/clean/recipes/{recipe_id}/versions").json()
+    assert [item["version"] for item in versions] == [1, 2]
+    assert versions[0]["steps"][0]["enabled"] is True  # version 1 is untouched by the version-2 edit
+
+    latest = client.get(f"/api/v1/clean/recipes/{recipe_id}").json()
+    assert latest["version"] == 2
+
+
+def test_recipe_apply_rejects_an_unknown_recipe_and_an_all_disabled_recipe() -> None:
+    client = TestClient(create_app())
+    dataset_id = _dataset(client)
+
+    missing = client.post(f"/api/v1/clean/datasets/{dataset_id}/recipes/recipe_does_not_exist/apply")
+    assert missing.status_code == 404
+
+    created = client.post("/api/v1/clean/recipes", json={"name": "Nothing enabled", "steps": [{"request": {"operation": "drop_duplicates"}, "enabled": False}]})
+    recipe_id = created.json()["recipe_id"]
+    response = client.post(f"/api/v1/clean/datasets/{dataset_id}/recipes/{recipe_id}/apply")
+    assert response.status_code == 422
+
+
+def test_recipes_persist_across_a_fresh_store_connection_not_just_in_process_memory() -> None:
+    """Same durability contract as dataset revisions and transformation history:
+    survives a fresh connection to the same database file, not a process-local cache."""
+    from prism_api.durable_recipe_store import DurableRecipeStore
+    from prism_api.durable_registry import history_database_url
+
+    client = TestClient(create_app())
+    created = client.post("/api/v1/clean/recipes", json={"name": "Durable recipe", "steps": [{"request": {"operation": "drop_duplicates"}, "enabled": True}]})
+    recipe_id = created.json()["recipe_id"]
+
+    fresh_store = DurableRecipeStore(history_database_url())
+    recovered = fresh_store.latest(recipe_id)
+    assert recovered.recipe_id == recipe_id
+    assert recovered.name == "Durable recipe"
+    assert recovered.version == 1
+
+
 def test_atlas_explains_an_issue_and_proposes_a_previewable_fix_without_applying_it() -> None:
     client = TestClient(create_app())
     dataset_id = _dataset(client)
