@@ -40,4 +40,25 @@ describe("Query Studio", () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/promote"), expect.objectContaining({ method: "POST" })));
     expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/api/v1/sql-lab/runs"), expect.objectContaining({ method: "POST" }));
   });
+
+  it("restores both the SQL and the saved parameters when a snippet is picked, not just the SQL", async () => {
+    const snippet = { snippet_id: "snip_1", name: "Top segments", sql: "SELECT * FROM data WHERE segment = :segment", dialect: "duckdb", parameters: { segment: "b" }, created_at: "2026-08-28T00:00:00Z" };
+    const fetchMock = vi.fn(async (input: string | URL) => {
+      const path = String(input);
+      const body = path.endsWith("/connections") ? [connection]
+        : path.endsWith("/snippets") ? [snippet]
+        : path.includes("/schema") ? schema
+        : path.endsWith("/history") ? []
+        : {};
+      return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<QueryStudio onSelectContext={vi.fn()} />);
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Top segments" })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Top segments" }));
+
+    await waitFor(() => expect(screen.getByLabelText("PRISM Query Studio editor")).toHaveValue(snippet.sql));
+    expect(screen.getByLabelText("Query parameters JSON")).toHaveValue(JSON.stringify(snippet.parameters, null, 2));
+  });
 });
