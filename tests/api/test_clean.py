@@ -291,6 +291,135 @@ def test_recipes_persist_across_a_fresh_store_connection_not_just_in_process_mem
     assert recovered.version == 1
 
 
+def test_category_mapping_renames_grouped_values_and_reports_unresolved_ones() -> None:
+    client = TestClient(create_app())
+    dataset_id = _dataset(client)
+    # segment values present: a(x2), b(x1), c(x1); "c" is deliberately left out of the mapping.
+    response = client.post(f"/api/v1/clean/datasets/{dataset_id}/apply", json={
+        "operation": "category_mapping", "column": "segment",
+        "category_mapping": {"a": "Alpha", "b": "Beta"},
+    })
+    assert response.status_code == 201
+    body = response.json()
+    assert body["transformation"]["affected_rows"] == 3  # 2 'a' rows + 1 'b' row
+
+    profile = client.get(f"/api/v1/overview/datasets/{dataset_id}/profile").json()
+    segment_column = next(c for c in profile["columns"] if c["name"] == "segment")
+    labels = {bucket["label"] for bucket in segment_column["distribution"]}
+    assert "Alpha" in labels and "Beta" in labels and "a" not in labels and "b" not in labels
+    assert "c" in labels  # unresolved values are preserved, never silently dropped
+
+
+def test_category_mapping_preview_reports_unresolved_values_explicitly() -> None:
+    client = TestClient(create_app())
+    dataset_id = _dataset(client)
+    preview = client.post(f"/api/v1/clean/datasets/{dataset_id}/preview", json={
+        "operation": "category_mapping", "column": "segment",
+        "category_mapping": {"a": "Alpha"},
+    })
+    assert preview.status_code == 200
+    body = preview.json()
+    assert body["unresolved_values"] == ["b", "c"] or sorted(body["unresolved_values"]) == ["b", "c"]
+    assert any("not covered" in warning for warning in body["warnings"])
+
+
+def test_category_mapping_case_insensitive_and_unmatched_values_can_be_cleared() -> None:
+    client = TestClient(create_app())
+    dataset_id = _dataset(client)
+    response = client.post(f"/api/v1/clean/datasets/{dataset_id}/apply", json={
+        "operation": "category_mapping", "column": "segment",
+        "category_mapping": {"A": "Alpha"}, "case_sensitive": False, "preserve_unmatched": False,
+    })
+    assert response.status_code == 201
+    # 2 'a' rows renamed (case-insensitive match) + 'b' and 'c' cleared to missing (preserve_unmatched=False) = 4
+    assert response.json()["transformation"]["affected_rows"] == 4
+
+
+def test_category_mapping_requires_a_mapping() -> None:
+    client = TestClient(create_app())
+    dataset_id = _dataset(client)
+    response = client.post(f"/api/v1/clean/datasets/{dataset_id}/apply", json={"operation": "category_mapping", "column": "segment"})
+    assert response.status_code == 422
+
+
+def test_get_column_values_returns_distinct_values_with_counts() -> None:
+    client = TestClient(create_app())
+    dataset_id = _dataset(client)
+    response = client.get(f"/api/v1/clean/datasets/{dataset_id}/columns/segment/values")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["column"] == "segment"
+    assert body["truncated"] is False
+    counts = {item["value"]: item["count"] for item in body["values"]}
+    assert counts == {"a": 2, "b": 1, "c": 1}  # the missing segment row is excluded, not counted as a phantom value
+
+
+def test_get_column_values_rejects_an_unknown_column() -> None:
+    client = TestClient(create_app())
+    dataset_id = _dataset(client)
+    response = client.get(f"/api/v1/clean/datasets/{dataset_id}/columns/not_real/values")
+    assert response.status_code == 422
+
+
+DUP_CSV = (
+    b"customer_id,region,revenue\n"
+    b"c1,north,100\n"
+    b"c1,north,\n"
+    b"c2,south,50\n"
+)
+
+
+def test_duplicate_survivorship_most_complete_rule_keeps_the_row_with_fewer_missing_values() -> None:
+    client = TestClient(create_app())
+    response = client.post("/api/v1/overview/datasets", files={"file": ("dup.csv", DUP_CSV, "text/csv")})
+    dataset_id = response.json()["dataset_id"]
+
+    applied = client.post(f"/api/v1/clean/datasets/{dataset_id}/apply", json={
+        "operation": "deduplicate_survivorship", "group_by_columns": ["customer_id", "region"], "survivorship_rule": "most_complete",
+    })
+    assert applied.status_code == 201
+    body = applied.json()
+    assert body["dataset"]["row_count"] == 2  # the c1/north duplicate group collapses to 1 row
+    assert body["transformation"]["affected_rows"] == 1
+
+    rows_response = client.get(f"/api/v1/overview/datasets/{dataset_id}/rows")
+    rows = rows_response.json()["rows"]
+    c1_row = next(r for r in rows if r["customer_id"] == "c1")
+    assert c1_row["revenue"] == 100  # the complete row survived, not the one with a missing revenue
+
+
+def test_duplicate_survivorship_max_by_column_rule_keeps_the_highest_value() -> None:
+    client = TestClient(create_app())
+    response = client.post("/api/v1/overview/datasets", files={"file": ("dup.csv", DUP_CSV, "text/csv")})
+    dataset_id = response.json()["dataset_id"]
+
+    applied = client.post(f"/api/v1/clean/datasets/{dataset_id}/apply", json={
+        "operation": "deduplicate_survivorship", "group_by_columns": ["customer_id", "region"],
+        "survivorship_rule": "max_by_column", "survivorship_tiebreak_column": "revenue",
+    })
+    assert applied.status_code == 201
+    rows = client.get(f"/api/v1/overview/datasets/{dataset_id}/rows").json()["rows"]
+    c1_row = next(r for r in rows if r["customer_id"] == "c1")
+    assert c1_row["revenue"] == 100
+
+
+def test_duplicate_survivorship_requires_a_tiebreak_column_for_max_by_column_rule() -> None:
+    client = TestClient(create_app())
+    response = client.post("/api/v1/overview/datasets", files={"file": ("dup.csv", DUP_CSV, "text/csv")})
+    dataset_id = response.json()["dataset_id"]
+    applied = client.post(f"/api/v1/clean/datasets/{dataset_id}/apply", json={
+        "operation": "deduplicate_survivorship", "group_by_columns": ["customer_id", "region"], "survivorship_rule": "max_by_column",
+    })
+    assert applied.status_code == 422
+
+
+def test_duplicate_survivorship_requires_at_least_one_grouping_column() -> None:
+    client = TestClient(create_app())
+    dataset_id = _dataset(client)
+    response = client.post(f"/api/v1/clean/datasets/{dataset_id}/apply", json={"operation": "deduplicate_survivorship"})
+    assert response.status_code == 422
+
+
 def test_atlas_explains_an_issue_and_proposes_a_previewable_fix_without_applying_it() -> None:
     client = TestClient(create_app())
     dataset_id = _dataset(client)

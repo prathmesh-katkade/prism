@@ -433,6 +433,8 @@ class CleanOperation(str, Enum):
     DROP_COLUMN = "drop_column"
     TRIM_WHITESPACE = "trim_whitespace"
     NORMALIZE_CASE = "normalize_case"
+    CATEGORY_MAPPING = "category_mapping"
+    DEDUPLICATE_SURVIVORSHIP = "deduplicate_survivorship"
 
 
 class FillStrategy(str, Enum):
@@ -461,6 +463,12 @@ class CleanTransformationRequest(ContractModel):
     fill_strategy: Optional[FillStrategy] = None
     fill_value: Optional[str] = None
     case: Optional[Literal["lower", "upper", "title"]] = None
+    category_mapping: Optional[dict[str, str]] = None
+    case_sensitive: Optional[bool] = None
+    preserve_unmatched: Optional[bool] = None
+    group_by_columns: Optional[list[str]] = None
+    survivorship_rule: Optional[Literal["first", "last", "most_complete", "max_by_column"]] = None
+    survivorship_tiebreak_column: Optional[str] = None
 
 
 class CleanTransformation(ContractModel):
@@ -486,6 +494,19 @@ class CleanPreviewResponse(ContractModel):
     after_sample: list[dict[str, Optional[Any]]]
     warnings: list[str] = Field(default_factory=list)
     projected_health: OverviewHealth
+    unresolved_values: list[str] = Field(default_factory=list)
+
+
+class ColumnValueCount(ContractModel):
+    value: str
+    count: int = Field(ge=0)
+
+
+class ColumnValueCountsResponse(ContractModel):
+    column: str
+    total_distinct: int = Field(ge=0)
+    values: list[ColumnValueCount]
+    truncated: bool
 
 
 class CleanApplyResponse(ContractModel):

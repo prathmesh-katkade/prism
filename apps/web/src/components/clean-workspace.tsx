@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useState } from "react";
-import type { AtlasCleanResponse, CleanIssue, CleanOperation, CleanPreviewResponse, CleanRecipe, CleanStateResponse, CleanTransformationRequest, DatasetRowsResponse, FillStrategy, OverviewProfileResponse } from "@prism/api-contracts";
+import type { AtlasCleanResponse, CleanIssue, CleanOperation, CleanPreviewResponse, CleanRecipe, CleanStateResponse, CleanTransformationRequest, ColumnValueCount, ColumnValueCountsResponse, DatasetRowsResponse, FillStrategy, OverviewProfileResponse } from "@prism/api-contracts";
 import { apiUrl } from "../config/api";
 import type { InspectorObjectState } from "../state/shell-model";
 
@@ -17,6 +17,14 @@ const OPERATIONS: readonly { value: CleanOperation; label: string; needsColumn: 
   { value: "convert_type", label: "Convert column type", needsColumn: true },
   { value: "trim_whitespace", label: "Trim whitespace", needsColumn: true },
   { value: "normalize_case", label: "Normalize text case", needsColumn: true },
+  { value: "category_mapping", label: "Map category values", needsColumn: true },
+  { value: "deduplicate_survivorship", label: "Resolve duplicate groups", needsColumn: false },
+];
+const SURVIVORSHIP_RULES: readonly { value: "first" | "last" | "most_complete" | "max_by_column"; label: string }[] = [
+  { value: "first", label: "Keep the first row in each group" },
+  { value: "last", label: "Keep the last row in each group" },
+  { value: "most_complete", label: "Keep the row with the fewest missing values" },
+  { value: "max_by_column", label: "Keep the row with the highest value in a column" },
 ];
 
 /** Phase 6A: issues → preview → apply, as a versioned, reversible transformation — never a silent mutation. */
@@ -40,6 +48,17 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
   const [manualFillStrategy, setManualFillStrategy] = useState<FillStrategy>("median");
   const [manualFillValue, setManualFillValue] = useState("");
   const [manualCase, setManualCase] = useState<"lower" | "upper" | "title">("lower");
+
+  const [columnValues, setColumnValues] = useState<ColumnValueCountsResponse | null>(null);
+  const [categoryMapping, setCategoryMapping] = useState<Record<string, string>>({});
+  const [categorySelected, setCategorySelected] = useState<ReadonlySet<string>>(new Set());
+  const [categoryTarget, setCategoryTarget] = useState("");
+  const [categoryCaseSensitive, setCategoryCaseSensitive] = useState(true);
+  const [categoryPreserveUnmatched, setCategoryPreserveUnmatched] = useState(true);
+
+  const [survivorshipColumns, setSurvivorshipColumns] = useState<ReadonlySet<string>>(new Set());
+  const [survivorshipRule, setSurvivorshipRule] = useState<"first" | "last" | "most_complete" | "max_by_column">("first");
+  const [survivorshipTiebreak, setSurvivorshipTiebreak] = useState("");
 
   const [recipes, setRecipes] = useState<CleanRecipe[]>([]);
   const [recipeName, setRecipeName] = useState("");
@@ -80,6 +99,17 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
 
   useEffect(() => { if (datasetId) void refresh(datasetId); else { setState("empty"); setClean(null); setProfile(null); setRows(null); } }, [datasetId, refresh]);
 
+  useEffect(() => {
+    if (!datasetId || manualOperation !== "category_mapping" || !manualColumn) { setColumnValues(null); return; }
+    let cancelled = false;
+    setCategoryMapping({}); setCategorySelected(new Set()); setCategoryTarget("");
+    fetch(apiUrl(`/api/v1/clean/datasets/${datasetId}/columns/${encodeURIComponent(manualColumn)}/values`))
+      .then((response) => (response.ok ? response.json() as Promise<ColumnValueCountsResponse> : null))
+      .then((body) => { if (!cancelled) setColumnValues(body); })
+      .catch(() => { if (!cancelled) setColumnValues(null); });
+    return () => { cancelled = true; };
+  }, [datasetId, manualOperation, manualColumn]);
+
   async function selectIssue(issue: CleanIssue) {
     if (!datasetId) return;
     setManualMode(false); setSelectedIssue(issue); setPreview(null); setAtlas(null); setPendingRequest(null);
@@ -114,12 +144,45 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
     if (spec.needsColumn && !manualColumn) return { request: null, reason: "Choose a column first." };
     if (manualOperation === "rename_column" && !manualNewName.trim()) return { request: null, reason: "Enter a new column name." };
     if (manualOperation === "fill_missing" && manualFillStrategy === "constant" && !manualFillValue.trim()) return { request: null, reason: "Enter a constant value to fill with." };
+    if (manualOperation === "category_mapping" && Object.keys(categoryMapping).length === 0) return { request: null, reason: "Map at least one source value to a new value." };
+    if (manualOperation === "deduplicate_survivorship") {
+      if (survivorshipColumns.size === 0) return { request: null, reason: "Choose at least one column to group duplicates by." };
+      if (survivorshipRule === "max_by_column" && !survivorshipTiebreak) return { request: null, reason: "Choose a column to keep the highest value from." };
+    }
     const request: CleanTransformationRequest = { operation: manualOperation, ...(spec.needsColumn ? { column: manualColumn } : {}) };
     if (manualOperation === "rename_column") request.new_name = manualNewName.trim();
     if (manualOperation === "convert_type") request.target_type = manualTargetType;
     if (manualOperation === "fill_missing") { request.fill_strategy = manualFillStrategy; if (manualFillStrategy === "constant") request.fill_value = manualFillValue; }
     if (manualOperation === "normalize_case") request.case = manualCase;
+    if (manualOperation === "category_mapping") { request.category_mapping = categoryMapping; request.case_sensitive = categoryCaseSensitive; request.preserve_unmatched = categoryPreserveUnmatched; }
+    if (manualOperation === "deduplicate_survivorship") {
+      request.group_by_columns = Array.from(survivorshipColumns);
+      request.survivorship_rule = survivorshipRule;
+      if (survivorshipRule === "max_by_column") request.survivorship_tiebreak_column = survivorshipTiebreak;
+    }
     return { request, reason: null };
+  }
+
+  function assignCategoryMapping() {
+    if (!categoryTarget.trim() || categorySelected.size === 0) return;
+    setCategoryMapping((current) => {
+      const next = { ...current };
+      for (const value of categorySelected) next[value] = categoryTarget.trim();
+      return next;
+    });
+    setCategorySelected(new Set()); setCategoryTarget("");
+  }
+
+  function removeCategoryMapping(sourceValue: string) {
+    setCategoryMapping((current) => { const next = { ...current }; delete next[sourceValue]; return next; });
+  }
+
+  function toggleCategorySelected(value: string) {
+    setCategorySelected((current) => { const next = new Set(current); if (next.has(value)) next.delete(value); else next.add(value); return next; });
+  }
+
+  function toggleSurvivorshipColumn(column: string) {
+    setSurvivorshipColumns((current) => { const next = new Set(current); if (next.has(column)) next.delete(column); else next.add(column); return next; });
   }
 
   async function saveAsRecipe(request: CleanTransformationRequest) {
@@ -197,6 +260,23 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
           {manualFillStrategy === "constant" ? <label>Constant value<input aria-label="Constant fill value" value={manualFillValue} onChange={(event) => setManualFillValue(event.target.value)} /></label> : null}
         </> : null}
         {manualOperation === "normalize_case" ? <label>Case<select aria-label="Case" value={manualCase} onChange={(event) => setManualCase(event.target.value as typeof manualCase)}><option value="lower">lower</option><option value="upper">upper</option><option value="title">title</option></select></label> : null}
+        {manualOperation === "category_mapping" ? <div className="clean-category-mapping">
+          <label className="clean-inline-toggle"><input type="checkbox" checked={categoryCaseSensitive} onChange={(event) => setCategoryCaseSensitive(event.target.checked)} /> Case sensitive</label>
+          <label className="clean-inline-toggle"><input type="checkbox" checked={categoryPreserveUnmatched} onChange={(event) => setCategoryPreserveUnmatched(event.target.checked)} /> Preserve unmatched values</label>
+          {columnValues ? <>
+            <p className="quiet-note">{columnValues.total_distinct.toLocaleString()} distinct value(s){columnValues.truncated ? ` (showing the top ${columnValues.values.length})` : ""}. Select source values, name what they should become, then assign.</p>
+            <ul className="clean-value-list">{columnValues.values.map((item: ColumnValueCount) => <li key={item.value}><label><input type="checkbox" checked={categorySelected.has(item.value)} onChange={() => toggleCategorySelected(item.value)} /> <span>{item.value}</span> <small>{item.count.toLocaleString()} row(s){categoryMapping[item.value] ? ` → ${categoryMapping[item.value]}` : ""}</small></label></li>)}</ul>
+            <label>Map selected to<input aria-label="Map selected values to" value={categoryTarget} onChange={(event) => setCategoryTarget(event.target.value)} placeholder="e.g. Bengaluru" /></label>
+            <button type="button" className="secondary" disabled={categorySelected.size === 0 || !categoryTarget.trim()} onClick={assignCategoryMapping}>Assign mapping</button>
+            {Object.keys(categoryMapping).length ? <ul className="clean-mapping-summary">{Object.entries(categoryMapping).map(([source, target]) => <li key={source}><code>{source}</code> → <code>{target}</code><button type="button" className="secondary" aria-label={`Remove mapping for ${source}`} onClick={() => removeCategoryMapping(source)}>×</button></li>)}</ul> : null}
+          </> : <p className="quiet-note">Loading distinct values…</p>}
+        </div> : null}
+        {manualOperation === "deduplicate_survivorship" ? <div className="clean-survivorship">
+          <p className="quiet-note">Group rows that share the same value in every selected column; keep one row per group.</p>
+          <ul className="clean-value-list">{(profile?.columns ?? []).map((column) => <li key={column.name}><label><input type="checkbox" checked={survivorshipColumns.has(column.name)} onChange={() => toggleSurvivorshipColumn(column.name)} /> <span>{column.name}</span> <small>{column.semantic_type}</small></label></li>)}</ul>
+          <label>Survivorship rule<select aria-label="Survivorship rule" value={survivorshipRule} onChange={(event) => setSurvivorshipRule(event.target.value as typeof survivorshipRule)}>{SURVIVORSHIP_RULES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
+          {survivorshipRule === "max_by_column" ? <label>Highest-value column<input aria-label="Tiebreak column" list="clean-column-options" value={survivorshipTiebreak} onChange={(event) => setSurvivorshipTiebreak(event.target.value)} placeholder="Search columns…" /></label> : null}
+        </div> : null}
         <button disabled={!manualBuild.request} title={manualBuild.reason ?? undefined} onClick={() => manualBuild.request && void previewOperation(manualBuild.request)}>Preview</button>
         {manualBuild.reason ? <p className="quiet-note">{manualBuild.reason}</p> : null}
         <label>Recipe name<input aria-label="Recipe name" value={recipeName} onChange={(event) => setRecipeName(event.target.value)} placeholder="e.g. Standard monthly cleanup" /></label>
@@ -224,6 +304,7 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
       {preview ? <>
         <p className="clean-preview-summary">{preview.operation.replaceAll("_", " ")} affects <strong>{preview.affected_rows.toLocaleString()}</strong> row(s){(preview.affected_columns ?? []).length ? ` in ${(preview.affected_columns ?? []).join(", ")}` : ""}. Projected health: <strong>{preview.projected_health.total}/100</strong> (currently {clean.health.total}/100).</p>
         {(preview.warnings ?? []).length ? <ul className="clean-warnings">{(preview.warnings ?? []).map((warning) => <li key={warning}>{warning}</li>)}</ul> : null}
+        {(preview.unresolved_values ?? []).length ? <div className="clean-exceptions"><span className="eyebrow">EXCEPTIONS · {(preview.unresolved_values ?? []).length}</span><ul>{(preview.unresolved_values ?? []).slice(0, 20).map((value) => <li key={value}><code>{value}</code></li>)}</ul>{(preview.unresolved_values ?? []).length > 20 ? <p className="quiet-note">+{(preview.unresolved_values ?? []).length - 20} more</p> : null}</div> : null}
         <div className="clean-diff"><div><span className="eyebrow">BEFORE</span><SampleTable rows={preview.before_sample} /></div><div><span className="eyebrow">AFTER</span><SampleTable rows={preview.after_sample} /></div></div>
       </> : <>
         <p className="quiet-note">{selectedIssue ? "Select an issue to preview a proposed fix before applying it." : manualMode ? "Fill in the operation on the left and select Preview — nothing is changed until you apply." : "This is the dataset as it stands at the current revision. Select an issue or start a manual operation to preview a fix."} Nothing is changed until you apply.</p>

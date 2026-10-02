@@ -1317,7 +1317,7 @@ export interface CleanIssue {
 
 export type CleanIssueKind = "missing_values" | "duplicate_rows" | "all_null_column" | "type_mismatch" | "outlier_burden";
 
-export type CleanOperation = "drop_duplicates" | "fill_missing" | "drop_missing_rows" | "convert_type" | "rename_column" | "drop_column" | "trim_whitespace" | "normalize_case";
+export type CleanOperation = "drop_duplicates" | "fill_missing" | "drop_missing_rows" | "convert_type" | "rename_column" | "drop_column" | "trim_whitespace" | "normalize_case" | "category_mapping" | "deduplicate_survivorship";
 
 export interface CleanPreviewResponse {
   operation: CleanOperation;
@@ -1327,6 +1327,7 @@ export interface CleanPreviewResponse {
   after_sample: Record<string, unknown>[];
   warnings?: string[];
   projected_health: OverviewHealth;
+  unresolved_values?: string[];
 }
 
 export interface CleanRecipe {
@@ -1402,6 +1403,12 @@ export interface CleanTransformationRequest {
   fill_strategy?: FillStrategy;
   fill_value?: string;
   case?: "lower" | "upper" | "title";
+  category_mapping?: Record<string, string>;
+  case_sensitive?: boolean;
+  preserve_unmatched?: boolean;
+  group_by_columns?: string[];
+  survivorship_rule?: "first" | "last" | "most_complete" | "max_by_column";
+  survivorship_tiebreak_column?: string;
 }
 
 export interface CleanUndoRequest {
@@ -1413,6 +1420,18 @@ export interface CleaningReproducibilitySpec {
   kind?: string;
   operation: string;
   parameters?: Record<string, unknown>;
+}
+
+export interface ColumnValueCount {
+  value: string;
+  count: number;
+}
+
+export interface ColumnValueCountsResponse {
+  column: string;
+  total_distinct: number;
+  values: ColumnValueCount[];
+  truncated: boolean;
 }
 
 export interface CorrelationFinding {

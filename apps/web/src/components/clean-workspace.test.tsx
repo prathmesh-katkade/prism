@@ -166,6 +166,81 @@ describe("Clean workspace", () => {
     await waitFor(() => expect(screen.getByText(/no longer matches this dataset's schema/)).toBeInTheDocument());
     expect(screen.getByText("5 rows · 3 columns · revision 0")).toBeInTheDocument(); // never claims a later revision happened
   });
+
+  it("builds a category mapping from real distinct values, previews unresolved exceptions, and applies", async () => {
+    const columnValues = { column: "region", total_distinct: 3, truncated: false, values: [{ value: "Bangalore", count: 8 }, { value: "BENGALURU", count: 3 }, { value: "Mumbai", count: 2 }] };
+    let applied = false;
+    const fetchMock = vi.fn(async (input: string | URL, _init?: RequestInit) => {
+      const path = String(input);
+      if (path.endsWith("/state")) return applied ? json({ dataset: dataset1, issues: [], history: [], health }) : json({ dataset: dataset0, issues: [], history: [], health });
+      if (path.includes("/columns/region/values")) return json(columnValues);
+      if (path.includes("/rows")) return json(rowsPage);
+      if (path.includes("/profile")) return json({ columns: [{ name: "region", semantic_type: "categorical" }] });
+      if (path.includes("/recipes")) return json([]);
+      if (path.endsWith("/preview")) return json({ operation: "category_mapping", affected_rows: 11, affected_columns: ["region"], before_sample: [{ region: "Bangalore" }], after_sample: [{ region: "Bengaluru" }], warnings: ["1 distinct value(s) in 'region' were not covered by the mapping and were left unchanged."], unresolved_values: ["Mumbai"], projected_health: health });
+      if (path.endsWith("/apply")) { applied = true; return json({ dataset: dataset1, transformation: { transformation_id: "t3", operation: "category_mapping", column: "region", parameters: {}, affected_rows: 11, affected_columns: ["region"], source_revision: 0, resulting_revision: 1, source_fingerprint: dataset0.source_fingerprint, resulting_fingerprint: "e".repeat(64), reversible: true, created_at: "2026-08-28T00:00:00Z" }, issues: [], health }, 201); }
+      return json({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
+
+    await waitFor(() => expect(screen.getByText(/Rows 1–5 of 5/)).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "+ New manual operation" }));
+    fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "category_mapping" } });
+    fireEvent.change(screen.getByLabelText("Column"), { target: { value: "region" } });
+
+    await waitFor(() => expect(screen.getByText("Bangalore")).toBeInTheDocument());
+    expect(screen.getByText("BENGALURU")).toBeInTheDocument();
+
+    const bangaloreCheckbox = screen.getByText("Bangalore").closest("label")!.querySelector("input")!;
+    const bengaluruVariantCheckbox = screen.getByText("BENGALURU").closest("label")!.querySelector("input")!;
+    fireEvent.click(bangaloreCheckbox);
+    fireEvent.click(bengaluruVariantCheckbox);
+    fireEvent.change(screen.getByLabelText("Map selected values to"), { target: { value: "Bengaluru" } });
+    fireEvent.click(screen.getByRole("button", { name: "Assign mapping" }));
+
+    expect(screen.getAllByText("Bengaluru", { selector: "code" })).toHaveLength(2); // one mapping-summary row per assigned source value
+    fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/preview"), expect.objectContaining({ method: "POST" })));
+    const previewCall = fetchMock.mock.calls.find(([, requestInit]) => String(requestInit?.method) === "POST" && (requestInit as RequestInit | undefined)?.body && String((requestInit as RequestInit).body).includes("category_mapping"));
+    expect(previewCall).toBeTruthy();
+    const sentBody = JSON.parse(String((previewCall![1] as RequestInit).body));
+    expect(sentBody.category_mapping).toEqual({ Bangalore: "Bengaluru", BENGALURU: "Bengaluru" });
+
+    await waitFor(() => expect(screen.getByText("EXCEPTIONS · 1")).toBeInTheDocument());
+    expect(screen.getByText("Mumbai", { selector: "code" })).toBeInTheDocument(); // the unresolved value is disclosed, not hidden
+
+    fireEvent.click(screen.getByRole("button", { name: "Apply transformation" }));
+    await waitFor(() => expect(screen.getByText(/revision 1/)).toBeInTheDocument());
+  });
+
+  it("builds a duplicate-survivorship request from selected columns and a rule, with a concrete reason when a required field is missing", async () => {
+    const fetchMock = vi.fn(async (input: string | URL) => {
+      const path = String(input);
+      if (path.endsWith("/state")) return json({ dataset: dataset0, issues: [], history: [], health });
+      if (path.includes("/rows")) return json(rowsPage);
+      if (path.includes("/profile")) return json({ columns: [{ name: "customer_id", semantic_type: "text" }, { name: "region", semantic_type: "categorical" }, { name: "revenue", semantic_type: "numeric" }] });
+      if (path.includes("/recipes")) return json([]);
+      return json({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
+
+    await waitFor(() => expect(screen.getByText(/Rows 1–5 of 5/)).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "+ New manual operation" }));
+    fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "deduplicate_survivorship" } });
+
+    expect(screen.getByRole("button", { name: "Preview" })).toBeDisabled();
+    expect(screen.getByText("Choose at least one column to group duplicates by.")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("customer_id").closest("label")!.querySelector("input")!);
+    fireEvent.change(screen.getByLabelText("Survivorship rule"), { target: { value: "max_by_column" } });
+    expect(screen.getByText("Choose a column to keep the highest value from.")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Tiebreak column"), { target: { value: "revenue" } });
+    expect(screen.getByRole("button", { name: "Preview" })).not.toBeDisabled();
+  });
 });
 
 function json(body: unknown, status = 200): Response {

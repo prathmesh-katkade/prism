@@ -38,6 +38,8 @@ from prism_api_contracts import (
     CleanTransformation,
     CleanTransformationRequest,
     CleanUndoRequest,
+    ColumnValueCount,
+    ColumnValueCountsResponse,
     OverviewColumn,
     OverviewQuality,
 )
@@ -164,28 +166,28 @@ def detect_issues(frame: pd.DataFrame) -> list[CleanIssue]:
     return issues
 
 
-def _apply_operation(frame: pd.DataFrame, request: CleanTransformationRequest) -> tuple[pd.DataFrame, int, list[str], list[str]]:
-    """Returns (new_frame, affected_rows, affected_columns, warnings). Never mutates ``frame``."""
+def _apply_operation(frame: pd.DataFrame, request: CleanTransformationRequest) -> tuple[pd.DataFrame, int, list[str], list[str], list[str]]:
+    """Returns (new_frame, affected_rows, affected_columns, warnings, unresolved_values). Never mutates ``frame``."""
     warnings: list[str] = []
     if request.operation is CleanOperation.DROP_DUPLICATES:
         mask = frame.duplicated()
         affected = int(mask.sum())
-        return frame.loc[~mask].reset_index(drop=True), affected, [], warnings
+        return frame.loc[~mask].reset_index(drop=True), affected, [], warnings, []
     if request.operation is CleanOperation.DROP_COLUMN:
         column = _require_column(frame, request.column)
-        return frame.drop(columns=[column]), len(frame), [column], warnings
+        return frame.drop(columns=[column]), len(frame), [column], warnings, []
     if request.operation is CleanOperation.RENAME_COLUMN:
         column = _require_column(frame, request.column)
         if not request.new_name:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="A new column name is required.")
         if request.new_name in frame.columns and request.new_name != column:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"Column {request.new_name!r} already exists.")
-        return frame.rename(columns={column: request.new_name}), len(frame), [column, request.new_name], warnings
+        return frame.rename(columns={column: request.new_name}), len(frame), [column, request.new_name], warnings, []
     if request.operation is CleanOperation.DROP_MISSING_ROWS:
         column = _require_column(frame, request.column)
         mask = frame[column].isna()
         affected = int(mask.sum())
-        return frame.loc[~mask].reset_index(drop=True), affected, [column], warnings
+        return frame.loc[~mask].reset_index(drop=True), affected, [column], warnings, []
     if request.operation is CleanOperation.FILL_MISSING:
         column = _require_column(frame, request.column)
         series = frame[column]
@@ -212,10 +214,10 @@ def _apply_operation(frame: pd.DataFrame, request: CleanTransformationRequest) -
             still_missing = int(updated[column].isna().sum())
             if still_missing:
                 warnings.append(f"{still_missing} row(s) at the start of the data had no prior value to forward-fill from and remain missing.")
-            return updated, affected - still_missing, [column], warnings
+            return updated, affected - still_missing, [column], warnings, []
         updated = frame.copy()
         updated[column] = series.fillna(fill_value)
-        return updated, affected, [column], warnings
+        return updated, affected, [column], warnings, []
     if request.operation is CleanOperation.CONVERT_TYPE:
         column = _require_column(frame, request.column)
         if request.target_type is None:
@@ -234,7 +236,7 @@ def _apply_operation(frame: pd.DataFrame, request: CleanTransformationRequest) -
         if newly_invalid:
             warnings.append(f"{newly_invalid} value(s) could not be converted to {request.target_type} and became missing instead of being silently guessed.")
         updated[column] = converted
-        return updated, len(frame), [column], warnings
+        return updated, len(frame), [column], warnings, []
     if request.operation is CleanOperation.TRIM_WHITESPACE:
         column = _require_column(frame, request.column)
         series = frame[column].astype(str)
@@ -242,7 +244,7 @@ def _apply_operation(frame: pd.DataFrame, request: CleanTransformationRequest) -
         mask = trimmed.ne(series) & frame[column].notna()
         updated = frame.copy()
         updated[column] = frame[column].where(frame[column].isna(), trimmed)
-        return updated, int(mask.sum()), [column], warnings
+        return updated, int(mask.sum()), [column], warnings, []
     if request.operation is CleanOperation.NORMALIZE_CASE:
         column = _require_column(frame, request.column)
         if request.case is None:
@@ -252,7 +254,76 @@ def _apply_operation(frame: pd.DataFrame, request: CleanTransformationRequest) -
         mask = normalized.ne(series) & frame[column].notna()
         updated = frame.copy()
         updated[column] = frame[column].where(frame[column].isna(), normalized)
-        return updated, int(mask.sum()), [column], warnings
+        return updated, int(mask.sum()), [column], warnings, []
+    if request.operation is CleanOperation.CATEGORY_MAPPING:
+        column = _require_column(frame, request.column)
+        mapping = request.category_mapping
+        if not mapping:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="A value mapping is required.")
+        case_sensitive = request.case_sensitive if request.case_sensitive is not None else True
+        preserve_unmatched = request.preserve_unmatched if request.preserve_unmatched is not None else True
+        lookup = {(key if case_sensitive else key.lower()): target for key, target in mapping.items()}
+        series = frame[column]
+        counts = series.value_counts(dropna=True)
+        replacement: dict[Any, Any] = {}
+        affected = 0
+        unresolved_values: list[str] = []
+        for raw_value, n in counts.items():
+            text = str(raw_value)
+            lookup_key = text if case_sensitive else text.lower()
+            if lookup_key in lookup:
+                target = lookup[lookup_key]
+                if target != text:
+                    replacement[raw_value] = target
+                    affected += int(n)
+            else:
+                unresolved_values.append(text)
+                if not preserve_unmatched:
+                    replacement[raw_value] = None
+                    affected += int(n)
+        updated = frame.copy()
+        updated[column] = series.replace(replacement) if replacement else series
+        if unresolved_values:
+            warnings.append(
+                f"{len(unresolved_values)} distinct value(s) in {column!r} were not covered by the mapping and were "
+                + ("left unchanged." if preserve_unmatched else "set to missing.")
+            )
+        return updated, affected, [column], warnings, unresolved_values
+    if request.operation is CleanOperation.DEDUPLICATE_SURVIVORSHIP:
+        columns = request.group_by_columns
+        if not columns:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="At least one grouping column is required.")
+        for group_column in columns:
+            _require_column(frame, group_column)
+        rule = request.survivorship_rule or "first"
+        tiebreak_column: str | None = None
+        if rule == "max_by_column":
+            tiebreak_column = request.survivorship_tiebreak_column
+            if not tiebreak_column:
+                raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="A tiebreak column is required for the max_by_column survivorship rule.")
+            _require_column(frame, tiebreak_column)
+        duplicate_group_count = 0
+        keep_indices: list[Any] = []
+        for _key, group in frame.groupby(list(columns), dropna=False, sort=False):
+            if len(group) == 1:
+                keep_indices.append(group.index[0])
+                continue
+            duplicate_group_count += 1
+            if rule == "last":
+                keep_indices.append(group.index[-1])
+            elif rule == "most_complete":
+                completeness = group.notna().sum(axis=1)
+                keep_indices.append(completeness.idxmax())
+            elif rule == "max_by_column":
+                numeric = pd.to_numeric(group[tiebreak_column], errors="coerce")
+                keep_indices.append(numeric.idxmax() if numeric.notna().any() else group.index[0])
+            else:  # first
+                keep_indices.append(group.index[0])
+        updated = frame.loc[sorted(keep_indices)].reset_index(drop=True)
+        affected = len(frame) - len(updated)
+        if duplicate_group_count:
+            warnings.append(f"{duplicate_group_count} duplicate group(s) found across {', '.join(columns)}; kept 1 row per group using the {rule!r} rule.")
+        return updated, affected, list(columns), warnings, []
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported operation.")
 
 
@@ -270,14 +341,35 @@ def get_state(dataset_id: str) -> CleanStateResponse:
     return _state(overview_store.get(dataset_id))
 
 
+COLUMN_VALUES_LIMIT = 500
+
+
+@router.get("/datasets/{dataset_id}/columns/{column}/values", response_model=ColumnValueCountsResponse)
+def get_column_values(dataset_id: str, column: str) -> ColumnValueCountsResponse:
+    """Every distinct value in a column with its row count, for building a category
+    mapping without guessing at values the UI never actually saw. Capped (and the cap
+    disclosed) rather than silently truncated for a near-unique column."""
+    stored = overview_store.get(dataset_id)
+    _require_column(stored.frame, column)
+    counts = stored.frame[column].value_counts(dropna=True)
+    total_distinct = len(counts)
+    truncated = total_distinct > COLUMN_VALUES_LIMIT
+    top = counts.iloc[:COLUMN_VALUES_LIMIT]
+    return ColumnValueCountsResponse(
+        column=column, total_distinct=total_distinct, truncated=truncated,
+        values=[ColumnValueCount(value=str(value), count=int(count)) for value, count in top.items()],
+    )
+
+
 @router.post("/datasets/{dataset_id}/preview", response_model=CleanPreviewResponse)
 def preview_transformation(dataset_id: str, request: CleanTransformationRequest) -> CleanPreviewResponse:
     stored = overview_store.get(dataset_id)
     before_sample = _sample(stored.frame)
-    updated, affected_rows, affected_columns, warnings = _apply_operation(stored.frame, request)
+    updated, affected_rows, affected_columns, warnings, unresolved_values = _apply_operation(stored.frame, request)
     return CleanPreviewResponse(
         operation=request.operation, affected_rows=affected_rows, affected_columns=affected_columns,
         before_sample=before_sample, after_sample=_sample(updated), warnings=warnings, projected_health=_health(updated),
+        unresolved_values=unresolved_values,
     )
 
 
@@ -289,7 +381,7 @@ def _commit_operation(dataset_id: str, request: CleanTransformationRequest, extr
     """
     stored = overview_store.get(dataset_id)
     source_revision = stored.dataset.revision
-    updated, affected_rows, affected_columns, warnings = _apply_operation(stored.frame, request)
+    updated, affected_rows, affected_columns, warnings, _unresolved_values = _apply_operation(stored.frame, request)
     fingerprint = _fingerprint(updated)
     dataset = overview_store.add_revision(dataset_id, updated, fingerprint)
     parameters = request.model_dump(exclude={"operation", "column"}, exclude_none=True)
@@ -366,7 +458,7 @@ def _dry_run_recipe(frame: pd.DataFrame, steps: list[CleanRecipeStep]) -> None:
         if not step.enabled:
             continue
         try:
-            working, _, _, _ = _apply_operation(working, step.request)
+            working, _, _, _, _ = _apply_operation(working, step.request)
         except HTTPException as error:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
