@@ -20,6 +20,7 @@ from prism_api_contracts import (
     AtlasVisualizeAction,
     AtlasVisualizeRequest,
     AtlasVisualizeResponse,
+    BoxStats,
     OverviewColumn,
     OverviewProvenance,
     VisualizationDataResponse,
@@ -114,7 +115,37 @@ def _aggregate(frame: pd.DataFrame, spec: VisualizationSpec) -> tuple[list[Visua
         truncated = len(sample) < len(pairs)
         if truncated:
             warnings.append(f"Showing a random sample of {len(sample):,} of {len(pairs):,} points; overplotting would otherwise obscure the relationship.")
-        return [VisualizationDatum(label=str(row[dimension]), value=float(row[measure])) for _, row in sample.iterrows()], truncated, warnings
+        return [
+            VisualizationDatum(label=f"{dimension}={row[dimension]:,.2f}, {measure}={row[measure]:,.2f}", value=float(row[measure]), x=float(row[dimension]))
+            for _, row in sample.iterrows()
+        ], truncated, warnings
+    if spec.mark is VizMark.BOX:
+        measure = _require_column(frame, spec.measure, "measure")
+        numeric = pd.to_numeric(frame[measure], errors="coerce")
+        working = frame.assign(**{measure: numeric}).dropna(subset=[measure, dimension])
+        if working.empty:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"No numeric {measure!r} values are available to summarize per {dimension!r} group.")
+        boxes: list[tuple[str, float, BoxStats]] = []
+        for key, values in working.groupby(dimension, dropna=True)[measure]:
+            if values.empty:
+                continue
+            q1, q2, q3 = (float(value) for value in values.quantile([0.25, 0.5, 0.75]))
+            iqr = q3 - q1
+            lower_fence, upper_fence = q1 - 1.5 * iqr, q3 + 1.5 * iqr
+            within = values[(values >= lower_fence) & (values <= upper_fence)]
+            outliers = sorted(float(value) for value in values[(values < lower_fence) | (values > upper_fence)])
+            boxes.append((str(key), q2, BoxStats(
+                q1=q1, median=q2, q3=q3,
+                whisker_low=float(within.min()) if not within.empty else q1,
+                whisker_high=float(within.max()) if not within.empty else q3,
+                outliers=outliers,
+            )))
+        boxes.sort(key=lambda item: item[1], reverse=True)
+        truncated = len(boxes) > spec.max_categories
+        if truncated:
+            warnings.append(f"{len(boxes) - spec.max_categories} additional {dimension!r} groups are not shown (top {spec.max_categories} by median); this many box plots side by side would be unreadable.")
+            boxes = boxes[: spec.max_categories]
+        return [VisualizationDatum(label=label, value=median, box=box) for label, median, box in boxes], truncated, warnings
     grouped = frame.groupby(dimension, dropna=True)
     if spec.aggregation is VizAggregation.COUNT or spec.measure is None:
         series = grouped.size()
@@ -122,13 +153,23 @@ def _aggregate(frame: pd.DataFrame, spec: VisualizationSpec) -> tuple[list[Visua
         measure = _require_column(frame, spec.measure, "measure")
         numeric = pd.to_numeric(frame[measure], errors="coerce")
         series = getattr(frame.assign(**{measure: numeric}).groupby(dimension, dropna=True)[measure], spec.aggregation.value)()
-    series = series.sort_values(ascending=False)
-    truncated = len(series) > spec.max_categories
-    if truncated:
-        warnings.append(f"{len(series) - spec.max_categories} additional {dimension!r} categories are not shown (top {spec.max_categories} by value); a bar chart with this many categories would be unreadable, not just long.")
-        series = series.iloc[: spec.max_categories]
-    if len(series) > 12 and spec.mark is VizMark.BAR:
-        warnings.append("More than 12 categories are shown; consider a Pareto/ranking view or filtering to the segment you care about.")
+    if spec.mark is VizMark.LINE:
+        # A trend reads left-to-right in the dimension's own order (chronological for
+        # a datetime axis); sorting by value instead -- as the ranking branch below
+        # does -- would scramble the line into a meaningless zig-zag.
+        series = series.sort_index()
+        truncated = len(series) > spec.max_categories
+        if truncated:
+            warnings.append(f"{len(series) - spec.max_categories} additional {dimension!r} points are not shown (first {spec.max_categories} in sequence); narrow the date range instead of viewing a truncated trend.")
+            series = series.iloc[: spec.max_categories]
+    else:
+        series = series.sort_values(ascending=False)
+        truncated = len(series) > spec.max_categories
+        if truncated:
+            warnings.append(f"{len(series) - spec.max_categories} additional {dimension!r} categories are not shown (top {spec.max_categories} by value); a bar chart with this many categories would be unreadable, not just long.")
+            series = series.iloc[: spec.max_categories]
+        if len(series) > 12 and spec.mark is VizMark.BAR:
+            warnings.append("More than 12 categories are shown; consider a Pareto/ranking view or filtering to the segment you care about.")
     return [VisualizationDatum(label=str(index), value=float(value)) for index, value in series.items()], truncated, warnings
 
 

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useState } from "react";
-import type { AtlasVisualizeResponse, OverviewProfileResponse, VisualizationDataResponse, VisualizationSpec, VisualizationSuggestion, VizMark } from "@prism/api-contracts";
+import type { AtlasVisualizeResponse, OverviewProfileResponse, VisualizationDataResponse, VisualizationDatum, VisualizationSpec, VisualizationSuggestion, VizMark } from "@prism/api-contracts";
 import { apiUrl } from "../config/api";
 import { newestAnalyticalObjectId } from "./analytical-history";
 import type { InspectorObjectState } from "../state/shell-model";
@@ -73,16 +73,21 @@ export function VisualizeWorkspace({ datasetId, onSelectContext, onOpenWorkflow 
   if (state === "loading" || !profile) return <section className="overview-state loading-state" aria-live="polite"><span className="loading-bar" /><h2>Choosing a chart for this data</h2><p>Chart selection is deterministic — the same intent and column types always suggest the same mark.</p></section>;
   if (!spec) return <section className="overview-state error-state" role="alert"><h2>Visualize could not suggest a chart.</h2><p>{error}</p><button onClick={() => datasetId && void load(datasetId)}>Retry</button></section>;
 
-  const categorical = profile.columns.filter((c) => c.semantic_type === "categorical" || c.semantic_type === "datetime");
   const numeric = profile.columns.filter((c) => c.semantic_type === "numeric");
+  // A scatter/relationship chart's X axis is itself numeric (e.g. "revenue"), so the
+  // dimension picker must offer numeric columns too, not just categorical/datetime
+  // ones -- restricting it to those would make a numeric X field unreachable from
+  // this control even though render() already accepts and plots one.
+  const dimensionCandidates = profile.columns.filter((c) => c.name !== spec.measure);
+  const measureCandidates = numeric.filter((c) => c.name !== spec.dimension);
 
   return <article className="visualize-workspace three-pane">
     <nav className="viz-fields" aria-label="Data fields" tabIndex={0}>
       <div className="section-title"><span className="eyebrow">FIELDS</span><h2>{profile.dataset.source_name}</h2></div>
-      <p className="quiet-note">DIMENSIONS</p>
-      <div className="finding-list">{categorical.map((column) => <button key={column.name} className={column.name === spec.dimension ? "is-selected" : ""} onClick={() => updateSpec({ dimension: column.name })}><span className="finding-dot good" /><strong>{column.name}</strong><small>{column.semantic_type}</small></button>)}</div>
-      <p className="quiet-note">MEASURES</p>
-      <div className="finding-list">{numeric.map((column) => <button key={column.name} className={column.name === spec.measure ? "is-selected" : ""} onClick={() => updateSpec({ measure: column.name })}><span className="finding-dot good" /><strong>{column.name}</strong><small>numeric</small></button>)}</div>
+      <p className="quiet-note">{spec.mark === "scatter" ? "X FIELD" : "DIMENSION"}</p>
+      <div className="finding-list">{dimensionCandidates.map((column) => <button key={column.name} className={column.name === spec.dimension ? "is-selected" : ""} onClick={() => updateSpec({ dimension: column.name })}><span className="finding-dot good" /><strong>{column.name}</strong><small>{column.semantic_type}</small></button>)}</div>
+      <p className="quiet-note">{spec.mark === "scatter" ? "Y FIELD" : "MEASURE"}</p>
+      <div className="finding-list">{measureCandidates.map((column) => <button key={column.name} className={column.name === spec.measure ? "is-selected" : ""} onClick={() => updateSpec({ measure: column.name })}><span className="finding-dot good" /><strong>{column.name}</strong><small>numeric</small></button>)}</div>
     </nav>
     <section className="viz-canvas" aria-label="Visual canvas" tabIndex={0}>
       <header><span className="eyebrow">{rationale}</span><h1>{spec.dimension ?? spec.measure} {spec.measure && spec.dimension ? `by ${spec.measure}` : ""}</h1></header>
@@ -101,23 +106,62 @@ export function VisualizeWorkspace({ datasetId, onSelectContext, onOpenWorkflow 
   </article>;
 }
 
-function ChartCanvas({ mark, data }: { mark: VizMark; data: readonly { label: string; value: number }[] }) {
+export function ChartCanvas({ mark, data }: { mark: VizMark; data: readonly VisualizationDatum[] }) {
   if (!data.length) return <p className="quiet-note">No data to chart.</p>;
   const width = 640, height = 280, padding = 32;
-  const max = Math.max(...data.map((d) => d.value), 1);
-  const min = mark === "scatter" ? Math.min(...data.map((d) => d.value)) : 0;
-  const span = max - min || 1;
+
   if (mark === "scatter") {
-    const xValues = data.map((_, index) => index);
-    const xMax = Math.max(...xValues, 1);
-    return <svg role="img" aria-label={`Scatter chart with ${data.length} points`} viewBox={`0 0 ${width} ${height}`} className="viz-svg">{data.map((point, index) => <circle key={index} cx={padding + (index / xMax) * (width - 2 * padding)} cy={height - padding - ((point.value - min) / span) * (height - 2 * padding)} r={3} />)}</svg>;
+    const xs = data.map((d) => d.x ?? 0);
+    const ys = data.map((d) => d.value);
+    const xMin = Math.min(...xs), xMax = Math.max(...xs);
+    const xSpan = xMax - xMin || 1;
+    const yMin = Math.min(...ys, 0), yMax = Math.max(...ys, 1);
+    const ySpan = yMax - yMin || 1;
+    return <svg role="img" aria-label={`Scatter chart with ${data.length} points`} viewBox={`0 0 ${width} ${height}`} className="viz-svg">
+      {data.map((point, index) => <circle key={index} cx={padding + (((point.x ?? 0) - xMin) / xSpan) * (width - 2 * padding)} cy={height - padding - ((point.value - yMin) / ySpan) * (height - 2 * padding)} r={3}><title>{point.label}</title></circle>)}
+    </svg>;
   }
+
+  if (mark === "box") {
+    const boxes = data.filter((d) => d.box);
+    if (!boxes.length) return <p className="quiet-note">No numeric distribution is available to summarize per group.</p>;
+    const allValues = boxes.flatMap((d) => [d.box!.whisker_low, d.box!.whisker_high, d.box!.q1, d.box!.q3, ...(d.box!.outliers ?? [])]);
+    const yMin = Math.min(...allValues, 0), yMax = Math.max(...allValues, 1);
+    const ySpan = yMax - yMin || 1;
+    const scaleY = (v: number) => height - padding - ((v - yMin) / ySpan) * (height - 2 * padding);
+    const slotWidth = (width - 2 * padding) / boxes.length;
+    const boxWidth = Math.max(8, Math.min(40, slotWidth * 0.5));
+    return <svg role="img" aria-label={`Box plot across ${boxes.length} groups`} viewBox={`0 0 ${width} ${height}`} className="viz-svg">
+      {boxes.map((point, index) => {
+        const box = point.box!;
+        const cx = padding + index * slotWidth + slotWidth / 2;
+        const top = scaleY(box.q3), bottom = scaleY(box.q1), median = scaleY(box.median);
+        return <g key={index}>
+          <line x1={cx} x2={cx} y1={scaleY(box.whisker_high)} y2={top} />
+          <line x1={cx} x2={cx} y1={bottom} y2={scaleY(box.whisker_low)} />
+          <rect x={cx - boxWidth / 2} y={top} width={boxWidth} height={Math.max(1, bottom - top)} />
+          <line x1={cx - boxWidth / 2} x2={cx + boxWidth / 2} y1={median} y2={median} className="viz-box-median" />
+          {(box.outliers ?? []).map((outlier, outlierIndex) => <circle key={outlierIndex} cx={cx} cy={scaleY(outlier)} r={2} className="viz-box-outlier" />)}
+          <title>{`${point.label}: median ${box.median.toLocaleString()}, Q1 ${box.q1.toLocaleString()}, Q3 ${box.q3.toLocaleString()}${(box.outliers ?? []).length ? `, ${(box.outliers ?? []).length} outlier(s)` : ""}`}</title>
+        </g>;
+      })}
+    </svg>;
+  }
+
+  // A zero-anchored, signed scale: constant-value data (max===min) still gets a
+  // non-zero span via the `|| 1` fallback, and a negative value draws below the
+  // zero baseline instead of producing an invalid negative-height rect.
+  const values = data.map((d) => d.value);
+  const min = Math.min(0, ...values), max = Math.max(0, ...values);
+  const span = max - min || 1;
+  const scaleY = (v: number) => height - padding - ((v - min) / span) * (height - 2 * padding);
   if (mark === "line") {
-    const points = data.map((point, index) => `${padding + (index / Math.max(1, data.length - 1)) * (width - 2 * padding)},${height - padding - (point.value / span) * (height - 2 * padding)}`).join(" ");
+    const points = data.map((point, index) => `${padding + (index / Math.max(1, data.length - 1)) * (width - 2 * padding)},${scaleY(point.value)}`).join(" ");
     return <svg role="img" aria-label={`Line chart across ${data.length} categories`} viewBox={`0 0 ${width} ${height}`} className="viz-svg"><polyline points={points} fill="none" /></svg>;
   }
   const barWidth = (width - 2 * padding) / data.length;
+  const zeroY = scaleY(0);
   return <svg role="img" aria-label={`Bar chart with ${data.length} categories`} viewBox={`0 0 ${width} ${height}`} className="viz-svg">
-    {data.map((point, index) => { const barHeight = (point.value / span) * (height - 2 * padding); return <g key={index}><rect x={padding + index * barWidth + 2} y={height - padding - barHeight} width={Math.max(1, barWidth - 4)} height={barHeight} /><title>{`${point.label}: ${point.value}`}</title></g>; })}
+    {data.map((point, index) => { const valueY = scaleY(point.value); const y = Math.min(valueY, zeroY); const barHeight = Math.max(1, Math.abs(valueY - zeroY)); return <g key={index}><rect x={padding + index * barWidth + 2} y={y} width={Math.max(1, barWidth - 4)} height={barHeight} /><title>{`${point.label}: ${point.value}`}</title></g>; })}
   </svg>;
 }

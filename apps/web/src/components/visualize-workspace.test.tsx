@@ -1,7 +1,7 @@
 import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { VisualizeWorkspace } from "./visualize-workspace";
+import { ChartCanvas, VisualizeWorkspace } from "./visualize-workspace";
 
 const dataset = { dataset_id: "ds_1", revision: 0, source_name: "sales.csv", source_fingerprint: "a".repeat(64), row_count: 6, column_count: 2 };
 const profile = {
@@ -57,3 +57,46 @@ describe("Visualize workspace", () => {
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 }
+
+describe("ChartCanvas", () => {
+  it("positions scatter points by their numeric x value, not by array index", () => {
+    // Irregularly spaced x values: an index-based x (the original bug) would space
+    // these evenly regardless of these numbers, which is exactly what this catches.
+    const data = [
+      { label: "p0", value: 10, x: 0 },
+      { label: "p1", value: 10, x: 1 },
+      { label: "p2", value: 10, x: 100 },
+    ];
+    const { container } = render(<ChartCanvas mark="scatter" data={data} />);
+    const circles = container.querySelectorAll("circle");
+    expect(circles).toHaveLength(3);
+    const [cx0, cx1, cx2] = Array.from(circles).map((c) => Number(c.getAttribute("cx")));
+    // p0 and p1 (x=0 and x=1) must sit far closer together than p1 and p2 (x=1 and x=100).
+    expect(Math.abs(cx1! - cx0!)).toBeLessThan(Math.abs(cx2! - cx1!) / 10);
+  });
+
+  it("draws real box-plot geometry (quartile box, whiskers, outliers) instead of falling back to bars", () => {
+    const data = [
+      { label: "group-a", value: 50, box: { q1: 25, median: 50, q3: 75, whisker_low: 10, whisker_high: 90, outliers: [120] } },
+    ];
+    const { container } = render(<ChartCanvas mark="box" data={data} />);
+    expect(container.querySelector("rect")).not.toBeNull(); // the quartile box
+    expect(container.querySelectorAll("line").length).toBeGreaterThanOrEqual(3); // two whiskers + median line
+    expect(container.querySelector("circle.viz-box-outlier")).not.toBeNull();
+  });
+
+  it("renders a line chart left-to-right in the given data order without resorting by value", () => {
+    // Values are intentionally non-monotonic; if anything resorted by value the
+    // polyline's point order would change and no longer match this input order.
+    const data = [
+      { label: "jan", value: 5 },
+      { label: "feb", value: 50 },
+      { label: "mar", value: 1 },
+    ];
+    const { container } = render(<ChartCanvas mark="line" data={data} />);
+    const polyline = container.querySelector("polyline");
+    expect(polyline).not.toBeNull();
+    const xs = (polyline!.getAttribute("points") ?? "").trim().split(/\s+/).map((pair) => Number(pair.split(",")[0]));
+    expect(xs).toEqual([...xs].sort((a, b) => a - b)); // left-to-right in input order
+  });
+});

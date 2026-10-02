@@ -71,6 +71,43 @@ def test_scatter_samples_and_warns_about_overplotting() -> None:
     assert len(response["data"]) <= 60
 
 
+def test_scatter_points_carry_the_actual_numeric_x_value_not_a_row_index() -> None:
+    client = TestClient(create_app())
+    dataset_id = _dataset(client)
+    spec = {"mark": "scatter", "intent": "relationship", "dimension": "revenue", "measure": "units", "aggregation": "none", "max_categories": 20}
+    response = client.post(f"/api/v1/visualize/datasets/{dataset_id}/render", json=spec).json()
+    assert response["data"]
+    x_values = [point["x"] for point in response["data"]]
+    assert all(x is not None for x in x_values)
+    # With this fixture revenue only takes 7 distinct values (i % 7) * 10 + 5; a row
+    # index standing in for x would instead produce as many distinct values as rows.
+    assert set(x_values) <= {5.0, 15.0, 25.0, 35.0, 45.0, 55.0, 65.0}
+
+
+def test_box_plot_reports_real_quartiles_whiskers_and_outliers_not_a_bar_fallback() -> None:
+    client = TestClient(create_app())
+    dataset_id = _dataset(client)
+    spec = {"mark": "box", "intent": "distribution", "dimension": "segment", "measure": "revenue", "aggregation": "none", "max_categories": 20}
+    response = client.post(f"/api/v1/visualize/datasets/{dataset_id}/render", json=spec).json()
+    assert response["data"]
+    first = response["data"][0]
+    assert first["box"] is not None
+    box = first["box"]
+    assert box["q1"] <= box["median"] <= box["q3"]
+    assert box["whisker_low"] <= box["q1"]
+    assert box["whisker_high"] >= box["q3"]
+    assert isinstance(box["outliers"], list)
+
+
+def test_line_chart_preserves_chronological_order_even_when_values_are_not_monotonic() -> None:
+    client = TestClient(create_app())
+    dataset_id = _dataset(client)
+    spec = {"mark": "line", "intent": "trend", "dimension": "ordered_at", "measure": "revenue", "aggregation": "sum", "max_categories": 50}
+    response = client.post(f"/api/v1/visualize/datasets/{dataset_id}/render", json=spec).json()
+    labels = [point["label"] for point in response["data"]]
+    assert labels == sorted(labels)  # chronological, never resorted by value
+
+
 def test_atlas_explain_chart_and_trust_check_do_not_mutate_state() -> None:
     client = TestClient(create_app())
     dataset_id = _dataset(client)

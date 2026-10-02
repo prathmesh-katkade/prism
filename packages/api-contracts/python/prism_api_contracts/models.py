@@ -569,9 +569,20 @@ class VisualizationSuggestion(ContractModel):
     alternatives: list[VizMark] = Field(default_factory=list)
 
 
+class BoxStats(ContractModel):
+    q1: float
+    median: float
+    q3: float
+    whisker_low: float
+    whisker_high: float
+    outliers: list[float] = Field(default_factory=list)
+
+
 class VisualizationDatum(ContractModel):
     label: str
     value: float
+    x: Optional[float] = None
+    box: Optional[BoxStats] = None
 
 
 class VisualizationDataResponse(ContractModel):

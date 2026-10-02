@@ -1262,6 +1262,15 @@ export interface Body_upload_dataset_api_v1_overview_datasets_post {
   file: string;
 }
 
+export interface BoxStats {
+  q1: number;
+  median: number;
+  q3: number;
+  whisker_low: number;
+  whisker_high: number;
+  outliers?: number[];
+}
+
 export interface ChangepointFinding {
   position: number;
   timestamp: string;
@@ -1994,6 +2003,8 @@ export interface VisualizationDataResponse {
 export interface VisualizationDatum {
   label: string;
   value: number;
+  x?: number;
+  box?: BoxStats;
 }
 
 export interface VisualizationSpec {
