@@ -182,7 +182,7 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
       <div className="section-title"><div><span className="eyebrow">ISSUES</span><h2>{clean.issues.length ? `${clean.issues.length} found` : "No issues detected"}</h2></div><span className={`health-pill ${clean.health.total >= 80 ? "good" : clean.health.total >= 60 ? "warn" : "risk"}`}>{clean.health.total}/100</span></div>
       <div className="finding-list">{clean.issues.map((issue) => <button key={issue.issue_id} className={!manualMode && issue.issue_id === selectedIssue?.issue_id ? "is-selected" : ""} onClick={() => void selectIssue(issue)}><span className={`finding-dot ${issue.severity === "high" ? "issue" : issue.severity === "medium" ? "warning" : "good"}`} /><strong>{issue.column ?? "Dataset"}</strong><small>{issue.description}</small></button>)}</div>
 
-      <div className="section-title"><span className="eyebrow">OPERATIONS</span><h2>Any supported transformation</h2></div>
+      <div className="section-title"><div><span className="eyebrow">OPERATIONS</span><h2>Build one</h2></div></div>
       <button className={manualMode ? "is-selected" : "secondary"} onClick={startManualOperation}>+ New manual operation</button>
       {manualMode ? <div className="clean-manual-form">
         <label>Operation<select aria-label="Operation" value={manualOperation} onChange={(event) => setManualOperation(event.target.value as CleanOperation)}>{OPERATIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
