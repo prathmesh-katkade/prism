@@ -241,6 +241,55 @@ describe("Clean workspace", () => {
     fireEvent.change(screen.getByLabelText("Tiebreak column"), { target: { value: "revenue" } });
     expect(screen.getByRole("button", { name: "Preview" })).not.toBeDisabled();
   });
+
+  it("creates a validation rule, runs it, and shows the real pass/fail result", async () => {
+    const rule = { rule_id: "rule_1", name: "Unique customers", kind: "uniqueness", column: "customer_id", before_column: null, after_column: null, created_at: "2026-08-28T00:00:00Z" };
+    let ruleSaved = false;
+    const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path.endsWith("/state")) return json({ dataset: dataset0, issues: [], history: [], health });
+      if (path.includes("/rows")) return json(rowsPage);
+      if (path.includes("/profile")) return json({});
+      if (path.includes("/recipes")) return json([]);
+      if (path.endsWith("/validation-rules") && init?.method === "POST") { ruleSaved = true; return json(rule, 201); }
+      if (path.endsWith("/validation-rules")) return json(ruleSaved ? [rule] : []);
+      if (path.includes("/validation-rules/rule_1/run")) return json({ rule, dataset_revision: 0, total_checked: 5, violation_count: 2, passed: false, sample_violations: [{ customer_id: "c1" }] });
+      return json({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
+
+    await waitFor(() => expect(screen.getByText("No rules saved")).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText("Validation rule name"), { target: { value: "Unique customers" } });
+    fireEvent.change(screen.getByLabelText("Validation rule column"), { target: { value: "customer_id" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save rule" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/validation-rules"), expect.objectContaining({ method: "POST", body: JSON.stringify({ name: "Unique customers", kind: "uniqueness", column: "customer_id" }) })));
+    await waitFor(() => expect(screen.getByText("Unique customers")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "Run" }));
+    await waitFor(() => expect(screen.getByText(/2 violation\(s\)/)).toBeInTheDocument());
+    expect(screen.getByText(/5 checked/)).toBeInTheDocument();
+  });
+
+  it("shows a concrete reason instead of saving a validation rule with a missing required field", async () => {
+    const fetchMock = vi.fn(async (input: string | URL) => {
+      const path = String(input);
+      if (path.endsWith("/state")) return json({ dataset: dataset0, issues: [], history: [], health });
+      if (path.includes("/rows")) return json(rowsPage);
+      if (path.includes("/profile")) return json({});
+      if (path.includes("/recipes")) return json([]);
+      if (path.endsWith("/validation-rules")) return json([]);
+      return json({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
+
+    await waitFor(() => expect(screen.getByText("No rules saved")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Save rule" }));
+    await waitFor(() => expect(screen.getByText("Name the rule before saving it.")).toBeInTheDocument());
+    expect(fetchMock).not.toHaveBeenCalledWith(expect.stringContaining("/validation-rules"), expect.objectContaining({ method: "POST" }));
+  });
 });
 
 function json(body: unknown, status = 200): Response {

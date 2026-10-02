@@ -2054,6 +2054,35 @@ export interface ValidationError {
   type: string;
 }
 
+export interface ValidationRule {
+  rule_id: string;
+  name: string;
+  kind: ValidationRuleKind;
+  column?: string;
+  before_column?: string;
+  after_column?: string;
+  created_at: string;
+}
+
+export interface ValidationRuleCreateRequest {
+  name: string;
+  kind: ValidationRuleKind;
+  column?: string;
+  before_column?: string;
+  after_column?: string;
+}
+
+export type ValidationRuleKind = "uniqueness" | "nonnegative" | "date_order";
+
+export interface ValidationRunResult {
+  rule: ValidationRule;
+  dataset_revision: number;
+  total_checked: number;
+  violation_count: number;
+  passed: boolean;
+  sample_violations?: Record<string, unknown>[];
+}
+
 export interface VisualizationDataResponse {
   spec: VisualizationSpec;
   data: VisualizationDatum[];

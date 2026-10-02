@@ -577,6 +577,39 @@ class CleanRecipeApplyResponse(ContractModel):
     health: OverviewHealth
 
 
+class ValidationRuleKind(str, Enum):
+    UNIQUENESS = "uniqueness"
+    NONNEGATIVE = "nonnegative"
+    DATE_ORDER = "date_order"
+
+
+class ValidationRuleCreateRequest(ContractModel):
+    name: str = Field(min_length=1, max_length=200)
+    kind: ValidationRuleKind
+    column: Optional[str] = Field(default=None, min_length=1)
+    before_column: Optional[str] = Field(default=None, min_length=1)
+    after_column: Optional[str] = Field(default=None, min_length=1)
+
+
+class ValidationRule(ContractModel):
+    rule_id: str = Field(min_length=1)
+    name: str = Field(min_length=1)
+    kind: ValidationRuleKind
+    column: Optional[str] = None
+    before_column: Optional[str] = None
+    after_column: Optional[str] = None
+    created_at: datetime
+
+
+class ValidationRunResult(ContractModel):
+    rule: ValidationRule
+    dataset_revision: int = Field(ge=0)
+    total_checked: int = Field(ge=0)
+    violation_count: int = Field(ge=0)
+    passed: bool
+    sample_violations: list[dict[str, Optional[Any]]] = Field(default_factory=list)
+
+
 class AtlasCleanAction(str, Enum):
     EXPLAIN_ISSUE = "explain_issue"
     PROPOSE_FIX = "propose_fix"

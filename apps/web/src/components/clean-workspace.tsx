@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useState } from "react";
-import type { AtlasCleanResponse, CleanIssue, CleanOperation, CleanPreviewResponse, CleanRecipe, CleanStateResponse, CleanTransformationRequest, ColumnValueCount, ColumnValueCountsResponse, DatasetRowsResponse, FillStrategy, OverviewProfileResponse } from "@prism/api-contracts";
+import type { AtlasCleanResponse, CleanIssue, CleanOperation, CleanPreviewResponse, CleanRecipe, CleanStateResponse, CleanTransformationRequest, ColumnValueCount, ColumnValueCountsResponse, DatasetRowsResponse, FillStrategy, OverviewProfileResponse, ValidationRule, ValidationRuleKind, ValidationRunResult } from "@prism/api-contracts";
 import { apiUrl } from "../config/api";
 import type { InspectorObjectState } from "../state/shell-model";
 
@@ -72,6 +72,23 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
     } catch { /* recipes are a convenience layer over manual operations, which stay usable without this list. */ }
   }, []);
 
+  const [validationRules, setValidationRules] = useState<ValidationRule[]>([]);
+  const [validationResults, setValidationResults] = useState<Record<string, ValidationRunResult>>({});
+  const [validationRunning, setValidationRunning] = useState<string | null>(null);
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const [newRuleName, setNewRuleName] = useState("");
+  const [newRuleKind, setNewRuleKind] = useState<ValidationRuleKind>("uniqueness");
+  const [newRuleColumn, setNewRuleColumn] = useState("");
+  const [newRuleBeforeColumn, setNewRuleBeforeColumn] = useState("");
+  const [newRuleAfterColumn, setNewRuleAfterColumn] = useState("");
+
+  const loadValidationRules = useCallback(async () => {
+    try {
+      const response = await fetch(apiUrl("/api/v1/clean/validation-rules"));
+      if (response.ok) setValidationRules(await response.json() as ValidationRule[]);
+    } catch { /* validation rules are a convenience; Clean stays usable without this list. */ }
+  }, []);
+
   const loadRows = useCallback(async (id: string, offset: number) => {
     try {
       const response = await fetch(apiUrl(`/api/v1/overview/datasets/${id}/rows?offset=${offset}&limit=${ROWS_PER_PAGE}`));
@@ -91,11 +108,12 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
       if (profileResponse.ok) setProfile(await profileResponse.json() as OverviewProfileResponse);
       await loadRows(id, 0);
       await loadRecipes();
+      await loadValidationRules();
       setState("ready");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Clean is unavailable."); setState("error");
     }
-  }, [loadRows, loadRecipes]);
+  }, [loadRows, loadRecipes, loadValidationRules]);
 
   useEffect(() => { if (datasetId) void refresh(datasetId); else { setState("empty"); setClean(null); setProfile(null); setRows(null); } }, [datasetId, refresh]);
 
@@ -208,6 +226,45 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
     finally { setApplyingRecipeId(null); }
   }
 
+  async function createValidationRule() {
+    if (!newRuleName.trim()) { setValidationError("Name the rule before saving it."); return; }
+    if ((newRuleKind === "uniqueness" || newRuleKind === "nonnegative") && !newRuleColumn) { setValidationError("Choose a column for this rule."); return; }
+    if (newRuleKind === "date_order" && (!newRuleBeforeColumn || !newRuleAfterColumn)) { setValidationError("Choose both a before-column and an after-column."); return; }
+    setValidationError(null);
+    try {
+      const response = await fetch(apiUrl("/api/v1/clean/validation-rules"), {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          name: newRuleName.trim(), kind: newRuleKind,
+          ...(newRuleKind !== "date_order" ? { column: newRuleColumn } : { before_column: newRuleBeforeColumn, after_column: newRuleAfterColumn }),
+        }),
+      });
+      if (!response.ok) throw new Error((await response.json() as { detail?: string }).detail ?? "Saving the rule failed.");
+      setNewRuleName(""); setNewRuleColumn(""); setNewRuleBeforeColumn(""); setNewRuleAfterColumn("");
+      await loadValidationRules();
+    } catch (reason) { setValidationError(reason instanceof Error ? reason.message : "Saving the rule failed."); }
+  }
+
+  async function runValidationRule(rule: ValidationRule) {
+    if (!datasetId) return;
+    setValidationRunning(rule.rule_id); setValidationError(null);
+    try {
+      const response = await fetch(apiUrl(`/api/v1/clean/datasets/${datasetId}/validation-rules/${rule.rule_id}/run`), { method: "POST" });
+      if (!response.ok) throw new Error((await response.json() as { detail?: string }).detail ?? "Running the rule failed.");
+      const result = await response.json() as ValidationRunResult;
+      setValidationResults((current) => ({ ...current, [rule.rule_id]: result }));
+    } catch (reason) { setValidationError(reason instanceof Error ? reason.message : "Running the rule failed."); }
+    finally { setValidationRunning(null); }
+  }
+
+  async function deleteValidationRule(ruleId: string) {
+    try {
+      await fetch(apiUrl(`/api/v1/clean/validation-rules/${ruleId}`), { method: "DELETE" });
+      setValidationResults((current) => { const next = { ...current }; delete next[ruleId]; return next; });
+      await loadValidationRules();
+    } catch { /* best-effort; the rule simply stays listed until the next successful delete. */ }
+  }
+
   async function apply() {
     if (!datasetId || !pendingRequest) return;
     setApplying(true);
@@ -292,6 +349,32 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
         </li>;
       })}</ul> : <p className="quiet-note">Build an operation above and save it as a recipe to reuse it later, or on another dataset with the same schema.</p>}
       {recipeError ? <p className="query-error" role="alert">{recipeError}</p> : null}
+
+      <div className="section-title"><div><span className="eyebrow">VALIDATION</span><h2>{validationRules.length ? `${validationRules.length} rule(s)` : "No rules saved"}</h2></div></div>
+      {validationRules.length ? <ul className="clean-recipe-list">{validationRules.map((rule) => {
+        const result = validationResults[rule.rule_id];
+        return <li key={rule.rule_id} className="clean-validation-row">
+          <div>
+            <strong>{rule.name}</strong>
+            <small>{rule.kind.replaceAll("_", " ")}{rule.column ? ` · ${rule.column}` : ""}{rule.before_column ? ` · ${rule.before_column} ≤ ${rule.after_column}` : ""}</small>
+            {result ? <small className={result.passed ? "clean-validation-pass" : "clean-validation-fail"}>{result.passed ? "Passed" : `${result.violation_count.toLocaleString()} violation(s)`} · {result.total_checked.toLocaleString()} checked</small> : null}
+          </div>
+          <div className="clean-validation-actions">
+            <button className="secondary" disabled={validationRunning === rule.rule_id} onClick={() => void runValidationRule(rule)}>{validationRunning === rule.rule_id ? "Running…" : "Run"}</button>
+            <button className="secondary" aria-label={`Delete rule ${rule.name}`} onClick={() => void deleteValidationRule(rule.rule_id)}>×</button>
+          </div>
+        </li>;
+      })}</ul> : <p className="quiet-note">No validation rules yet.</p>}
+      <div className="clean-manual-form clean-new-rule">
+        <label>New rule name<input aria-label="Validation rule name" value={newRuleName} onChange={(event) => setNewRuleName(event.target.value)} placeholder="e.g. Unique customer IDs" /></label>
+        <label>Kind<select aria-label="Validation rule kind" value={newRuleKind} onChange={(event) => setNewRuleKind(event.target.value as ValidationRuleKind)}><option value="uniqueness">uniqueness</option><option value="nonnegative">nonnegative</option><option value="date_order">date order</option></select></label>
+        {newRuleKind !== "date_order" ? <label>Rule column<input aria-label="Validation rule column" list="clean-column-options" value={newRuleColumn} onChange={(event) => setNewRuleColumn(event.target.value)} placeholder="Search columns…" /></label> : <>
+          <label>Before column (earlier date)<input aria-label="Before column" list="clean-column-options" value={newRuleBeforeColumn} onChange={(event) => setNewRuleBeforeColumn(event.target.value)} placeholder="Search columns…" /></label>
+          <label>After column (later date)<input aria-label="After column" list="clean-column-options" value={newRuleAfterColumn} onChange={(event) => setNewRuleAfterColumn(event.target.value)} placeholder="Search columns…" /></label>
+        </>}
+        <button type="button" className="secondary" onClick={() => void createValidationRule()}>Save rule</button>
+        {validationError ? <p className="quiet-note">{validationError}</p> : null}
+      </div>
 
       <div className="section-title"><span className="eyebrow">HISTORY</span></div>
       <ol className="clean-history">
