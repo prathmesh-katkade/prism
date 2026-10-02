@@ -93,4 +93,31 @@ describe("Query Studio", () => {
     await waitFor(() => expect(screen.getByText("row-multiplication risk")).toBeInTheDocument());
     expect(screen.getByText(/1 data row\(s\) have no match in joined/)).toBeInTheDocument();
   });
+
+  it("finds a query's CTEs and materializes one into the editor for standalone inspection", async () => {
+    const materialized = "WITH recent AS (SELECT * FROM data WHERE revenue > 10) SELECT * FROM recent";
+    const fetchMock = vi.fn(async (input: string | URL) => {
+      const path = String(input);
+      const body = path.endsWith("/connections") ? [connection]
+        : path.endsWith("/snippets") ? []
+        : path.includes("/schema") ? schema
+        : path.endsWith("/history") ? []
+        : path.endsWith("/ctes/list") ? { ctes: ["recent", "totals"] }
+        : path.endsWith("/ctes/materialize") ? { cte_name: "recent", materialized_sql: materialized }
+        : {};
+      return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<QueryStudio onSelectContext={vi.fn()} />);
+
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Write against evidence, not assumptions." })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Find CTEs" }));
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Inspect recent" })).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "Inspect totals" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Inspect recent" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/ctes/materialize"), expect.objectContaining({ method: "POST", body: JSON.stringify({ connection_id: connection.connection_id, sql: "SELECT *\nFROM data\nLIMIT 100;", cte_name: "recent" }) })));
+    await waitFor(() => expect(screen.getByLabelText("PRISM Query Studio editor")).toHaveValue(materialized));
+  });
 });

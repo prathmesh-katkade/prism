@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import type { AtlasSqlAction, AtlasSqlResponse, JoinDiagnosticsResponse, SqlConnectionSummary, SqlPlanResponse, SqlResultPageResponse, SqlResultPromotionResponse, SqlRunResponse, SqlSchemaResponse, SqlSnippet } from "@prism/api-contracts";
+import type { AtlasSqlAction, AtlasSqlResponse, CteListResponse, CteMaterializeResponse, JoinDiagnosticsResponse, SqlConnectionSummary, SqlPlanResponse, SqlResultPageResponse, SqlResultPromotionResponse, SqlRunResponse, SqlSchemaResponse, SqlSnippet } from "@prism/api-contracts";
 import { apiUrl } from "../config/api";
 import type { InspectorObjectState } from "../state/shell-model";
 import { QueryEditor } from "./query-editor";
@@ -28,6 +28,8 @@ export function QueryStudio({ onSelectContext, initialSql, initialParameters, in
   const [joinDiagnostics, setJoinDiagnostics] = useState<JoinDiagnosticsResponse | null>(null);
   const [joinDiagnosticsLoading, setJoinDiagnosticsLoading] = useState(false);
   const [joinDiagnosticsError, setJoinDiagnosticsError] = useState<string | null>(null);
+  const [ctes, setCtes] = useState<string[]>([]);
+  const [cteError, setCteError] = useState<string | null>(null);
 
   useEffect(() => { if (initialSql) setSql(initialSql); }, [initialSql]);
   useEffect(() => { if (initialParameters) setParametersText(JSON.stringify(initialParameters)); }, [initialParameters]);
@@ -104,6 +106,30 @@ export function QueryStudio({ onSelectContext, initialSql, initialParameters, in
     finally { setJoinDiagnosticsLoading(false); }
   }
 
+  async function findCtes() {
+    if (!activeConnection) return;
+    setCteError(null);
+    try {
+      const response = await fetch(apiUrl("/api/v1/sql-lab/ctes/list"), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ connection_id: activeConnection.connection_id, sql }) });
+      if (!response.ok) throw new Error((await response.json() as { detail?: string }).detail ?? "Could not list this query's CTEs.");
+      const body = await response.json() as CteListResponse;
+      setCtes(body.ctes ?? []);
+      if (!(body.ctes ?? []).length) setCteError("This query has no named CTEs (no WITH clause).");
+    } catch (reason) { setCteError(reason instanceof Error ? reason.message : "Could not list this query's CTEs."); setCtes([]); }
+  }
+
+  async function materializeCte(cteName: string) {
+    if (!activeConnection) return;
+    setCteError(null);
+    try {
+      const response = await fetch(apiUrl("/api/v1/sql-lab/ctes/materialize"), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ connection_id: activeConnection.connection_id, sql, cte_name: cteName }) });
+      if (!response.ok) throw new Error((await response.json() as { detail?: string }).detail ?? "Could not materialize this CTE.");
+      const body = await response.json() as CteMaterializeResponse;
+      setSql(body.materialized_sql);
+      setCtes([]);
+    } catch (reason) { setCteError(reason instanceof Error ? reason.message : "Could not materialize this CTE."); }
+  }
+
   async function cancelActiveRun() {
     if (!run || !["queued", "running"].includes(run.state)) return;
     try {
@@ -156,7 +182,9 @@ export function QueryStudio({ onSelectContext, initialSql, initialParameters, in
 
   return <article className="query-studio">
     <header className="query-heading"><div><span className="eyebrow">SQL LAB · QUERY STUDIO</span><h1>Write against evidence, not assumptions.</h1><p>{activeConnection ? <><strong>{activeConnection.label}</strong> · <code>{activeConnection.dialect}</code> · schema-aware local source</> : "Select a source"}</p></div><div className="query-status"><span className={`migration-chip ${state === "degraded" ? "unavailable" : "ready"}`}>{run?.state ?? "ready"}</span><small>Ctrl/Cmd + Enter to run</small></div></header>
-    <section className="query-toolbar" aria-label="Query source and actions"><label>Source<select value={connectionId} onChange={(event) => setConnectionId(event.target.value)}>{readyConnections.map((item) => <option key={item.connection_id} value={item.connection_id}>{item.label} · {item.dialect}</option>)}</select></label><label>Parameters<textarea aria-label="Query parameters JSON" value={parametersText} onChange={(event) => setParametersText(event.target.value)} /></label><button onClick={() => void execute()} disabled={!activeConnection || state === "running"}>Run query <kbd>⌘ ↵</kbd></button>{run && ["queued", "running"].includes(run.state) ? <button className="secondary" onClick={() => void cancelActiveRun()}>Cancel query</button> : null}<button className="secondary" onClick={() => setSql(formatSql(sql))} disabled={!activeConnection}>Format query</button><button className="secondary" onClick={() => void inspectPlan()} disabled={!activeConnection}>Inspect plan</button><button className="secondary" onClick={() => { setActiveResultTab("joins"); void inspectJoins(); }} disabled={!activeConnection}>Inspect joins</button><button className="secondary" onClick={() => void saveSnippet()} disabled={!activeConnection}>Save snippet</button></section>
+    <section className="query-toolbar" aria-label="Query source and actions"><label>Source<select value={connectionId} onChange={(event) => setConnectionId(event.target.value)}>{readyConnections.map((item) => <option key={item.connection_id} value={item.connection_id}>{item.label} · {item.dialect}</option>)}</select></label><label>Parameters<textarea aria-label="Query parameters JSON" value={parametersText} onChange={(event) => setParametersText(event.target.value)} /></label><button onClick={() => void execute()} disabled={!activeConnection || state === "running"}>Run query <kbd>⌘ ↵</kbd></button>{run && ["queued", "running"].includes(run.state) ? <button className="secondary" onClick={() => void cancelActiveRun()}>Cancel query</button> : null}<button className="secondary" onClick={() => setSql(formatSql(sql))} disabled={!activeConnection}>Format query</button><button className="secondary" onClick={() => void inspectPlan()} disabled={!activeConnection}>Inspect plan</button><button className="secondary" onClick={() => { setActiveResultTab("joins"); void inspectJoins(); }} disabled={!activeConnection}>Inspect joins</button><button className="secondary" onClick={() => void findCtes()} disabled={!activeConnection}>Find CTEs</button><button className="secondary" onClick={() => void saveSnippet()} disabled={!activeConnection}>Save snippet</button></section>
+    {ctes.length ? <section className="snippet-strip" aria-label="Materialize an intermediate CTE"><span className="eyebrow">INTERMEDIATE CTEs</span>{ctes.map((name) => <button key={name} onClick={() => void materializeCte(name)}>Inspect {name}</button>)}</section> : null}
+    {cteError ? <p className="query-error" role="alert">{cteError}</p> : null}
     <section className="query-layout"><div><QueryEditor value={sql} dialect={activeConnection?.dialect ?? "sql"} schemaItems={schema?.tables.flatMap((table) => [table.name, ...table.columns.map((column) => column.name)]) ?? []} onChange={setSql} onRun={() => void execute()} /><div className="query-editor-foot"><span>Dialect: <code>{activeConnection?.dialect ?? "unavailable"}</code></span><span>Safe reads run without a repeated prompt. Writes and unproven SQL are blocked.</span></div></div><SchemaPanel schema={schema} onInsert={(identifier) => setSql((current) => `${current}${current.endsWith(" ") || current.endsWith("\n") ? "" : " "}${identifier}`)} /></section>
     {error ? <p className="query-error" role="alert">{error}</p> : null}
     <section className="sql-result-panel"><div className="result-tabs" role="tablist" aria-label="SQL result views">{(["results", "plan", "history", "joins"] as ResultTab[]).map((tab) => <button key={tab} role="tab" aria-selected={activeResultTab === tab} onClick={() => { setActiveResultTab(tab); if (tab === "joins" && !joinDiagnostics && !joinDiagnosticsLoading) void inspectJoins(); }}>{tab}</button>)}</div>{activeResultTab === "results" ? <DataGrid result={results} run={run} onSelectContext={onSelectContext} onPage={(offset) => void loadResultPage(offset)} onPromote={() => void promoteResult()} {...(onUseAsEvidence ? { onUseAsEvidence } : {})} /> : null}{activeResultTab === "plan" ? <PlanPanel plan={plan} /> : null}{activeResultTab === "history" ? <HistoryPanel history={history} onUse={(entry) => setSql(entry.sql)} /> : null}{activeResultTab === "joins" ? <JoinDiagnosticsPanel diagnostics={joinDiagnostics} loading={joinDiagnosticsLoading} error={joinDiagnosticsError} /> : null}</section>

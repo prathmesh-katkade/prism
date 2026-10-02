@@ -360,6 +360,26 @@ class JoinDiagnosticsResponse(ContractModel):
     unsupported_notes: list[str] = Field(default_factory=list)
 
 
+class CteListRequest(ContractModel):
+    connection_id: str = Field(min_length=1)
+    sql: str = Field(min_length=1, max_length=250_000)
+
+
+class CteListResponse(ContractModel):
+    ctes: list[str] = Field(default_factory=list)
+
+
+class CteMaterializeRequest(ContractModel):
+    connection_id: str = Field(min_length=1)
+    sql: str = Field(min_length=1, max_length=250_000)
+    cte_name: str = Field(min_length=1)
+
+
+class CteMaterializeResponse(ContractModel):
+    cte_name: str
+    materialized_sql: str
+
+
 class AtlasSqlAction(str, Enum):
     EXPLAIN_QUERY = "explain_query"
     OPTIMIZE_QUERY = "optimize_query"

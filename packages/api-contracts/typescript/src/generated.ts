@@ -1466,6 +1466,26 @@ export interface CortexNode {
 
 export type CortexNodeKind = "run" | "plan_step" | "specialist" | "evidence" | "dataset" | "analytical_object" | "tool" | "artifact";
 
+export interface CteListRequest {
+  connection_id: string;
+  sql: string;
+}
+
+export interface CteListResponse {
+  ctes?: string[];
+}
+
+export interface CteMaterializeRequest {
+  connection_id: string;
+  sql: string;
+  cte_name: string;
+}
+
+export interface CteMaterializeResponse {
+  cte_name: string;
+  materialized_sql: string;
+}
+
 export interface DatasetRef {
   dataset_id: string;
   revision: number;
