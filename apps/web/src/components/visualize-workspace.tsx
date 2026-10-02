@@ -21,6 +21,8 @@ export function VisualizeWorkspace({ datasetId, onSelectContext, onOpenWorkflow 
   const [drilldown, setDrilldown] = useState<ChartDrillDownResponse | null>(null);
   const [drilldownLoading, setDrilldownLoading] = useState(false);
   const [drilldownError, setDrilldownError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
   const load = useCallback(async (id: string) => {
     setState("loading"); setError(null);
@@ -87,6 +89,22 @@ export function VisualizeWorkspace({ datasetId, onSelectContext, onOpenWorkflow 
     } catch { /* Atlas commentary is optional; the chart remains usable without it. */ }
   }
 
+  async function saveChart() {
+    if (!datasetId || !spec || !data) return;
+    setSaving(true); setSaveMessage(null);
+    try {
+      const response = await fetch(apiUrl("/api/v1/reports/charts"), {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name: `${spec.measure ?? spec.dimension} by ${spec.dimension ?? "distribution"}`, dataset_id: datasetId,
+          spec, rationale, source_revision: data.provenance.dataset_revision,
+          source_fingerprint: data.provenance.source_fingerprint }),
+      });
+      if (!response.ok) throw new Error((await response.json() as { detail?: string }).detail ?? "Could not save chart.");
+      setSaveMessage("Chart saved with its source revision and result. Add it to a report.");
+    } catch (reason) { setSaveMessage(reason instanceof Error ? reason.message : "Could not save chart."); }
+    finally { setSaving(false); }
+  }
+
   if (state === "empty") return <section className="overview-state empty-state"><span className="eyebrow">VISUALIZE · NATIVE WORKSPACE</span><h1>Load a dataset in Overview first.</h1><p>Visualize charts the same server-held dataset Overview and SQL Lab already use.</p><button onClick={() => onOpenWorkflow("overview")}>Open Overview</button></section>;
   // error must be checked before the loading/null-data fallback: a failed
   // first load never populates `profile`, so `!profile` alone would keep
@@ -132,6 +150,7 @@ export function VisualizeWorkspace({ datasetId, onSelectContext, onOpenWorkflow 
       <div className="inspector-heading"><span className="eyebrow">ENCODING</span></div>
       <label>Mark<select value={spec.mark} onChange={(event) => updateSpec({ mark: event.target.value as VizMark })}>{MARKS.map((mark) => <option key={mark} value={mark}>{mark}</option>)}</select></label>
       <label>Aggregation<select value={spec.aggregation} onChange={(event) => updateSpec({ aggregation: event.target.value as VisualizationSpec["aggregation"] })}><option value="count">count</option><option value="sum">sum</option><option value="mean">mean</option><option value="median">median</option><option value="none">none</option></select></label>
+      <div className="inspector-actions"><span className="eyebrow">REPORT HANDOFF</span><button disabled={!data || saving} onClick={() => void saveChart()}>{saving ? "Saving…" : "Save chart"}</button><button className="secondary" onClick={() => onOpenWorkflow("reports")}>Open reports</button>{saveMessage ? <p role="status">{saveMessage}</p> : null}</div>
       <div className="inspector-actions"><span className="eyebrow">ATLAS · EVIDENCE-AWARE</span><button onClick={() => void askAtlas("explain_chart")}>Explain this chart</button><button onClick={() => void askAtlas("identify_anomaly")}>Identify anomalies</button><button onClick={() => void askAtlas("propose_alternative")}>Trust check</button></div>
       {atlas ? <aside className="atlas-result" aria-live="polite"><span className="eyebrow">ATLAS · {atlas.action.replaceAll("_", " ")}</span><strong>{atlas.summary}</strong><small>{atlas.uncertainty}</small></aside> : null}
       {data ? <dl className="inspector-data"><div><dt>Source</dt><dd><code>{data.provenance.source_fingerprint.slice(0, 12)}…</code></dd></div><div><dt>Revision</dt><dd>{data.provenance.dataset_revision}</dd></div><div><dt>Points shown</dt><dd>{data.data.length}</dd></div></dl> : null}

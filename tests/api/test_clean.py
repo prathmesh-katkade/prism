@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import unittest.mock
 
-from fastapi.testclient import TestClient
+from fastapi.testclient import TestClient as PlainTestClient
 from prism_api.main import create_app
+from reviewing_client import ReviewingTestClient as TestClient
 
 CSV = (
     b"segment,revenue,label\n"
@@ -239,6 +240,83 @@ def test_recipe_apply_is_all_or_nothing_when_a_step_no_longer_matches_the_schema
     state = client.get(f"/api/v1/clean/datasets/{dataset_id}/state").json()
     assert state["dataset"]["revision"] == 0
     assert state["history"] == []
+
+
+def test_recipe_later_publication_failure_rolls_back_data_and_provenance_then_retry_succeeds() -> None:
+    import prism_api.clean as clean_module
+    from prism_analytical_schemas import ObjectKind
+
+    client = TestClient(create_app())
+    dataset_id = _dataset(client)
+    recipe = client.post("/api/v1/clean/recipes", json={"name": "Two steps", "steps": [
+        {"request": {"operation": "drop_duplicates"}, "enabled": True},
+        {"request": {"operation": "trim_whitespace", "column": "label"}, "enabled": True},
+    ]}).json()
+    original = clean_module.registry.register_with_connection
+    clean_records = 0
+
+    def fail_second_clean(connection, record, **kwargs):  # type: ignore[no-untyped-def]
+        nonlocal clean_records
+        if record.kind is ObjectKind.CLEANING_PLAN:
+            clean_records += 1
+            if clean_records == 2:
+                raise RuntimeError("injected later-step storage failure")
+        return original(connection, record, **kwargs)
+
+    with unittest.mock.patch.object(clean_module.registry, "register_with_connection", side_effect=fail_second_clean):
+        failed = client.post(f"/api/v1/clean/datasets/{dataset_id}/recipes/{recipe['recipe_id']}/apply")
+    assert failed.status_code == 500
+    assert "no steps were applied" in failed.json()["detail"]
+    state = client.get(f"/api/v1/clean/datasets/{dataset_id}/state").json()
+    assert state["dataset"]["revision"] == 0
+    assert state["history"] == []
+    assert clean_module.registry.list_for_dataset(dataset_id, kind=ObjectKind.CLEANING_PLAN) == []
+
+    retried = client.post(f"/api/v1/clean/datasets/{dataset_id}/recipes/{recipe['recipe_id']}/apply")
+    assert retried.status_code == 200
+    assert retried.json()["dataset"]["revision"] == 2
+    assert len(retried.json()["applied_steps"]) == 2
+
+
+def test_preview_ticket_rejects_changed_parameters_stale_revision_and_duplicate_submission() -> None:
+    client = PlainTestClient(create_app())
+    dataset_id = _dataset(client)
+    url = f"/api/v1/clean/datasets/{dataset_id}"
+    request = {"operation": "trim_whitespace", "column": "label"}
+    first = client.post(f"{url}/preview", json=request).json()
+    assert first["source_revision"] == 0
+    assert first["source_fingerprint"]
+    assert client.post(f"{url}/apply", json=request).status_code == 409
+    changed = client.post(f"{url}/apply", json={"operation": "normalize_case", "column": "label", "case": "upper", "review_token": first["review_token"]})
+    assert changed.status_code == 409
+    second = client.post(f"{url}/preview", json=request).json()
+    applied = client.post(f"{url}/apply", json={**request, "review_token": first["review_token"]})
+    assert applied.status_code == 201
+    assert client.post(f"{url}/apply", json={**request, "review_token": first["review_token"]}).status_code == 409
+    stale = client.post(f"{url}/apply", json={**request, "review_token": second["review_token"]})
+    assert stale.status_code == 409
+    assert client.get(f"{url}/state").json()["dataset"]["revision"] == 1
+
+
+def test_recipe_preview_ticket_rejects_changed_recipe_version_and_intervening_edit() -> None:
+    client = PlainTestClient(create_app())
+    dataset_id = _dataset(client)
+    recipe = client.post("/api/v1/clean/recipes", json={"name": "Review me", "steps": [
+        {"request": {"operation": "drop_duplicates"}, "enabled": True},
+    ]}).json()
+    url = f"/api/v1/clean/datasets/{dataset_id}/recipes/{recipe['recipe_id']}"
+    first = client.post(f"{url}/preview").json()
+    assert len(first["step_impacts"]) == 1
+    changed = client.put(f"/api/v1/clean/recipes/{recipe['recipe_id']}/steps", json={"steps": [
+        {"step_id": recipe["steps"][0]["step_id"], "request": {"operation": "trim_whitespace", "column": "label"}, "enabled": True},
+    ]})
+    assert changed.status_code == 200
+    assert client.post(f"{url}/apply", json={"review_token": first["review_token"]}).status_code == 409
+    second = client.post(f"{url}/preview").json()
+    edit = {"operation": "drop_duplicates"}
+    edit_preview = client.post(f"/api/v1/clean/datasets/{dataset_id}/preview", json=edit).json()
+    assert client.post(f"/api/v1/clean/datasets/{dataset_id}/apply", json={**edit, "review_token": edit_preview["review_token"]}).status_code == 201
+    assert client.post(f"{url}/apply", json={"review_token": second["review_token"]}).status_code == 409
 
 
 def test_recipe_editing_steps_creates_a_new_version_without_losing_history() -> None:

@@ -62,6 +62,23 @@ def _dataset_revision_object_id(ref: DatasetRef) -> str:
     return f"dsrev_{ref.dataset_id}_r{ref.revision}_{ref.source_fingerprint[:16]}"
 
 
+def dataset_revision_record(ref: DatasetRef, parent: Optional[AnalyticalObject] = None) -> AnalyticalObject:
+    parent_refs = [ParentRef(object_id=parent.object_id, relation="revision_of")] if parent is not None else []
+    return AnalyticalObject(
+        object_id=_dataset_revision_object_id(ref), kind=ObjectKind.DATASET_REVISION,
+        lifecycle=LifecycleState.COMPLETED,
+        provenance=AnalyticalProvenance(
+            dataset=ref, parent_refs=parent_refs,
+            reproducibility=GenericReproducibilitySpec(
+                producer=Producer(service="dataset-store", version=ANALYTICS_SERVICE_VERSION),
+                operation="ingest" if ref.revision == 0 else "revision",
+                parameters={"revision": ref.revision},
+            ),
+            created_at=datetime.now(timezone.utc),
+        ), payload={},
+    )
+
+
 def ensure_dataset_revision(ref: DatasetRef, parent: Optional[AnalyticalObject] = None) -> AnalyticalObject:
     """Idempotently mirror one DatasetStore dataset/revision/fingerprint identity into the
     registry.
@@ -88,23 +105,7 @@ def ensure_dataset_revision(ref: DatasetRef, parent: Optional[AnalyticalObject] 
     existing = registry.get(object_id)
     if existing is not None:
         return existing
-    parent_refs = [ParentRef(object_id=parent.object_id, relation="revision_of")] if parent is not None else []
-    record = AnalyticalObject(
-        object_id=object_id,
-        kind=ObjectKind.DATASET_REVISION,
-        lifecycle=LifecycleState.COMPLETED,
-        provenance=AnalyticalProvenance(
-            dataset=ref,
-            parent_refs=parent_refs,
-            reproducibility=GenericReproducibilitySpec(
-                producer=Producer(service="dataset-store", version=ANALYTICS_SERVICE_VERSION),
-                operation="ingest" if ref.revision == 0 else "revision",
-                parameters={"revision": ref.revision},
-            ),
-            created_at=datetime.now(timezone.utc),
-        ),
-        payload={},
-    )
+    record = dataset_revision_record(ref, parent)
     try:
         return registry.register(record)
     except ValueError:
@@ -189,7 +190,6 @@ def register_clean_transformation(
     object's own direct parent at the source it actually transformed - never the revision
     it produced, since that didn't exist yet when the transformation ran.
     """
-    producer = Producer(service="clean", version=ANALYTICS_SERVICE_VERSION)
     source_dataset_revision = ensure_dataset_revision(_dataset_ref(source))
     resulting_ref = DatasetRef(
         dataset_id=source.dataset.dataset_id,
@@ -197,6 +197,19 @@ def register_clean_transformation(
         source_fingerprint=transformation.resulting_fingerprint,
     )
     ensure_dataset_revision(resulting_ref, parent=source_dataset_revision)
+    return registry.register(clean_transformation_record(source, transformation, warnings, source_dataset_revision))
+
+
+def clean_transformation_record(
+    source: StoredDataset, transformation: CleanTransformation, warnings: List[str],
+    source_dataset_revision: AnalyticalObject,
+) -> AnalyticalObject:
+    producer = Producer(service="clean", version=ANALYTICS_SERVICE_VERSION)
+    resulting_ref = DatasetRef(
+        dataset_id=source.dataset.dataset_id,
+        revision=transformation.resulting_revision,
+        source_fingerprint=transformation.resulting_fingerprint,
+    )
     record = AnalyticalObject(
         object_id=f"clean_{transformation.transformation_id}",
         kind=ObjectKind.CLEANING_PLAN,
@@ -229,7 +242,7 @@ def register_clean_transformation(
             "source_revision": transformation.source_revision,
         },
     )
-    return registry.register(record)
+    return record
 
 
 def register_query_result(

@@ -1,5 +1,7 @@
 # Analytical Workspaces v1 — delivery report
 
+> Historical checkpoint report. Its “not attempted” list and 1,240/7 and 95-web-test counts predate the latest branch commits. See [acceptance-matrix.md](acceptance-matrix.md) for the current audit. On 2026-10-02, the repaired Python 3.11.9 environment ran the current baseline against a unique isolated SQLite database: **1,293 passed, 7 skipped, 43 warnings**. The fresh web baseline was **104 passed across 16 files**. The release remains in progress.
+
 Branch: `prism/analytical-workspaces-v1`
 Baseline: `main` @ `56da12e` (tag `prism-native-v0.9`), reverified against `origin/main` before starting.
 Worktree: `C:\Users\Admin\source\repos\prism-workspaces`

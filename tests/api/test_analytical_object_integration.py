@@ -1,6 +1,6 @@
-from fastapi.testclient import TestClient
 from prism_api.analytical_objects import registry
 from prism_api.main import create_app
+from reviewing_client import ReviewingTestClient as TestClient
 
 
 def _dataset(client: TestClient) -> str:

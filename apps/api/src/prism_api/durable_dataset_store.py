@@ -138,7 +138,8 @@ class DurableDatasetStore:
             rows = connection.execute(select(_revisions).where(and_(_revisions.c.dataset_id == dataset_id, _revisions.c.is_active.is_(True))).order_by(_revisions.c.revision, _revisions.c.activated_at)).mappings().all()
         return [self._stored(row) for row in rows]
 
-    def add_revision(self, dataset_id: str, frame: pd.DataFrame, fingerprint: str) -> OverviewDataset:
+    def add_revision(self, dataset_id: str, frame: pd.DataFrame, fingerprint: str,
+                     expected_revision: int | None = None, expected_fingerprint: str | None = None) -> OverviewDataset:
         # Two overlapping apply requests for the same dataset must not both
         # read the same "current" head and allocate the same next revision
         # number under different fingerprints (the primary key would let both
@@ -166,6 +167,10 @@ class DurableDatasetStore:
                     ).mappings().first()
                     if row is None:
                         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Overview dataset was not found.")
+                    if ((expected_revision is not None and row["revision"] != expected_revision) or
+                            (expected_fingerprint is not None and row["source_fingerprint"] != expected_fingerprint)):
+                        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                                            detail="Dataset changed since this operation was reviewed; preview the current revision again.")
                     dataset = OverviewDataset(dataset_id=dataset_id, revision=row["revision"] + 1, source_name=row["source_name"], source_fingerprint=fingerprint, row_count=len(frame), column_count=len(frame.columns))
                     existing = connection.execute(
                         select(_revisions.c.dataset_id).where(

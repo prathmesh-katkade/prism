@@ -19,7 +19,7 @@ from typing import Any, cast
 
 import pandas as pd
 from fastapi import APIRouter, HTTPException, status
-from prism_analytical_schemas import CleaningReproducibilitySpec, ObjectKind
+from prism_analytical_schemas import CleaningReproducibilitySpec, DatasetRef, ObjectKind
 from prism_api_contracts import (
     AtlasCleanAction,
     AtlasCleanRequest,
@@ -31,8 +31,10 @@ from prism_api_contracts import (
     CleanOperation,
     CleanPreviewResponse,
     CleanRecipe,
+    CleanRecipeApplyRequest,
     CleanRecipeApplyResponse,
     CleanRecipeCreateRequest,
+    CleanRecipePreviewResponse,
     CleanRecipeStep,
     CleanRecipeStepsUpdateRequest,
     CleanStateResponse,
@@ -42,12 +44,22 @@ from prism_api_contracts import (
     ColumnValueCount,
     ColumnValueCountsResponse,
     OverviewColumn,
+    OverviewDataset,
     OverviewQuality,
 )
 from prism_overview_analytics import build_overview
+from sqlalchemy import and_, desc, func, insert, select, update
 
-from .analytical_objects import register_clean_transformation, registry
+from .analytical_objects import (
+    clean_transformation_record,
+    dataset_revision_record,
+    register_clean_transformation,
+    registry,
+)
+from .durable_clean_review_store import DurableCleanReviewStore
+from .durable_dataset_store import DurableDatasetStore, _revisions
 from .durable_recipe_store import DurableRecipeStore
+from .durable_registry import DurableAnalyticalObjectRegistry
 from .overview import StoredDataset
 from .overview import store as overview_store
 
@@ -399,25 +411,37 @@ def preview_transformation(dataset_id: str, request: CleanTransformationRequest)
     stored = overview_store.get(dataset_id)
     before_sample = _sample(stored.frame)
     updated, affected_rows, affected_columns, warnings, unresolved_values = _apply_operation(stored.frame, request)
+    token = reviews.issue(dataset_id, stored.dataset.revision, stored.source_fingerprint,
+                          request.model_dump(exclude={"review_token"}, exclude_none=True))
     return CleanPreviewResponse(
         operation=request.operation, affected_rows=affected_rows, affected_columns=affected_columns,
         before_sample=before_sample, after_sample=_sample(updated), warnings=warnings, projected_health=_health(updated),
         unresolved_values=unresolved_values,
+        review_token=token, source_revision=stored.dataset.revision,
+        source_fingerprint=stored.source_fingerprint,
     )
 
 
-def _commit_operation(dataset_id: str, request: CleanTransformationRequest, extra_parameters: dict[str, Any] | None = None) -> CleanTransformation:
+def _commit_operation(dataset_id: str, request: CleanTransformationRequest, extra_parameters: dict[str, Any] | None = None,
+                      reviewed_source: StoredDataset | None = None) -> CleanTransformation:
     """Run and durably record one operation against a dataset's *current* revision.
 
-    Shared by the single-operation apply endpoint and recipe application, so both go
-    through the exact same validate → compute → append-revision → register path.
+    This path handles one operation. Recipes use a separate atomic publication
+    transaction for the entire enabled chain.
     """
     stored = overview_store.get(dataset_id)
     source_revision = stored.dataset.revision
+    if reviewed_source is not None and (source_revision != reviewed_source.dataset.revision or
+                                        stored.source_fingerprint != reviewed_source.source_fingerprint):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail="Dataset changed since preview; review the current revision again.")
     updated, affected_rows, affected_columns, warnings, _unresolved_values = _apply_operation(stored.frame, request)
     fingerprint = _fingerprint(updated)
-    dataset = overview_store.add_revision(dataset_id, updated, fingerprint)
-    parameters = request.model_dump(exclude={"operation", "column"}, exclude_none=True)
+    dataset = cast(DurableDatasetStore, overview_store).add_revision(
+        dataset_id, updated, fingerprint, expected_revision=source_revision,
+        expected_fingerprint=stored.source_fingerprint,
+    )
+    parameters = request.model_dump(exclude={"operation", "column", "review_token"}, exclude_none=True)
     if extra_parameters:
         parameters.update(extra_parameters)
     transformation = CleanTransformation(
@@ -444,12 +468,17 @@ def _commit_operation(dataset_id: str, request: CleanTransformationRequest, extr
 
 @router.post("/datasets/{dataset_id}/apply", response_model=CleanApplyResponse, status_code=status.HTTP_201_CREATED)
 def apply_transformation(dataset_id: str, request: CleanTransformationRequest) -> CleanApplyResponse:
-    transformation = _commit_operation(dataset_id, request)
+    current = overview_store.get(dataset_id)
+    reviews.consume(request.review_token, dataset_id, current.dataset.revision,
+                    current.source_fingerprint,
+                    request.model_dump(exclude={"review_token"}, exclude_none=True))
+    transformation = _commit_operation(dataset_id, request, reviewed_source=current)
     updated = overview_store.get(dataset_id)
     return CleanApplyResponse(dataset=updated.dataset, transformation=transformation, issues=detect_issues(updated.frame), health=_health(updated.frame))
 
 
 recipes = DurableRecipeStore()
+reviews = DurableCleanReviewStore()
 
 
 @router.post("/recipes", response_model=CleanRecipe, status_code=status.HTTP_201_CREATED)
@@ -499,23 +528,137 @@ def _dry_run_recipe(frame: pd.DataFrame, steps: list[CleanRecipeStep]) -> None:
             ) from error
 
 
+@router.post("/datasets/{dataset_id}/recipes/{recipe_id}/preview", response_model=CleanRecipePreviewResponse)
+def preview_recipe(dataset_id: str, recipe_id: str) -> CleanRecipePreviewResponse:
+    recipe = recipes.latest(recipe_id)
+    if not any(step.enabled for step in recipe.steps):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            detail="This recipe has no enabled steps to preview.")
+    stored = overview_store.get(dataset_id)
+    working = stored.frame
+    impacts: list[int] = []
+    for index, step in enumerate(recipe.steps):
+        if not step.enabled:
+            impacts.append(0)
+            continue
+        try:
+            working, affected, _, _, _ = _apply_operation(working, step.request)
+        except HTTPException as error:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                                detail=f"Recipe step {index + 1} ({step.request.operation.value} on {step.request.column or 'the dataset'}) no longer matches this dataset's schema: {error.detail}") from error
+        impacts.append(affected)
+    token = reviews.issue(dataset_id, stored.dataset.revision, stored.source_fingerprint,
+                          {"recipe_id": recipe_id, "recipe_version": recipe.version,
+                           "steps": [step.model_dump(mode="json") for step in recipe.steps]})
+    return CleanRecipePreviewResponse(
+        recipe_id=recipe_id, recipe_version=recipe.version,
+        source_revision=stored.dataset.revision, source_fingerprint=stored.source_fingerprint,
+        review_token=token, before_sample=_sample(stored.frame), after_sample=_sample(working),
+        step_impacts=impacts, projected_health=_health(working),
+    )
+
+
 @router.post("/datasets/{dataset_id}/recipes/{recipe_id}/apply", response_model=CleanRecipeApplyResponse)
-def apply_recipe(dataset_id: str, recipe_id: str) -> CleanRecipeApplyResponse:
+def apply_recipe(dataset_id: str, recipe_id: str, request: CleanRecipeApplyRequest) -> CleanRecipeApplyResponse:
     recipe = recipes.latest(recipe_id)
     if not any(step.enabled for step in recipe.steps):
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="This recipe has no enabled steps to apply.")
     stored = overview_store.get(dataset_id)
-    _dry_run_recipe(stored.frame, recipe.steps)  # all-or-nothing: the whole chain is validated before any revision is written
-    applied: list[CleanTransformation] = []
+    # Compute every enabled step before opening a publication transaction. A
+    # failing later step names its place in the recipe without changing data.
+    prepared: list[tuple[StoredDataset, StoredDataset, CleanTransformation, list[str]]] = []
+    source = stored
     for index, step in enumerate(recipe.steps):
         if not step.enabled:
             continue
-        applied.append(_commit_operation(
-            dataset_id, step.request,
-            extra_parameters={"recipe_id": recipe_id, "recipe_version": recipe.version, "recipe_step_index": index},
-        ))
+        try:
+            frame, affected_rows, affected_columns, warnings, _ = _apply_operation(source.frame, step.request)
+        except HTTPException as error:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                                detail=f"Recipe step {index + 1} ({step.request.operation.value} on {step.request.column or 'the dataset'}) no longer matches this dataset's schema: {error.detail}") from error
+        fingerprint = _fingerprint(frame)
+        next_dataset = OverviewDataset(
+            dataset_id=dataset_id, revision=source.dataset.revision + 1,
+            source_name=source.dataset.source_name, source_fingerprint=fingerprint,
+            row_count=len(frame), column_count=len(frame.columns),
+        )
+        next_source = StoredDataset(next_dataset, frame, fingerprint)
+        parameters = step.request.model_dump(exclude={"operation", "column", "review_token"}, exclude_none=True)
+        parameters.update({"recipe_id": recipe_id, "recipe_version": recipe.version, "recipe_step_index": index})
+        transformation = CleanTransformation(
+            transformation_id=f"clean_{uuid.uuid4().hex}", operation=step.request.operation,
+            column=step.request.column, parameters=parameters,
+            affected_rows=affected_rows, affected_columns=affected_columns,
+            source_revision=source.dataset.revision, resulting_revision=next_dataset.revision,
+            source_fingerprint=source.source_fingerprint, resulting_fingerprint=fingerprint,
+            reversible=True, created_at=datetime.now(timezone.utc),
+        )
+        prepared.append((source, next_source, transformation, warnings))
+        source = next_source
+
+    reviews.consume(request.review_token, dataset_id, stored.dataset.revision,
+                    stored.source_fingerprint, {"recipe_id": recipe_id, "recipe_version": recipe.version,
+                                                "steps": [step.model_dump(mode="json") for step in recipe.steps]})
+
+    dataset_store = cast(DurableDatasetStore, overview_store)
+    durable_registry = cast(DurableAnalyticalObjectRegistry, registry)
+    if durable_registry.engine is None or dataset_store.engine.url != durable_registry.engine.url:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                            detail="Atomic recipe publication requires the dataset and provenance stores to share one durable database.")
+    try:
+        with dataset_store.engine.begin() as connection:
+            head = connection.execute(
+                select(_revisions).where(and_(_revisions.c.dataset_id == dataset_id, _revisions.c.is_active.is_(True)))
+                .order_by(desc(_revisions.c.revision)).limit(1).with_for_update()
+            ).mappings().first()
+            if head is None or head["revision"] != stored.dataset.revision or head["source_fingerprint"] != stored.source_fingerprint:
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                                    detail="Dataset changed while this recipe was being prepared; preview the current revision again.")
+            parent_ref = DatasetRef(dataset_id=dataset_id, revision=stored.dataset.revision,
+                                    source_fingerprint=stored.source_fingerprint)
+            parent_record = dataset_revision_record(parent_ref)
+            durable_registry.register_with_connection(connection, parent_record, allow_existing=True)
+            for before, after, transformation, warnings in prepared:
+                existing = connection.execute(select(_revisions.c.dataset_id).where(and_(
+                    _revisions.c.dataset_id == dataset_id, _revisions.c.revision == after.dataset.revision,
+                    _revisions.c.source_fingerprint == after.source_fingerprint,
+                ))).scalar_one_or_none()
+                if existing is None:
+                    connection.execute(insert(_revisions).values(
+                        dataset_id=dataset_id, revision=after.dataset.revision,
+                        source_fingerprint=after.source_fingerprint, source_name=after.dataset.source_name,
+                        row_count=after.dataset.row_count, column_count=after.dataset.column_count,
+                        frame_json=dataset_store._frame_json(after.frame), is_active=True,
+                        activated_at=datetime.now(timezone.utc),
+                    ))
+                else:
+                    connection.execute(update(_revisions).where(and_(
+                        _revisions.c.dataset_id == dataset_id, _revisions.c.revision == after.dataset.revision,
+                        _revisions.c.source_fingerprint == after.source_fingerprint,
+                    )).values(is_active=True, activated_at=datetime.now(timezone.utc)))
+                active = connection.execute(select(func.count()).select_from(_revisions).where(and_(
+                    _revisions.c.dataset_id == dataset_id, _revisions.c.revision == after.dataset.revision,
+                    _revisions.c.is_active.is_(True),
+                ))).scalar_one()
+                if active != 1:
+                    raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                                        detail="Another apply created this dataset revision; reload before retrying.")
+                next_ref = DatasetRef(dataset_id=dataset_id, revision=after.dataset.revision,
+                                      source_fingerprint=after.source_fingerprint)
+                next_record = dataset_revision_record(next_ref, parent_record)
+                durable_registry.register_with_connection(connection, next_record, allow_existing=True)
+                clean_record = clean_transformation_record(before, transformation, warnings, parent_record)
+                durable_registry.register_with_connection(connection, clean_record)
+                parent_record = next_record
+    except HTTPException:
+        raise
+    except Exception as error:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                            detail="Recipe publication failed; no steps were applied. Retry after the storage error is resolved.") from error
     updated = overview_store.get(dataset_id)
-    return CleanRecipeApplyResponse(dataset=updated.dataset, recipe_id=recipe_id, recipe_version=recipe.version, applied_steps=applied, issues=detect_issues(updated.frame), health=_health(updated.frame))
+    return CleanRecipeApplyResponse(dataset=updated.dataset, recipe_id=recipe_id, recipe_version=recipe.version,
+                                    applied_steps=[item[2] for item in prepared],
+                                    issues=detect_issues(updated.frame), health=_health(updated.frame))
 
 
 @router.post("/datasets/{dataset_id}/undo", response_model=CleanStateResponse)

@@ -4,10 +4,10 @@ analytical object - it always creates a new one, leaving the original untouched.
 
 from __future__ import annotations
 
-from fastapi.testclient import TestClient
 from prism_analytical_schemas import ObjectKind
 from prism_api.analytical_objects import registry
 from prism_api.main import create_app
+from reviewing_client import ReviewingTestClient as TestClient
 
 
 def _dataset(client: TestClient, csv: bytes = b"x,y,segment,label\n1,10,a,yes\n2,20,a,no\n3,30,b,yes\n4,40,b,no\n5,50,a,yes\n6,60,b,no\n", name: str = "phase8f.csv") -> str:

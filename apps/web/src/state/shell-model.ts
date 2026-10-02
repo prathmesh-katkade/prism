@@ -8,7 +8,7 @@ export type PanelId = "rail" | "inspector" | "atlas";
 export interface WorkspaceTab {
   id: string;
   label: string;
-  kind: "home" | "bridge" | "overview" | "sql-lab" | "ai-analyst" | "clean" | "visualize" | "stats" | "forecasting" | "ml" | "history" | "atlas" | "evolution";
+  kind: "home" | "bridge" | "overview" | "sql-lab" | "ai-analyst" | "clean" | "visualize" | "reports" | "stats" | "forecasting" | "ml" | "history" | "atlas" | "evolution";
   workflow?: string;
   closeable: boolean;
 }
@@ -50,6 +50,7 @@ export const phaseTwoMigrations: readonly MigrationState[] = [
   { workflow: "ai-analyst", channel: "enabled", legacy_reference: "legacy://ai-analyst", parity_required: true },
   { workflow: "clean", channel: "enabled", legacy_reference: "legacy://clean", parity_required: true },
   { workflow: "visualize", channel: "enabled", legacy_reference: "legacy://visualize", parity_required: true },
+  { workflow: "reports", channel: "enabled", legacy_reference: "legacy://reports", parity_required: true },
   { workflow: "stats", channel: "enabled", legacy_reference: "modules/stats_lab.py", parity_required: true },
   { workflow: "forecasting", channel: "enabled", legacy_reference: "modules/forecasting.py", parity_required: true },
   { workflow: "ml", channel: "enabled", legacy_reference: "modules/mllab.py", parity_required: true },

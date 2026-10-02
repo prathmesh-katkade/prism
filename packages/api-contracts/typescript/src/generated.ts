@@ -1316,6 +1316,16 @@ export interface ChartDrillDownResponse {
   filters_applied?: Record<string, unknown>;
 }
 
+export interface ChartFreshnessStatus {
+  chart_id: string;
+  saved_revision: number;
+  acknowledged_revision: number;
+  current_revision?: number;
+  current_fingerprint?: string;
+  needs_refresh: boolean;
+  dataset_unavailable?: boolean;
+}
+
 export interface CleanApplyResponse {
   dataset: OverviewDataset;
   transformation: CleanTransformation;
@@ -1346,6 +1356,9 @@ export interface CleanPreviewResponse {
   warnings?: string[];
   projected_health: OverviewHealth;
   unresolved_values?: string[];
+  review_token?: string;
+  source_revision?: number;
+  source_fingerprint?: string;
 }
 
 export interface CleanRecipe {
@@ -1354,6 +1367,10 @@ export interface CleanRecipe {
   version: number;
   steps: CleanRecipeStep[];
   created_at: string;
+}
+
+export interface CleanRecipeApplyRequest {
+  review_token: string;
 }
 
 export interface CleanRecipeApplyResponse {
@@ -1368,6 +1385,18 @@ export interface CleanRecipeApplyResponse {
 export interface CleanRecipeCreateRequest {
   name: string;
   steps?: CleanRecipeStepInput[];
+}
+
+export interface CleanRecipePreviewResponse {
+  recipe_id: string;
+  recipe_version: number;
+  source_revision: number;
+  source_fingerprint: string;
+  review_token: string;
+  before_sample: Record<string, unknown>[];
+  after_sample: Record<string, unknown>[];
+  step_impacts: number[];
+  projected_health: OverviewHealth;
 }
 
 export interface CleanRecipeStep {
@@ -1429,6 +1458,7 @@ export interface CleanTransformationRequest {
   survivorship_tiebreak_column?: string;
   date_format?: string;
   number_locale?: "standard" | "european";
+  review_token?: string;
 }
 
 export interface CleanUndoRequest {
@@ -1931,6 +1961,52 @@ export interface ReadinessResponse {
 
 export type ReleaseChannel = "legacy" | "shadow" | "enabled";
 
+export interface Report {
+  report_id: string;
+  name: string;
+  chart_refs?: ReportChartRef[];
+  notes?: ReportNote[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ReportAddChartRequest {
+  chart_id: string;
+}
+
+export interface ReportAddNoteRequest {
+  text: string;
+}
+
+export interface ReportChartRef {
+  chart_id: string;
+  acknowledged_revision: number;
+  acknowledged_fingerprint?: string;
+  added_at: string;
+}
+
+export interface ReportCreateRequest {
+  name: string;
+}
+
+export interface ReportDetail {
+  report: Report;
+  charts?: SavedChart[];
+  freshness?: ChartFreshnessStatus[];
+}
+
+export interface ReportNote {
+  note_id: string;
+  text: string;
+  created_at: string;
+}
+
+export interface ReportRefreshRequest {
+  chart_ids?: string[];
+  source_revisions?: Record<string, number>;
+  source_fingerprints?: Record<string, string>;
+}
+
 export type ReproductionMode = "same_revision" | "current_revision";
 
 export type ReproductionOutcome = "created" | "unsupported" | "validation_failed" | "source_revision_unavailable";
@@ -1976,6 +2052,28 @@ export interface ResultRowDiff {
   changed_columns?: string[];
   base_values?: Record<string, unknown>;
   compare_values?: Record<string, unknown>;
+}
+
+export interface SavedChart {
+  chart_id: string;
+  name: string;
+  dataset_id: string;
+  dataset_revision: number;
+  source_fingerprint: string;
+  spec: VisualizationSpec;
+  rationale: string;
+  created_at: string;
+  result?: VisualizationDataResponse;
+  previous_chart_id?: string;
+}
+
+export interface SavedChartCreateRequest {
+  name: string;
+  dataset_id: string;
+  spec: VisualizationSpec;
+  rationale?: string;
+  source_revision?: number;
+  source_fingerprint?: string;
 }
 
 export interface SqlCapability {

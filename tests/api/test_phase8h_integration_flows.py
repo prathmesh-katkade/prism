@@ -8,10 +8,10 @@ from __future__ import annotations
 
 import time
 
-from fastapi.testclient import TestClient
 from prism_analytical_schemas import ObjectKind
 from prism_api.analytical_objects import registry
 from prism_api.main import create_app
+from reviewing_client import ReviewingTestClient as TestClient
 
 
 def _dataset(client: TestClient, csv: bytes, name: str) -> str:

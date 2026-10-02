@@ -120,6 +120,7 @@ describe("Clean workspace", () => {
         return json(saved, 201);
       }
       if (path.endsWith("/recipes")) return json(saved ? [saved] : []);
+      if (path.includes("/recipes/recipe_1/preview")) return json({ recipe_id: "recipe_1", recipe_version: 1, source_revision: 0, source_fingerprint: dataset0.source_fingerprint, review_token: "review_1", before_sample: [{ segment: "a" }], after_sample: [{ segment: "a" }], step_impacts: [1], projected_health: health });
       if (path.includes("/recipes/recipe_1/apply")) { applied = true; return json({ dataset: dataset1, recipe_id: "recipe_1", recipe_version: 1, applied_steps: [], issues: [], health }); }
       return json({});
     });
@@ -141,7 +142,9 @@ describe("Clean workspace", () => {
     await waitFor(() => expect(screen.getByText("Drop duplicates nightly")).toBeInTheDocument());
     expect(screen.getByText("v1 · 1/1 step(s) enabled")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "Preview" })[1]!);
+    await waitFor(() => expect(screen.getByText(/Recipe version 1 reviewed/)).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Apply reviewed recipe" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/recipes/recipe_1/apply"), expect.objectContaining({ method: "POST" })));
     await waitFor(() => expect(screen.getByText(/revision 1/)).toBeInTheDocument());
   });
@@ -154,14 +157,14 @@ describe("Clean workspace", () => {
       if (path.includes("/rows")) return json(rowsPage);
       if (path.includes("/profile")) return json({});
       if (path.endsWith("/recipes")) return json([recipe]);
-      if (path.includes("/recipes/recipe_2/apply")) return json({ detail: "Recipe step 1 (drop_column on retired_column) no longer matches this dataset's schema: Column 'retired_column' is not in the active dataset." }, 409);
+      if (path.includes("/recipes/recipe_2/preview")) return json({ detail: "Recipe step 1 (drop_column on retired_column) no longer matches this dataset's schema: Column 'retired_column' is not in the active dataset." }, 409);
       return json({});
     });
     vi.stubGlobal("fetch", fetchMock);
     render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
 
     await waitFor(() => expect(screen.getByText("Stale recipe")).toBeInTheDocument());
-    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    fireEvent.click(screen.getByRole("button", { name: "Preview" }));
 
     await waitFor(() => expect(screen.getByText(/no longer matches this dataset's schema/)).toBeInTheDocument());
     expect(screen.getByText("5 rows · 3 columns · revision 0")).toBeInTheDocument(); // never claims a later revision happened

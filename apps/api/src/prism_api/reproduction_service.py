@@ -207,8 +207,11 @@ def _dispatch_clean_current(record: AnalyticalObject, stored: StoredDataset) -> 
         fill_value=cast(Optional[str], params.get("fill_value")),
         case=cast(Optional[str], params.get("case")),
     )
-    result = clean.apply_transformation(stored.dataset.dataset_id, request)
-    created = object_registry.get(f"clean_{result.transformation.transformation_id}")
+    # The rerun route is its own explicit action against an immutable stored
+    # plan. It does not enter the general user-authored apply route, which
+    # requires a one-use preview ticket.
+    result = clean._commit_operation(stored.dataset.dataset_id, request)
+    created = object_registry.get(f"clean_{result.transformation_id}")
     if created is None:  # pragma: no cover - transaction failure would already surface
         raise ValueError("Clean rerun completed without recording an analytical object.")
     return created

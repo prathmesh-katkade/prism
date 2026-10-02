@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useState } from "react";
-import type { AtlasCleanResponse, CleanIssue, CleanOperation, CleanPreviewResponse, CleanRecipe, CleanStateResponse, CleanTransformationRequest, ColumnValueCount, ColumnValueCountsResponse, DatasetRowsResponse, FillStrategy, OverviewProfileResponse, ValidationRule, ValidationRuleKind, ValidationRunResult } from "@prism/api-contracts";
+import type { AtlasCleanResponse, CleanIssue, CleanOperation, CleanPreviewResponse, CleanRecipe, CleanRecipePreviewResponse, CleanStateResponse, CleanTransformationRequest, ColumnValueCount, ColumnValueCountsResponse, DatasetRowsResponse, FillStrategy, OverviewProfileResponse, ValidationRule, ValidationRuleKind, ValidationRunResult } from "@prism/api-contracts";
 import { apiUrl } from "../config/api";
 import type { InspectorObjectState } from "../state/shell-model";
 
@@ -66,6 +66,7 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
   const [recipeName, setRecipeName] = useState("");
   const [recipeError, setRecipeError] = useState<string | null>(null);
   const [applyingRecipeId, setApplyingRecipeId] = useState<string | null>(null);
+  const [recipePreview, setRecipePreview] = useState<CleanRecipePreviewResponse | null>(null);
 
   const loadRecipes = useCallback(async () => {
     try {
@@ -150,7 +151,7 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
 
   async function previewOperation(request: CleanTransformationRequest) {
     if (!datasetId) return;
-    setPendingRequest(request); setError(null);
+    setPendingRequest(request); setPreview(null); setRecipePreview(null); setError(null);
     try {
       const response = await fetch(apiUrl(`/api/v1/clean/datasets/${datasetId}/preview`), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(request) });
       if (!response.ok) throw new Error((await response.json() as { detail?: string }).detail ?? "Preview failed.");
@@ -220,13 +221,24 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
     } catch (reason) { setRecipeError(reason instanceof Error ? reason.message : "Saving the recipe failed."); }
   }
 
+  async function previewSavedRecipe(recipe: CleanRecipe) {
+    if (!datasetId) return;
+    setRecipeError(null); setRecipePreview(null); setPreview(null); setPendingRequest(null);
+    try {
+      const response = await fetch(apiUrl(`/api/v1/clean/datasets/${datasetId}/recipes/${recipe.recipe_id}/preview`), { method: "POST" });
+      if (!response.ok) throw new Error((await response.json() as { detail?: string }).detail ?? "Previewing the recipe failed.");
+      setRecipePreview(await response.json() as CleanRecipePreviewResponse);
+    } catch (reason) { setRecipeError(reason instanceof Error ? reason.message : "Previewing the recipe failed."); }
+  }
+
   async function applyRecipe(recipe: CleanRecipe) {
     if (!datasetId) return;
+    if (!recipePreview || recipePreview.recipe_id !== recipe.recipe_id || recipePreview.recipe_version !== recipe.version) return;
     setApplyingRecipeId(recipe.recipe_id); setRecipeError(null);
     try {
-      const response = await fetch(apiUrl(`/api/v1/clean/datasets/${datasetId}/recipes/${recipe.recipe_id}/apply`), { method: "POST" });
+      const response = await fetch(apiUrl(`/api/v1/clean/datasets/${datasetId}/recipes/${recipe.recipe_id}/apply`), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ review_token: recipePreview.review_token }) });
       if (!response.ok) throw new Error((await response.json() as { detail?: string }).detail ?? "Applying the recipe failed.");
-      setManualMode(false); setSelectedIssue(null); setPreview(null); setPendingRequest(null);
+      setManualMode(false); setSelectedIssue(null); setPreview(null); setPendingRequest(null); setRecipePreview(null);
       await refresh(datasetId);
     } catch (reason) { setRecipeError(reason instanceof Error ? reason.message : "Applying the recipe failed."); }
     finally { setApplyingRecipeId(null); }
@@ -272,10 +284,10 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
   }
 
   async function apply() {
-    if (!datasetId || !pendingRequest) return;
+    if (!datasetId || !pendingRequest || !preview) return;
     setApplying(true);
     try {
-      const response = await fetch(apiUrl(`/api/v1/clean/datasets/${datasetId}/apply`), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(pendingRequest) });
+      const response = await fetch(apiUrl(`/api/v1/clean/datasets/${datasetId}/apply`), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...pendingRequest, review_token: preview.review_token }) });
       if (!response.ok) throw new Error((await response.json() as { detail?: string }).detail ?? "Applying the transformation failed.");
       const applied = await response.json() as { transformation: { transformation_id: string; operation: string } };
       onSelectContext({ objectId: applied.transformation.transformation_id, analyticalObjectId: `clean_${applied.transformation.transformation_id}`, label: `Clean — ${applied.transformation.operation.replaceAll("_", " ")}`, type: "finding", state: "ready", actions: [], metadata: ["Immutable transformation record"] });
@@ -355,7 +367,8 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
         const enabledCount = recipe.steps.filter((step) => step.enabled).length;
         return <li key={recipe.recipe_id}>
           <div><strong>{recipe.name}</strong><small>v{recipe.version} · {enabledCount}/{recipe.steps.length} step(s) enabled</small></div>
-          <button className="secondary" disabled={applyingRecipeId === recipe.recipe_id} onClick={() => void applyRecipe(recipe)}>{applyingRecipeId === recipe.recipe_id ? "Applying…" : "Apply"}</button>
+          <button className="secondary" disabled={applyingRecipeId === recipe.recipe_id} onClick={() => void previewSavedRecipe(recipe)}>Preview</button>
+          {recipePreview?.recipe_id === recipe.recipe_id ? <div className="clean-recipe-review"><small>Reviewed revision {recipePreview.source_revision} · {recipePreview.step_impacts.join(" / ")} affected row(s) by step</small><button disabled={applyingRecipeId === recipe.recipe_id} onClick={() => void applyRecipe(recipe)}>{applyingRecipeId === recipe.recipe_id ? "Applying…" : "Apply reviewed recipe"}</button><button className="secondary" onClick={() => setRecipePreview(null)}>Discard</button></div> : null}
         </li>;
       })}</ul> : <p className="quiet-note">Build an operation above and save it as a recipe to reuse it later, or on another dataset with the same schema.</p>}
       {recipeError ? <p className="query-error" role="alert">{recipeError}</p> : null}
@@ -399,6 +412,10 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
         {(preview.warnings ?? []).length ? <ul className="clean-warnings">{(preview.warnings ?? []).map((warning) => <li key={warning}>{warning}</li>)}</ul> : null}
         {(preview.unresolved_values ?? []).length ? <div className="clean-exceptions"><span className="eyebrow">EXCEPTIONS · {(preview.unresolved_values ?? []).length}</span><ul>{(preview.unresolved_values ?? []).slice(0, 20).map((value) => <li key={value}><code>{value}</code></li>)}</ul>{(preview.unresolved_values ?? []).length > 20 ? <p className="quiet-note">+{(preview.unresolved_values ?? []).length - 20} more</p> : null}</div> : null}
         <div className="clean-diff"><div><span className="eyebrow">BEFORE</span><SampleTable rows={preview.before_sample} /></div><div><span className="eyebrow">AFTER</span><SampleTable rows={preview.after_sample} /></div></div>
+      </> : recipePreview ? <>
+        <p className="clean-preview-summary">Recipe version {recipePreview.recipe_version} reviewed against revision {recipePreview.source_revision}. Projected health: <strong>{recipePreview.projected_health.total}/100</strong>.</p>
+        <div className="clean-diff"><div><span className="eyebrow">BEFORE</span><SampleTable rows={recipePreview.before_sample} /></div><div><span className="eyebrow">AFTER</span><SampleTable rows={recipePreview.after_sample} /></div></div>
+        <p className="quiet-note">No dataset changes until Apply reviewed recipe.</p>
       </> : <>
         <p className="quiet-note">{selectedIssue ? "Select an issue to preview a proposed fix before applying it." : manualMode ? "Fill in the operation on the left and select Preview — nothing is changed until you apply." : "This is the dataset as it stands at the current revision. Select an issue or start a manual operation to preview a fix."} Nothing is changed until you apply.</p>
         <div className="clean-table-toolbar">

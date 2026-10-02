@@ -26,7 +26,7 @@ describe("Visualize workspace", () => {
   });
 
   it("suggests a deterministic chart, renders server-aggregated data, and explains it through Atlas", async () => {
-    const fetchMock = vi.fn(async (input: string | URL) => {
+    const fetchMock = vi.fn(async (input: string | URL, _init?: RequestInit) => {
       const path = String(input);
       if (path.includes("/profile")) return json(profile);
       if (path.includes("/suggest")) return json(suggestion);
@@ -47,7 +47,7 @@ describe("Visualize workspace", () => {
 
   it("resolves a clicked bar to its real contributing rows via a server-resolved filter, disclosing truncation", async () => {
     const drilldownResponse = { total_matching_rows: 5, rows: [{ segment: "a", revenue: 15 }, { segment: "a", revenue: 15 }], offset: 0, limit: 2, truncated: true, filters_applied: { segment: "a" } };
-    const fetchMock = vi.fn(async (input: string | URL) => {
+    const fetchMock = vi.fn(async (input: string | URL, _init?: RequestInit) => {
       const path = String(input);
       if (path.includes("/profile")) return json(profile);
       if (path.includes("/suggest")) return json(suggestion);

@@ -9,6 +9,7 @@ import { QueryStudio } from "./query-studio";
 import { AiAnalyst } from "./ai-analyst";
 import { CleanWorkspace } from "./clean-workspace";
 import { VisualizeWorkspace } from "./visualize-workspace";
+import { ReportsWorkspace } from "./reports-workspace";
 import { StatsWorkspace } from "./stats-workspace";
 import { ForecastingWorkspace } from "./forecasting-workspace";
 import { MlLabWorkspace } from "./mllab-workspace";
@@ -29,6 +30,7 @@ const navigation: ReadonlyArray<{ workflow: string; label: string; icon: IconNam
   { workflow: "ai-analyst", label: "AI Analyst", icon: "spark" },
   { workflow: "clean", label: "Clean", icon: "grid" },
   { workflow: "visualize", label: "Visualize", icon: "grid" },
+  { workflow: "reports", label: "Reports", icon: "grid" },
   { workflow: "stats", label: "Stats", icon: "grid" },
   { workflow: "forecasting", label: "Forecasting", icon: "grid" },
   { workflow: "ml", label: "ML", icon: "spark" },
@@ -41,7 +43,7 @@ function findMigration(workflow: string): MigrationState {
   return phaseTwoMigrations.find((migration) => migration.workflow === workflow) ?? phaseTwoMigrations[0]!;
 }
 
-const nativeKinds: Record<string, WorkspaceTab["kind"]> = { overview: "overview", "sql-lab": "sql-lab", "ai-analyst": "ai-analyst", clean: "clean", visualize: "visualize", stats: "stats", forecasting: "forecasting", ml: "ml", history: "history", atlas: "atlas", evolution: "evolution" };
+const nativeKinds: Record<string, WorkspaceTab["kind"]> = { overview: "overview", "sql-lab": "sql-lab", "ai-analyst": "ai-analyst", clean: "clean", visualize: "visualize", reports: "reports", stats: "stats", forecasting: "forecasting", ml: "ml", history: "history", atlas: "atlas", evolution: "evolution" };
 
 function initialDatasetId(): string | undefined {
   if (typeof window === "undefined") return undefined;
@@ -223,7 +225,7 @@ export function PrismShell() {
           <button className="icon-button" aria-label={`Switch to ${layout.theme === "dark" ? "light" : "dark"} theme`} onClick={() => updateLayout({ theme: layout.theme === "dark" ? "light" : "dark" })}><Icon name={layout.theme === "dark" ? "sun" : "moon"} /></button>
         </div>
       </header>
-      <div className="shell-body">
+      <div className={`shell-body ${["clean", "sql-lab", "visualize", "reports"].includes(activeTab.kind) ? "has-local-inspector" : ""}`}>
         <aside className={`nav-rail ${layout.railCollapsed ? "is-collapsed" : ""}`} aria-label="PRISM workspace navigation">
           <button className="rail-collapse" onClick={() => updateLayout({ railCollapsed: !layout.railCollapsed })} aria-label={layout.railCollapsed ? "Expand navigation" : "Collapse navigation"}><Icon name="collapse" /></button>
           <nav aria-label="Migration-aware workspaces">
@@ -251,7 +253,7 @@ export function PrismShell() {
           {activeTab.kind !== "atlas" ? <button className={layout.atlasExpanded ? "atlas-presence is-expanded" : "atlas-presence"} onClick={() => updateLayout({ atlasExpanded: !layout.atlasExpanded })} aria-expanded={layout.atlasExpanded} aria-label="Expand Atlas workspace"><span className="atlas-signal"><i /><i /><i /></span><span><strong>Atlas</strong><small>{layout.atlasExpanded ? "Context workspace ready" : "Watching workspace context"}</small></span><Icon name="arrow" /></button> : null}
           {layout.atlasExpanded && activeTab.kind !== "atlas" ? <section className="atlas-drawer" aria-label="Atlas contextual workspace"><div><span className="eyebrow">ATLAS · AMBIENT OPERATING PRESENCE</span><h2>What should we investigate?</h2><p>Run Atlas from durable data context, inspect each declared tool, and keep executable SQL in SQL Lab.</p></div><button onClick={() => openWorkflow("atlas")}>Open Atlas <kbd>⌘ K</kbd></button></section> : null}
         </section>
-        {layout.inspectorOpen ? <><ResizeHandle panel="inspector" value={layout.inspectorWidth} onPointerDown={startResize} onKeyboardResize={(delta) => updateLayout({ inspectorWidth: Math.max(240, Math.min(420, layout.inspectorWidth + delta)) })} /><Inspector state={inspector} onClose={() => updateLayout({ inspectorOpen: false })} /></> : <><div className="resize-spacer" /><button className="inspector-restore" onClick={() => updateLayout({ inspectorOpen: true })} aria-label="Show inspector"><Icon name="panel" /></button></>}
+        {!["clean", "sql-lab", "visualize", "reports"].includes(activeTab.kind) ? (layout.inspectorOpen ? <><ResizeHandle panel="inspector" value={layout.inspectorWidth} onPointerDown={startResize} onKeyboardResize={(delta) => updateLayout({ inspectorWidth: Math.max(240, Math.min(420, layout.inspectorWidth + delta)) })} /><Inspector state={inspector} onClose={() => updateLayout({ inspectorOpen: false })} /></> : <><div className="resize-spacer" /><button className="inspector-restore" onClick={() => updateLayout({ inspectorOpen: true })} aria-label="Show inspector"><Icon name="panel" /></button></>) : null}
       </div>
       {isNarrow && activeTab.kind === "atlas" && selectedContext ? <button ref={mobileInspectorTrigger} type="button" className="atlas-mobile-inspector-trigger" onClick={() => setMobileInspectorOpen(true)}>Inspect selected record</button> : null}
       {isNarrow && activeTab.kind === "atlas" && selectedContext && mobileInspectorOpen ? <div className="atlas-mobile-inspector-layer"><button type="button" className="atlas-mobile-inspector-backdrop" aria-label="Close inspector" onClick={() => { setMobileInspectorOpen(false); mobileInspectorTrigger.current?.focus(); }} /><div role="dialog" aria-modal="true" aria-label="Selected Atlas record" onKeyDown={(event) => { if (event.key === "Escape") { setMobileInspectorOpen(false); mobileInspectorTrigger.current?.focus(); } }}><Inspector state={inspector} onClose={() => { setMobileInspectorOpen(false); mobileInspectorTrigger.current?.focus(); }} /></div></div> : null}
@@ -270,6 +272,7 @@ function WorkspaceSurface({ tab, status, onStatusChange, onOpenCommand, onSelect
   if (tab.kind === "ai-analyst") return <AiAnalyst datasetId={activeDatasetId} resultRunId={analystResultRunId} onSqlDraft={onSqlDraft} onSelectContext={onSelectContext} />;
   if (tab.kind === "clean") return <CleanWorkspace datasetId={activeDatasetId} onSelectContext={onSelectContext} onOpenWorkflow={onOpenWorkflow} />;
   if (tab.kind === "visualize") return <VisualizeWorkspace datasetId={activeDatasetId} onSelectContext={onSelectContext} onOpenWorkflow={onOpenWorkflow} />;
+  if (tab.kind === "reports") return <ReportsWorkspace onOpenWorkflow={onOpenWorkflow} />;
   if (tab.kind === "stats") return <StatsWorkspace datasetId={activeDatasetId} onSelectContext={onSelectContext} onOpenWorkflow={onOpenWorkflow} />;
   if (tab.kind === "forecasting") return <ForecastingWorkspace datasetId={activeDatasetId} onSelectContext={onSelectContext} onOpenWorkflow={onOpenWorkflow} />;
   if (tab.kind === "ml") return <MlLabWorkspace datasetId={activeDatasetId} onSelectContext={onSelectContext} onOpenWorkflow={onOpenWorkflow} />;

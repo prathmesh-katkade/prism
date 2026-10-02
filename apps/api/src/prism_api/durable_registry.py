@@ -35,7 +35,7 @@ from sqlalchemy import (
     select,
     text,
 )
-from sqlalchemy.engine import Engine
+from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.exc import IntegrityError
 
 _metadata = MetaData()
@@ -141,6 +141,24 @@ class DurableAnalyticalObjectRegistry(AnalyticalObjectRegistry):
         # a second, mandatory boundary: a future producer cannot turn an accidental
         # payload credential into durable history simply by bypassing a helper.
         record = record.model_copy(update={"payload": sanitize_provenance_parameters(record.payload)})
+        try:
+            assert self.engine is not None
+            with self.engine.begin() as connection:
+                self.register_with_connection(connection, record)
+        except IntegrityError as error:
+            existing = self.get(record.object_id)
+            if existing is not None:
+                raise ValueError(f"Analytical object {record.object_id!r} is already registered.") from error
+            raise
+        return self.get(record.object_id) or record
+
+    def register_with_connection(self, connection: Connection, record: AnalyticalObject, *, allow_existing: bool = False) -> None:
+        """Publish an object and its lineage/audit rows inside the caller's transaction."""
+        if any(parent.object_id == record.object_id for parent in record.provenance.parent_refs):
+            raise ValueError("An analytical object cannot reference itself as a parent.")
+        record = record.model_copy(update={"payload": sanitize_provenance_parameters(record.payload)})
+        if allow_existing and connection.execute(select(_objects.c.object_id).where(_objects.c.object_id == record.object_id)).scalar_one_or_none():
+            return
         values = {
             "object_id": record.object_id,
             "dataset_id": record.provenance.dataset.dataset_id,
@@ -150,23 +168,12 @@ class DurableAnalyticalObjectRegistry(AnalyticalObjectRegistry):
             "created_at": record.provenance.created_at,
             "snapshot": self._dump(record),
         }
-        try:
-            assert self.engine is not None
-            with self.engine.begin() as connection:
-                connection.execute(insert(_objects).values(**values))
-                for parent in record.provenance.parent_refs:
-                    connection.execute(insert(_edges).values(
-                        parent_object_id=parent.object_id, child_object_id=record.object_id, relation=parent.relation
-                    ))
-                connection.execute(insert(_audit_events).values(**self._audit_value(record)))
-        except IntegrityError as error:
-            # A duplicate object id is the expected idempotent-retry race.  Any
-            # other constraint failure is kept visible to the caller.
-            existing = self.get(record.object_id)
-            if existing is not None:
-                raise ValueError(f"Analytical object {record.object_id!r} is already registered.") from error
-            raise
-        return self.get(record.object_id) or record
+        connection.execute(insert(_objects).values(**values))
+        for parent in record.provenance.parent_refs:
+            connection.execute(insert(_edges).values(
+                parent_object_id=parent.object_id, child_object_id=record.object_id, relation=parent.relation
+            ))
+        connection.execute(insert(_audit_events).values(**self._audit_value(record)))
 
     @staticmethod
     def _audit_value(record: AnalyticalObject) -> dict[str, Any]:

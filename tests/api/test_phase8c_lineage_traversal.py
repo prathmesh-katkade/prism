@@ -15,7 +15,6 @@ from __future__ import annotations
 import time
 from datetime import datetime, timezone
 
-from fastapi.testclient import TestClient
 from prism_analytical_schemas import (
     AnalyticalObject,
     AnalyticalProvenance,
@@ -28,6 +27,7 @@ from prism_analytical_schemas import (
 )
 from prism_api.analytical_objects import ensure_dataset_revision, registry
 from prism_api.main import create_app
+from reviewing_client import ReviewingTestClient as TestClient
 
 
 def _dataset(client: TestClient, csv: bytes = b"x,y,segment,label\n1,10,a,yes\n2,20,a,no\n3,30,b,yes\n4,40,b,no\n", name: str = "phase8c.csv") -> str:

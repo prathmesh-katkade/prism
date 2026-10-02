@@ -40,6 +40,7 @@ from .lineage import router as lineage_router
 from .migration import PHASE_1_MIGRATIONS
 from .mllab import router as mllab_router
 from .overview import router as overview_router
+from .reports import router as reports_router
 from .sql_lab import router as sql_lab_router
 from .sql_lab_comparison import router as sql_lab_comparison_router
 from .sql_lab_ctes import router as sql_lab_ctes_router
@@ -93,6 +94,7 @@ def create_app() -> FastAPI:
             allow_headers=["Content-Type", "X-Request-ID"],
         )
     app.include_router(overview_router)
+    app.include_router(reports_router)
     app.include_router(sql_lab_router)
     app.include_router(sql_lab_join_diagnostics_router)
     app.include_router(sql_lab_ctes_router)

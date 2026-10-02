@@ -553,6 +553,7 @@ class CleanTransformationRequest(ContractModel):
     survivorship_tiebreak_column: Optional[str] = None
     date_format: Optional[str] = Field(default=None, min_length=1, max_length=64)
     number_locale: Optional[Literal["standard", "european"]] = None
+    review_token: Optional[str] = None
 
 
 class CleanTransformation(ContractModel):
@@ -579,6 +580,9 @@ class CleanPreviewResponse(ContractModel):
     warnings: list[str] = Field(default_factory=list)
     projected_health: OverviewHealth
     unresolved_values: list[str] = Field(default_factory=list)
+    review_token: str = ""
+    source_revision: int = Field(default=0, ge=0)
+    source_fingerprint: str = ""
 
 
 class ColumnValueCount(ContractModel):
@@ -659,6 +663,22 @@ class CleanRecipeApplyResponse(ContractModel):
     applied_steps: list[CleanTransformation]
     issues: list[CleanIssue]
     health: OverviewHealth
+
+
+class CleanRecipeApplyRequest(ContractModel):
+    review_token: str = Field(min_length=1)
+
+
+class CleanRecipePreviewResponse(ContractModel):
+    recipe_id: str
+    recipe_version: int
+    source_revision: int = Field(ge=0)
+    source_fingerprint: str
+    review_token: str
+    before_sample: list[dict[str, Optional[Any]]]
+    after_sample: list[dict[str, Optional[Any]]]
+    step_impacts: list[int]
+    projected_health: OverviewHealth
 
 
 class ValidationRuleKind(str, Enum):
@@ -2868,3 +2888,81 @@ class AtlasInvestigationLinkIssued(AtlasInvestigationLink):
 class AtlasInvestigationLinkResolve(ContractModel):
     link_id: str = Field(min_length=1, max_length=120)
     bearer_secret: str = Field(min_length=1, max_length=128)
+
+
+class SavedChartCreateRequest(ContractModel):
+    name: str = Field(min_length=1, max_length=200)
+    dataset_id: str = Field(min_length=1)
+    spec: VisualizationSpec
+    rationale: str = ""
+    source_revision: Optional[int] = None
+    source_fingerprint: Optional[str] = None
+
+
+class SavedChart(ContractModel):
+    chart_id: str = Field(min_length=1)
+    name: str
+    dataset_id: str
+    dataset_revision: int = Field(ge=0)
+    source_fingerprint: str
+    spec: VisualizationSpec
+    rationale: str
+    created_at: datetime
+    result: Optional[VisualizationDataResponse] = None
+    previous_chart_id: Optional[str] = None
+
+
+class ReportCreateRequest(ContractModel):
+    name: str = Field(min_length=1, max_length=200)
+
+
+class ReportChartRef(ContractModel):
+    chart_id: str
+    acknowledged_revision: int = Field(ge=0)
+    acknowledged_fingerprint: Optional[str] = None
+    added_at: datetime
+
+
+class ReportNote(ContractModel):
+    note_id: str = Field(min_length=1)
+    text: str = Field(min_length=1, max_length=10_000)
+    created_at: datetime
+
+
+class ReportAddChartRequest(ContractModel):
+    chart_id: str = Field(min_length=1)
+
+
+class ReportAddNoteRequest(ContractModel):
+    text: str = Field(min_length=1, max_length=10_000)
+
+
+class Report(ContractModel):
+    report_id: str = Field(min_length=1)
+    name: str
+    chart_refs: list[ReportChartRef] = Field(default_factory=list)
+    notes: list[ReportNote] = Field(default_factory=list)
+    created_at: datetime
+    updated_at: datetime
+
+
+class ChartFreshnessStatus(ContractModel):
+    chart_id: str
+    saved_revision: int = Field(ge=0)
+    acknowledged_revision: int = Field(ge=0)
+    current_revision: Optional[int] = None
+    current_fingerprint: Optional[str] = None
+    needs_refresh: bool
+    dataset_unavailable: bool = False
+
+
+class ReportDetail(ContractModel):
+    report: Report
+    charts: list[SavedChart] = Field(default_factory=list)
+    freshness: list[ChartFreshnessStatus] = Field(default_factory=list)
+
+
+class ReportRefreshRequest(ContractModel):
+    chart_ids: Optional[list[str]] = None
+    source_revisions: dict[str, int] = Field(default_factory=dict)
+    source_fingerprints: dict[str, str] = Field(default_factory=dict)
