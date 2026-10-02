@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useState } from "react";
-import type { AtlasCleanResponse, CleanIssue, CleanOperation, CleanPreviewResponse, CleanStateResponse, CleanTransformationRequest, DatasetRowsResponse, FillStrategy, OverviewProfileResponse } from "@prism/api-contracts";
+import type { AtlasCleanResponse, CleanIssue, CleanOperation, CleanPreviewResponse, CleanRecipe, CleanStateResponse, CleanTransformationRequest, DatasetRowsResponse, FillStrategy, OverviewProfileResponse } from "@prism/api-contracts";
 import { apiUrl } from "../config/api";
 import type { InspectorObjectState } from "../state/shell-model";
 
@@ -41,6 +41,18 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
   const [manualFillValue, setManualFillValue] = useState("");
   const [manualCase, setManualCase] = useState<"lower" | "upper" | "title">("lower");
 
+  const [recipes, setRecipes] = useState<CleanRecipe[]>([]);
+  const [recipeName, setRecipeName] = useState("");
+  const [recipeError, setRecipeError] = useState<string | null>(null);
+  const [applyingRecipeId, setApplyingRecipeId] = useState<string | null>(null);
+
+  const loadRecipes = useCallback(async () => {
+    try {
+      const response = await fetch(apiUrl("/api/v1/clean/recipes"));
+      if (response.ok) setRecipes(await response.json() as CleanRecipe[]);
+    } catch { /* recipes are a convenience layer over manual operations, which stay usable without this list. */ }
+  }, []);
+
   const loadRows = useCallback(async (id: string, offset: number) => {
     try {
       const response = await fetch(apiUrl(`/api/v1/overview/datasets/${id}/rows?offset=${offset}&limit=${ROWS_PER_PAGE}`));
@@ -59,11 +71,12 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
       setClean(await stateResponse.json() as CleanStateResponse);
       if (profileResponse.ok) setProfile(await profileResponse.json() as OverviewProfileResponse);
       await loadRows(id, 0);
+      await loadRecipes();
       setState("ready");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Clean is unavailable."); setState("error");
     }
-  }, [loadRows]);
+  }, [loadRows, loadRecipes]);
 
   useEffect(() => { if (datasetId) void refresh(datasetId); else { setState("empty"); setClean(null); setProfile(null); setRows(null); } }, [datasetId, refresh]);
 
@@ -107,6 +120,29 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
     if (manualOperation === "fill_missing") { request.fill_strategy = manualFillStrategy; if (manualFillStrategy === "constant") request.fill_value = manualFillValue; }
     if (manualOperation === "normalize_case") request.case = manualCase;
     return { request, reason: null };
+  }
+
+  async function saveAsRecipe(request: CleanTransformationRequest) {
+    if (!recipeName.trim()) { setRecipeError("Name the recipe before saving it."); return; }
+    setRecipeError(null);
+    try {
+      const response = await fetch(apiUrl("/api/v1/clean/recipes"), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: recipeName.trim(), steps: [{ request, enabled: true }] }) });
+      if (!response.ok) throw new Error((await response.json() as { detail?: string }).detail ?? "Saving the recipe failed.");
+      setRecipeName("");
+      await loadRecipes();
+    } catch (reason) { setRecipeError(reason instanceof Error ? reason.message : "Saving the recipe failed."); }
+  }
+
+  async function applyRecipe(recipe: CleanRecipe) {
+    if (!datasetId) return;
+    setApplyingRecipeId(recipe.recipe_id); setRecipeError(null);
+    try {
+      const response = await fetch(apiUrl(`/api/v1/clean/datasets/${datasetId}/recipes/${recipe.recipe_id}/apply`), { method: "POST" });
+      if (!response.ok) throw new Error((await response.json() as { detail?: string }).detail ?? "Applying the recipe failed.");
+      setManualMode(false); setSelectedIssue(null); setPreview(null); setPendingRequest(null);
+      await refresh(datasetId);
+    } catch (reason) { setRecipeError(reason instanceof Error ? reason.message : "Applying the recipe failed."); }
+    finally { setApplyingRecipeId(null); }
   }
 
   async function apply() {
@@ -163,7 +199,19 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
         {manualOperation === "normalize_case" ? <label>Case<select aria-label="Case" value={manualCase} onChange={(event) => setManualCase(event.target.value as typeof manualCase)}><option value="lower">lower</option><option value="upper">upper</option><option value="title">title</option></select></label> : null}
         <button disabled={!manualBuild.request} title={manualBuild.reason ?? undefined} onClick={() => manualBuild.request && void previewOperation(manualBuild.request)}>Preview</button>
         {manualBuild.reason ? <p className="quiet-note">{manualBuild.reason}</p> : null}
+        <label>Recipe name<input aria-label="Recipe name" value={recipeName} onChange={(event) => setRecipeName(event.target.value)} placeholder="e.g. Standard monthly cleanup" /></label>
+        <button className="secondary" disabled={!manualBuild.request} title={!manualBuild.request ? (manualBuild.reason ?? undefined) : "Save this operation as a reusable, versioned recipe"} onClick={() => manualBuild.request && void saveAsRecipe(manualBuild.request)}>Save as recipe</button>
       </div> : null}
+
+      <div className="section-title"><div><span className="eyebrow">RECIPES</span><h2>{recipes.length ? `${recipes.length} saved` : "None saved yet"}</h2></div></div>
+      {recipes.length ? <ul className="clean-recipe-list">{recipes.map((recipe) => {
+        const enabledCount = recipe.steps.filter((step) => step.enabled).length;
+        return <li key={recipe.recipe_id}>
+          <div><strong>{recipe.name}</strong><small>v{recipe.version} · {enabledCount}/{recipe.steps.length} step(s) enabled</small></div>
+          <button className="secondary" disabled={applyingRecipeId === recipe.recipe_id} onClick={() => void applyRecipe(recipe)}>{applyingRecipeId === recipe.recipe_id ? "Applying…" : "Apply"}</button>
+        </li>;
+      })}</ul> : <p className="quiet-note">Build an operation above and save it as a recipe to reuse it later, or on another dataset with the same schema.</p>}
+      {recipeError ? <p className="query-error" role="alert">{recipeError}</p> : null}
 
       <div className="section-title"><span className="eyebrow">HISTORY</span></div>
       <ol className="clean-history">

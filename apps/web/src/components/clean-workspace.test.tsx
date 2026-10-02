@@ -26,6 +26,7 @@ describe("Clean workspace", () => {
       if (path.endsWith("/state")) return applied ? json({ dataset: dataset1, issues: [], history: [transformation], health }) : json({ dataset: dataset0, issues: [issue], history: [], health });
       if (path.includes("/rows")) return json(rowsPage);
       if (path.includes("/profile")) return json({});
+      if (path.includes("/recipes")) return json([]);
       if (path.endsWith("/atlas")) return json({ action: "explain_issue", summary: "1 rows are exact duplicates of another row.", uncertainty: "Issue detection is a deterministic screening pass; it flags candidates for review, not confirmed defects.", evidence: [], proposed_operation: { operation: "drop_duplicates" } });
       if (path.endsWith("/preview")) return json({ operation: "drop_duplicates", affected_rows: 1, affected_columns: [], before_sample: [{ segment: "a" }], after_sample: [{ segment: "a" }], warnings: [], projected_health: health });
       if (path.endsWith("/apply")) { applied = true; return json({ dataset: dataset1, transformation, issues: [], health }, 201); }
@@ -60,6 +61,7 @@ describe("Clean workspace", () => {
       if (path.endsWith("/state")) return json({ dataset: dataset0, issues: [], history: [], health });
       if (path.includes("/rows")) return json(rowsPage);
       if (path.includes("/profile")) return json({});
+      if (path.includes("/recipes")) return json([]);
       return json({});
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -78,6 +80,7 @@ describe("Clean workspace", () => {
       if (path.endsWith("/state")) return applied ? json({ dataset: dataset1, issues: [], history: [transformation], health }) : json({ dataset: dataset0, issues: [], history: [], health });
       if (path.includes("/rows")) return json(rowsPage);
       if (path.includes("/profile")) return json({ columns: [{ name: "notes", semantic_type: "text" }] });
+      if (path.includes("/recipes")) return json([]);
       if (path.endsWith("/preview")) return json({ operation: "drop_column", affected_rows: 5, affected_columns: ["notes"], before_sample: [{ notes: "x" }], after_sample: [{}], warnings: [], projected_health: health });
       if (path.endsWith("/apply")) { applied = true; return json({ dataset: dataset1, transformation, issues: [], health }, 201); }
       return json({});
@@ -102,6 +105,66 @@ describe("Clean workspace", () => {
     fireEvent.click(screen.getByRole("button", { name: "Apply transformation" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/apply"), expect.objectContaining({ method: "POST" })));
     await waitFor(() => expect(screen.getByText(/revision 1/)).toBeInTheDocument());
+  });
+
+  it("saves a manual operation as a named recipe, lists it, and applies it from the recipe list", async () => {
+    let saved: { recipe_id: string; name: string; version: number; steps: unknown[] } | null = null;
+    let applied = false;
+    const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path.endsWith("/state")) return applied ? json({ dataset: dataset1, issues: [], history: [], health }) : json({ dataset: dataset0, issues: [], history: [], health });
+      if (path.includes("/rows")) return json(rowsPage);
+      if (path.includes("/profile")) return json({});
+      if (path.endsWith("/recipes") && init?.method === "POST") {
+        saved = { recipe_id: "recipe_1", name: "Drop duplicates nightly", version: 1, steps: [{ step_id: "s1", request: { operation: "drop_duplicates" }, enabled: true }] };
+        return json(saved, 201);
+      }
+      if (path.endsWith("/recipes")) return json(saved ? [saved] : []);
+      if (path.includes("/recipes/recipe_1/apply")) { applied = true; return json({ dataset: dataset1, recipe_id: "recipe_1", recipe_version: 1, applied_steps: [], issues: [], health }); }
+      return json({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
+
+    await waitFor(() => expect(screen.getByText("None saved yet")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "+ New manual operation" }));
+    fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "drop_duplicates" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Save as recipe" }));
+    await waitFor(() => expect(screen.getByText("Name the recipe before saving it.")).toBeInTheDocument()); // a visible, concrete reason, not a silent no-op
+    expect(fetchMock).not.toHaveBeenCalledWith(expect.stringContaining("/recipes"), expect.objectContaining({ method: "POST" }));
+
+    fireEvent.change(screen.getByLabelText("Recipe name"), { target: { value: "Drop duplicates nightly" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save as recipe" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/recipes"), expect.objectContaining({ method: "POST", body: JSON.stringify({ name: "Drop duplicates nightly", steps: [{ request: { operation: "drop_duplicates" }, enabled: true }] }) })));
+    await waitFor(() => expect(screen.getByText("Drop duplicates nightly")).toBeInTheDocument());
+    expect(screen.getByText("v1 · 1/1 step(s) enabled")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/recipes/recipe_1/apply"), expect.objectContaining({ method: "POST" })));
+    await waitFor(() => expect(screen.getByText(/revision 1/)).toBeInTheDocument());
+  });
+
+  it("surfaces the specific schema-mismatch reason when a recipe no longer matches the dataset, without pretending it applied", async () => {
+    const recipe = { recipe_id: "recipe_2", name: "Stale recipe", version: 1, steps: [{ step_id: "s1", request: { operation: "drop_column", column: "retired_column" }, enabled: true }] };
+    const fetchMock = vi.fn(async (input: string | URL) => {
+      const path = String(input);
+      if (path.endsWith("/state")) return json({ dataset: dataset0, issues: [], history: [], health });
+      if (path.includes("/rows")) return json(rowsPage);
+      if (path.includes("/profile")) return json({});
+      if (path.endsWith("/recipes")) return json([recipe]);
+      if (path.includes("/recipes/recipe_2/apply")) return json({ detail: "Recipe step 1 (drop_column on retired_column) no longer matches this dataset's schema: Column 'retired_column' is not in the active dataset." }, 409);
+      return json({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
+
+    await waitFor(() => expect(screen.getByText("Stale recipe")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+
+    await waitFor(() => expect(screen.getByText(/no longer matches this dataset's schema/)).toBeInTheDocument());
+    expect(screen.getByText("5 rows · 3 columns · revision 0")).toBeInTheDocument(); // never claims a later revision happened
   });
 });
 
