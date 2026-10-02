@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import hashlib
 import math
+import re
 import uuid
 from datetime import datetime, timezone
 from typing import Any, cast
@@ -123,6 +124,22 @@ def _require_column(frame: pd.DataFrame, column: str | None) -> str:
     return column
 
 
+_AMBIGUOUS_DATE_PATTERN = re.compile(r"^\s*(\d{1,2})[/-](\d{1,2})[/-]\d{2,4}\s*$")
+
+
+def _detect_ambiguous_dates(series: pd.Series) -> list[str]:
+    """Distinct values like "03/04/2026" where both components are <=12, so day-first
+    and month-first readings are both plausible and silently guessing one would be
+    exactly the kind of invented interpretation Clean must not produce without a
+    declared date_format."""
+    ambiguous: set[str] = set()
+    for value in series.dropna().unique():
+        match = _AMBIGUOUS_DATE_PATTERN.match(str(value))
+        if match and int(match.group(1)) <= 12 and int(match.group(2)) <= 12:
+            ambiguous.add(str(value))
+    return sorted(ambiguous)
+
+
 def detect_issues(frame: pd.DataFrame) -> list[CleanIssue]:
     """Deterministic, evidence-based issue detection reusing Overview's own analytics."""
     profile = build_overview(frame)
@@ -224,10 +241,26 @@ def _apply_operation(frame: pd.DataFrame, request: CleanTransformationRequest) -
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="A target type is required.")
         series = frame[column]
         updated = frame.copy()
+        unresolved: list[str] = []
         if request.target_type == "numeric":
-            converted = pd.to_numeric(series, errors="coerce")
+            raw = series.astype(str)
+            if request.number_locale == "european":
+                cleaned = raw.str.replace(".", "", regex=False).str.replace(",", ".", regex=False)
+            else:
+                cleaned = raw.str.replace(",", "", regex=False)
+            converted = pd.to_numeric(cleaned.where(series.notna()), errors="coerce")
         elif request.target_type == "datetime":
-            converted = pd.to_datetime(series, errors="coerce", format="mixed")
+            if request.date_format:
+                converted = pd.to_datetime(series, format=request.date_format, errors="coerce")
+            else:
+                converted = pd.to_datetime(series, errors="coerce", format="mixed")
+                unresolved = _detect_ambiguous_dates(series)
+                if unresolved:
+                    warnings.append(
+                        f"{len(unresolved)} distinct value(s) in {column!r} match more than one plausible date "
+                        "reading (day vs month order is ambiguous); declare an explicit date_format to resolve "
+                        "them confidently instead of guessing."
+                    )
         elif request.target_type == "boolean":
             converted = series.astype(str).str.strip().str.lower().map({"true": True, "1": True, "yes": True, "false": False, "0": False, "no": False})
         else:
@@ -236,7 +269,7 @@ def _apply_operation(frame: pd.DataFrame, request: CleanTransformationRequest) -
         if newly_invalid:
             warnings.append(f"{newly_invalid} value(s) could not be converted to {request.target_type} and became missing instead of being silently guessed.")
         updated[column] = converted
-        return updated, len(frame), [column], warnings, []
+        return updated, len(frame), [column], warnings, unresolved
     if request.operation is CleanOperation.TRIM_WHITESPACE:
         column = _require_column(frame, request.column)
         series = frame[column].astype(str)

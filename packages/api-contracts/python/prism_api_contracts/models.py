@@ -469,6 +469,8 @@ class CleanTransformationRequest(ContractModel):
     group_by_columns: Optional[list[str]] = None
     survivorship_rule: Optional[Literal["first", "last", "most_complete", "max_by_column"]] = None
     survivorship_tiebreak_column: Optional[str] = None
+    date_format: Optional[str] = Field(default=None, min_length=1, max_length=64)
+    number_locale: Optional[Literal["standard", "european"]] = None
 
 
 class CleanTransformation(ContractModel):

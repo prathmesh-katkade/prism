@@ -45,6 +45,8 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
   const [manualColumn, setManualColumn] = useState("");
   const [manualNewName, setManualNewName] = useState("");
   const [manualTargetType, setManualTargetType] = useState<"numeric" | "text" | "datetime" | "boolean">("numeric");
+  const [manualDateFormat, setManualDateFormat] = useState("");
+  const [manualNumberLocale, setManualNumberLocale] = useState<"standard" | "european">("standard");
   const [manualFillStrategy, setManualFillStrategy] = useState<FillStrategy>("median");
   const [manualFillValue, setManualFillValue] = useState("");
   const [manualCase, setManualCase] = useState<"lower" | "upper" | "title">("lower");
@@ -169,7 +171,11 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
     }
     const request: CleanTransformationRequest = { operation: manualOperation, ...(spec.needsColumn ? { column: manualColumn } : {}) };
     if (manualOperation === "rename_column") request.new_name = manualNewName.trim();
-    if (manualOperation === "convert_type") request.target_type = manualTargetType;
+    if (manualOperation === "convert_type") {
+      request.target_type = manualTargetType;
+      if (manualTargetType === "datetime" && manualDateFormat.trim()) request.date_format = manualDateFormat.trim();
+      if (manualTargetType === "numeric") request.number_locale = manualNumberLocale;
+    }
     if (manualOperation === "fill_missing") { request.fill_strategy = manualFillStrategy; if (manualFillStrategy === "constant") request.fill_value = manualFillValue; }
     if (manualOperation === "normalize_case") request.case = manualCase;
     if (manualOperation === "category_mapping") { request.category_mapping = categoryMapping; request.case_sensitive = categoryCaseSensitive; request.preserve_unmatched = categoryPreserveUnmatched; }
@@ -311,7 +317,11 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
           <datalist id="clean-column-options">{(profile?.columns ?? []).map((column) => <option key={column.name} value={column.name} />)}</datalist>
         </label> : null}
         {manualOperation === "rename_column" ? <label>New name<input aria-label="New column name" value={manualNewName} onChange={(event) => setManualNewName(event.target.value)} /></label> : null}
-        {manualOperation === "convert_type" ? <label>Target type<select aria-label="Target type" value={manualTargetType} onChange={(event) => setManualTargetType(event.target.value as typeof manualTargetType)}><option value="numeric">numeric</option><option value="text">text</option><option value="datetime">datetime</option><option value="boolean">boolean</option></select></label> : null}
+        {manualOperation === "convert_type" ? <>
+          <label>Target type<select aria-label="Target type" value={manualTargetType} onChange={(event) => setManualTargetType(event.target.value as typeof manualTargetType)}><option value="numeric">numeric</option><option value="text">text</option><option value="datetime">datetime</option><option value="boolean">boolean</option></select></label>
+          {manualTargetType === "datetime" ? <label>Date format (optional)<input aria-label="Date format" value={manualDateFormat} onChange={(event) => setManualDateFormat(event.target.value)} placeholder="e.g. %d/%m/%Y — leave blank to auto-detect" /></label> : null}
+          {manualTargetType === "numeric" ? <label>Number locale<select aria-label="Number locale" value={manualNumberLocale} onChange={(event) => setManualNumberLocale(event.target.value as typeof manualNumberLocale)}><option value="standard">standard (1,234.56)</option><option value="european">european (1.234,56)</option></select></label> : null}
+        </> : null}
         {manualOperation === "fill_missing" ? <>
           <label>Fill strategy<select aria-label="Fill strategy" value={manualFillStrategy} onChange={(event) => setManualFillStrategy(event.target.value as FillStrategy)}><option value="mean">mean</option><option value="median">median</option><option value="mode">mode</option><option value="constant">constant</option><option value="forward_fill">forward fill</option></select></label>
           {manualFillStrategy === "constant" ? <label>Constant value<input aria-label="Constant fill value" value={manualFillValue} onChange={(event) => setManualFillValue(event.target.value)} /></label> : null}

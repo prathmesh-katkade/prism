@@ -420,6 +420,71 @@ def test_duplicate_survivorship_requires_at_least_one_grouping_column() -> None:
     assert response.status_code == 422
 
 
+DATE_NUMBER_CSV = (
+    b"id,signup,amount\n"
+    b"1,03/04/2026,\"1.234,56\"\n"  # ambiguous day/month; European-formatted amount
+    b"2,15/06/2026,\"2.000,00\"\n"  # unambiguous (day=15 > 12); European-formatted amount
+    b"3,01/01/2026,\"500,00\"\n"
+)
+
+
+def test_convert_type_to_datetime_without_a_format_reports_ambiguous_values_instead_of_guessing() -> None:
+    client = TestClient(create_app())
+    response = client.post("/api/v1/overview/datasets", files={"file": ("dates.csv", DATE_NUMBER_CSV, "text/csv")})
+    dataset_id = response.json()["dataset_id"]
+
+    preview = client.post(f"/api/v1/clean/datasets/{dataset_id}/preview", json={"operation": "convert_type", "column": "signup", "target_type": "datetime"})
+    assert preview.status_code == 200
+    body = preview.json()
+    # "03/04/2026" and "01/01/2026" both have day,month <= 12; "15/06/2026" does not.
+    assert sorted(body["unresolved_values"]) == ["01/01/2026", "03/04/2026"]
+    assert any("ambiguous" in warning for warning in body["warnings"])
+
+
+def test_convert_type_to_datetime_with_a_declared_format_resolves_ambiguity_deterministically() -> None:
+    client = TestClient(create_app())
+    response = client.post("/api/v1/overview/datasets", files={"file": ("dates.csv", DATE_NUMBER_CSV, "text/csv")})
+    dataset_id = response.json()["dataset_id"]
+
+    applied = client.post(f"/api/v1/clean/datasets/{dataset_id}/apply", json={"operation": "convert_type", "column": "signup", "target_type": "datetime", "date_format": "%d/%m/%Y"})
+    assert applied.status_code == 201
+    assert applied.json()["transformation"]["affected_rows"] == 3  # none left unparsed under the declared day-first format
+
+    rows = client.get(f"/api/v1/overview/datasets/{dataset_id}/rows").json()["rows"]
+    first_row = next(r for r in rows if r["id"] == 1)
+    assert first_row["signup"].startswith("2026-04-03")  # day=03, month=04 under %d/%m/%Y
+
+
+def test_convert_type_to_numeric_with_european_locale_parses_comma_decimals() -> None:
+    client = TestClient(create_app())
+    response = client.post("/api/v1/overview/datasets", files={"file": ("dates.csv", DATE_NUMBER_CSV, "text/csv")})
+    dataset_id = response.json()["dataset_id"]
+
+    applied = client.post(f"/api/v1/clean/datasets/{dataset_id}/apply", json={"operation": "convert_type", "column": "amount", "target_type": "numeric", "number_locale": "european"})
+    assert applied.status_code == 201
+    assert applied.json()["transformation"]["affected_rows"] == 3
+
+    rows = client.get(f"/api/v1/overview/datasets/{dataset_id}/rows").json()["rows"]
+    first_row = next(r for r in rows if r["id"] == 1)
+    assert first_row["amount"] == 1234.56  # "1.234,56" under european locale, not misread as 1.23456
+
+
+def test_convert_type_to_numeric_without_locale_fails_to_parse_european_formatted_values() -> None:
+    """Proves the locale flag is load-bearing, not a no-op: the same column, parsed
+    under the default (standard) locale, cannot correctly read "1.234,56"."""
+    client = TestClient(create_app())
+    response = client.post("/api/v1/overview/datasets", files={"file": ("dates.csv", DATE_NUMBER_CSV, "text/csv")})
+    dataset_id = response.json()["dataset_id"]
+
+    applied = client.post(f"/api/v1/clean/datasets/{dataset_id}/apply", json={"operation": "convert_type", "column": "amount", "target_type": "numeric"})
+    assert applied.status_code == 201
+    assert applied.json()["transformation"]["affected_rows"] == 3  # all three values changed in some way (whether parsed, misparsed, or made missing)
+
+    rows = client.get(f"/api/v1/overview/datasets/{dataset_id}/rows").json()["rows"]
+    first_row = next(r for r in rows if r["id"] == 1)
+    assert first_row["amount"] != 1234.56  # without the locale declared, this is not silently (mis)read as the correct value
+
+
 def test_atlas_explains_an_issue_and_proposes_a_previewable_fix_without_applying_it() -> None:
     client = TestClient(create_app())
     dataset_id = _dataset(client)

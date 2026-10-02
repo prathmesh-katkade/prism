@@ -1409,6 +1409,8 @@ export interface CleanTransformationRequest {
   group_by_columns?: string[];
   survivorship_rule?: "first" | "last" | "most_complete" | "max_by_column";
   survivorship_tiebreak_column?: string;
+  date_format?: string;
+  number_locale?: "standard" | "european";
 }
 
 export interface CleanUndoRequest {
