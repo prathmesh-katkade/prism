@@ -1929,6 +1929,37 @@ export interface RerunRequest {
   mode: ReproductionMode;
 }
 
+export interface ResultComparisonRequest {
+  base_run_id: string;
+  compare_run_id: string;
+  key_columns: string[];
+  max_sample_diffs?: number;
+}
+
+export interface ResultComparisonResponse {
+  base_run_id: string;
+  compare_run_id: string;
+  key_columns: string[];
+  base_row_count: number;
+  compare_row_count: number;
+  duplicate_key_count_base: number;
+  duplicate_key_count_compare: number;
+  added_count: number;
+  removed_count: number;
+  changed_count: number;
+  unchanged_count: number;
+  sample_diffs?: ResultRowDiff[];
+  warnings?: string[];
+}
+
+export interface ResultRowDiff {
+  key: Record<string, unknown>;
+  change: "added" | "removed" | "changed";
+  changed_columns?: string[];
+  base_values?: Record<string, unknown>;
+  compare_values?: Record<string, unknown>;
+}
+
 export interface SqlCapability {
   name: string;
   supported: boolean;

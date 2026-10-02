@@ -120,4 +120,42 @@ describe("Query Studio", () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/ctes/materialize"), expect.objectContaining({ method: "POST", body: JSON.stringify({ connection_id: connection.connection_id, sql: "SELECT *\nFROM data\nLIMIT 100;", cte_name: "recent" }) })));
     await waitFor(() => expect(screen.getByLabelText("PRISM Query Studio editor")).toHaveValue(materialized));
   });
+
+  it("picks a base and compare run from history, declares a key column, and shows the real diff counts", async () => {
+    const historyEntries = [
+      { run_id: "run_a", state: "succeeded", risk: "safe_read", sql: "SELECT * FROM data", result_columns: [], row_count: 3, returned_row_count: 3, truncated: false, duration_ms: 5, warnings: [], provenance },
+      { run_id: "run_b", state: "succeeded", risk: "safe_read", sql: "SELECT * FROM data", result_columns: [], row_count: 3, returned_row_count: 3, truncated: false, duration_ms: 5, warnings: [], provenance },
+    ];
+    const comparisonResult = { base_run_id: "run_a", compare_run_id: "run_b", key_columns: ["id"], base_row_count: 3, compare_row_count: 3, duplicate_key_count_base: 0, duplicate_key_count_compare: 0, added_count: 1, removed_count: 1, changed_count: 1, unchanged_count: 1, sample_diffs: [], warnings: [] };
+    const fetchMock = vi.fn(async (input: string | URL) => {
+      const path = String(input);
+      const body = path.endsWith("/connections") ? [connection]
+        : path.endsWith("/snippets") ? []
+        : path.includes("/schema") ? schema
+        : path.endsWith("/history") ? historyEntries
+        : path.includes("/results") ? { run: { run_id: "run_a", state: "succeeded", risk: "safe_read", sql: "SELECT * FROM data", result_columns: [], row_count: 3, returned_row_count: 3, truncated: false, duration_ms: 5, warnings: [], provenance }, offset: 0, limit: 100, rows: [] }
+        : path.endsWith("/runs") ? { run_id: "run_a", state: "succeeded", risk: "safe_read", sql: "SELECT * FROM data", result_columns: [], row_count: 3, returned_row_count: 3, truncated: false, duration_ms: 5, warnings: [], provenance }
+        : path.endsWith("/runs/compare") ? comparisonResult
+        : {};
+      return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<QueryStudio onSelectContext={vi.fn()} />);
+
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Write against evidence, not assumptions." })).toBeInTheDocument());
+    fireEvent.keyDown(screen.getByLabelText("PRISM Query Studio editor"), { key: "Enter", ctrlKey: true });
+    await waitFor(() => expect(screen.getByRole("button", { name: "Create dataset" })).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("tab", { name: "history" }));
+    await waitFor(() => expect(screen.getAllByRole("button", { name: "Base" })).toHaveLength(2));
+
+    const [baseButtons, compareButtons] = [screen.getAllByRole("button", { name: "Base" }), screen.getAllByRole("button", { name: "Compare" })];
+    fireEvent.click(baseButtons[0]!);
+    fireEvent.click(compareButtons[1]!);
+    fireEvent.change(screen.getByLabelText("Comparison key columns"), { target: { value: "id" } });
+    fireEvent.click(screen.getByRole("button", { name: "Compare selected runs" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/runs/compare"), expect.objectContaining({ method: "POST", body: JSON.stringify({ base_run_id: "run_a", compare_run_id: "run_b", key_columns: ["id"] }) })));
+    await waitFor(() => expect(screen.getByText(/matched by id/)).toBeInTheDocument());
+  });
 });

@@ -41,6 +41,7 @@ from .migration import PHASE_1_MIGRATIONS
 from .mllab import router as mllab_router
 from .overview import router as overview_router
 from .sql_lab import router as sql_lab_router
+from .sql_lab_comparison import router as sql_lab_comparison_router
 from .sql_lab_ctes import router as sql_lab_ctes_router
 from .sql_lab_join_diagnostics import router as sql_lab_join_diagnostics_router
 from .stats import router as stats_router
@@ -95,6 +96,7 @@ def create_app() -> FastAPI:
     app.include_router(sql_lab_router)
     app.include_router(sql_lab_join_diagnostics_router)
     app.include_router(sql_lab_ctes_router)
+    app.include_router(sql_lab_comparison_router)
     app.include_router(ai_analyst_router)
     app.include_router(atlas_router)
     app.include_router(atlas_command_center_router)

@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import type { AtlasSqlAction, AtlasSqlResponse, CteListResponse, CteMaterializeResponse, JoinDiagnosticsResponse, SqlConnectionSummary, SqlPlanResponse, SqlResultPageResponse, SqlResultPromotionResponse, SqlRunResponse, SqlSchemaResponse, SqlSnippet } from "@prism/api-contracts";
+import type { AtlasSqlAction, AtlasSqlResponse, CteListResponse, CteMaterializeResponse, JoinDiagnosticsResponse, ResultComparisonResponse, SqlConnectionSummary, SqlPlanResponse, SqlResultPageResponse, SqlResultPromotionResponse, SqlRunResponse, SqlSchemaResponse, SqlSnippet } from "@prism/api-contracts";
 import { apiUrl } from "../config/api";
 import type { InspectorObjectState } from "../state/shell-model";
 import { QueryEditor } from "./query-editor";
@@ -30,6 +30,12 @@ export function QueryStudio({ onSelectContext, initialSql, initialParameters, in
   const [joinDiagnosticsError, setJoinDiagnosticsError] = useState<string | null>(null);
   const [ctes, setCtes] = useState<string[]>([]);
   const [cteError, setCteError] = useState<string | null>(null);
+  const [compareBaseRunId, setCompareBaseRunId] = useState<string | null>(null);
+  const [compareRunId, setCompareRunId] = useState<string | null>(null);
+  const [comparisonKeyColumnsText, setComparisonKeyColumnsText] = useState("");
+  const [comparison, setComparison] = useState<ResultComparisonResponse | null>(null);
+  const [comparisonLoading, setComparisonLoading] = useState(false);
+  const [comparisonError, setComparisonError] = useState<string | null>(null);
 
   useEffect(() => { if (initialSql) setSql(initialSql); }, [initialSql]);
   useEffect(() => { if (initialParameters) setParametersText(JSON.stringify(initialParameters)); }, [initialParameters]);
@@ -130,6 +136,19 @@ export function QueryStudio({ onSelectContext, initialSql, initialParameters, in
     } catch (reason) { setCteError(reason instanceof Error ? reason.message : "Could not materialize this CTE."); }
   }
 
+  async function runComparison() {
+    if (!compareBaseRunId || !compareRunId) { setComparisonError("Pick a base run and a compare run from history first."); return; }
+    const keyColumns = comparisonKeyColumnsText.split(",").map((item) => item.trim()).filter(Boolean);
+    if (!keyColumns.length) { setComparisonError("Declare at least one row-matching key column (e.g. id)."); return; }
+    setComparisonLoading(true); setComparisonError(null);
+    try {
+      const response = await fetch(apiUrl("/api/v1/sql-lab/runs/compare"), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ base_run_id: compareBaseRunId, compare_run_id: compareRunId, key_columns: keyColumns }) });
+      if (!response.ok) throw new Error((await response.json() as { detail?: string }).detail ?? "Comparison failed.");
+      setComparison(await response.json() as ResultComparisonResponse);
+    } catch (reason) { setComparisonError(reason instanceof Error ? reason.message : "Comparison failed."); }
+    finally { setComparisonLoading(false); }
+  }
+
   async function cancelActiveRun() {
     if (!run || !["queued", "running"].includes(run.state)) return;
     try {
@@ -187,7 +206,13 @@ export function QueryStudio({ onSelectContext, initialSql, initialParameters, in
     {cteError ? <p className="query-error" role="alert">{cteError}</p> : null}
     <section className="query-layout"><div><QueryEditor value={sql} dialect={activeConnection?.dialect ?? "sql"} schemaItems={schema?.tables.flatMap((table) => [table.name, ...table.columns.map((column) => column.name)]) ?? []} onChange={setSql} onRun={() => void execute()} /><div className="query-editor-foot"><span>Dialect: <code>{activeConnection?.dialect ?? "unavailable"}</code></span><span>Safe reads run without a repeated prompt. Writes and unproven SQL are blocked.</span></div></div><SchemaPanel schema={schema} onInsert={(identifier) => setSql((current) => `${current}${current.endsWith(" ") || current.endsWith("\n") ? "" : " "}${identifier}`)} /></section>
     {error ? <p className="query-error" role="alert">{error}</p> : null}
-    <section className="sql-result-panel"><div className="result-tabs" role="tablist" aria-label="SQL result views">{(["results", "plan", "history", "joins"] as ResultTab[]).map((tab) => <button key={tab} role="tab" aria-selected={activeResultTab === tab} onClick={() => { setActiveResultTab(tab); if (tab === "joins" && !joinDiagnostics && !joinDiagnosticsLoading) void inspectJoins(); }}>{tab}</button>)}</div>{activeResultTab === "results" ? <DataGrid result={results} run={run} onSelectContext={onSelectContext} onPage={(offset) => void loadResultPage(offset)} onPromote={() => void promoteResult()} {...(onUseAsEvidence ? { onUseAsEvidence } : {})} /> : null}{activeResultTab === "plan" ? <PlanPanel plan={plan} /> : null}{activeResultTab === "history" ? <HistoryPanel history={history} onUse={(entry) => setSql(entry.sql)} /> : null}{activeResultTab === "joins" ? <JoinDiagnosticsPanel diagnostics={joinDiagnostics} loading={joinDiagnosticsLoading} error={joinDiagnosticsError} /> : null}</section>
+    <section className="sql-result-panel"><div className="result-tabs" role="tablist" aria-label="SQL result views">{(["results", "plan", "history", "joins"] as ResultTab[]).map((tab) => <button key={tab} role="tab" aria-selected={activeResultTab === tab} onClick={() => { setActiveResultTab(tab); if (tab === "joins" && !joinDiagnostics && !joinDiagnosticsLoading) void inspectJoins(); }}>{tab}</button>)}</div>{activeResultTab === "results" ? <DataGrid result={results} run={run} onSelectContext={onSelectContext} onPage={(offset) => void loadResultPage(offset)} onPromote={() => void promoteResult()} {...(onUseAsEvidence ? { onUseAsEvidence } : {})} /> : null}{activeResultTab === "plan" ? <PlanPanel plan={plan} /> : null}{activeResultTab === "history" ? <HistoryPanel
+      history={history} onUse={(entry) => setSql(entry.sql)}
+      compareBaseRunId={compareBaseRunId} compareRunId={compareRunId}
+      onSetBase={setCompareBaseRunId} onSetCompare={setCompareRunId}
+      comparisonKeyColumnsText={comparisonKeyColumnsText} onKeyColumnsChange={setComparisonKeyColumnsText}
+      onCompare={() => void runComparison()} comparison={comparison} comparisonLoading={comparisonLoading} comparisonError={comparisonError}
+    /> : null}{activeResultTab === "joins" ? <JoinDiagnosticsPanel diagnostics={joinDiagnostics} loading={joinDiagnosticsLoading} error={joinDiagnosticsError} /> : null}</section>
     <section className="sql-atlas"><div><span className="eyebrow">ATLAS · CONTEXTUAL SQL ACTIONS</span><h2>Inspect before execution.</h2><p>Atlas returns schema-grounded, editable drafts. It does not execute SQL, invent schema objects, or claim unsupported connectors.</p></div><div className="atlas-action-row">{(["explain_query", "optimize_query", "debug_error", "inspect_plan", "generate_sql", "compare_queries", "explain_selection", "trace_lineage", "convert_result"] as AtlasSqlAction[]).map((action) => <button key={action} onClick={() => void askAtlas(action)}>{action.replaceAll("_", " ")}</button>)}</div>{atlas ? <aside className="atlas-result" aria-live="polite"><span className="eyebrow">ATLAS RESPONSE · {atlas.action.replaceAll("_", " ")}</span><strong>{atlas.summary}</strong><small>{atlas.uncertainty}</small></aside> : null}</section>
     <SourceCapabilities connections={connections.filter((item) => item.status !== "ready")} />
     {snippets.length ? <section className="snippet-strip"><span className="eyebrow">SAVED SNIPPETS</span>{snippets.map((snippet) => <button key={snippet.snippet_id} onClick={() => { setSql(snippet.sql); setParametersText(JSON.stringify(snippet.parameters ?? {}, null, 2)); }}>{snippet.name}</button>)}</section> : null}
@@ -236,5 +261,33 @@ function JoinDiagnosticsPanel({ diagnostics, loading, error }: { diagnostics: Jo
     {(diagnostics.unsupported_notes ?? []).length ? <ul className="clean-warnings">{(diagnostics.unsupported_notes ?? []).map((note) => <li key={note}>{note}</li>)}</ul> : null}
   </div>;
 }
-function HistoryPanel({ history, onUse }: { history: SqlRunResponse[]; onUse(entry: SqlRunResponse): void }) { return <div className="history-panel">{history.length ? history.map((entry) => <button key={entry.run_id} onClick={() => onUse(entry)}><span className={`migration-chip ${entry.state === "succeeded" ? "ready" : "unavailable"}`}>{entry.state}</span><code>{entry.sql.replaceAll("\n", " ").slice(0, 120)}</code><small>{entry.duration_ms ?? 0} ms · {entry.provenance.dialect}</small></button>) : <p>No durable query history exists in this local project yet.</p>}</div>; }
+function HistoryPanel({ history, onUse, compareBaseRunId, compareRunId, onSetBase, onSetCompare, comparisonKeyColumnsText, onKeyColumnsChange, onCompare, comparison, comparisonLoading, comparisonError }: {
+  history: SqlRunResponse[]; onUse(entry: SqlRunResponse): void;
+  compareBaseRunId: string | null; compareRunId: string | null; onSetBase(runId: string): void; onSetCompare(runId: string): void;
+  comparisonKeyColumnsText: string; onKeyColumnsChange(value: string): void; onCompare(): void;
+  comparison: ResultComparisonResponse | null; comparisonLoading: boolean; comparisonError: string | null;
+}) {
+  if (!history.length) return <div className="history-panel"><p>No durable query history exists in this local project yet.</p></div>;
+  return <div className="history-panel">
+    {history.map((entry) => <div key={entry.run_id} className="history-row">
+      <button onClick={() => onUse(entry)}><span className={`migration-chip ${entry.state === "succeeded" ? "ready" : "unavailable"}`}>{entry.state}</span><code>{entry.sql.replaceAll("\n", " ").slice(0, 120)}</code><small>{entry.duration_ms ?? 0} ms · {entry.provenance.dialect}</small></button>
+      <div className="history-compare-picks">
+        <button className={compareBaseRunId === entry.run_id ? "secondary is-selected" : "secondary"} disabled={entry.state !== "succeeded"} onClick={() => onSetBase(entry.run_id)}>Base</button>
+        <button className={compareRunId === entry.run_id ? "secondary is-selected" : "secondary"} disabled={entry.state !== "succeeded"} onClick={() => onSetCompare(entry.run_id)}>Compare</button>
+      </div>
+    </div>)}
+    <div className="clean-manual-form">
+      <label>Row-matching key column(s)<input aria-label="Comparison key columns" value={comparisonKeyColumnsText} onChange={(event) => onKeyColumnsChange(event.target.value)} placeholder="e.g. id or customer_id, order_id" /></label>
+      <button type="button" disabled={!compareBaseRunId || !compareRunId || comparisonLoading} onClick={onCompare}>{comparisonLoading ? "Comparing…" : "Compare selected runs"}</button>
+      {comparisonError ? <p className="quiet-note">{comparisonError}</p> : null}
+    </div>
+    {comparison ? <div className="comparison-result">
+      <p className="clean-preview-summary"><strong>{comparison.added_count}</strong> added, <strong>{comparison.removed_count}</strong> removed, <strong>{comparison.changed_count}</strong> changed, <strong>{comparison.unchanged_count}</strong> unchanged (matched by {comparison.key_columns.join(", ")}).</p>
+      {(comparison.warnings ?? []).length ? <ul className="clean-warnings">{(comparison.warnings ?? []).map((warning) => <li key={warning}>{warning}</li>)}</ul> : null}
+      {(comparison.sample_diffs ?? []).length ? <ul className="clean-recipe-list">{(comparison.sample_diffs ?? []).map((diff, index) => <li key={index}>
+        <div><strong>{diff.change}</strong><small>{Object.entries(diff.key).map(([k, v]) => `${k}=${v}`).join(", ")}{diff.changed_columns?.length ? ` · ${diff.changed_columns.join(", ")}` : ""}</small></div>
+      </li>)}</ul> : null}
+    </div> : null}
+  </div>;
+}
 function SourceCapabilities({ connections }: { connections: SqlConnectionSummary[] }) { if (!connections.length) return null; return <section className="source-capabilities"><span className="eyebrow">CONNECTOR CAPABILITIES</span>{connections.map((connection) => <article key={connection.connection_id}><strong>{connection.label}</strong><span className={`migration-chip ${connection.status === "ready" ? "ready" : "unavailable"}`}>{connection.status}</span><small>{connection.capabilities.map((capability) => capability.reason).find(Boolean) ?? "Available"}</small></article>)}</section>; }

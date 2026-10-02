@@ -380,6 +380,37 @@ class CteMaterializeResponse(ContractModel):
     materialized_sql: str
 
 
+class ResultComparisonRequest(ContractModel):
+    base_run_id: str = Field(min_length=1)
+    compare_run_id: str = Field(min_length=1)
+    key_columns: list[str] = Field(min_length=1)
+    max_sample_diffs: int = Field(default=50, ge=1, le=500)
+
+
+class ResultRowDiff(ContractModel):
+    key: dict[str, Any]
+    change: Literal["added", "removed", "changed"]
+    changed_columns: list[str] = Field(default_factory=list)
+    base_values: Optional[dict[str, Any]] = None
+    compare_values: Optional[dict[str, Any]] = None
+
+
+class ResultComparisonResponse(ContractModel):
+    base_run_id: str
+    compare_run_id: str
+    key_columns: list[str]
+    base_row_count: int = Field(ge=0)
+    compare_row_count: int = Field(ge=0)
+    duplicate_key_count_base: int = Field(ge=0)
+    duplicate_key_count_compare: int = Field(ge=0)
+    added_count: int = Field(ge=0)
+    removed_count: int = Field(ge=0)
+    changed_count: int = Field(ge=0)
+    unchanged_count: int = Field(ge=0)
+    sample_diffs: list[ResultRowDiff] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+
+
 class AtlasSqlAction(str, Enum):
     EXPLAIN_QUERY = "explain_query"
     OPTIMIZE_QUERY = "optimize_query"
