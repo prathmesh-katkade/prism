@@ -57,6 +57,24 @@ def _require_column(frame: pd.DataFrame, column: str | None, role: str) -> str:
     return column
 
 
+def _filtered_frame(frame: pd.DataFrame, spec: VisualizationSpec) -> pd.DataFrame:
+    """Apply saved chart filters for rendering and mark inspection alike."""
+    result = frame
+    for column, expected in spec.filters.items():
+        _require_column(frame, column, "filter")
+        if isinstance(expected, list):
+            if any(isinstance(item, (dict, list)) for item in expected):
+                raise HTTPException(status_code=422, detail=f"Filter {column!r} must contain scalar values.")
+            result = result.loc[result[column].isin(expected)]
+        elif expected is None:
+            result = result.loc[result[column].isna()]
+        elif isinstance(expected, (str, int, float, bool)):
+            result = result.loc[result[column].astype(str) == str(expected)]
+        else:
+            raise HTTPException(status_code=422, detail=f"Filter {column!r} must be a scalar or list of scalars.")
+    return result
+
+
 @router.post("/datasets/{dataset_id}/suggest", response_model=VisualizationSuggestion)
 def suggest(dataset_id: str, intent: VizIntent | None = None, dimension: str | None = None, measure: str | None = None) -> VisualizationSuggestion:
     """Deterministic mark selection: the same (intent, column-types) always yields the same mark."""
@@ -96,15 +114,18 @@ def suggest(dataset_id: str, intent: VizIntent | None = None, dimension: str | N
 
 def _aggregate(frame: pd.DataFrame, spec: VisualizationSpec) -> tuple[list[VisualizationDatum], bool, list[str]]:
     warnings: list[str] = []
+    frame = _filtered_frame(frame, spec)
+    if frame.empty:
+        raise HTTPException(status_code=422, detail="The chart filters leave no rows to render.")
     if spec.mark is VizMark.HISTOGRAM:
         column = _require_column(frame, spec.measure or spec.dimension, "measure")
         numeric = pd.to_numeric(frame[column], errors="coerce").dropna()
         if numeric.empty:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"{column!r} has no numeric values to build a distribution from.")
-        bins = min(20, max(5, int(len(numeric) ** 0.5)))
+        bins = spec.histogram_bins or min(20, max(5, int(len(numeric) ** 0.5)))
         counts = pd.cut(numeric, bins=bins, duplicates="drop")
         table = counts.value_counts().sort_index()
-        data = [VisualizationDatum(label=f"{interval.left:.2f}–{interval.right:.2f}", value=float(count)) for interval, count in table.items()]
+        data = [VisualizationDatum(label=f"{interval.left:.2f}–{interval.right:.2f}", value=float(count), bin_start=float(interval.left), bin_end=float(interval.right)) for interval, count in table.items()]
         return data, False, warnings
     dimension = _require_column(frame, spec.dimension, "dimension")
     if spec.mark is VizMark.SCATTER:
@@ -193,10 +214,17 @@ def drill_down(dataset_id: str, request: ChartDrillDownRequest) -> ChartDrillDow
     """Resolve a single clicked mark back to its contributing rows, server-side —
     never by shipping the whole dataset to the browser so it can filter locally."""
     stored = overview_store.get(dataset_id)
-    frame = stored.frame
+    frame = _filtered_frame(stored.frame, request.spec)
     spec = request.spec
     filters_applied: dict[str, object] = {}
-    if spec.mark is VizMark.SCATTER:
+    if spec.mark is VizMark.HISTOGRAM:
+        measure = _require_column(frame, spec.measure or spec.dimension, "measure")
+        if request.bin_start is None or request.bin_end is None:
+            raise HTTPException(status_code=422, detail="bin_start and bin_end are required to inspect a histogram bin.")
+        numeric = pd.to_numeric(frame[measure], errors="coerce")
+        mask = numeric.gt(request.bin_start) & numeric.le(request.bin_end)
+        filters_applied = {**spec.filters, measure: {"greater_than": request.bin_start, "less_than_or_equal": request.bin_end}}
+    elif spec.mark is VizMark.SCATTER:
         dimension = _require_column(frame, spec.dimension, "dimension")
         measure = _require_column(frame, spec.measure, "measure")
         if request.x_value is None or request.y_value is None:
@@ -204,13 +232,13 @@ def drill_down(dataset_id: str, request: ChartDrillDownRequest) -> ChartDrillDow
         dim_numeric = pd.to_numeric(frame[dimension], errors="coerce").round(6)
         measure_numeric = pd.to_numeric(frame[measure], errors="coerce").round(6)
         mask = (dim_numeric == round(request.x_value, 6)) & (measure_numeric == round(request.y_value, 6))
-        filters_applied = {dimension: request.x_value, measure: request.y_value}
+        filters_applied = {**spec.filters, dimension: request.x_value, measure: request.y_value}
     else:
         dimension = _require_column(frame, spec.dimension, "dimension")
         if request.dimension_value is None:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="dimension_value is required to drill into this mark.")
         mask = frame[dimension].astype(str) == request.dimension_value
-        filters_applied = {dimension: request.dimension_value}
+        filters_applied = {**spec.filters, dimension: request.dimension_value}
     matching = frame.loc[mask]
     total = len(matching)
     limit = min(request.limit, DRILL_DOWN_SAMPLE_LIMIT)

@@ -21,6 +21,7 @@ from prism_api_contracts import (
     Report,
     ReportChartRef,
     ReportNote,
+    ReportTable,
     SavedChart,
     VisualizationDataResponse,
     VisualizationSpec,
@@ -63,6 +64,8 @@ _reports = Table(
     Column("name", String(500), nullable=False),
     Column("chart_refs_json", Text, nullable=False),
     Column("notes_json", Text, nullable=False),
+    Column("tables_json", Text, nullable=False, server_default="[]"),
+    Column("item_order_json", Text, nullable=False, server_default="[]"),
     Column("created_at", DateTime(timezone=True), nullable=False, index=True),
     Column("updated_at", DateTime(timezone=True), nullable=False),
 )
@@ -79,6 +82,11 @@ class DurableReportStore:
                 connection.execute(text("ALTER TABLE prism_saved_charts ADD COLUMN result_json TEXT"))
             if "previous_chart_id" not in existing:
                 connection.execute(text("ALTER TABLE prism_saved_charts ADD COLUMN previous_chart_id VARCHAR(255)"))
+            report_columns = {column["name"] for column in inspect(self.engine).get_columns("prism_reports")}
+            if "tables_json" not in report_columns:
+                connection.execute(text("ALTER TABLE prism_reports ADD COLUMN tables_json TEXT NOT NULL DEFAULT '[]'"))
+            if "item_order_json" not in report_columns:
+                connection.execute(text("ALTER TABLE prism_reports ADD COLUMN item_order_json TEXT NOT NULL DEFAULT '[]'"))
 
     # -- saved charts ----------------------------------------------------
     def save_chart(self, name: str, dataset_id: str, dataset_revision: int, source_fingerprint: str, spec: VisualizationSpec, rationale: str, result: VisualizationDataResponse, previous_chart_id: str | None = None) -> SavedChart:
@@ -132,7 +140,7 @@ class DurableReportStore:
         if any(ref.chart_id == chart_id for ref in report.chart_refs):
             return report
         next_refs = [*report.chart_refs, ReportChartRef(chart_id=chart_id, acknowledged_revision=acknowledged_revision, acknowledged_fingerprint=acknowledged_fingerprint, added_at=datetime.now(timezone.utc))]
-        return self._update_report(report, chart_refs=next_refs)
+        return self._update_report(report, chart_refs=next_refs, item_order=[*report.item_order, chart_id])
 
     def replace_chart(self, report_id: str, previous_chart_id: str, chart: SavedChart) -> Report:
         report = self.get_report(report_id)
@@ -143,21 +151,36 @@ class DurableReportStore:
                                    "acknowledged_fingerprint": chart.source_fingerprint})
             if ref.chart_id == previous_chart_id else ref for ref in report.chart_refs
         ]
-        return self._update_report(report, chart_refs=refs)
+        return self._update_report(report, chart_refs=refs, item_order=[chart.chart_id if item == previous_chart_id else item for item in report.item_order])
 
     def remove_chart(self, report_id: str, chart_id: str) -> Report:
         report = self.get_report(report_id)
         next_refs = [ref for ref in report.chart_refs if ref.chart_id != chart_id]
-        return self._update_report(report, chart_refs=next_refs)
+        return self._update_report(report, chart_refs=next_refs, item_order=[item for item in report.item_order if item != chart_id])
 
     def add_note(self, report_id: str, text: str) -> Report:
         report = self.get_report(report_id)
         note = ReportNote(note_id=f"note_{uuid.uuid4().hex}", text=text, created_at=datetime.now(timezone.utc))
-        return self._update_report(report, notes=[*report.notes, note])
+        return self._update_report(report, notes=[*report.notes, note], item_order=[*report.item_order, note.note_id])
 
     def remove_note(self, report_id: str, note_id: str) -> Report:
         report = self.get_report(report_id)
-        return self._update_report(report, notes=[note for note in report.notes if note.note_id != note_id])
+        return self._update_report(report, notes=[note for note in report.notes if note.note_id != note_id], item_order=[item for item in report.item_order if item != note_id])
+
+    def add_table(self, report_id: str, table: ReportTable) -> Report:
+        report = self.get_report(report_id)
+        return self._update_report(report, tables=[*report.tables, table], item_order=[*report.item_order, table.table_id])
+
+    def remove_table(self, report_id: str, table_id: str) -> Report:
+        report = self.get_report(report_id)
+        return self._update_report(report, tables=[table for table in report.tables if table.table_id != table_id], item_order=[item for item in report.item_order if item != table_id])
+
+    def reorder(self, report_id: str, item_order: list[str]) -> Report:
+        report = self.get_report(report_id)
+        actual = [ref.chart_id for ref in report.chart_refs] + [note.note_id for note in report.notes] + [table.table_id for table in report.tables]
+        if len(item_order) != len(actual) or set(item_order) != set(actual):
+            raise HTTPException(status_code=422, detail="Report order must include each current chart, note, and table exactly once.")
+        return self._update_report(report, item_order=item_order)
 
     def acknowledge_refresh(self, report_id: str, chart_id: str, revision: int, fingerprint: str) -> Report:
         report = self.get_report(report_id)
@@ -173,19 +196,25 @@ class DurableReportStore:
                 report_id=report.report_id, name=report.name,
                 chart_refs_json=json.dumps([ref.model_dump(mode="json") for ref in report.chart_refs]),
                 notes_json=json.dumps([note.model_dump(mode="json") for note in report.notes]),
+                tables_json=json.dumps([table.model_dump(mode="json") for table in report.tables]),
+                item_order_json=json.dumps(report.item_order),
                 created_at=report.created_at, updated_at=report.updated_at,
             ))
 
-    def _update_report(self, report: Report, chart_refs: list[ReportChartRef] | None = None, notes: list[ReportNote] | None = None) -> Report:
+    def _update_report(self, report: Report, chart_refs: list[ReportChartRef] | None = None, notes: list[ReportNote] | None = None, tables: list[ReportTable] | None = None, item_order: list[str] | None = None) -> Report:
         updated = report.model_copy(update={
             "chart_refs": chart_refs if chart_refs is not None else report.chart_refs,
             "notes": notes if notes is not None else report.notes,
+            "tables": tables if tables is not None else report.tables,
+            "item_order": item_order if item_order is not None else report.item_order,
             "updated_at": datetime.now(timezone.utc),
         })
         with self.engine.begin() as connection:
             connection.execute(update(_reports).where(_reports.c.report_id == report.report_id).values(
                 chart_refs_json=json.dumps([ref.model_dump(mode="json") for ref in updated.chart_refs]),
                 notes_json=json.dumps([note.model_dump(mode="json") for note in updated.notes]),
+                tables_json=json.dumps([table.model_dump(mode="json") for table in updated.tables]),
+                item_order_json=json.dumps(updated.item_order),
                 updated_at=updated.updated_at,
             ))
         return updated
@@ -206,4 +235,8 @@ def _row_to_report(row: object) -> Report:
     mapping = dict(row)  # type: ignore[call-overload]
     chart_refs = [ReportChartRef(**item) for item in json.loads(mapping["chart_refs_json"])]
     notes = [ReportNote(**item) for item in json.loads(mapping["notes_json"])]
-    return Report(report_id=mapping["report_id"], name=mapping["name"], chart_refs=chart_refs, notes=notes, created_at=mapping["created_at"], updated_at=mapping["updated_at"])
+    tables = [ReportTable(**item) for item in json.loads(mapping.get("tables_json") or "[]")]
+    order = json.loads(mapping.get("item_order_json") or "[]")
+    if not order:
+        order = [ref.chart_id for ref in chart_refs] + [note.note_id for note in notes] + [table.table_id for table in tables]
+    return Report(report_id=mapping["report_id"], name=mapping["name"], chart_refs=chart_refs, notes=notes, tables=tables, item_order=order, created_at=mapping["created_at"], updated_at=mapping["updated_at"])

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useState } from "react";
-import type { AtlasCleanResponse, CleanIssue, CleanOperation, CleanPreviewResponse, CleanRecipe, CleanRecipePreviewResponse, CleanStateResponse, CleanTransformationRequest, ColumnValueCount, ColumnValueCountsResponse, DatasetRowsResponse, FillStrategy, OverviewProfileResponse, ValidationRule, ValidationRuleKind, ValidationRunResult } from "@prism/api-contracts";
+import type { AtlasCleanResponse, CleanIssue, CleanOperation, CleanPreviewResponse, CleanRecipe, CleanRecipeDraftPreviewResponse, CleanRecipePreviewResponse, CleanRecipeStep, CleanRowInspection, CleanStateResponse, CleanTransformationRequest, ColumnValueCount, ColumnValueCountsResponse, DatasetRowsResponse, FillStrategy, OverviewProfileResponse, ValidationRule, ValidationRuleKind, ValidationRunResult } from "@prism/api-contracts";
 import { apiUrl } from "../config/api";
 import type { InspectorObjectState } from "../state/shell-model";
 
@@ -37,6 +37,8 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
   const [manualMode, setManualMode] = useState(false);
   const [pendingRequest, setPendingRequest] = useState<CleanTransformationRequest | null>(null);
   const [preview, setPreview] = useState<CleanPreviewResponse | null>(null);
+  const [reviewView, setReviewView] = useState<"before" | "changes" | "after">("changes");
+  const [reviewRowsView, setReviewRowsView] = useState<"affected" | "exceptions" | "validation">("affected");
   const [atlas, setAtlas] = useState<AtlasCleanResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [applying, setApplying] = useState(false);
@@ -67,6 +69,27 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
   const [recipeError, setRecipeError] = useState<string | null>(null);
   const [applyingRecipeId, setApplyingRecipeId] = useState<string | null>(null);
   const [recipePreview, setRecipePreview] = useState<CleanRecipePreviewResponse | null>(null);
+  const [draftSteps, setDraftSteps] = useState<CleanRecipeStep[]>([]);
+  const [draftPreview, setDraftPreview] = useState<CleanRecipeDraftPreviewResponse | null>(null);
+  const [draftError, setDraftError] = useState<string | null>(null);
+  const [editingRecipeId, setEditingRecipeId] = useState<string | null>(null);
+  const [editingStepIndex, setEditingStepIndex] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!datasetId || !draftSteps.length) { setDraftPreview(null); return; }
+    const controller = new AbortController();
+    setDraftPreview(null); setDraftError(null);
+    void fetch(apiUrl(`/api/v1/clean/datasets/${datasetId}/recipe-draft/preview`), {
+      method: "POST", headers: { "content-type": "application/json" }, signal: controller.signal,
+      body: JSON.stringify({ steps: draftSteps.map(({ request, enabled }) => ({ request, enabled })) }),
+    }).then(async (response) => {
+      if (!response.ok) throw new Error((await response.json() as { detail?: string }).detail ?? "Draft preview failed.");
+      return response.json() as Promise<CleanRecipeDraftPreviewResponse>;
+    }).then((body) => setDraftPreview(body)).catch((reason: unknown) => {
+      if (!controller.signal.aborted) setDraftError(reason instanceof Error ? reason.message : "Draft preview failed.");
+    });
+    return () => controller.abort();
+  }, [datasetId, draftSteps]);
 
   const loadRecipes = useCallback(async () => {
     try {
@@ -152,6 +175,7 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
   async function previewOperation(request: CleanTransformationRequest) {
     if (!datasetId) return;
     setPendingRequest(request); setPreview(null); setRecipePreview(null); setError(null);
+    setReviewView("changes"); setReviewRowsView("affected");
     try {
       const response = await fetch(apiUrl(`/api/v1/clean/datasets/${datasetId}/preview`), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(request) });
       if (!response.ok) throw new Error((await response.json() as { detail?: string }).detail ?? "Preview failed.");
@@ -211,14 +235,51 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
   }
 
   async function saveAsRecipe(request: CleanTransformationRequest) {
-    if (!recipeName.trim()) { setRecipeError("Name the recipe before saving it."); return; }
+    if (!editingRecipeId && !recipeName.trim()) { setRecipeError("Name the recipe before saving it."); return; }
     setRecipeError(null);
     try {
-      const response = await fetch(apiUrl("/api/v1/clean/recipes"), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: recipeName.trim(), steps: [{ request, enabled: true }] }) });
+      const steps = draftSteps.length ? draftSteps : [{ step_id: `step_${Date.now()}`, request, enabled: true }];
+      const response = editingRecipeId
+        ? await fetch(apiUrl(`/api/v1/clean/recipes/${editingRecipeId}/steps`), { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ steps }) })
+        : await fetch(apiUrl("/api/v1/clean/recipes"), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: recipeName.trim(), steps: steps.map(({ request: operation, enabled }) => ({ request: operation, enabled })) }) });
       if (!response.ok) throw new Error((await response.json() as { detail?: string }).detail ?? "Saving the recipe failed.");
-      setRecipeName("");
+      setRecipeName(""); setDraftSteps([]); setEditingRecipeId(null); setEditingStepIndex(null); setRecipePreview(null);
       await loadRecipes();
     } catch (reason) { setRecipeError(reason instanceof Error ? reason.message : "Saving the recipe failed."); }
+  }
+
+  function addDraftStep(request: CleanTransformationRequest) {
+    setDraftSteps((current) => [...current, { step_id: `draft_${Date.now()}_${current.length}`, request, enabled: true }]);
+    setRecipePreview(null);
+  }
+
+  function editSavedRecipe(recipe: CleanRecipe) {
+    setEditingRecipeId(recipe.recipe_id); setRecipeName(recipe.name);
+    setManualMode(true);
+    setDraftSteps(recipe.steps.map((step) => ({ ...step })));
+    setRecipePreview(null); setEditingStepIndex(null); setRecipeError(null);
+  }
+
+  function loadDraftStep(index: number) {
+    const request = draftSteps[index]?.request;
+    if (!request) return;
+    setEditingStepIndex(index); setManualMode(true); setSelectedIssue(null);
+    setManualOperation(request.operation); setManualColumn(request.column ?? "");
+    setManualNewName(request.new_name ?? ""); setManualTargetType(request.target_type ?? "numeric");
+    setManualDateFormat(request.date_format ?? ""); setManualNumberLocale(request.number_locale ?? "standard");
+    setManualFillStrategy(request.fill_strategy ?? "median"); setManualFillValue(request.fill_value ?? "");
+    setManualCase(request.case ?? "lower"); setCategoryMapping(request.category_mapping ?? {});
+    setCategoryCaseSensitive(request.case_sensitive ?? true);
+    setCategoryPreserveUnmatched(request.preserve_unmatched ?? true);
+    setSurvivorshipColumns(new Set(request.group_by_columns ?? []));
+    setSurvivorshipRule(request.survivorship_rule ?? "first");
+    setSurvivorshipTiebreak(request.survivorship_tiebreak_column ?? "");
+  }
+
+  function updateDraftStep(request: CleanTransformationRequest) {
+    if (editingStepIndex === null) return;
+    setDraftSteps((current) => current.map((step, index) => index === editingStepIndex ? { ...step, request } : step));
+    setEditingStepIndex(null); setRecipePreview(null);
   }
 
   async function previewSavedRecipe(recipe: CleanRecipe) {
@@ -358,9 +419,15 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
         </div> : null}
         <button disabled={!manualBuild.request} title={manualBuild.reason ?? undefined} onClick={() => manualBuild.request && void previewOperation(manualBuild.request)}>Preview</button>
         {manualBuild.reason ? <p className="quiet-note">{manualBuild.reason}</p> : null}
+        <button className="secondary" disabled={!manualBuild.request} onClick={() => manualBuild.request && (editingStepIndex === null ? addDraftStep(manualBuild.request) : updateDraftStep(manualBuild.request))}>{editingStepIndex === null ? "Add step to draft" : `Update step ${editingStepIndex + 1}`}</button>
         <label>Recipe name<input aria-label="Recipe name" value={recipeName} onChange={(event) => setRecipeName(event.target.value)} placeholder="e.g. Standard monthly cleanup" /></label>
-        <button className="secondary" disabled={!manualBuild.request} title={!manualBuild.request ? (manualBuild.reason ?? undefined) : "Save this operation as a reusable, versioned recipe"} onClick={() => manualBuild.request && void saveAsRecipe(manualBuild.request)}>Save as recipe</button>
+        <button className="secondary" disabled={!manualBuild.request && !draftSteps.length} title={!manualBuild.request && !draftSteps.length ? (manualBuild.reason ?? undefined) : "Save the ordered steps as a reusable, versioned recipe"} onClick={() => void saveAsRecipe(manualBuild.request ?? draftSteps[0]!.request)}>{editingRecipeId ? "Save recipe changes" : "Save as recipe"}</button>
       </div> : null}
+
+      {draftSteps.length ? <section className="clean-recipe-draft" aria-label="Recipe draft editor"><span className="eyebrow">DRAFT RECIPE · {draftSteps.length} STEP(S)</span>
+        <ol>{draftSteps.map((step, index) => <li key={step.step_id}><span className="clean-step-number">{String(index + 1).padStart(2, "0")}</span><div><strong>{step.request.operation.replaceAll("_", " ")}</strong><small>{step.request.column ?? "dataset"} · {step.enabled ? "draft" : "disabled"}{draftPreview ? ` · ${draftPreview.step_impacts[index] ?? 0} affected` : ""}</small></div><div className="clean-step-actions"><button aria-label={`Move step ${index + 1} up`} disabled={index === 0} onClick={() => setDraftSteps((current) => { const next = [...current]; [next[index - 1], next[index]] = [next[index]!, next[index - 1]!]; return next; })}>↑</button><button aria-label={`Move step ${index + 1} down`} disabled={index === draftSteps.length - 1} onClick={() => setDraftSteps((current) => { const next = [...current]; [next[index], next[index + 1]] = [next[index + 1]!, next[index]!]; return next; })}>↓</button><button aria-label={`Edit step ${index + 1}`} onClick={() => loadDraftStep(index)}>Edit</button><button aria-label={`${step.enabled ? "Disable" : "Enable"} step ${index + 1}`} onClick={() => setDraftSteps((current) => current.map((item, at) => at === index ? { ...item, enabled: !item.enabled } : item))}>{step.enabled ? "Disable" : "Enable"}</button><button aria-label={`Remove step ${index + 1}`} onClick={() => setDraftSteps((current) => current.filter((_, at) => at !== index))}>Remove</button></div></li>)}</ol>
+        {draftError ? <p role="alert" className="query-error">{draftError}</p> : draftPreview ? <p className="quiet-note">Downstream preview recomputed from revision {draftPreview.source_revision}. Projected health {draftPreview.projected_health.total}/100.</p> : <p className="quiet-note">Recomputing downstream preview…</p>}
+      </section> : null}
 
       <div className="section-title"><div><span className="eyebrow">RECIPES</span><h2>{recipes.length ? `${recipes.length} saved` : "None saved yet"}</h2></div></div>
       {recipes.length ? <ul className="clean-recipe-list">{recipes.map((recipe) => {
@@ -368,6 +435,7 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
         return <li key={recipe.recipe_id}>
           <div><strong>{recipe.name}</strong><small>v{recipe.version} · {enabledCount}/{recipe.steps.length} step(s) enabled</small></div>
           <button className="secondary" disabled={applyingRecipeId === recipe.recipe_id} onClick={() => void previewSavedRecipe(recipe)}>Preview</button>
+          <button className="secondary" onClick={() => editSavedRecipe(recipe)}>Edit steps</button>
           {recipePreview?.recipe_id === recipe.recipe_id ? <div className="clean-recipe-review"><small>Reviewed revision {recipePreview.source_revision} · {recipePreview.step_impacts.join(" / ")} affected row(s) by step</small><button disabled={applyingRecipeId === recipe.recipe_id} onClick={() => void applyRecipe(recipe)}>{applyingRecipeId === recipe.recipe_id ? "Applying…" : "Apply reviewed recipe"}</button><button className="secondary" onClick={() => setRecipePreview(null)}>Discard</button></div> : null}
         </li>;
       })}</ul> : <p className="quiet-note">Build an operation above and save it as a recipe to reuse it later, or on another dataset with the same schema.</p>}
@@ -408,14 +476,27 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
     <section className="clean-preview" aria-label="Data and transformation preview" tabIndex={0}>
       <header><span className="eyebrow">{clean.dataset.source_name}</span><h1>{clean.dataset.row_count.toLocaleString()} rows · {clean.dataset.column_count} columns · revision {clean.dataset.revision}</h1></header>
       {preview ? <>
-        <p className="clean-preview-summary">{preview.operation.replaceAll("_", " ")} affects <strong>{preview.affected_rows.toLocaleString()}</strong> row(s){(preview.affected_columns ?? []).length ? ` in ${(preview.affected_columns ?? []).join(", ")}` : ""}. Projected health: <strong>{preview.projected_health.total}/100</strong> (currently {clean.health.total}/100).</p>
-        {(preview.warnings ?? []).length ? <ul className="clean-warnings">{(preview.warnings ?? []).map((warning) => <li key={warning}>{warning}</li>)}</ul> : null}
-        {(preview.unresolved_values ?? []).length ? <div className="clean-exceptions"><span className="eyebrow">EXCEPTIONS · {(preview.unresolved_values ?? []).length}</span><ul>{(preview.unresolved_values ?? []).slice(0, 20).map((value) => <li key={value}><code>{value}</code></li>)}</ul>{(preview.unresolved_values ?? []).length > 20 ? <p className="quiet-note">+{(preview.unresolved_values ?? []).length - 20} more</p> : null}</div> : null}
-        <div className="clean-diff"><div><span className="eyebrow">BEFORE</span><SampleTable rows={preview.before_sample} /></div><div><span className="eyebrow">AFTER</span><SampleTable rows={preview.after_sample} /></div></div>
+        <div className="clean-review-tabs" role="tablist" aria-label="Review transformation"><button role="tab" aria-selected={reviewView === "before"} onClick={() => setReviewView("before")}>Before</button><button role="tab" aria-selected={reviewView === "changes"} onClick={() => setReviewView("changes")}>Changes</button><button role="tab" aria-selected={reviewView === "after"} onClick={() => setReviewView("after")}>After</button></div>
+        {reviewView === "before" ? <><p className="quiet-note">Source revision {preview.source_revision ?? clean.dataset.revision} · fingerprint {(preview.source_fingerprint ?? clean.dataset.source_fingerprint).slice(0, 12)}… · first {preview.before_sample.length} row(s)</p><SampleTable rows={preview.before_sample} /></> : null}
+        {reviewView === "after" ? <><p className="quiet-note">Projected result only. Nothing has been applied. First {preview.after_sample.length} row(s).</p><SampleTable rows={preview.after_sample} /></> : null}
+        {reviewView === "changes" ? <>
+          <p className="clean-preview-summary">{preview.operation.replaceAll("_", " ")} affects <strong>{(preview.changed_rows_total ?? preview.affected_rows).toLocaleString()}</strong> source row(s){(preview.affected_columns ?? []).length ? ` in ${(preview.affected_columns ?? []).join(", ")}` : ""}. Projected health: <strong>{preview.projected_health.total}/100</strong> (currently {clean.health.total}/100).</p>
+          {(preview.warnings ?? []).length ? <ul className="clean-warnings">{(preview.warnings ?? []).map((warning) => <li key={warning}>{warning}</li>)}</ul> : null}
+          <div className="clean-review-tabs" role="tablist" aria-label="Inspect review results"><button role="tab" aria-selected={reviewRowsView === "affected"} onClick={() => setReviewRowsView("affected")}>Affected rows ({(preview.changed_rows_total ?? preview.affected_rows).toLocaleString()})</button><button role="tab" aria-selected={reviewRowsView === "exceptions"} onClick={() => setReviewRowsView("exceptions")}>Exceptions ({(preview.exception_rows_total ?? 0).toLocaleString()})</button><button role="tab" aria-selected={reviewRowsView === "validation"} onClick={() => setReviewRowsView("validation")}>Validation</button></div>
+          {reviewRowsView === "affected" ? <InspectionTable rows={preview.changed_rows ?? []} total={preview.changed_rows_total ?? preview.affected_rows} /> : null}
+          {reviewRowsView === "exceptions" ? <><p className="quiet-note">{(preview.unresolved_values ?? []).length} distinct unresolved value(s). These rows stay unchanged unless the selected operation explicitly makes them missing.</p><InspectionTable rows={preview.exception_rows ?? []} total={preview.exception_rows_total ?? 0} /></> : null}
+          {reviewRowsView === "validation" ? <div className="clean-validation-review">{validationRules.length ? validationRules.map((rule) => {
+            const result = validationResults[rule.rule_id];
+            return <section key={rule.rule_id}><strong>{rule.name}</strong><p>{result ? `${result.violation_count} violation(s) at revision ${result.dataset_revision}` : "Not run. Use Run beside this rule in the recipe pane."}</p>{result?.sample_violations?.length ? <div className="data-table-wrap" tabIndex={0}><table><thead><tr><th>Source row</th><th>Values</th></tr></thead><tbody>{result.sample_violations.map((row, index) => <tr key={index}><td><code>{result.violation_source_rows?.[index] ?? "unknown"}</code></td><td><code>{JSON.stringify(row)}</code></td></tr>)}</tbody></table></div> : null}</section>;
+          }) : <p>No saved validation rules. Add one in the recipe pane and run it against the current dataset.</p>}</div> : null}
+        </> : null}
       </> : recipePreview ? <>
         <p className="clean-preview-summary">Recipe version {recipePreview.recipe_version} reviewed against revision {recipePreview.source_revision}. Projected health: <strong>{recipePreview.projected_health.total}/100</strong>.</p>
         <div className="clean-diff"><div><span className="eyebrow">BEFORE</span><SampleTable rows={recipePreview.before_sample} /></div><div><span className="eyebrow">AFTER</span><SampleTable rows={recipePreview.after_sample} /></div></div>
         <p className="quiet-note">No dataset changes until Apply reviewed recipe.</p>
+      </> : draftPreview ? <>
+        <p className="clean-preview-summary">Draft recipe recalculated against revision {draftPreview.source_revision}. Projected health: <strong>{draftPreview.projected_health.total}/100</strong>. Save the recipe and preview its version before Apply.</p>
+        <div className="clean-diff"><div><span className="eyebrow">BEFORE</span><SampleTable rows={draftPreview.before_sample} /></div><div><span className="eyebrow">AFTER</span><SampleTable rows={draftPreview.after_sample} /></div></div>
       </> : <>
         <p className="quiet-note">{selectedIssue ? "Select an issue to preview a proposed fix before applying it." : manualMode ? "Fill in the operation on the left and select Preview — nothing is changed until you apply." : "This is the dataset as it stands at the current revision. Select an issue or start a manual operation to preview a fix."} Nothing is changed until you apply.</p>
         <div className="clean-table-toolbar">
@@ -445,4 +526,9 @@ function SampleTable({ rows }: { rows: readonly Record<string, unknown>[] }) {
   if (!rows.length) return <p className="quiet-note">No rows.</p>;
   const columns = Object.keys(rows[0] ?? {});
   return <div className="data-table-wrap" tabIndex={0}><table><thead><tr>{columns.map((key) => <th key={key}>{key}</th>)}</tr></thead><tbody>{rows.map((row, index) => <tr key={index}>{columns.map((key) => <td key={key}>{row[key] === null || row[key] === undefined ? "—" : String(row[key])}</td>)}</tr>)}</tbody></table></div>;
+}
+
+function InspectionTable({ rows, total }: { rows: readonly CleanRowInspection[]; total: number }) {
+  if (!total) return <p className="quiet-note">No rows in this view.</p>;
+  return <><p className="quiet-note">Showing {rows.length.toLocaleString()} of {total.toLocaleString()} source row(s){total > rows.length ? " (inspection sample limited to 100)" : ""}.</p><div className="data-table-wrap" tabIndex={0}><table><thead><tr><th>Source row</th><th>Status</th><th>Before</th><th>After</th></tr></thead><tbody>{rows.map((row) => <tr key={row.source_row}><td><code>{row.source_row}</code></td><td>{row.status.replaceAll("_", " ")}</td><td><code>{JSON.stringify(row.before)}</code></td><td><code>{row.after ? JSON.stringify(row.after) : "removed"}</code></td></tr>)}</tbody></table></div></>;
 }

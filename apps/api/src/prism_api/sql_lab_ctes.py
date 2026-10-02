@@ -18,6 +18,7 @@ from prism_api_contracts import (
     CteMaterializeResponse,
     SqlDialect,
 )
+from prism_sql_lab_runtime import classify_query
 from sqlglot import expressions as exp
 
 from .sql_lab import _connection
@@ -31,6 +32,10 @@ _SQLGLOT_DIALECT = {
 
 
 def _parse(sql: str, dialect_name: str) -> exp.Expression:
+    classification = classify_query(sql)
+    if not classification.is_read_only:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            detail=f"CTE inspection requires a proven read-only query. {classification.reason}")
     try:
         return sqlglot.parse_one(sql, read=dialect_name)
     except Exception as error:
@@ -66,4 +71,8 @@ def materialize_cte(request: CteMaterializeRequest) -> CteMaterializeResponse:
     prefix = [cte.copy() for cte in ctes[: index + 1]]
     materialized = exp.select("*").from_(request.cte_name)
     materialized.set("with_", exp.With(expressions=prefix))
-    return CteMaterializeResponse(cte_name=request.cte_name, materialized_sql=materialized.sql(dialect=dialect_name))
+    sql = materialized.sql(dialect=dialect_name)
+    if not classify_query(sql).is_read_only:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            detail="The materialized CTE is not a proven read-only query.")
+    return CteMaterializeResponse(cte_name=request.cte_name, materialized_sql=sql)

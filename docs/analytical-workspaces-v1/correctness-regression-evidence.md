@@ -1,5 +1,13 @@
 # Correctness checkpoint, 2026-10-02
 
+## Current working-tree follow-up
+
+- Clean draft recipe preview now accepts edited ordered steps, including disabled steps. A schema mismatch names the failing step; changing an earlier step recomputes downstream results. Preview returns bounded changed and exception row samples with source-row identities and exact totals. Validation exposes violation source rows. Focused Clean and validation run: **43 passed**.
+- CTE list and materialization reject mutating and multi-statement SQL before parsing. Focused CTE run: **7 passed**.
+- Visualize applies saved spec filters on the server for both render and drilldown. Histogram bins carry numeric bounds and resolve to the same contributing rows. Focused Visualize run: **17 passed**.
+- Reports save bounded table snapshots with selected source revision/fingerprint, persist order across charts, tables and notes, and disclose stale or unavailable table sources. A fresh store connection restores table rows and item order. Focused Reports run: **11 passed**.
+- The current full isolated Python run: **1,304 passed, 7 skipped, 43 warnings in 105.93s**. Full web rerun: **104 passed across 16 files**. One preceding full web run had one intermittent Atlas command-center failure (103/104); the test passed alone (15/15) and the full suite passed on rerun. Both outputs are retained in the raw log.
+
 Source branch: `prism/analytical-workspaces-v1`. Tests below used a unique temporary SQLite database via `PRISM_ANALYTICAL_HISTORY_DATABASE_URL`; production data was not used.
 
 ## Clean review and publication

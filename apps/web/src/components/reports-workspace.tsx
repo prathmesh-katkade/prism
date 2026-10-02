@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import type { Report, ReportDetail, SavedChart } from "@prism/api-contracts";
+import type { OverviewProfileResponse, Report, ReportDetail, SavedChart } from "@prism/api-contracts";
 import { apiUrl } from "../config/api";
 import { ChartCanvas } from "./visualize-workspace";
 
@@ -13,7 +13,7 @@ async function readJson<T>(response: Response): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-export function ReportsWorkspace({ onOpenWorkflow }: { onOpenWorkflow(workflow: string): void }) {
+export function ReportsWorkspace({ datasetId, onOpenWorkflow }: { datasetId?: string | undefined; onOpenWorkflow(workflow: string): void }) {
   const [reports, setReports] = useState<Report[]>([]);
   const [charts, setCharts] = useState<SavedChart[]>([]);
   const [detail, setDetail] = useState<ReportDetail | null>(null);
@@ -23,6 +23,9 @@ export function ReportsWorkspace({ onOpenWorkflow }: { onOpenWorkflow(workflow: 
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sourceProfile, setSourceProfile] = useState<OverviewProfileResponse | null>(null);
+  const [tableTitle, setTableTitle] = useState("");
+  const [tableColumns, setTableColumns] = useState<string[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true); setError(null);
@@ -39,6 +42,25 @@ export function ReportsWorkspace({ onOpenWorkflow }: { onOpenWorkflow(workflow: 
   }, []);
 
   useEffect(() => { void load(); }, [load]);
+  useEffect(() => { if (!datasetId) { setSourceProfile(null); return; } void fetch(apiUrl(`/api/v1/overview/datasets/${datasetId}/profile`)).then(readJson<OverviewProfileResponse>).then(setSourceProfile).catch(() => setSourceProfile(null)); }, [datasetId]);
+
+  async function moveItem(itemId: string, direction: -1 | 1) {
+    if (!detail) return;
+    const order = [...(detail.report.item_order ?? [])];
+    const index = order.indexOf(itemId); const target = index + direction;
+    if (index < 0 || target < 0 || target >= order.length) return;
+    [order[index], order[target]] = [order[target]!, order[index]!];
+    await mutate(`/api/v1/reports/${detail.report.report_id}/order`, "PUT", { item_order: order });
+  }
+
+  async function addTable() {
+    if (!detail || !datasetId || !sourceProfile || !tableTitle.trim() || !tableColumns.length) return;
+    await mutate(`/api/v1/reports/${detail.report.report_id}/tables`, "POST", {
+      title: tableTitle.trim(), dataset_id: datasetId, source_revision: sourceProfile.dataset.revision,
+      source_fingerprint: sourceProfile.dataset.source_fingerprint, columns: tableColumns, limit: 50,
+    });
+    setTableTitle("");
+  }
 
   async function openReport(reportId: string) {
     setError(null);
@@ -103,25 +125,25 @@ export function ReportsWorkspace({ onOpenWorkflow }: { onOpenWorkflow(workflow: 
       {detail ? <>
         <header><span className="eyebrow">REPORT CANVAS · EXPLICIT SOURCE VERSIONS</span><h1>{detail.report.name}</h1><small>Saved {new Date(detail.report.created_at).toLocaleString()}</small></header>
         <div className="report-add"><label>Add saved chart<select value={selectedChartId} onChange={(event) => setSelectedChartId(event.target.value)}><option value="">Choose a chart</option>{charts.filter((chart) => !detail.report.chart_refs?.some((ref) => ref.chart_id === chart.chart_id)).map((chart) => <option key={chart.chart_id} value={chart.chart_id}>{chart.name} · revision {chart.dataset_revision}</option>)}</select></label><button disabled={busy || !selectedChartId} onClick={() => { void mutate(`/api/v1/reports/${detail.report.report_id}/charts`, "POST", { chart_id: selectedChartId }); setSelectedChartId(""); }}>Add chart</button></div>
-        <div className="report-items">{detail.report.chart_refs?.map((ref) => {
-          const chart = detail.charts?.find((item) => item.chart_id === ref.chart_id);
-          const freshness = detail.freshness?.find((item) => item.chart_id === ref.chart_id);
-          if (!chart) return null;
-          return <section className="report-item" key={chart.chart_id}><header><div><span className="eyebrow">CHART · REVISION {chart.dataset_revision}</span><h2>{chart.name}</h2></div><button className="secondary" disabled={busy} onClick={() => void mutate(`/api/v1/reports/${detail.report.report_id}/charts/${chart.chart_id}`, "DELETE")}>Remove</button></header>
+        {sourceProfile ? <div className="report-add report-table-editor"><span className="eyebrow">TABLE FROM CURRENT SOURCE · REVISION {sourceProfile.dataset.revision}</span><label>Table title<input value={tableTitle} onChange={(event) => setTableTitle(event.target.value)} placeholder="Source rows" /></label><fieldset><legend>Columns</legend>{sourceProfile.columns.map((column) => <label key={column.name}><input type="checkbox" checked={tableColumns.includes(column.name)} onChange={(event) => setTableColumns((previous) => event.target.checked ? [...previous, column.name] : previous.filter((name) => name !== column.name))} />{column.name}</label>)}</fieldset><button disabled={busy || !tableTitle.trim() || !tableColumns.length} onClick={() => void addTable()}>Add table snapshot</button><small>First 50 source rows saved with revision and fingerprint.</small></div> : null}
+        <div className="report-items">{(detail.report.item_order ?? []).map((itemId, index) => {
+          const chart = detail.charts?.find((item) => item.chart_id === itemId);
+          const freshness = detail.freshness?.find((item) => item.chart_id === itemId);
+          const table = detail.report.tables?.find((item) => item.table_id === itemId);
+          const tableFreshness = detail.table_freshness?.find((item) => item.table_id === itemId);
+          const noteItem = detail.report.notes?.find((item) => item.note_id === itemId);
+          const controls = <div className="report-order-controls"><button className="secondary" disabled={busy || index === 0} onClick={() => void moveItem(itemId, -1)} aria-label={`Move item ${index + 1} up`}>↑</button><button className="secondary" disabled={busy || index === (detail.report.item_order?.length ?? 0) - 1} onClick={() => void moveItem(itemId, 1)} aria-label={`Move item ${index + 1} down`}>↓</button></div>;
+          if (chart) return <section className="report-item" key={itemId}><header><div><span className="eyebrow">CHART · REVISION {chart.dataset_revision}</span><h2>{chart.name}</h2></div>{controls}<button className="secondary" disabled={busy} onClick={() => void mutate(`/api/v1/reports/${detail.report.report_id}/charts/${chart.chart_id}`, "DELETE")}>Remove</button></header>
             {freshness?.dataset_unavailable ? <p className="report-stale" role="status">Source unavailable. This saved result is the last available snapshot; refresh is disabled.</p> : freshness?.needs_refresh ? <p className="report-stale" role="status">Source changed: saved revision {chart.dataset_revision}; current revision {freshness.current_revision}. Review before refreshing.</p> : <p className="quiet-note">Source revision {chart.dataset_revision} · fingerprint {chart.source_fingerprint.slice(0, 12)}…</p>}
-            {chart.result ? <ChartCanvas mark={chart.spec.mark} data={chart.result.data} /> : <p className="report-stale">This older chart has no preserved rendered result.</p>}
+            {chart.result ? <ChartCanvas mark={chart.spec.mark} data={chart.result.data} referenceLine={chart.spec.reference_line} /> : <p className="report-stale">This older chart has no preserved rendered result.</p>}
             {chart.result?.warnings?.length ? <ul className="clean-warnings">{chart.result.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul> : null}
             {freshness?.needs_refresh && !freshness.dataset_unavailable ? <button disabled={busy} onClick={() => void refresh(chart)}>Refresh from reviewed current source</button> : null}
             {chart.previous_chart_id ? <small>Previous version: <code>{chart.previous_chart_id}</code></small> : null}
           </section>;
-        })}
-        {detail.report.notes?.map((item) => <section className="report-item" key={item.note_id}><header><span className="eyebrow">NOTE</span><button className="secondary" disabled={busy} onClick={async () => {
-          setBusy(true); setError(null);
-          try { const report = await fetch(apiUrl(`/api/v1/reports/${detail.report.report_id}/notes/${item.note_id}`), { method: "DELETE" }).then(readJson<Report>); setDetail({ ...detail, report }); }
-          catch (reason) { setError(reason instanceof Error ? reason.message : "Could not remove note."); }
-          finally { setBusy(false); }
-        }}>Remove</button></header><p>{item.text}</p></section>)}
-        </div>
+          if (table) return <section className="report-item" key={itemId}><header><div><span className="eyebrow">TABLE · REVISION {table.dataset_revision}</span><h2>{table.title}</h2></div>{controls}<button className="secondary" disabled={busy} onClick={() => void mutate(`/api/v1/reports/${detail.report.report_id}/tables/${table.table_id}`, "DELETE")}>Remove</button></header>{tableFreshness?.dataset_unavailable ? <p className="report-stale" role="status">Table source unavailable. Showing the preserved snapshot.</p> : tableFreshness?.needs_refresh ? <p className="report-stale" role="status">Table source changed after this snapshot. Showing saved revision {table.dataset_revision}; current revision {tableFreshness.current_revision}.</p> : null}<p className="quiet-note">Saved {table.rows.length} of {table.source_row_count} source rows · fingerprint {table.source_fingerprint.slice(0, 12)}…</p><div className="data-table-wrap" tabIndex={0}><table><thead><tr>{table.columns.map((column) => <th key={column}>{column}</th>)}</tr></thead><tbody>{table.rows.map((row, rowIndex) => <tr key={rowIndex}>{table.columns.map((column) => <td key={column}>{row[column] === null || row[column] === undefined ? "—" : String(row[column])}</td>)}</tr>)}</tbody></table></div></section>;
+          if (noteItem) return <section className="report-item" key={itemId}><header><span className="eyebrow">NOTE</span>{controls}<button className="secondary" disabled={busy} onClick={async () => { setBusy(true); setError(null); try { const report = await fetch(apiUrl(`/api/v1/reports/${detail.report.report_id}/notes/${noteItem.note_id}`), { method: "DELETE" }).then(readJson<Report>); setDetail({ ...detail, report }); } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not remove note."); } finally { setBusy(false); } }}>Remove</button></header><p>{noteItem.text}</p></section>;
+          return null;
+        })}</div>
         <div className="report-add"><label>New note<textarea value={note} onChange={(event) => setNote(event.target.value)} placeholder="Interpretation, caveat, or next question" /></label><button disabled={busy || !note.trim()} onClick={() => void addNote()}>Add note</button></div>
       </> : null}
     </section>

@@ -53,6 +53,7 @@ def test_uniqueness_rule_finds_the_duplicate_customer_id() -> None:
     assert body["violation_count"] == 2  # both c1 rows
     assert body["total_checked"] == 5
     assert {row["customer_id"] for row in body["sample_violations"]} == {"c1"}
+    assert body["violation_source_rows"] == ["0", "1"]
 
 
 def test_nonnegative_rule_finds_the_negative_revenue_row() -> None:
@@ -64,6 +65,7 @@ def test_nonnegative_rule_finds_the_negative_revenue_row() -> None:
     assert result["passed"] is False
     assert result["violation_count"] == 1
     assert result["sample_violations"][0]["customer_id"] == "c2"
+    assert result["violation_source_rows"] == ["2"]
 
 
 def test_date_order_rule_finds_the_row_where_end_precedes_start() -> None:

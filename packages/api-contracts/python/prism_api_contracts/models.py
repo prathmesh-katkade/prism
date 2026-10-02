@@ -571,6 +571,13 @@ class CleanTransformation(ContractModel):
     created_at: datetime
 
 
+class CleanRowInspection(ContractModel):
+    source_row: str
+    status: Literal["changed", "removed", "unresolved", "newly_missing"]
+    before: dict[str, Optional[Any]]
+    after: Optional[dict[str, Optional[Any]]] = None
+
+
 class CleanPreviewResponse(ContractModel):
     operation: CleanOperation
     affected_rows: int = Field(ge=0)
@@ -583,6 +590,10 @@ class CleanPreviewResponse(ContractModel):
     review_token: str = ""
     source_revision: int = Field(default=0, ge=0)
     source_fingerprint: str = ""
+    changed_rows: list[CleanRowInspection] = Field(default_factory=list)
+    changed_rows_total: int = Field(default=0, ge=0)
+    exception_rows: list[CleanRowInspection] = Field(default_factory=list)
+    exception_rows_total: int = Field(default=0, ge=0)
 
 
 class ColumnValueCount(ContractModel):
@@ -681,6 +692,19 @@ class CleanRecipePreviewResponse(ContractModel):
     projected_health: OverviewHealth
 
 
+class CleanRecipeDraftPreviewRequest(ContractModel):
+    steps: list[CleanRecipeStepInput] = Field(min_length=1)
+
+
+class CleanRecipeDraftPreviewResponse(ContractModel):
+    source_revision: int = Field(ge=0)
+    source_fingerprint: str
+    before_sample: list[dict[str, Optional[Any]]]
+    after_sample: list[dict[str, Optional[Any]]]
+    step_impacts: list[int]
+    projected_health: OverviewHealth
+
+
 class ValidationRuleKind(str, Enum):
     UNIQUENESS = "uniqueness"
     NONNEGATIVE = "nonnegative"
@@ -712,6 +736,7 @@ class ValidationRunResult(ContractModel):
     violation_count: int = Field(ge=0)
     passed: bool
     sample_violations: list[dict[str, Optional[Any]]] = Field(default_factory=list)
+    violation_source_rows: list[str] = Field(default_factory=list)
 
 
 class AtlasCleanAction(str, Enum):
@@ -769,6 +794,12 @@ class VisualizationSpec(ContractModel):
     aggregation: VizAggregation
     filters: dict[str, Any] = Field(default_factory=dict)
     max_categories: int = Field(default=20, ge=1, le=200)
+    histogram_bins: Optional[int] = Field(default=None, ge=2, le=100)
+    x_label: Optional[str] = Field(default=None, max_length=100)
+    y_label: Optional[str] = Field(default=None, max_length=100)
+    unit: Optional[str] = Field(default=None, max_length=40)
+    reference_line: Optional[float] = None
+    annotation: Optional[str] = Field(default=None, max_length=500)
 
 
 class VisualizationSuggestion(ContractModel):
@@ -791,6 +822,8 @@ class VisualizationDatum(ContractModel):
     value: float
     x: Optional[float] = None
     box: Optional[BoxStats] = None
+    bin_start: Optional[float] = None
+    bin_end: Optional[float] = None
 
 
 class VisualizationDataResponse(ContractModel):
@@ -806,6 +839,8 @@ class ChartDrillDownRequest(ContractModel):
     dimension_value: Optional[str] = None
     x_value: Optional[float] = None
     y_value: Optional[float] = None
+    bin_start: Optional[float] = None
+    bin_end: Optional[float] = None
     offset: int = Field(default=0, ge=0)
     limit: int = Field(default=50, ge=1, le=500)
 
@@ -2937,11 +2972,38 @@ class ReportAddNoteRequest(ContractModel):
     text: str = Field(min_length=1, max_length=10_000)
 
 
+class ReportAddTableRequest(ContractModel):
+    title: str = Field(min_length=1, max_length=200)
+    dataset_id: str = Field(min_length=1)
+    source_revision: int = Field(ge=0)
+    source_fingerprint: str = Field(min_length=1)
+    columns: list[str] = Field(min_length=1)
+    limit: int = Field(default=50, ge=1, le=100)
+
+
+class ReportTable(ContractModel):
+    table_id: str
+    title: str
+    dataset_id: str
+    dataset_revision: int = Field(ge=0)
+    source_fingerprint: str
+    columns: list[str]
+    rows: list[dict[str, Any]]
+    source_row_count: int = Field(ge=0)
+    created_at: datetime
+
+
+class ReportReorderRequest(ContractModel):
+    item_order: list[str]
+
+
 class Report(ContractModel):
     report_id: str = Field(min_length=1)
     name: str
     chart_refs: list[ReportChartRef] = Field(default_factory=list)
     notes: list[ReportNote] = Field(default_factory=list)
+    tables: list[ReportTable] = Field(default_factory=list)
+    item_order: list[str] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
 
@@ -2956,10 +3018,19 @@ class ChartFreshnessStatus(ContractModel):
     dataset_unavailable: bool = False
 
 
+class ReportTableFreshnessStatus(ContractModel):
+    table_id: str
+    current_revision: Optional[int] = None
+    current_fingerprint: Optional[str] = None
+    needs_refresh: bool
+    dataset_unavailable: bool = False
+
+
 class ReportDetail(ContractModel):
     report: Report
     charts: list[SavedChart] = Field(default_factory=list)
     freshness: list[ChartFreshnessStatus] = Field(default_factory=list)
+    table_freshness: list[ReportTableFreshnessStatus] = Field(default_factory=list)
 
 
 class ReportRefreshRequest(ContractModel):

@@ -34,9 +34,12 @@ from prism_api_contracts import (
     CleanRecipeApplyRequest,
     CleanRecipeApplyResponse,
     CleanRecipeCreateRequest,
+    CleanRecipeDraftPreviewRequest,
+    CleanRecipeDraftPreviewResponse,
     CleanRecipePreviewResponse,
     CleanRecipeStep,
     CleanRecipeStepsUpdateRequest,
+    CleanRowInspection,
     CleanStateResponse,
     CleanTransformation,
     CleanTransformationRequest,
@@ -65,6 +68,7 @@ from .overview import store as overview_store
 
 router = APIRouter(prefix="/api/v1/clean", tags=["clean"])
 PREVIEW_SAMPLE_ROWS = 10
+INSPECTION_LIMIT = 100
 
 
 def _durable_history(dataset_id: str) -> list[CleanTransformation]:
@@ -126,6 +130,42 @@ def _json_value(value: Any) -> object | None:
 
 def _sample(frame: pd.DataFrame, n: int = PREVIEW_SAMPLE_ROWS) -> list[dict[str, Any]]:
     return [{str(k): _json_value(v) for k, v in row.items()} for row in frame.head(n).to_dict(orient="records")]
+
+
+def _row_inspection(before: pd.DataFrame, after: pd.DataFrame, request: CleanTransformationRequest,
+                    unresolved_values: list[str]) -> tuple[list[CleanRowInspection], int, list[CleanRowInspection], int]:
+    """Resolve source-row identity and truthful counts without shipping full datasets."""
+    after_indices = set(after.index)
+    common = before.index.intersection(after.index)
+    if request.operation in {CleanOperation.CONVERT_TYPE, CleanOperation.RENAME_COLUMN, CleanOperation.DROP_COLUMN} or list(before.columns) != list(after.columns):
+        changed_indices = set(common)
+    else:
+        changed_mask = before.loc[common].astype(str).ne(after.loc[common].astype(str)).any(axis=1)
+        changed_indices = set(common[changed_mask])
+    removed_indices = set(before.index) - after_indices
+    affected_indices = changed_indices | removed_indices
+    changed_total = len(affected_indices)
+    unresolved_set = set(unresolved_values)
+    exception_indices: set[Any] = set()
+    if request.column and request.column in before.columns:
+        if unresolved_set:
+            exception_indices.update(before.index[before[request.column].astype(str).isin(unresolved_set)])
+        if request.column in after.columns:
+            newly_missing = before.loc[common, request.column].notna() & after.loc[common, request.column].isna()
+            exception_indices.update(common[newly_missing])
+
+    def item(index: Any, kind: str) -> CleanRowInspection:
+        before_row = {str(key): _json_value(value) for key, value in before.loc[index].to_dict().items()}
+        after_row = ({str(key): _json_value(value) for key, value in after.loc[index].to_dict().items()}
+                     if index in after_indices else None)
+        return CleanRowInspection(source_row=str(index), status=kind, before=before_row, after=after_row)
+
+    changed = [item(index, "removed" if index in removed_indices else "changed")
+               for index in before.index if index in affected_indices][:INSPECTION_LIMIT]
+    exceptions = [item(index, "newly_missing" if index in after_indices and request.column and
+                       request.column in after.columns and pd.isna(after.at[index, request.column]) else "unresolved")
+                  for index in before.index if index in exception_indices][:INSPECTION_LIMIT]
+    return changed, changed_total, exceptions, len(exception_indices)
 
 
 def _require_column(frame: pd.DataFrame, column: str | None) -> str:
@@ -201,7 +241,7 @@ def _apply_operation(frame: pd.DataFrame, request: CleanTransformationRequest) -
     if request.operation is CleanOperation.DROP_DUPLICATES:
         mask = frame.duplicated()
         affected = int(mask.sum())
-        return frame.loc[~mask].reset_index(drop=True), affected, [], warnings, []
+        return frame.loc[~mask].copy(), affected, [], warnings, []
     if request.operation is CleanOperation.DROP_COLUMN:
         column = _require_column(frame, request.column)
         return frame.drop(columns=[column]), len(frame), [column], warnings, []
@@ -216,7 +256,7 @@ def _apply_operation(frame: pd.DataFrame, request: CleanTransformationRequest) -
         column = _require_column(frame, request.column)
         mask = frame[column].isna()
         affected = int(mask.sum())
-        return frame.loc[~mask].reset_index(drop=True), affected, [column], warnings, []
+        return frame.loc[~mask].copy(), affected, [column], warnings, []
     if request.operation is CleanOperation.FILL_MISSING:
         column = _require_column(frame, request.column)
         series = frame[column]
@@ -348,6 +388,7 @@ def _apply_operation(frame: pd.DataFrame, request: CleanTransformationRequest) -
                 raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="A tiebreak column is required for the max_by_column survivorship rule.")
             _require_column(frame, tiebreak_column)
         duplicate_group_count = 0
+        tied_group_count = 0
         keep_indices: list[Any] = []
         for _key, group in frame.groupby(list(columns), dropna=False, sort=False):
             if len(group) == 1:
@@ -358,16 +399,22 @@ def _apply_operation(frame: pd.DataFrame, request: CleanTransformationRequest) -
                 keep_indices.append(group.index[-1])
             elif rule == "most_complete":
                 completeness = group.notna().sum(axis=1)
+                if int((completeness == completeness.max()).sum()) > 1:
+                    tied_group_count += 1
                 keep_indices.append(completeness.idxmax())
             elif rule == "max_by_column":
                 numeric = pd.to_numeric(group[tiebreak_column], errors="coerce")
+                if not numeric.notna().any() or int((numeric == numeric.max()).sum()) > 1:
+                    tied_group_count += 1
                 keep_indices.append(numeric.idxmax() if numeric.notna().any() else group.index[0])
             else:  # first
                 keep_indices.append(group.index[0])
-        updated = frame.loc[sorted(keep_indices)].reset_index(drop=True)
+        updated = frame.loc[sorted(keep_indices)].copy()
         affected = len(frame) - len(updated)
         if duplicate_group_count:
             warnings.append(f"{duplicate_group_count} duplicate group(s) found across {', '.join(columns)}; kept 1 row per group using the {rule!r} rule.")
+        if tied_group_count:
+            warnings.append(f"{tied_group_count} group(s) tied under the {rule!r} rule; the earliest source row was kept deterministically.")
         return updated, affected, list(columns), warnings, []
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported operation.")
 
@@ -411,6 +458,8 @@ def preview_transformation(dataset_id: str, request: CleanTransformationRequest)
     stored = overview_store.get(dataset_id)
     before_sample = _sample(stored.frame)
     updated, affected_rows, affected_columns, warnings, unresolved_values = _apply_operation(stored.frame, request)
+    changed_rows, changed_total, exception_rows, exception_total = _row_inspection(
+        stored.frame, updated, request, unresolved_values)
     token = reviews.issue(dataset_id, stored.dataset.revision, stored.source_fingerprint,
                           request.model_dump(exclude={"review_token"}, exclude_none=True))
     return CleanPreviewResponse(
@@ -419,6 +468,8 @@ def preview_transformation(dataset_id: str, request: CleanTransformationRequest)
         unresolved_values=unresolved_values,
         review_token=token, source_revision=stored.dataset.revision,
         source_fingerprint=stored.source_fingerprint,
+        changed_rows=changed_rows, changed_rows_total=changed_total,
+        exception_rows=exception_rows, exception_rows_total=exception_total,
     )
 
 
@@ -535,9 +586,22 @@ def preview_recipe(dataset_id: str, recipe_id: str) -> CleanRecipePreviewRespons
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                             detail="This recipe has no enabled steps to preview.")
     stored = overview_store.get(dataset_id)
-    working = stored.frame
+    working, impacts = _preview_recipe_steps(stored.frame, recipe.steps)
+    token = reviews.issue(dataset_id, stored.dataset.revision, stored.source_fingerprint,
+                          {"recipe_id": recipe_id, "recipe_version": recipe.version,
+                           "steps": [step.model_dump(mode="json") for step in recipe.steps]})
+    return CleanRecipePreviewResponse(
+        recipe_id=recipe_id, recipe_version=recipe.version,
+        source_revision=stored.dataset.revision, source_fingerprint=stored.source_fingerprint,
+        review_token=token, before_sample=_sample(stored.frame), after_sample=_sample(working),
+        step_impacts=impacts, projected_health=_health(working),
+    )
+
+
+def _preview_recipe_steps(frame: pd.DataFrame, steps: list[CleanRecipeStep]) -> tuple[pd.DataFrame, list[int]]:
+    working = frame
     impacts: list[int] = []
-    for index, step in enumerate(recipe.steps):
+    for index, step in enumerate(steps):
         if not step.enabled:
             impacts.append(0)
             continue
@@ -547,13 +611,18 @@ def preview_recipe(dataset_id: str, recipe_id: str) -> CleanRecipePreviewRespons
             raise HTTPException(status_code=status.HTTP_409_CONFLICT,
                                 detail=f"Recipe step {index + 1} ({step.request.operation.value} on {step.request.column or 'the dataset'}) no longer matches this dataset's schema: {error.detail}") from error
         impacts.append(affected)
-    token = reviews.issue(dataset_id, stored.dataset.revision, stored.source_fingerprint,
-                          {"recipe_id": recipe_id, "recipe_version": recipe.version,
-                           "steps": [step.model_dump(mode="json") for step in recipe.steps]})
-    return CleanRecipePreviewResponse(
-        recipe_id=recipe_id, recipe_version=recipe.version,
+    return working, impacts
+
+
+@router.post("/datasets/{dataset_id}/recipe-draft/preview", response_model=CleanRecipeDraftPreviewResponse)
+def preview_recipe_draft(dataset_id: str, request: CleanRecipeDraftPreviewRequest) -> CleanRecipeDraftPreviewResponse:
+    stored = overview_store.get(dataset_id)
+    steps = [CleanRecipeStep(step_id=f"draft_{index}", request=item.request, enabled=item.enabled)
+             for index, item in enumerate(request.steps)]
+    working, impacts = _preview_recipe_steps(stored.frame, steps)
+    return CleanRecipeDraftPreviewResponse(
         source_revision=stored.dataset.revision, source_fingerprint=stored.source_fingerprint,
-        review_token=token, before_sample=_sample(stored.frame), after_sample=_sample(working),
+        before_sample=_sample(stored.frame), after_sample=_sample(working),
         step_impacts=impacts, projected_health=_health(working),
     )
 

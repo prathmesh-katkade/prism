@@ -1,18 +1,19 @@
 # Analytical workspaces v1 acceptance matrix
 
-Snapshot: 2026-10-02, branch `prism/analytical-workspaces-v1` at `80d14d6` plus the preserved working-tree report changes. This matrix is updated as gates and UI evidence become available. “Implemented” describes code found; “verified” means a fresh gate or direct exercise in this worktree.
+Snapshot: 2026-10-02, branch `prism/analytical-workspaces-v1` at pushed checkpoint `5503a6b` plus the current working tree. â€œVerifiedâ€ means a fresh gate or direct exercise against this worktree and an isolated database.
 
-| Area | Actual starting state | Fresh verification / gap |
+| Area | Implemented | Verification and remaining scope |
 |---|---|---|
-| Clean operations | Category mapping, duplicate survivorship, explicit date format, validation rules implemented | Backend baseline passed; full recipe editor and detailed review UI partial |
-| Clean recipes | Durable versioned recipes; preview and one-use review ticket; data and provenance published in one transaction | Injected later-step failure and retry verified; multi-step editor and detailed row inspection pending |
-| SQL Lab | Parsed join diagnostics, CTE inspection, declared-key comparison and result handoffs implemented | UI workflow and isolated integration verification pending |
-| Visualize | Scatter/box/trend fixes and server mark drilldown implemented | Linked filters, shared scales, annotations, persisted chart UI and full visual matrix pending |
-| Reports | Durable saved chart result versions, report charts/notes, refresh with explicit source identity, distinct acknowledgement, first report canvas | Backend refresh, missing-source and fresh-store restart tests pass; tables, reordering and browser proof pending |
-| AI proposals | Existing Clean/Visualize deterministic Atlas action endpoints | Local-model typed proposal workflow pending; deterministic suggestions must not be presented as model output |
-| Connected workflow | Prior screenshots show Clean/Visualize slices | End-to-end UI, recording, SQL/Reports screenshots and 100k measurements pending |
-| Baseline web | 104 tests across 16 files | Passed fresh on this worktree |
-| Baseline Python | `.venv` initially referenced missing Python 3.11.9 | Interpreter repaired, pinned dev dependencies installed; original baseline 1,293 passed / 7 skipped; current checkpoint 1,298 passed / 7 skipped / 43 warnings on a unique isolated SQLite database |
-| Baseline lint/type | Web lint passed | Typecheck initially failed on a Visualize test mock signature; fixed locally and rerun passed. Current Ruff and mypy pass. |
+| Clean operations | Category mapping, duplicate survivorship, explicit date/numeric formats, missing-value choices, validation, changed/exception source-row identity, Before/Changes/After and Affected/Exceptions/Validation tabs | Focused backend tests pass. Current layout and connected browser flow still need real visual proof. |
+| Clean recipes | Durable versioned recipes, one-use review tickets, atomic data and provenance, multi-step draft editor with add/edit/reorder/disable and downstream preview | Injected later-step failure and retry verified. Editor still needs live browser acceptance. |
+| SQL Lab | Schema-aware editor, typed parameters and JSON, saved SQL/parameters, parsed join diagnostics, guarded CTE materialization, declared-key comparison, result handoffs | CTE mutation regression passes. Full live workflow and MySQL integration remain open. |
+| Visualize | Server filters shared by render and drilldown, histogram bin controls and mark inspection, axes/units, reference line, annotation, scatter/box/trend fixes | Focused API tests pass. Shared-scale small multiples, fuller chart-specific warnings and live UI proof remain open. |
+| Reports | Durable chart/table snapshots and notes, persisted cross-content order, explicit chart refresh with retained versions, stale/missing source status | Focused API and fresh-store restart tests pass. Connected browser proof and table refresh versioning remain open. |
+| AI proposals | Existing deterministic Clean/Visualize Atlas actions | Local-model typed proposal workflow remains open; deterministic suggestions must not be labeled model-generated. |
+| Connected workflow | Earlier real Clean/Visualize screenshots | New Clean/SQL/Visualize/Reports light/dark, desktop/mobile, state screenshots and one connected recording remain open. |
+| 100k rows | No current measurement | Reproducible fixture, timing, responsiveness and hardware disclosure remain open. |
+| Python | Python 3.11.9 and dev dependencies repaired | Original baseline 1,293 passed / 7 skipped. Current working tree: **1,304 passed / 7 skipped / 43 warnings** in 105.93s, unique isolated SQLite database. |
+| Web and static gates | Current worktree | **104 passed across 16 files** on full rerun. Lint, typecheck, build, a11y baseline, Ruff, mypy, boundaries, secrets and generated-contract check pass. |
+| Landing | Branch checkpoint `5503a6b` pushed | Current working tree not yet pushed. Main, CI at landed SHA, smoke URL and release tag remain open until mandatory criteria pass. |
 
-The earlier 1,240 passed / 7 skipped and 95 web tests in `README.md` are historical evidence, not current verification. No release or landing claim is made by this matrix.
+The earlier 1,240 passed / 7 skipped and 95 web tests in the historical README are not current verification. No complete release claim is made here.

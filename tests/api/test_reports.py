@@ -54,6 +54,34 @@ def test_create_report_add_chart_and_note_then_read_the_composed_detail() -> Non
     assert detail["freshness"][0]["needs_refresh"] is False  # nothing changed since the chart was added
 
 
+def test_report_tables_are_source_bound_durable_and_ordered_with_notes() -> None:
+    from prism_api.durable_registry import history_database_url
+    from prism_api.durable_report_store import DurableReportStore
+
+    client = TestClient(create_app())
+    dataset_id = _dataset(client)
+    profile = client.get(f"/api/v1/overview/datasets/{dataset_id}/profile").json()
+    report_id = client.post("/api/v1/reports", json={"name": "Table review"}).json()["report_id"]
+    payload = {"title": "Sample rows", "dataset_id": dataset_id, "source_revision": profile["dataset"]["revision"],
+               "source_fingerprint": profile["dataset"]["source_fingerprint"], "columns": ["segment", "revenue"], "limit": 2}
+    added = client.post(f"/api/v1/reports/{report_id}/tables", json=payload)
+    assert added.status_code == 200
+    table = added.json()["report"]["tables"][0]
+    assert table["rows"] == [{"segment": "a", "revenue": 10}, {"segment": "b", "revenue": 20}]
+    assert table["source_row_count"] == 3
+    note = client.post(f"/api/v1/reports/{report_id}/notes", json={"text": "Interpretation"}).json()["notes"][0]
+    reordered = client.put(f"/api/v1/reports/{report_id}/order", json={"item_order": [note["note_id"], table["table_id"]]})
+    assert reordered.status_code == 200
+    assert reordered.json()["report"]["item_order"] == [note["note_id"], table["table_id"]]
+    assert client.put(f"/api/v1/reports/{report_id}/order", json={"item_order": [note["note_id"]]}).status_code == 422
+    stale = client.post(f"/api/v1/reports/{report_id}/tables", json={**payload, "source_revision": 99})
+    assert stale.status_code == 409
+    assert client.get(f"/api/v1/reports/{report_id}").json()["report"]["tables"][0]["rows"] == table["rows"]
+    restored = DurableReportStore(history_database_url()).get_report(report_id)
+    assert restored.tables[0].rows == table["rows"]
+    assert restored.item_order == [note["note_id"], table["table_id"]]
+
+
 def test_report_flags_needs_refresh_after_the_source_dataset_changes_and_clears_on_explicit_refresh() -> None:
     client = TestClient(create_app())
     dataset_id = _dataset(client)

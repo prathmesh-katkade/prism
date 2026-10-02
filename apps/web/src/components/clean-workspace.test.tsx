@@ -180,7 +180,7 @@ describe("Clean workspace", () => {
       if (path.includes("/rows")) return json(rowsPage);
       if (path.includes("/profile")) return json({ columns: [{ name: "region", semantic_type: "categorical" }] });
       if (path.includes("/recipes")) return json([]);
-      if (path.endsWith("/preview")) return json({ operation: "category_mapping", affected_rows: 11, affected_columns: ["region"], before_sample: [{ region: "Bangalore" }], after_sample: [{ region: "Bengaluru" }], warnings: ["1 distinct value(s) in 'region' were not covered by the mapping and were left unchanged."], unresolved_values: ["Mumbai"], projected_health: health });
+      if (path.endsWith("/preview")) return json({ operation: "category_mapping", affected_rows: 11, changed_rows_total: 11, changed_rows: [{ source_row: "0", status: "changed", before: { region: "Bangalore" }, after: { region: "Bengaluru" } }], exception_rows_total: 1, exception_rows: [{ source_row: "3", status: "unresolved", before: { region: "Mumbai" }, after: { region: "Mumbai" } }], affected_columns: ["region"], before_sample: [{ region: "Bangalore" }], after_sample: [{ region: "Bengaluru" }], warnings: ["1 distinct value(s) in 'region' were not covered by the mapping and were left unchanged."], unresolved_values: ["Mumbai"], projected_health: health });
       if (path.endsWith("/apply")) { applied = true; return json({ dataset: dataset1, transformation: { transformation_id: "t3", operation: "category_mapping", column: "region", parameters: {}, affected_rows: 11, affected_columns: ["region"], source_revision: 0, resulting_revision: 1, source_fingerprint: dataset0.source_fingerprint, resulting_fingerprint: "e".repeat(64), reversible: true, created_at: "2026-08-28T00:00:00Z" }, issues: [], health }, 201); }
       return json({});
     });
@@ -211,8 +211,9 @@ describe("Clean workspace", () => {
     const sentBody = JSON.parse(String((previewCall![1] as RequestInit).body));
     expect(sentBody.category_mapping).toEqual({ Bangalore: "Bengaluru", BENGALURU: "Bengaluru" });
 
-    await waitFor(() => expect(screen.getByText("EXCEPTIONS · 1")).toBeInTheDocument());
-    expect(screen.getByText("Mumbai", { selector: "code" })).toBeInTheDocument(); // the unresolved value is disclosed, not hidden
+    fireEvent.click(screen.getByRole("tab", { name: "Exceptions (1)" }));
+    await waitFor(() => expect(screen.getByText(/1 distinct unresolved value/)).toBeInTheDocument());
+    expect(screen.getAllByText(/Mumbai/, { selector: "code" }).length).toBeGreaterThan(0); // source row and unresolved value remain inspectable
 
     fireEvent.click(screen.getByRole("button", { name: "Apply transformation" }));
     await waitFor(() => expect(screen.getByText(/revision 1/)).toBeInTheDocument());

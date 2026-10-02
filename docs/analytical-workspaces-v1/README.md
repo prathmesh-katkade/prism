@@ -1,5 +1,7 @@
 # Analytical Workspaces v1 — delivery report
 
+> **Current update, 2026-10-02:** The pushed correctness checkpoint is `5503a6b`. The current working tree adds the multi-step Clean editor and row review, guarded CTE inspection, typed SQL parameters, filtered and inspectable Visualize marks, and durable ordered report tables. Fresh current tests: **1,304 Python passed / 7 skipped / 43 warnings** on an isolated SQLite database and **104 web passed across 16 files**. Lint, typecheck, build, a11y baseline, Ruff, mypy, boundaries, secrets and contract generation check pass. The older report below records a prior phase and its limitations are superseded by [the acceptance matrix](acceptance-matrix.md). The connected browser workflow, full visual matrix, 100k measurement, local-model proposals, MySQL gate and landing remain open.
+
 > Historical checkpoint report. Its “not attempted” list and 1,240/7 and 95-web-test counts predate the latest branch commits. See [acceptance-matrix.md](acceptance-matrix.md) for the current audit. On 2026-10-02, the repaired Python 3.11.9 environment ran the current baseline against a unique isolated SQLite database: **1,293 passed, 7 skipped, 43 warnings**. The fresh web baseline was **104 passed across 16 files**. The release remains in progress.
 
 Branch: `prism/analytical-workspaces-v1`

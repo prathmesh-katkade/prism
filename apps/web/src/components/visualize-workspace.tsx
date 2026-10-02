@@ -23,6 +23,8 @@ export function VisualizeWorkspace({ datasetId, onSelectContext, onOpenWorkflow 
   const [drilldownError, setDrilldownError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [filterColumn, setFilterColumn] = useState("");
+  const [filterValue, setFilterValue] = useState("");
 
   const load = useCallback(async (id: string) => {
     setState("loading"); setError(null);
@@ -57,19 +59,19 @@ export function VisualizeWorkspace({ datasetId, onSelectContext, onOpenWorkflow 
 
   function updateSpec(patch: Partial<VisualizationSpec>) { if (spec) setSpec({ ...spec, ...patch }); setDrilldown(null); }
 
-  async function selectMark(params: { dimensionValue?: string; xValue?: number; yValue?: number }) {
+  async function selectMark(params: { dimensionValue?: string; xValue?: number; yValue?: number; binStart?: number; binEnd?: number }) {
     if (!datasetId || !spec) return;
     setDrilldownLoading(true); setDrilldownError(null); setDrilldown(null);
     try {
       const response = await fetch(apiUrl(`/api/v1/visualize/datasets/${datasetId}/drilldown`), {
         method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ spec, offset: 0, limit: 50, ...(params.dimensionValue !== undefined ? { dimension_value: params.dimensionValue } : {}), ...(params.xValue !== undefined ? { x_value: params.xValue, y_value: params.yValue } : {}) }),
+        body: JSON.stringify({ spec, offset: 0, limit: 50, ...(params.dimensionValue !== undefined ? { dimension_value: params.dimensionValue } : {}), ...(params.xValue !== undefined ? { x_value: params.xValue, y_value: params.yValue } : {}), ...(params.binStart !== undefined ? { bin_start: params.binStart, bin_end: params.binEnd } : {}) }),
       });
       if (!response.ok) throw new Error((await response.json() as { detail?: string }).detail ?? "Could not resolve this mark's contributing rows.");
       const body = await response.json() as ChartDrillDownResponse;
       setDrilldown(body);
       onSelectContext({
-        objectId: `mark:${params.dimensionValue ?? `${params.xValue},${params.yValue}`}`, label: "Contributing rows", type: "finding", state: "ready", actions: [],
+        objectId: `mark:${params.dimensionValue ?? params.binStart ?? `${params.xValue},${params.yValue}`}`, label: "Contributing rows", type: "finding", state: "ready", actions: [],
         metadata: [
           `${body.total_matching_rows.toLocaleString()} matching row(s)`,
           body.truncated ? `showing first ${body.rows.length} (truncated)` : "all shown",
@@ -135,7 +137,7 @@ export function VisualizeWorkspace({ datasetId, onSelectContext, onOpenWorkflow 
     </nav>
     <section className="viz-canvas" aria-label="Visual canvas" tabIndex={0}>
       <header><span className="eyebrow">{rationale}</span><h1>{spec.dimension ?? spec.measure} {spec.measure && spec.dimension ? `by ${spec.measure}` : ""}</h1></header>
-      {data ? <ChartCanvas mark={spec.mark} data={data.data} onSelectMark={selectMark} /> : <p className="quiet-note">Rendering…</p>}
+      {data ? <><ChartCanvas mark={spec.mark} data={data.data} onSelectMark={selectMark} referenceLine={spec.reference_line} /><div className="viz-axis-labels"><span>{spec.x_label || spec.dimension || spec.measure || "X"}</span><span>{spec.y_label || (spec.aggregation === "count" || spec.mark === "histogram" ? "Count" : `${spec.aggregation} ${spec.measure ?? "value"}`)}{spec.unit ? ` (${spec.unit})` : ""}</span></div>{spec.annotation ? <p className="quiet-note">Annotation: {spec.annotation}</p> : null}</> : <p className="quiet-note">Rendering…</p>}
       {(data?.warnings ?? []).length ? <ul className="clean-warnings">{(data?.warnings ?? []).map((warning) => <li key={warning}>{warning}</li>)}</ul> : null}
       {drilldownLoading ? <p className="quiet-note">Resolving contributing rows…</p> : null}
       {drilldownError ? <p className="query-error" role="alert">{drilldownError}</p> : null}
@@ -150,6 +152,13 @@ export function VisualizeWorkspace({ datasetId, onSelectContext, onOpenWorkflow 
       <div className="inspector-heading"><span className="eyebrow">ENCODING</span></div>
       <label>Mark<select value={spec.mark} onChange={(event) => updateSpec({ mark: event.target.value as VizMark })}>{MARKS.map((mark) => <option key={mark} value={mark}>{mark}</option>)}</select></label>
       <label>Aggregation<select value={spec.aggregation} onChange={(event) => updateSpec({ aggregation: event.target.value as VisualizationSpec["aggregation"] })}><option value="count">count</option><option value="sum">sum</option><option value="mean">mean</option><option value="median">median</option><option value="none">none</option></select></label>
+      {spec.mark === "histogram" ? <label>Histogram bins<input type="number" min={2} max={100} value={spec.histogram_bins ?? 10} onChange={(event) => updateSpec({ histogram_bins: Number(event.target.value) })} /></label> : null}
+      <label>X axis label<input value={spec.x_label ?? ""} onChange={(event) => updateSpec({ x_label: event.target.value })} /></label>
+      <label>Y axis label<input value={spec.y_label ?? ""} onChange={(event) => updateSpec({ y_label: event.target.value })} /></label>
+      <label>Unit<input value={spec.unit ?? ""} onChange={(event) => updateSpec({ unit: event.target.value })} /></label>
+      <label>Reference line<input type="number" value={spec.reference_line ?? ""} onChange={(event) => { if (event.target.value === "") { const next = { ...spec }; delete next.reference_line; setSpec(next); } else updateSpec({ reference_line: Number(event.target.value) }); }} /></label>
+      <label>Annotation<input value={spec.annotation ?? ""} onChange={(event) => updateSpec({ annotation: event.target.value })} /></label>
+      <div className="viz-filter-controls"><span className="eyebrow">SERVER FILTERS</span>{Object.entries(spec.filters ?? {}).map(([column, value]) => <div key={column}><span>{column} = {String(value)}</span><button className="secondary" onClick={() => { const filters = { ...spec.filters }; delete filters[column]; updateSpec({ filters }); }}>Remove</button></div>)}<label>Field<select value={filterColumn} onChange={(event) => setFilterColumn(event.target.value)}><option value="">Choose a field</option>{profile.columns.map((column) => <option key={column.name} value={column.name}>{column.name}</option>)}</select></label><label>Equals<input value={filterValue} onChange={(event) => setFilterValue(event.target.value)} /></label><button className="secondary" disabled={!filterColumn} onClick={() => { updateSpec({ filters: { ...spec.filters, [filterColumn]: filterValue } }); setFilterValue(""); }}>Apply filter</button></div>
       <div className="inspector-actions"><span className="eyebrow">REPORT HANDOFF</span><button disabled={!data || saving} onClick={() => void saveChart()}>{saving ? "Saving…" : "Save chart"}</button><button className="secondary" onClick={() => onOpenWorkflow("reports")}>Open reports</button>{saveMessage ? <p role="status">{saveMessage}</p> : null}</div>
       <div className="inspector-actions"><span className="eyebrow">ATLAS · EVIDENCE-AWARE</span><button onClick={() => void askAtlas("explain_chart")}>Explain this chart</button><button onClick={() => void askAtlas("identify_anomaly")}>Identify anomalies</button><button onClick={() => void askAtlas("propose_alternative")}>Trust check</button></div>
       {atlas ? <aside className="atlas-result" aria-live="polite"><span className="eyebrow">ATLAS · {atlas.action.replaceAll("_", " ")}</span><strong>{atlas.summary}</strong><small>{atlas.uncertainty}</small></aside> : null}
@@ -159,12 +168,12 @@ export function VisualizeWorkspace({ datasetId, onSelectContext, onOpenWorkflow 
   </article>;
 }
 
-type MarkSelection = { dimensionValue?: string; xValue?: number; yValue?: number };
+type MarkSelection = { dimensionValue?: string; xValue?: number; yValue?: number; binStart?: number; binEnd?: number };
 
-export function ChartCanvas({ mark, data, onSelectMark }: { mark: VizMark; data: readonly VisualizationDatum[]; onSelectMark?(selection: MarkSelection): void }) {
+export function ChartCanvas({ mark, data, onSelectMark, referenceLine }: { mark: VizMark; data: readonly VisualizationDatum[]; onSelectMark?(selection: MarkSelection): void; referenceLine?: number | null | undefined }) {
   if (!data.length) return <p className="quiet-note">No data to chart.</p>;
   const width = 640, height = 280, padding = 32;
-  const selectable = Boolean(onSelectMark) && mark !== "histogram";
+  const selectable = Boolean(onSelectMark);
 
   if (mark === "scatter") {
     const xs = data.map((d) => d.x ?? 0);
@@ -208,13 +217,14 @@ export function ChartCanvas({ mark, data, onSelectMark }: { mark: VizMark; data:
   // non-zero span via the `|| 1` fallback, and a negative value draws below the
   // zero baseline instead of producing an invalid negative-height rect.
   const values = data.map((d) => d.value);
-  const min = Math.min(0, ...values), max = Math.max(0, ...values);
+  const min = Math.min(0, ...values, ...(referenceLine === null || referenceLine === undefined ? [] : [referenceLine])), max = Math.max(0, ...values, ...(referenceLine === null || referenceLine === undefined ? [] : [referenceLine]));
   const span = max - min || 1;
   const scaleY = (v: number) => height - padding - ((v - min) / span) * (height - 2 * padding);
   if (mark === "line") {
     const points = data.map((point, index) => `${padding + (index / Math.max(1, data.length - 1)) * (width - 2 * padding)},${scaleY(point.value)}`).join(" ");
     const lineSelectable = Boolean(onSelectMark);
     return <svg role="img" aria-label={`Line chart across ${data.length} categories`} viewBox={`0 0 ${width} ${height}`} className="viz-svg">
+      {referenceLine !== null && referenceLine !== undefined ? <line className="viz-reference-line" x1={padding} x2={width - padding} y1={scaleY(referenceLine)} y2={scaleY(referenceLine)}><title>Reference value {referenceLine}</title></line> : null}
       <polyline points={points} fill="none" />
       {lineSelectable ? data.map((point, index) => <circle key={index} className="viz-mark-selectable" tabIndex={0} role="button" aria-label={`Inspect ${point.label}`} cx={padding + (index / Math.max(1, data.length - 1)) * (width - 2 * padding)} cy={scaleY(point.value)} r={4} onClick={() => onSelectMark?.({ dimensionValue: point.label })} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onSelectMark?.({ dimensionValue: point.label }); } }}><title>{`${point.label}: ${point.value}`}</title></circle>) : null}
     </svg>;
@@ -222,7 +232,8 @@ export function ChartCanvas({ mark, data, onSelectMark }: { mark: VizMark; data:
   const barWidth = (width - 2 * padding) / data.length;
   const zeroY = scaleY(0);
   return <svg role="img" aria-label={`Bar chart with ${data.length} categories`} viewBox={`0 0 ${width} ${height}`} className="viz-svg">
-    {data.map((point, index) => { const valueY = scaleY(point.value); const y = Math.min(valueY, zeroY); const barHeight = Math.max(1, Math.abs(valueY - zeroY)); return <g key={index} className={selectable ? "viz-mark-selectable" : undefined} tabIndex={selectable ? 0 : undefined} role={selectable ? "button" : undefined} aria-label={selectable ? `Inspect ${point.label}` : undefined} onClick={() => onSelectMark?.({ dimensionValue: point.label })} onKeyDown={(event) => { if (selectable && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); onSelectMark?.({ dimensionValue: point.label }); } }}><rect x={padding + index * barWidth + 2} y={y} width={Math.max(1, barWidth - 4)} height={barHeight} /><title>{`${point.label}: ${point.value}`}</title></g>; })}
+    {referenceLine !== null && referenceLine !== undefined ? <line className="viz-reference-line" x1={padding} x2={width - padding} y1={scaleY(referenceLine)} y2={scaleY(referenceLine)}><title>Reference value {referenceLine}</title></line> : null}
+    {data.map((point, index) => { const valueY = scaleY(point.value); const y = Math.min(valueY, zeroY); const barHeight = Math.max(1, Math.abs(valueY - zeroY)); const selection = mark === "histogram" ? { binStart: point.bin_start ?? 0, binEnd: point.bin_end ?? 0 } : { dimensionValue: point.label }; return <g key={index} className={selectable ? "viz-mark-selectable" : undefined} tabIndex={selectable ? 0 : undefined} role={selectable ? "button" : undefined} aria-label={selectable ? `Inspect ${point.label}` : undefined} onClick={() => onSelectMark?.(selection)} onKeyDown={(event) => { if (selectable && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); onSelectMark?.(selection); } }}><rect x={padding + index * barWidth + 2} y={y} width={Math.max(1, barWidth - 4)} height={barHeight} /><title>{`${point.label}: ${point.value}`}</title></g>; })}
   </svg>;
 }
 

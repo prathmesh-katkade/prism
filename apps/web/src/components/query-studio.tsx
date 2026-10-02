@@ -17,6 +17,7 @@ export function QueryStudio({ onSelectContext, initialSql, initialParameters, in
   const [schema, setSchema] = useState<SqlSchemaResponse | null>(null);
   const [sql, setSql] = useState("SELECT *\nFROM data\nLIMIT 100;");
   const [parametersText, setParametersText] = useState("{}");
+  const [newParameterName, setNewParameterName] = useState("");
   const [run, setRun] = useState<SqlRunResponse | null>(null);
   const [results, setResults] = useState<SqlResultPageResponse | null>(null);
   const [plan, setPlan] = useState<SqlPlanResponse | null>(null);
@@ -43,6 +44,21 @@ export function QueryStudio({ onSelectContext, initialSql, initialParameters, in
 
   const activeConnection = useMemo(() => connections.find((item) => item.connection_id === connectionId) ?? null, [connectionId, connections]);
   const readyConnections = useMemo(() => connections.filter((item) => item.status === "ready"), [connections]);
+  const parsedParameters = useMemo(() => {
+    try {
+      const value: unknown = JSON.parse(parametersText);
+      return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
+    } catch { return null; }
+  }, [parametersText]);
+  const namedParameters = useMemo(() => [...sql.matchAll(/(?<!:):([a-zA-Z_][a-zA-Z_0-9]*)/g)].map((match) => match[1]!).filter((name, index, names) => names.indexOf(name) === index), [sql]);
+  function setParameter(name: string, value: unknown) {
+    if (!parsedParameters) return;
+    setParametersText(JSON.stringify({ ...parsedParameters, [name]: value }, null, 2));
+  }
+  function removeParameter(name: string) {
+    if (!parsedParameters) return;
+    const next = { ...parsedParameters }; delete next[name]; setParametersText(JSON.stringify(next, null, 2));
+  }
 
   const loadConnections = useCallback(async () => {
     setState("loading"); setError(null);
@@ -77,8 +93,10 @@ export function QueryStudio({ onSelectContext, initialSql, initialParameters, in
 
   async function execute() {
     if (!activeConnection) return;
-    let parameters: Record<string, unknown>;
-    try { parameters = JSON.parse(parametersText) as Record<string, unknown>; } catch { setError("Parameters must be valid JSON."); return; }
+    if (!parsedParameters) { setError("Parameters must be a JSON object."); return; }
+    const parameters: Record<string, unknown> = parsedParameters;
+    const missing = namedParameters.filter((name) => !(name in parameters));
+    if (missing.length) { setError(`Set query parameter${missing.length > 1 ? "s" : ""}: ${missing.join(", ")}.`); return; }
     setState("running"); setError(null); setAtlas(null); setJoinDiagnostics(null); setPromotedDatasetId(null);
     try {
       const response = await fetch(apiUrl("/api/v1/sql-lab/runs"), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ connection_id: activeConnection.connection_id, sql, parameters, result_limit: 1_000, timeout_ms: 30_000, client_request_id: crypto.randomUUID() }) });
@@ -211,6 +229,7 @@ export function QueryStudio({ onSelectContext, initialSql, initialParameters, in
   return <article className="query-studio">
     <header className="query-heading"><div><span className="eyebrow">SQL LAB · QUERY STUDIO</span><h1>Write against evidence, not assumptions.</h1><p>{activeConnection ? <><strong>{activeConnection.label}</strong> · <code>{activeConnection.dialect}</code> · schema-aware local source</> : "Select a source"}</p></div><div className="query-status"><span className={`migration-chip ${state === "degraded" ? "unavailable" : "ready"}`}>{run?.state ?? "ready"}</span><small>Ctrl/Cmd + Enter to run</small></div></header>
     <section className="query-toolbar" aria-label="Query source and actions"><label>Source<select value={connectionId} onChange={(event) => setConnectionId(event.target.value)}>{readyConnections.map((item) => <option key={item.connection_id} value={item.connection_id}>{item.label} · {item.dialect}</option>)}</select></label><label>Parameters<textarea aria-label="Query parameters JSON" value={parametersText} onChange={(event) => setParametersText(event.target.value)} /></label><button onClick={() => void execute()} disabled={!activeConnection || state === "running"}>Run query <kbd>⌘ ↵</kbd></button>{run && ["queued", "running"].includes(run.state) ? <button className="secondary" onClick={() => void cancelActiveRun()}>Cancel query</button> : null}<button className="secondary" onClick={() => setSql(formatSql(sql))} disabled={!activeConnection}>Format query</button><button className="secondary" onClick={() => void inspectPlan()} disabled={!activeConnection}>Inspect plan</button><button className="secondary" onClick={() => { setActiveResultTab("joins"); void inspectJoins(); }} disabled={!activeConnection}>Inspect joins</button><button className="secondary" onClick={() => void findCtes()} disabled={!activeConnection}>Find CTEs</button><button className="secondary" onClick={() => void saveSnippet()} disabled={!activeConnection}>Save snippet</button></section>
+    <section className="sql-parameter-panel" aria-label="Typed query parameters"><div><span className="eyebrow">TYPED PARAMETERS</span><span>{namedParameters.length ? `Required by SQL: ${namedParameters.join(", ")}` : "Use :name in SQL to bind a value."}</span></div>{parsedParameters ? Object.entries(parsedParameters).map(([name, value]) => <div className="sql-parameter-row" key={name}><label>{name}<input aria-label={`${name} value`} type={typeof value === "number" ? "number" : "text"} value={value === null ? "" : String(value)} onChange={(event) => setParameter(name, typeof value === "number" ? (event.target.value === "" ? null : Number(event.target.value)) : typeof value === "boolean" ? event.target.value === "true" : event.target.value)} /></label><label>Type<select aria-label={`${name} type`} value={value === null ? "null" : typeof value} onChange={(event) => setParameter(name, event.target.value === "number" ? 0 : event.target.value === "boolean" ? false : event.target.value === "null" ? null : "")}><option value="string">Text</option><option value="number">Number</option><option value="boolean">Boolean</option><option value="null">Null</option></select></label><button className="secondary" onClick={() => removeParameter(name)} aria-label={`Remove ${name}`}>Remove</button></div>) : <p className="query-error" role="alert">Parameters must be a JSON object.</p>}<div className="sql-parameter-row"><label>New parameter<input aria-label="New parameter name" value={newParameterName} onChange={(event) => setNewParameterName(event.target.value)} placeholder="e.g. minimum_revenue" /></label><button className="secondary" disabled={!parsedParameters || !/^[a-zA-Z_][a-zA-Z_0-9]*$/.test(newParameterName) || newParameterName in (parsedParameters ?? {})} onClick={() => { setParameter(newParameterName, ""); setNewParameterName(""); }}>Add parameter</button></div></section>
     {ctes.length ? <section className="snippet-strip" aria-label="Materialize an intermediate CTE"><span className="eyebrow">INTERMEDIATE CTEs</span>{ctes.map((name) => <button key={name} onClick={() => void materializeCte(name)}>Inspect {name}</button>)}</section> : null}
     {cteError ? <p className="query-error" role="alert">{cteError}</p> : null}
     <section className="query-layout"><div><QueryEditor value={sql} dialect={activeConnection?.dialect ?? "sql"} schemaItems={schema?.tables.flatMap((table) => [table.name, ...table.columns.map((column) => column.name)]) ?? []} onChange={setSql} onRun={() => void execute()} /><div className="query-editor-foot"><span>Dialect: <code>{activeConnection?.dialect ?? "unavailable"}</code></span><span>Safe reads run without a repeated prompt. Writes and unproven SQL are blocked.</span></div></div><SchemaPanel schema={schema} onInsert={(identifier) => setSql((current) => `${current}${current.endsWith(" ") || current.endsWith("\n") ? "" : " "}${identifier}`)} /></section>

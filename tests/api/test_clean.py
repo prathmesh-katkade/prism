@@ -49,6 +49,26 @@ def test_preview_never_mutates_the_dataset() -> None:
     assert after["dataset"]["revision"] == 0
 
 
+def test_preview_inspects_real_changed_and_exception_rows_with_source_identity() -> None:
+    client = PlainTestClient(create_app())
+    dataset_id = _dataset(client)
+    preview = client.post(f"/api/v1/clean/datasets/{dataset_id}/preview", json={
+        "operation": "category_mapping", "column": "segment", "category_mapping": {"a": "A"},
+        "preserve_unmatched": True,
+    }).json()
+    assert preview["affected_rows"] == preview["changed_rows_total"] == 2
+    assert [row["source_row"] for row in preview["changed_rows"]] == ["0", "1"]
+    assert all(row["before"]["segment"] == "a" and row["after"]["segment"] == "A"
+               for row in preview["changed_rows"])
+    assert preview["exception_rows_total"] == 2
+    assert {row["source_row"] for row in preview["exception_rows"]} == {"2", "3"}
+    assert all(row["status"] == "unresolved" for row in preview["exception_rows"])
+    duplicate = client.post(f"/api/v1/clean/datasets/{dataset_id}/preview", json={"operation": "drop_duplicates"}).json()
+    assert duplicate["changed_rows_total"] == 1
+    assert duplicate["changed_rows"][0]["source_row"] == "1"
+    assert duplicate["changed_rows"][0]["status"] == "removed"
+
+
 def test_apply_creates_a_new_revision_and_is_visible_to_overview_and_sql_lab() -> None:
     client = TestClient(create_app())
     dataset_id = _dataset(client)
@@ -317,6 +337,25 @@ def test_recipe_preview_ticket_rejects_changed_recipe_version_and_intervening_ed
     edit_preview = client.post(f"/api/v1/clean/datasets/{dataset_id}/preview", json=edit).json()
     assert client.post(f"/api/v1/clean/datasets/{dataset_id}/apply", json={**edit, "review_token": edit_preview["review_token"]}).status_code == 201
     assert client.post(f"{url}/apply", json={"review_token": second["review_token"]}).status_code == 409
+
+
+def test_draft_recipe_preview_recomputes_downstream_schema_after_reorder_or_disable() -> None:
+    client = PlainTestClient(create_app())
+    dataset_id = _dataset(client)
+    url = f"/api/v1/clean/datasets/{dataset_id}/recipe-draft/preview"
+    rename = {"request": {"operation": "rename_column", "column": "label", "new_name": "clean_label"}, "enabled": True}
+    normalize = {"request": {"operation": "normalize_case", "column": "clean_label", "case": "lower"}, "enabled": True}
+    good = client.post(url, json={"steps": [rename, normalize]})
+    assert good.status_code == 200
+    assert len(good.json()["step_impacts"]) == 2
+    assert "clean_label" in good.json()["after_sample"][0]
+    reordered = client.post(url, json={"steps": [normalize, rename]})
+    assert reordered.status_code == 409
+    assert "Recipe step 1" in reordered.json()["detail"]
+    disabled = client.post(url, json={"steps": [{**rename, "enabled": False}, normalize]})
+    assert disabled.status_code == 409
+    assert "Recipe step 2" in disabled.json()["detail"]
+    assert client.get(f"/api/v1/clean/datasets/{dataset_id}/state").json()["dataset"]["revision"] == 0
 
 
 def test_recipe_editing_steps_creates_a_new_version_without_losing_history() -> None:

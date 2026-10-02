@@ -78,4 +78,5 @@ def run_validation_rule(dataset_id: str, rule_id: str) -> ValidationRunResult:
         rule=rule, dataset_revision=stored.dataset.revision, total_checked=total_checked,
         violation_count=violation_count, passed=violation_count == 0,
         sample_violations=_sample(violating, SAMPLE_VIOLATIONS),
+        violation_source_rows=[str(index) for index in violating.head(SAMPLE_VIOLATIONS).index],
     )

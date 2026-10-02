@@ -171,3 +171,29 @@ def test_atlas_explain_chart_and_trust_check_do_not_mutate_state() -> None:
 
     trust = client.post(f"/api/v1/visualize/datasets/{dataset_id}/atlas", json={"action": "propose_alternative", "spec": spec})
     assert "additional" in trust.json()["summary"]  # category truncation is a real trust issue for max_categories=3
+
+
+def test_saved_filters_apply_to_render_and_mark_rows() -> None:
+    client = TestClient(create_app())
+    dataset_id = _dataset(client)
+    spec = {"mark": "bar", "intent": "comparison", "dimension": "segment", "measure": "revenue", "aggregation": "sum", "filters": {"segment": "a"}}
+    rendered = client.post(f"/api/v1/visualize/datasets/{dataset_id}/render", json=spec)
+    assert rendered.status_code == 200
+    assert len(rendered.json()["data"]) == 1
+    inspected = client.post(f"/api/v1/visualize/datasets/{dataset_id}/drilldown", json={"spec": spec, "dimension_value": "a"})
+    assert inspected.status_code == 200
+    assert inspected.json()["total_matching_rows"] == 3
+    assert inspected.json()["filters_applied"] == {"segment": "a"}
+
+
+def test_histogram_bin_bounds_resolve_to_same_contributing_row_count() -> None:
+    client = TestClient(create_app())
+    dataset_id = _dataset(client)
+    spec = {"mark": "histogram", "intent": "distribution", "measure": "revenue", "aggregation": "none", "histogram_bins": 7}
+    rendered = client.post(f"/api/v1/visualize/datasets/{dataset_id}/render", json=spec)
+    assert rendered.status_code == 200
+    assert len(rendered.json()["data"]) == 7
+    for bin_data in rendered.json()["data"]:
+        inspected = client.post(f"/api/v1/visualize/datasets/{dataset_id}/drilldown", json={"spec": spec, "bin_start": bin_data["bin_start"], "bin_end": bin_data["bin_end"]})
+        assert inspected.status_code == 200
+        assert inspected.json()["total_matching_rows"] == bin_data["value"]

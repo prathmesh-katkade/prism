@@ -8,20 +8,28 @@ stale chart as current — and refreshing is a deliberate action, never automati
 
 from __future__ import annotations
 
+import uuid
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, HTTPException, status
 from prism_api_contracts import (
     ChartFreshnessStatus,
     Report,
     ReportAddChartRequest,
     ReportAddNoteRequest,
+    ReportAddTableRequest,
     ReportCreateRequest,
     ReportDetail,
     ReportRefreshRequest,
+    ReportReorderRequest,
+    ReportTable,
+    ReportTableFreshnessStatus,
     SavedChart,
     SavedChartCreateRequest,
     VisualizationDataResponse,
 )
 
+from .clean import _json_value
 from .durable_report_store import DurableReportStore
 from .overview import store as overview_store
 from .visualize import _aggregate, _provenance
@@ -91,11 +99,26 @@ def _freshness(report: Report) -> tuple[list[SavedChart], list[ChartFreshnessSta
     return charts, freshness
 
 
+def _detail(report: Report) -> ReportDetail:
+    charts, freshness = _freshness(report)
+    table_freshness: list[ReportTableFreshnessStatus] = []
+    for table in report.tables:
+        try:
+            source = overview_store.get(table.dataset_id)
+            table_freshness.append(ReportTableFreshnessStatus(
+                table_id=table.table_id, current_revision=source.dataset.revision,
+                current_fingerprint=source.source_fingerprint,
+                needs_refresh=(source.dataset.revision != table.dataset_revision or source.source_fingerprint != table.source_fingerprint),
+            ))
+        except HTTPException:
+            table_freshness.append(ReportTableFreshnessStatus(table_id=table.table_id, needs_refresh=True, dataset_unavailable=True))
+    return ReportDetail(report=report, charts=charts, freshness=freshness, table_freshness=table_freshness)
+
+
 @router.get("/{report_id}", response_model=ReportDetail)
 def get_report(report_id: str) -> ReportDetail:
     report = store.get_report(report_id)
-    charts, freshness = _freshness(report)
-    return ReportDetail(report=report, charts=charts, freshness=freshness)
+    return _detail(report)
 
 
 @router.post("/{report_id}/charts", response_model=ReportDetail)
@@ -103,15 +126,13 @@ def add_chart_to_report(report_id: str, request: ReportAddChartRequest) -> Repor
     chart = store.get_chart(request.chart_id)
     report = store.add_chart(report_id, request.chart_id, acknowledged_revision=chart.dataset_revision,
                              acknowledged_fingerprint=chart.source_fingerprint)
-    charts, freshness = _freshness(report)
-    return ReportDetail(report=report, charts=charts, freshness=freshness)
+    return _detail(report)
 
 
 @router.delete("/{report_id}/charts/{chart_id}", response_model=ReportDetail)
 def remove_chart_from_report(report_id: str, chart_id: str) -> ReportDetail:
     report = store.remove_chart(report_id, chart_id)
-    charts, freshness = _freshness(report)
-    return ReportDetail(report=report, charts=charts, freshness=freshness)
+    return _detail(report)
 
 
 @router.post("/{report_id}/notes", response_model=Report)
@@ -122,6 +143,39 @@ def add_note(report_id: str, request: ReportAddNoteRequest) -> Report:
 @router.delete("/{report_id}/notes/{note_id}", response_model=Report)
 def remove_note(report_id: str, note_id: str) -> Report:
     return store.remove_note(report_id, note_id)
+
+
+@router.post("/{report_id}/tables", response_model=ReportDetail)
+def add_table_to_report(report_id: str, request: ReportAddTableRequest) -> ReportDetail:
+    store.get_report(report_id)
+    try:
+        source = overview_store.get(request.dataset_id)
+    except HTTPException as error:
+        raise HTTPException(status_code=409, detail="Table source is unavailable; no snapshot was saved.") from error
+    if source.dataset.revision != request.source_revision or source.source_fingerprint != request.source_fingerprint:
+        raise HTTPException(status_code=409, detail="Table source changed since review; inspect the current source and retry.")
+    missing = [column for column in request.columns if column not in source.frame.columns]
+    if missing:
+        raise HTTPException(status_code=422, detail=f"Table columns are absent from the selected source: {', '.join(missing)}.")
+    rows = [{str(key): _json_value(value) for key, value in row.items()} for row in source.frame[request.columns].head(request.limit).to_dict(orient="records")]
+    table = ReportTable(table_id=f"table_{uuid.uuid4().hex}", title=request.title,
+                        dataset_id=request.dataset_id, dataset_revision=source.dataset.revision,
+                        source_fingerprint=source.source_fingerprint, columns=request.columns,
+                        rows=rows, source_row_count=len(source.frame), created_at=datetime.now(timezone.utc))
+    report = store.add_table(report_id, table)
+    return _detail(report)
+
+
+@router.delete("/{report_id}/tables/{table_id}", response_model=ReportDetail)
+def remove_table_from_report(report_id: str, table_id: str) -> ReportDetail:
+    report = store.remove_table(report_id, table_id)
+    return _detail(report)
+
+
+@router.put("/{report_id}/order", response_model=ReportDetail)
+def reorder_report(report_id: str, request: ReportReorderRequest) -> ReportDetail:
+    report = store.reorder(report_id, request.item_order)
+    return _detail(report)
 
 
 @router.post("/{report_id}/refresh", response_model=ReportDetail)
@@ -158,8 +212,7 @@ def refresh_report(report_id: str, request: ReportRefreshRequest) -> ReportDetai
                                      spec=chart.spec, rationale=chart.rationale, result=result,
                                      previous_chart_id=chart.chart_id)
         report = store.replace_chart(report_id, chart.chart_id, new_chart)
-    charts, freshness = _freshness(report)
-    return ReportDetail(report=report, charts=charts, freshness=freshness)
+    return _detail(report)
 
 
 @router.post("/{report_id}/acknowledge/{chart_id}", response_model=ReportDetail)
@@ -174,5 +227,4 @@ def acknowledge_old_snapshot(report_id: str, chart_id: str) -> ReportDetail:
     except HTTPException as error:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="The chart source is unavailable.") from error
     report = store.acknowledge_refresh(report_id, chart_id, current.dataset.revision, current.source_fingerprint)
-    charts, freshness = _freshness(report)
-    return ReportDetail(report=report, charts=charts, freshness=freshness)
+    return _detail(report)

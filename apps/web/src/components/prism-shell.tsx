@@ -272,7 +272,7 @@ function WorkspaceSurface({ tab, status, onStatusChange, onOpenCommand, onSelect
   if (tab.kind === "ai-analyst") return <AiAnalyst datasetId={activeDatasetId} resultRunId={analystResultRunId} onSqlDraft={onSqlDraft} onSelectContext={onSelectContext} />;
   if (tab.kind === "clean") return <CleanWorkspace datasetId={activeDatasetId} onSelectContext={onSelectContext} onOpenWorkflow={onOpenWorkflow} />;
   if (tab.kind === "visualize") return <VisualizeWorkspace datasetId={activeDatasetId} onSelectContext={onSelectContext} onOpenWorkflow={onOpenWorkflow} />;
-  if (tab.kind === "reports") return <ReportsWorkspace onOpenWorkflow={onOpenWorkflow} />;
+  if (tab.kind === "reports") return <ReportsWorkspace datasetId={activeDatasetId} onOpenWorkflow={onOpenWorkflow} />;
   if (tab.kind === "stats") return <StatsWorkspace datasetId={activeDatasetId} onSelectContext={onSelectContext} onOpenWorkflow={onOpenWorkflow} />;
   if (tab.kind === "forecasting") return <ForecastingWorkspace datasetId={activeDatasetId} onSelectContext={onSelectContext} onOpenWorkflow={onOpenWorkflow} />;
   if (tab.kind === "ml") return <MlLabWorkspace datasetId={activeDatasetId} onSelectContext={onSelectContext} onOpenWorkflow={onOpenWorkflow} />;

@@ -81,3 +81,19 @@ def test_materialize_rejects_a_query_with_no_with_clause() -> None:
     connection_id = _connection(client)
     response = client.post("/api/v1/sql-lab/ctes/materialize", json={"connection_id": connection_id, "sql": "SELECT * FROM data", "cte_name": "x"})
     assert response.status_code == 422
+
+
+def test_cte_inspection_rejects_mutation_and_multiple_statements() -> None:
+    client = TestClient(create_app())
+    connection_id = _connection(client)
+    for sql in (
+        "WITH removed AS (DELETE FROM data RETURNING *) SELECT * FROM removed",
+        "WITH safe AS (SELECT * FROM data) SELECT * FROM safe; DELETE FROM data",
+    ):
+        for route in ("list", "materialize"):
+            payload = {"connection_id": connection_id, "sql": sql}
+            if route == "materialize":
+                payload["cte_name"] = "safe"
+            response = client.post(f"/api/v1/sql-lab/ctes/{route}", json=payload)
+            assert response.status_code == 422
+            assert "read-only" in response.json()["detail"]

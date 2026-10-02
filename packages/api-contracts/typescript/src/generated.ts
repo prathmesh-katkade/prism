@@ -1303,6 +1303,8 @@ export interface ChartDrillDownRequest {
   dimension_value?: string;
   x_value?: number;
   y_value?: number;
+  bin_start?: number;
+  bin_end?: number;
   offset?: number;
   limit?: number;
 }
@@ -1359,6 +1361,10 @@ export interface CleanPreviewResponse {
   review_token?: string;
   source_revision?: number;
   source_fingerprint?: string;
+  changed_rows?: CleanRowInspection[];
+  changed_rows_total?: number;
+  exception_rows?: CleanRowInspection[];
+  exception_rows_total?: number;
 }
 
 export interface CleanRecipe {
@@ -1385,6 +1391,19 @@ export interface CleanRecipeApplyResponse {
 export interface CleanRecipeCreateRequest {
   name: string;
   steps?: CleanRecipeStepInput[];
+}
+
+export interface CleanRecipeDraftPreviewRequest {
+  steps: CleanRecipeStepInput[];
+}
+
+export interface CleanRecipeDraftPreviewResponse {
+  source_revision: number;
+  source_fingerprint: string;
+  before_sample: Record<string, unknown>[];
+  after_sample: Record<string, unknown>[];
+  step_impacts: number[];
+  projected_health: OverviewHealth;
 }
 
 export interface CleanRecipePreviewResponse {
@@ -1418,6 +1437,13 @@ export interface CleanRecipeStepUpdate {
 
 export interface CleanRecipeStepsUpdateRequest {
   steps: CleanRecipeStepUpdate[];
+}
+
+export interface CleanRowInspection {
+  source_row: string;
+  status: "changed" | "removed" | "unresolved" | "newly_missing";
+  before: Record<string, unknown>;
+  after?: Record<string, unknown>;
 }
 
 export interface CleanStateResponse {
@@ -1966,6 +1992,8 @@ export interface Report {
   name: string;
   chart_refs?: ReportChartRef[];
   notes?: ReportNote[];
+  tables?: ReportTable[];
+  item_order?: string[];
   created_at: string;
   updated_at: string;
 }
@@ -1976,6 +2004,15 @@ export interface ReportAddChartRequest {
 
 export interface ReportAddNoteRequest {
   text: string;
+}
+
+export interface ReportAddTableRequest {
+  title: string;
+  dataset_id: string;
+  source_revision: number;
+  source_fingerprint: string;
+  columns: string[];
+  limit?: number;
 }
 
 export interface ReportChartRef {
@@ -1993,6 +2030,7 @@ export interface ReportDetail {
   report: Report;
   charts?: SavedChart[];
   freshness?: ChartFreshnessStatus[];
+  table_freshness?: ReportTableFreshnessStatus[];
 }
 
 export interface ReportNote {
@@ -2005,6 +2043,30 @@ export interface ReportRefreshRequest {
   chart_ids?: string[];
   source_revisions?: Record<string, number>;
   source_fingerprints?: Record<string, string>;
+}
+
+export interface ReportReorderRequest {
+  item_order: string[];
+}
+
+export interface ReportTable {
+  table_id: string;
+  title: string;
+  dataset_id: string;
+  dataset_revision: number;
+  source_fingerprint: string;
+  columns: string[];
+  rows: Record<string, unknown>[];
+  source_row_count: number;
+  created_at: string;
+}
+
+export interface ReportTableFreshnessStatus {
+  table_id: string;
+  current_revision?: number;
+  current_fingerprint?: string;
+  needs_refresh: boolean;
+  dataset_unavailable?: boolean;
 }
 
 export type ReproductionMode = "same_revision" | "current_revision";
@@ -2281,6 +2343,7 @@ export interface ValidationRunResult {
   violation_count: number;
   passed: boolean;
   sample_violations?: Record<string, unknown>[];
+  violation_source_rows?: string[];
 }
 
 export interface VisualizationDataResponse {
@@ -2296,6 +2359,8 @@ export interface VisualizationDatum {
   value: number;
   x?: number;
   box?: BoxStats;
+  bin_start?: number;
+  bin_end?: number;
 }
 
 export interface VisualizationSpec {
@@ -2306,6 +2371,12 @@ export interface VisualizationSpec {
   aggregation: VizAggregation;
   filters?: Record<string, unknown>;
   max_categories?: number;
+  histogram_bins?: number;
+  x_label?: string;
+  y_label?: string;
+  unit?: string;
+  reference_line?: number;
+  annotation?: string;
 }
 
 export interface VisualizationSuggestion {
