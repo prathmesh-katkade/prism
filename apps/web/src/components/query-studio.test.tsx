@@ -158,4 +158,33 @@ describe("Query Studio", () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/runs/compare"), expect.objectContaining({ method: "POST", body: JSON.stringify({ base_run_id: "run_a", compare_run_id: "run_b", key_columns: ["id"] }) })));
     await waitFor(() => expect(screen.getByText(/matched by id/)).toBeInTheDocument());
   });
+
+  it("promotes the result and hands off to Clean, retaining the new dataset as lineage", async () => {
+    const promotion = { run: { run_id: "run_1", state: "succeeded", risk: "safe_read", sql: "SELECT * FROM data", result_columns: [{ name: "revenue", data_type: "float64" }], row_count: 2, returned_row_count: 2, truncated: false, duration_ms: 4, warnings: [], provenance: { ...provenance, downstream_objects: ["dataset:ds_result"] } }, dataset: { dataset_id: "ds_result", revision: 0, source_name: "SQL result run_1", source_fingerprint: "d".repeat(64), row_count: 2, column_count: 1 } };
+    const fetchMock = vi.fn(async (input: string | URL) => {
+      const path = String(input);
+      const body = path.endsWith("/connections") ? [connection]
+        : path.endsWith("/snippets") ? []
+        : path.includes("/schema") ? schema
+        : path.endsWith("/history") ? []
+        : path.includes("/promote") ? promotion
+        : path.endsWith("/runs") ? { run_id: "run_1", state: "succeeded", risk: "safe_read", sql: "SELECT * FROM data", result_columns: [{ name: "revenue", data_type: "float64" }], row_count: 2, returned_row_count: 2, truncated: false, duration_ms: 4, warnings: [], provenance }
+        : path.includes("/results") ? { run: { run_id: "run_1", state: "succeeded", risk: "safe_read", sql: "SELECT * FROM data", result_columns: [{ name: "revenue", data_type: "float64" }], row_count: 2, returned_row_count: 2, truncated: false, duration_ms: 4, warnings: [], provenance }, offset: 0, limit: 100, rows: [{ revenue: 10 }, { revenue: 12 }] }
+        : {};
+      return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const onDatasetReady = vi.fn();
+    const onOpenWorkflow = vi.fn();
+    render(<QueryStudio onSelectContext={vi.fn()} onDatasetReady={onDatasetReady} onOpenWorkflow={onOpenWorkflow} />);
+
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Write against evidence, not assumptions." })).toBeInTheDocument());
+    fireEvent.keyDown(screen.getByLabelText("PRISM Query Studio editor"), { key: "Enter", ctrlKey: true });
+    await waitFor(() => expect(screen.getByRole("button", { name: "Use in Clean" })).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "Use in Clean" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/promote"), expect.objectContaining({ method: "POST" })));
+    await waitFor(() => expect(onDatasetReady).toHaveBeenCalledWith("ds_result"));
+    expect(onOpenWorkflow).toHaveBeenCalledWith("clean");
+  });
 });
