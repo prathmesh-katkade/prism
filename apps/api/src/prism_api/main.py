@@ -41,6 +41,7 @@ from .migration import PHASE_1_MIGRATIONS
 from .mllab import router as mllab_router
 from .overview import router as overview_router
 from .sql_lab import router as sql_lab_router
+from .sql_lab_join_diagnostics import router as sql_lab_join_diagnostics_router
 from .stats import router as stats_router
 from .transport import phase_1_event_stream, sse_response
 from .visualize import router as visualize_router
@@ -91,6 +92,7 @@ def create_app() -> FastAPI:
         )
     app.include_router(overview_router)
     app.include_router(sql_lab_router)
+    app.include_router(sql_lab_join_diagnostics_router)
     app.include_router(ai_analyst_router)
     app.include_router(atlas_router)
     app.include_router(atlas_command_center_router)

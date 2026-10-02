@@ -1587,6 +1587,37 @@ export interface HealthResponse {
   migrations: MigrationState[];
 }
 
+export interface JoinDiagnostic {
+  join_index: number;
+  join_kind: string;
+  left: JoinKeyCardinality;
+  right: JoinKeyCardinality;
+  unmatched_left_rows: number;
+  unmatched_right_rows: number;
+  row_multiplication_risk: boolean;
+}
+
+export interface JoinDiagnosticsRequest {
+  connection_id: string;
+  sql: string;
+}
+
+export interface JoinDiagnosticsResponse {
+  connection_id: string;
+  sql_fingerprint: string;
+  joins?: JoinDiagnostic[];
+  unsupported_notes?: string[];
+}
+
+export interface JoinKeyCardinality {
+  table: string;
+  column: string;
+  total_rows: number;
+  distinct_keys: number;
+  null_keys: number;
+  duplicate_key_rows: number;
+}
+
 export type LifecycleState = "draft" | "completed" | "failed" | "stale" | "archived";
 
 export type LineageDirection = "upstream" | "downstream" | "both";

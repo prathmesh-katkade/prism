@@ -329,6 +329,37 @@ class SqlSnippetCreate(ContractModel):
     parameters: dict[str, Any] = Field(default_factory=dict)
 
 
+class JoinDiagnosticsRequest(ContractModel):
+    connection_id: str = Field(min_length=1)
+    sql: str = Field(min_length=1, max_length=250_000)
+
+
+class JoinKeyCardinality(ContractModel):
+    table: str
+    column: str
+    total_rows: int = Field(ge=0)
+    distinct_keys: int = Field(ge=0)
+    null_keys: int = Field(ge=0)
+    duplicate_key_rows: int = Field(ge=0)
+
+
+class JoinDiagnostic(ContractModel):
+    join_index: int = Field(ge=0)
+    join_kind: str
+    left: JoinKeyCardinality
+    right: JoinKeyCardinality
+    unmatched_left_rows: int = Field(ge=0)
+    unmatched_right_rows: int = Field(ge=0)
+    row_multiplication_risk: bool
+
+
+class JoinDiagnosticsResponse(ContractModel):
+    connection_id: str
+    sql_fingerprint: str
+    joins: list[JoinDiagnostic] = Field(default_factory=list)
+    unsupported_notes: list[str] = Field(default_factory=list)
+
+
 class AtlasSqlAction(str, Enum):
     EXPLAIN_QUERY = "explain_query"
     OPTIMIZE_QUERY = "optimize_query"

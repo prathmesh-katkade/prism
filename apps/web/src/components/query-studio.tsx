@@ -2,13 +2,13 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import type { AtlasSqlAction, AtlasSqlResponse, SqlConnectionSummary, SqlPlanResponse, SqlResultPageResponse, SqlResultPromotionResponse, SqlRunResponse, SqlSchemaResponse, SqlSnippet } from "@prism/api-contracts";
+import type { AtlasSqlAction, AtlasSqlResponse, JoinDiagnosticsResponse, SqlConnectionSummary, SqlPlanResponse, SqlResultPageResponse, SqlResultPromotionResponse, SqlRunResponse, SqlSchemaResponse, SqlSnippet } from "@prism/api-contracts";
 import { apiUrl } from "../config/api";
 import type { InspectorObjectState } from "../state/shell-model";
 import { QueryEditor } from "./query-editor";
 
 type StudioState = "loading" | "empty" | "ready" | "running" | "degraded" | "error";
-type ResultTab = "results" | "plan" | "history";
+type ResultTab = "results" | "plan" | "history" | "joins";
 
 export function QueryStudio({ onSelectContext, initialSql, initialParameters, initialConnectionId, onUseAsEvidence }: { onSelectContext(state: InspectorObjectState): void; initialSql?: string; initialParameters?: Record<string, unknown>; initialConnectionId?: string; onUseAsEvidence?(runId: string): void }) {
   const [state, setState] = useState<StudioState>("loading");
@@ -25,6 +25,9 @@ export function QueryStudio({ onSelectContext, initialSql, initialParameters, in
   const [atlas, setAtlas] = useState<AtlasSqlResponse | null>(null);
   const [activeResultTab, setActiveResultTab] = useState<ResultTab>("results");
   const [error, setError] = useState<string | null>(null);
+  const [joinDiagnostics, setJoinDiagnostics] = useState<JoinDiagnosticsResponse | null>(null);
+  const [joinDiagnosticsLoading, setJoinDiagnosticsLoading] = useState(false);
+  const [joinDiagnosticsError, setJoinDiagnosticsError] = useState<string | null>(null);
 
   useEffect(() => { if (initialSql) setSql(initialSql); }, [initialSql]);
   useEffect(() => { if (initialParameters) setParametersText(JSON.stringify(initialParameters)); }, [initialParameters]);
@@ -67,7 +70,7 @@ export function QueryStudio({ onSelectContext, initialSql, initialParameters, in
     if (!activeConnection) return;
     let parameters: Record<string, unknown>;
     try { parameters = JSON.parse(parametersText) as Record<string, unknown>; } catch { setError("Parameters must be valid JSON."); return; }
-    setState("running"); setError(null); setAtlas(null);
+    setState("running"); setError(null); setAtlas(null); setJoinDiagnostics(null);
     try {
       const response = await fetch(apiUrl("/api/v1/sql-lab/runs"), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ connection_id: activeConnection.connection_id, sql, parameters, result_limit: 1_000, timeout_ms: 30_000, client_request_id: crypto.randomUUID() }) });
       if (!response.ok) throw new Error("Query submission failed.");
@@ -88,6 +91,17 @@ export function QueryStudio({ onSelectContext, initialSql, initialParameters, in
       if (!response.ok) throw new Error("The connector did not return a plan.");
       setPlan(await response.json() as SqlPlanResponse); setActiveResultTab("plan");
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Plan inspection failed."); }
+  }
+
+  async function inspectJoins() {
+    if (!activeConnection) return;
+    setJoinDiagnosticsLoading(true); setJoinDiagnosticsError(null);
+    try {
+      const response = await fetch(apiUrl("/api/v1/sql-lab/joins/diagnose"), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ connection_id: activeConnection.connection_id, sql }) });
+      if (!response.ok) throw new Error((await response.json() as { detail?: string }).detail ?? "Join diagnostics failed.");
+      setJoinDiagnostics(await response.json() as JoinDiagnosticsResponse);
+    } catch (reason) { setJoinDiagnosticsError(reason instanceof Error ? reason.message : "Join diagnostics failed."); }
+    finally { setJoinDiagnosticsLoading(false); }
   }
 
   async function cancelActiveRun() {
@@ -142,10 +156,10 @@ export function QueryStudio({ onSelectContext, initialSql, initialParameters, in
 
   return <article className="query-studio">
     <header className="query-heading"><div><span className="eyebrow">SQL LAB · QUERY STUDIO</span><h1>Write against evidence, not assumptions.</h1><p>{activeConnection ? <><strong>{activeConnection.label}</strong> · <code>{activeConnection.dialect}</code> · schema-aware local source</> : "Select a source"}</p></div><div className="query-status"><span className={`migration-chip ${state === "degraded" ? "unavailable" : "ready"}`}>{run?.state ?? "ready"}</span><small>Ctrl/Cmd + Enter to run</small></div></header>
-    <section className="query-toolbar" aria-label="Query source and actions"><label>Source<select value={connectionId} onChange={(event) => setConnectionId(event.target.value)}>{readyConnections.map((item) => <option key={item.connection_id} value={item.connection_id}>{item.label} · {item.dialect}</option>)}</select></label><label>Parameters<textarea aria-label="Query parameters JSON" value={parametersText} onChange={(event) => setParametersText(event.target.value)} /></label><button onClick={() => void execute()} disabled={!activeConnection || state === "running"}>Run query <kbd>⌘ ↵</kbd></button>{run && ["queued", "running"].includes(run.state) ? <button className="secondary" onClick={() => void cancelActiveRun()}>Cancel query</button> : null}<button className="secondary" onClick={() => setSql(formatSql(sql))} disabled={!activeConnection}>Format query</button><button className="secondary" onClick={() => void inspectPlan()} disabled={!activeConnection}>Inspect plan</button><button className="secondary" onClick={() => void saveSnippet()} disabled={!activeConnection}>Save snippet</button></section>
+    <section className="query-toolbar" aria-label="Query source and actions"><label>Source<select value={connectionId} onChange={(event) => setConnectionId(event.target.value)}>{readyConnections.map((item) => <option key={item.connection_id} value={item.connection_id}>{item.label} · {item.dialect}</option>)}</select></label><label>Parameters<textarea aria-label="Query parameters JSON" value={parametersText} onChange={(event) => setParametersText(event.target.value)} /></label><button onClick={() => void execute()} disabled={!activeConnection || state === "running"}>Run query <kbd>⌘ ↵</kbd></button>{run && ["queued", "running"].includes(run.state) ? <button className="secondary" onClick={() => void cancelActiveRun()}>Cancel query</button> : null}<button className="secondary" onClick={() => setSql(formatSql(sql))} disabled={!activeConnection}>Format query</button><button className="secondary" onClick={() => void inspectPlan()} disabled={!activeConnection}>Inspect plan</button><button className="secondary" onClick={() => { setActiveResultTab("joins"); void inspectJoins(); }} disabled={!activeConnection}>Inspect joins</button><button className="secondary" onClick={() => void saveSnippet()} disabled={!activeConnection}>Save snippet</button></section>
     <section className="query-layout"><div><QueryEditor value={sql} dialect={activeConnection?.dialect ?? "sql"} schemaItems={schema?.tables.flatMap((table) => [table.name, ...table.columns.map((column) => column.name)]) ?? []} onChange={setSql} onRun={() => void execute()} /><div className="query-editor-foot"><span>Dialect: <code>{activeConnection?.dialect ?? "unavailable"}</code></span><span>Safe reads run without a repeated prompt. Writes and unproven SQL are blocked.</span></div></div><SchemaPanel schema={schema} onInsert={(identifier) => setSql((current) => `${current}${current.endsWith(" ") || current.endsWith("\n") ? "" : " "}${identifier}`)} /></section>
     {error ? <p className="query-error" role="alert">{error}</p> : null}
-    <section className="sql-result-panel"><div className="result-tabs" role="tablist" aria-label="SQL result views">{(["results", "plan", "history"] as ResultTab[]).map((tab) => <button key={tab} role="tab" aria-selected={activeResultTab === tab} onClick={() => setActiveResultTab(tab)}>{tab}</button>)}</div>{activeResultTab === "results" ? <DataGrid result={results} run={run} onSelectContext={onSelectContext} onPage={(offset) => void loadResultPage(offset)} onPromote={() => void promoteResult()} {...(onUseAsEvidence ? { onUseAsEvidence } : {})} /> : null}{activeResultTab === "plan" ? <PlanPanel plan={plan} /> : null}{activeResultTab === "history" ? <HistoryPanel history={history} onUse={(entry) => setSql(entry.sql)} /> : null}</section>
+    <section className="sql-result-panel"><div className="result-tabs" role="tablist" aria-label="SQL result views">{(["results", "plan", "history", "joins"] as ResultTab[]).map((tab) => <button key={tab} role="tab" aria-selected={activeResultTab === tab} onClick={() => { setActiveResultTab(tab); if (tab === "joins" && !joinDiagnostics && !joinDiagnosticsLoading) void inspectJoins(); }}>{tab}</button>)}</div>{activeResultTab === "results" ? <DataGrid result={results} run={run} onSelectContext={onSelectContext} onPage={(offset) => void loadResultPage(offset)} onPromote={() => void promoteResult()} {...(onUseAsEvidence ? { onUseAsEvidence } : {})} /> : null}{activeResultTab === "plan" ? <PlanPanel plan={plan} /> : null}{activeResultTab === "history" ? <HistoryPanel history={history} onUse={(entry) => setSql(entry.sql)} /> : null}{activeResultTab === "joins" ? <JoinDiagnosticsPanel diagnostics={joinDiagnostics} loading={joinDiagnosticsLoading} error={joinDiagnosticsError} /> : null}</section>
     <section className="sql-atlas"><div><span className="eyebrow">ATLAS · CONTEXTUAL SQL ACTIONS</span><h2>Inspect before execution.</h2><p>Atlas returns schema-grounded, editable drafts. It does not execute SQL, invent schema objects, or claim unsupported connectors.</p></div><div className="atlas-action-row">{(["explain_query", "optimize_query", "debug_error", "inspect_plan", "generate_sql", "compare_queries", "explain_selection", "trace_lineage", "convert_result"] as AtlasSqlAction[]).map((action) => <button key={action} onClick={() => void askAtlas(action)}>{action.replaceAll("_", " ")}</button>)}</div>{atlas ? <aside className="atlas-result" aria-live="polite"><span className="eyebrow">ATLAS RESPONSE · {atlas.action.replaceAll("_", " ")}</span><strong>{atlas.summary}</strong><small>{atlas.uncertainty}</small></aside> : null}</section>
     <SourceCapabilities connections={connections.filter((item) => item.status !== "ready")} />
     {snippets.length ? <section className="snippet-strip"><span className="eyebrow">SAVED SNIPPETS</span>{snippets.map((snippet) => <button key={snippet.snippet_id} onClick={() => { setSql(snippet.sql); setParametersText(JSON.stringify(snippet.parameters ?? {}, null, 2)); }}>{snippet.name}</button>)}</section> : null}
@@ -178,5 +192,21 @@ function DataGrid({ result, run, onSelectContext, onPage, onPromote, onUseAsEvid
 }
 
 function PlanPanel({ plan }: { plan: SqlPlanResponse | null }) { return <div className="plan-panel">{plan?.supported ? <pre>{plan.plan?.join("\n") ?? "No plan rows returned."}</pre> : <p>{plan?.warning ?? "Inspect a read-only query plan when the active connector supports EXPLAIN."}</p>}</div>; }
+function JoinDiagnosticsPanel({ diagnostics, loading, error }: { diagnostics: JoinDiagnosticsResponse | null; loading: boolean; error: string | null }) {
+  if (loading) return <div className="plan-panel"><p>Computing key cardinality and unmatched-key counts…</p></div>;
+  if (error) return <div className="plan-panel"><p className="query-error" role="alert">{error}</p></div>;
+  if (!diagnostics) return <div className="plan-panel"><p>Select "Inspect joins" to check key cardinality, unmatched keys, and row-multiplication risk for this query's joins.</p></div>;
+  return <div className="join-diagnostics">
+    {(diagnostics.joins ?? []).length ? (diagnostics.joins ?? []).map((join) => <article key={join.join_index} className={join.row_multiplication_risk ? "join-diagnostic-card is-risky" : "join-diagnostic-card"}>
+      <header><strong>{join.join_kind} join</strong>{join.row_multiplication_risk ? <span className="migration-chip unavailable">row-multiplication risk</span> : null}</header>
+      <div className="join-diagnostic-sides">
+        <div><span className="eyebrow">{join.left.table}.{join.left.column}</span><dl><div><dt>Rows</dt><dd>{join.left.total_rows.toLocaleString()}</dd></div><div><dt>Distinct keys</dt><dd>{join.left.distinct_keys.toLocaleString()}</dd></div><div><dt>Duplicate-key rows</dt><dd>{join.left.duplicate_key_rows.toLocaleString()}</dd></div><div><dt>Null keys</dt><dd>{join.left.null_keys.toLocaleString()}</dd></div></dl></div>
+        <div><span className="eyebrow">{join.right.table}.{join.right.column}</span><dl><div><dt>Rows</dt><dd>{join.right.total_rows.toLocaleString()}</dd></div><div><dt>Distinct keys</dt><dd>{join.right.distinct_keys.toLocaleString()}</dd></div><div><dt>Duplicate-key rows</dt><dd>{join.right.duplicate_key_rows.toLocaleString()}</dd></div><div><dt>Null keys</dt><dd>{join.right.null_keys.toLocaleString()}</dd></div></dl></div>
+      </div>
+      <p className="quiet-note">{join.unmatched_left_rows.toLocaleString()} {join.left.table} row(s) have no match in {join.right.table}; {join.unmatched_right_rows.toLocaleString()} {join.right.table} row(s) have no match in {join.left.table}.</p>
+    </article>) : null}
+    {(diagnostics.unsupported_notes ?? []).length ? <ul className="clean-warnings">{(diagnostics.unsupported_notes ?? []).map((note) => <li key={note}>{note}</li>)}</ul> : null}
+  </div>;
+}
 function HistoryPanel({ history, onUse }: { history: SqlRunResponse[]; onUse(entry: SqlRunResponse): void }) { return <div className="history-panel">{history.length ? history.map((entry) => <button key={entry.run_id} onClick={() => onUse(entry)}><span className={`migration-chip ${entry.state === "succeeded" ? "ready" : "unavailable"}`}>{entry.state}</span><code>{entry.sql.replaceAll("\n", " ").slice(0, 120)}</code><small>{entry.duration_ms ?? 0} ms · {entry.provenance.dialect}</small></button>) : <p>No durable query history exists in this local project yet.</p>}</div>; }
 function SourceCapabilities({ connections }: { connections: SqlConnectionSummary[] }) { if (!connections.length) return null; return <section className="source-capabilities"><span className="eyebrow">CONNECTOR CAPABILITIES</span>{connections.map((connection) => <article key={connection.connection_id}><strong>{connection.label}</strong><span className={`migration-chip ${connection.status === "ready" ? "ready" : "unavailable"}`}>{connection.status}</span><small>{connection.capabilities.map((capability) => capability.reason).find(Boolean) ?? "Available"}</small></article>)}</section>; }

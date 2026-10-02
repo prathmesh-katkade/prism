@@ -61,4 +61,36 @@ describe("Query Studio", () => {
     await waitFor(() => expect(screen.getByLabelText("PRISM Query Studio editor")).toHaveValue(snippet.sql));
     expect(screen.getByLabelText("Query parameters JSON")).toHaveValue(JSON.stringify(snippet.parameters, null, 2));
   });
+
+  it("inspects joins and shows real cardinality, unmatched-key, and multiplication-risk results", async () => {
+    const diagnostics = {
+      connection_id: connection.connection_id, sql_fingerprint: "f".repeat(64),
+      joins: [{
+        join_index: 0, join_kind: "inner",
+        left: { table: "data", column: "customer_id", total_rows: 4, distinct_keys: 3, null_keys: 0, duplicate_key_rows: 1 },
+        right: { table: "joined", column: "customer_id", total_rows: 4, distinct_keys: 3, null_keys: 0, duplicate_key_rows: 1 },
+        unmatched_left_rows: 1, unmatched_right_rows: 1, row_multiplication_risk: true,
+      }],
+      unsupported_notes: [],
+    };
+    const fetchMock = vi.fn(async (input: string | URL) => {
+      const path = String(input);
+      const body = path.endsWith("/connections") ? [connection]
+        : path.endsWith("/snippets") ? []
+        : path.includes("/schema") ? schema
+        : path.endsWith("/history") ? []
+        : path.endsWith("/joins/diagnose") ? diagnostics
+        : {};
+      return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<QueryStudio onSelectContext={vi.fn()} />);
+
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Write against evidence, not assumptions." })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Inspect joins" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/joins/diagnose"), expect.objectContaining({ method: "POST" })));
+    await waitFor(() => expect(screen.getByText("row-multiplication risk")).toBeInTheDocument());
+    expect(screen.getByText(/1 data row\(s\) have no match in joined/)).toBeInTheDocument();
+  });
 });
