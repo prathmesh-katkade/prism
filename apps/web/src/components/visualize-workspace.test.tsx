@@ -45,6 +45,33 @@ describe("Visualize workspace", () => {
     await waitFor(() => expect(screen.getByText(/answers a comparison question/)).toBeInTheDocument());
   });
 
+  it("resolves a clicked bar to its real contributing rows via a server-resolved filter, disclosing truncation", async () => {
+    const drilldownResponse = { total_matching_rows: 5, rows: [{ segment: "a", revenue: 15 }, { segment: "a", revenue: 15 }], offset: 0, limit: 2, truncated: true, filters_applied: { segment: "a" } };
+    const fetchMock = vi.fn(async (input: string | URL) => {
+      const path = String(input);
+      if (path.includes("/profile")) return json(profile);
+      if (path.includes("/suggest")) return json(suggestion);
+      if (path.includes("/render")) return json(rendered);
+      if (path.includes("/drilldown")) return json(drilldownResponse);
+      return json({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const onSelectContext = vi.fn();
+    render(<VisualizeWorkspace datasetId="ds_1" onSelectContext={onSelectContext} onOpenWorkflow={vi.fn()} />);
+
+    await waitFor(() => expect(screen.getByRole("img", { name: /Bar chart with 2 categories/ })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Inspect a" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/drilldown"), expect.objectContaining({ method: "POST" })));
+    const [, callInit] = fetchMock.mock.calls.find(([, requestInit]) => String((requestInit as RequestInit | undefined)?.body ?? "").includes("dimension_value"))!;
+    expect(JSON.parse(String((callInit as RequestInit).body))).toMatchObject({ dimension_value: "a" });
+
+    await waitFor(() => expect(screen.getByText("5", { selector: "strong" })).toBeInTheDocument()); // total_matching_rows disclosed
+    expect(screen.getByText(/truncated, not downloaded in full/)).toBeInTheDocument();
+    expect(screen.getByText(/segment = a/)).toBeInTheDocument(); // active filter disclosed
+    expect(onSelectContext).toHaveBeenCalledWith(expect.objectContaining({ metadata: expect.arrayContaining([expect.stringContaining("5 matching row(s)")]) }));
+  });
+
   it("shows the error state with a retry control, never an indefinite loading spinner, when the initial load fails", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("offline"); }));
     render(<VisualizeWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);

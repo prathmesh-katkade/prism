@@ -108,6 +108,58 @@ def test_line_chart_preserves_chronological_order_even_when_values_are_not_monot
     assert labels == sorted(labels)  # chronological, never resorted by value
 
 
+def test_drilldown_resolves_a_bar_mark_to_its_real_contributing_rows() -> None:
+    client = TestClient(create_app())
+    dataset_id = _dataset(client)
+    spec = {"mark": "bar", "intent": "comparison", "dimension": "segment", "measure": "revenue", "aggregation": "sum", "max_categories": 26}
+    response = client.post(f"/api/v1/visualize/datasets/{dataset_id}/drilldown", json={"spec": spec, "dimension_value": "a"})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total_matching_rows"] == 3  # i=0, 26, 52 all have segment 'a' in this 60-row fixture
+    assert all(row["segment"] == "a" for row in body["rows"])
+    assert body["truncated"] is False
+    assert body["filters_applied"] == {"segment": "a"}
+
+
+def test_drilldown_paginates_and_discloses_truncation() -> None:
+    client = TestClient(create_app())
+    dataset_id = _dataset(client)
+    spec = {"mark": "bar", "intent": "comparison", "dimension": "segment", "measure": "revenue", "aggregation": "sum", "max_categories": 26}
+    response = client.post(f"/api/v1/visualize/datasets/{dataset_id}/drilldown", json={"spec": spec, "dimension_value": "a", "limit": 2})
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body["rows"]) == 2
+    assert body["total_matching_rows"] == 3
+    assert body["truncated"] is True
+
+
+def test_drilldown_resolves_a_scatter_point_by_exact_x_and_y() -> None:
+    client = TestClient(create_app())
+    dataset_id = _dataset(client)
+    spec = {"mark": "scatter", "intent": "relationship", "dimension": "revenue", "measure": "units", "aggregation": "none", "max_categories": 20}
+    response = client.post(f"/api/v1/visualize/datasets/{dataset_id}/drilldown", json={"spec": spec, "x_value": 5, "y_value": 0})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total_matching_rows"] >= 1
+    assert all(row["revenue"] == 5 and row["units"] == 0 for row in body["rows"])
+
+
+def test_drilldown_requires_dimension_value_for_a_non_scatter_mark() -> None:
+    client = TestClient(create_app())
+    dataset_id = _dataset(client)
+    spec = {"mark": "bar", "intent": "comparison", "dimension": "segment", "measure": "revenue", "aggregation": "sum", "max_categories": 26}
+    response = client.post(f"/api/v1/visualize/datasets/{dataset_id}/drilldown", json={"spec": spec})
+    assert response.status_code == 422
+
+
+def test_drilldown_requires_x_and_y_for_a_scatter_mark() -> None:
+    client = TestClient(create_app())
+    dataset_id = _dataset(client)
+    spec = {"mark": "scatter", "intent": "relationship", "dimension": "revenue", "measure": "units", "aggregation": "none", "max_categories": 20}
+    response = client.post(f"/api/v1/visualize/datasets/{dataset_id}/drilldown", json={"spec": spec})
+    assert response.status_code == 422
+
+
 def test_atlas_explain_chart_and_trust_check_do_not_mutate_state() -> None:
     client = TestClient(create_app())
     dataset_id = _dataset(client)

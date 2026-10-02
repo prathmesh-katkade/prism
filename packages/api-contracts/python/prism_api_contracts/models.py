@@ -781,6 +781,24 @@ class VisualizationDataResponse(ContractModel):
     provenance: OverviewProvenance
 
 
+class ChartDrillDownRequest(ContractModel):
+    spec: VisualizationSpec
+    dimension_value: Optional[str] = None
+    x_value: Optional[float] = None
+    y_value: Optional[float] = None
+    offset: int = Field(default=0, ge=0)
+    limit: int = Field(default=50, ge=1, le=500)
+
+
+class ChartDrillDownResponse(ContractModel):
+    total_matching_rows: int = Field(ge=0)
+    rows: list[dict[str, Optional[Any]]]
+    offset: int = Field(ge=0)
+    limit: int = Field(ge=1)
+    truncated: bool
+    filters_applied: dict[str, Any] = Field(default_factory=dict)
+
+
 class AtlasVisualizeAction(str, Enum):
     EXPLAIN_CHART = "explain_chart"
     IDENTIFY_ANOMALY = "identify_anomaly"

@@ -1298,6 +1298,24 @@ export interface ChangepointResult {
   provenance: OverviewProvenance;
 }
 
+export interface ChartDrillDownRequest {
+  spec: VisualizationSpec;
+  dimension_value?: string;
+  x_value?: number;
+  y_value?: number;
+  offset?: number;
+  limit?: number;
+}
+
+export interface ChartDrillDownResponse {
+  total_matching_rows: number;
+  rows: Record<string, unknown>[];
+  offset: number;
+  limit: number;
+  truncated: boolean;
+  filters_applied?: Record<string, unknown>;
+}
+
 export interface CleanApplyResponse {
   dataset: OverviewDataset;
   transformation: CleanTransformation;

@@ -21,6 +21,8 @@ from prism_api_contracts import (
     AtlasVisualizeRequest,
     AtlasVisualizeResponse,
     BoxStats,
+    ChartDrillDownRequest,
+    ChartDrillDownResponse,
     OverviewColumn,
     OverviewProvenance,
     VisualizationDataResponse,
@@ -34,6 +36,7 @@ from prism_api_contracts import (
 from prism_overview_analytics import ANALYTICS_SERVICE_VERSION, build_overview
 
 from .analytical_objects import register_visualization
+from .clean import _json_value
 from .overview import StoredDataset
 from .overview import store as overview_store
 
@@ -180,6 +183,43 @@ def render(dataset_id: str, spec: VisualizationSpec) -> VisualizationDataRespons
     provenance = _provenance(stored)
     register_visualization(stored, spec, truncated, warnings)
     return VisualizationDataResponse(spec=spec, data=data, truncated=truncated, warnings=warnings, provenance=provenance)
+
+
+DRILL_DOWN_SAMPLE_LIMIT = 500
+
+
+@router.post("/datasets/{dataset_id}/drilldown", response_model=ChartDrillDownResponse)
+def drill_down(dataset_id: str, request: ChartDrillDownRequest) -> ChartDrillDownResponse:
+    """Resolve a single clicked mark back to its contributing rows, server-side —
+    never by shipping the whole dataset to the browser so it can filter locally."""
+    stored = overview_store.get(dataset_id)
+    frame = stored.frame
+    spec = request.spec
+    filters_applied: dict[str, object] = {}
+    if spec.mark is VizMark.SCATTER:
+        dimension = _require_column(frame, spec.dimension, "dimension")
+        measure = _require_column(frame, spec.measure, "measure")
+        if request.x_value is None or request.y_value is None:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Both x_value and y_value are required to drill into a scatter point.")
+        dim_numeric = pd.to_numeric(frame[dimension], errors="coerce").round(6)
+        measure_numeric = pd.to_numeric(frame[measure], errors="coerce").round(6)
+        mask = (dim_numeric == round(request.x_value, 6)) & (measure_numeric == round(request.y_value, 6))
+        filters_applied = {dimension: request.x_value, measure: request.y_value}
+    else:
+        dimension = _require_column(frame, spec.dimension, "dimension")
+        if request.dimension_value is None:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="dimension_value is required to drill into this mark.")
+        mask = frame[dimension].astype(str) == request.dimension_value
+        filters_applied = {dimension: request.dimension_value}
+    matching = frame.loc[mask]
+    total = len(matching)
+    limit = min(request.limit, DRILL_DOWN_SAMPLE_LIMIT)
+    page = matching.iloc[request.offset: request.offset + limit]
+    rows = [{str(key): _json_value(value) for key, value in row.items()} for row in page.to_dict(orient="records")]
+    return ChartDrillDownResponse(
+        total_matching_rows=total, rows=rows, offset=request.offset, limit=limit,
+        truncated=total > request.offset + limit, filters_applied=filters_applied,
+    )
 
 
 def _provenance(stored: StoredDataset) -> OverviewProvenance:

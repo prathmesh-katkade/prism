@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useState } from "react";
-import type { AtlasVisualizeResponse, OverviewProfileResponse, VisualizationDataResponse, VisualizationDatum, VisualizationSpec, VisualizationSuggestion, VizMark } from "@prism/api-contracts";
+import type { AtlasVisualizeResponse, ChartDrillDownResponse, OverviewProfileResponse, VisualizationDataResponse, VisualizationDatum, VisualizationSpec, VisualizationSuggestion, VizMark } from "@prism/api-contracts";
 import { apiUrl } from "../config/api";
 import { newestAnalyticalObjectId } from "./analytical-history";
 import type { InspectorObjectState } from "../state/shell-model";
@@ -18,6 +18,9 @@ export function VisualizeWorkspace({ datasetId, onSelectContext, onOpenWorkflow 
   const [data, setData] = useState<VisualizationDataResponse | null>(null);
   const [atlas, setAtlas] = useState<AtlasVisualizeResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [drilldown, setDrilldown] = useState<ChartDrillDownResponse | null>(null);
+  const [drilldownLoading, setDrilldownLoading] = useState(false);
+  const [drilldownError, setDrilldownError] = useState<string | null>(null);
 
   const load = useCallback(async (id: string) => {
     setState("loading"); setError(null);
@@ -50,7 +53,30 @@ export function VisualizeWorkspace({ datasetId, onSelectContext, onOpenWorkflow 
 
   useEffect(() => { if (datasetId && spec) void render(datasetId, spec); }, [datasetId, spec, render]);
 
-  function updateSpec(patch: Partial<VisualizationSpec>) { if (spec) setSpec({ ...spec, ...patch }); }
+  function updateSpec(patch: Partial<VisualizationSpec>) { if (spec) setSpec({ ...spec, ...patch }); setDrilldown(null); }
+
+  async function selectMark(params: { dimensionValue?: string; xValue?: number; yValue?: number }) {
+    if (!datasetId || !spec) return;
+    setDrilldownLoading(true); setDrilldownError(null); setDrilldown(null);
+    try {
+      const response = await fetch(apiUrl(`/api/v1/visualize/datasets/${datasetId}/drilldown`), {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ spec, offset: 0, limit: 50, ...(params.dimensionValue !== undefined ? { dimension_value: params.dimensionValue } : {}), ...(params.xValue !== undefined ? { x_value: params.xValue, y_value: params.yValue } : {}) }),
+      });
+      if (!response.ok) throw new Error((await response.json() as { detail?: string }).detail ?? "Could not resolve this mark's contributing rows.");
+      const body = await response.json() as ChartDrillDownResponse;
+      setDrilldown(body);
+      onSelectContext({
+        objectId: `mark:${params.dimensionValue ?? `${params.xValue},${params.yValue}`}`, label: "Contributing rows", type: "finding", state: "ready", actions: [],
+        metadata: [
+          `${body.total_matching_rows.toLocaleString()} matching row(s)`,
+          body.truncated ? `showing first ${body.rows.length} (truncated)` : "all shown",
+          `filtered by ${Object.entries((body.filters_applied ?? {})).map(([k, v]) => `${k}=${v}`).join(", ")}`,
+        ],
+      });
+    } catch (reason) { setDrilldownError(reason instanceof Error ? reason.message : "Could not resolve this mark's contributing rows."); }
+    finally { setDrilldownLoading(false); }
+  }
 
   async function askAtlas(action: "explain_chart" | "identify_anomaly" | "propose_alternative") {
     if (!datasetId || !spec) return;
@@ -91,8 +117,16 @@ export function VisualizeWorkspace({ datasetId, onSelectContext, onOpenWorkflow 
     </nav>
     <section className="viz-canvas" aria-label="Visual canvas" tabIndex={0}>
       <header><span className="eyebrow">{rationale}</span><h1>{spec.dimension ?? spec.measure} {spec.measure && spec.dimension ? `by ${spec.measure}` : ""}</h1></header>
-      {data ? <ChartCanvas mark={spec.mark} data={data.data} /> : <p className="quiet-note">Rendering…</p>}
+      {data ? <ChartCanvas mark={spec.mark} data={data.data} onSelectMark={selectMark} /> : <p className="quiet-note">Rendering…</p>}
       {(data?.warnings ?? []).length ? <ul className="clean-warnings">{(data?.warnings ?? []).map((warning) => <li key={warning}>{warning}</li>)}</ul> : null}
+      {drilldownLoading ? <p className="quiet-note">Resolving contributing rows…</p> : null}
+      {drilldownError ? <p className="query-error" role="alert">{drilldownError}</p> : null}
+      {drilldown ? <div className="viz-drilldown">
+        <p className="clean-preview-summary">
+          <strong>{drilldown.total_matching_rows.toLocaleString()}</strong> contributing row(s){drilldown.truncated ? <> — showing the first <strong>{drilldown.rows.length}</strong> (truncated, not downloaded in full)</> : null}, filtered by {Object.entries((drilldown.filters_applied ?? {})).map(([key, value]) => `${key} = ${value}`).join(", ")}.
+        </p>
+        <DrillDownTable rows={drilldown.rows} />
+      </div> : null}
     </section>
     <aside className="inspector viz-inspector" aria-label="Chart inspector">
       <div className="inspector-heading"><span className="eyebrow">ENCODING</span></div>
@@ -106,9 +140,12 @@ export function VisualizeWorkspace({ datasetId, onSelectContext, onOpenWorkflow 
   </article>;
 }
 
-export function ChartCanvas({ mark, data }: { mark: VizMark; data: readonly VisualizationDatum[] }) {
+type MarkSelection = { dimensionValue?: string; xValue?: number; yValue?: number };
+
+export function ChartCanvas({ mark, data, onSelectMark }: { mark: VizMark; data: readonly VisualizationDatum[]; onSelectMark?(selection: MarkSelection): void }) {
   if (!data.length) return <p className="quiet-note">No data to chart.</p>;
   const width = 640, height = 280, padding = 32;
+  const selectable = Boolean(onSelectMark) && mark !== "histogram";
 
   if (mark === "scatter") {
     const xs = data.map((d) => d.x ?? 0);
@@ -118,7 +155,7 @@ export function ChartCanvas({ mark, data }: { mark: VizMark; data: readonly Visu
     const yMin = Math.min(...ys, 0), yMax = Math.max(...ys, 1);
     const ySpan = yMax - yMin || 1;
     return <svg role="img" aria-label={`Scatter chart with ${data.length} points`} viewBox={`0 0 ${width} ${height}`} className="viz-svg">
-      {data.map((point, index) => <circle key={index} cx={padding + (((point.x ?? 0) - xMin) / xSpan) * (width - 2 * padding)} cy={height - padding - ((point.value - yMin) / ySpan) * (height - 2 * padding)} r={3}><title>{point.label}</title></circle>)}
+      {data.map((point, index) => <circle key={index} className={selectable ? "viz-mark-selectable" : undefined} tabIndex={selectable ? 0 : undefined} role={selectable ? "button" : undefined} aria-label={selectable ? `Inspect point ${point.label}` : undefined} cx={padding + (((point.x ?? 0) - xMin) / xSpan) * (width - 2 * padding)} cy={height - padding - ((point.value - yMin) / ySpan) * (height - 2 * padding)} r={3} onClick={() => onSelectMark?.({ xValue: point.x ?? 0, yValue: point.value })} onKeyDown={(event) => { if (selectable && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); onSelectMark?.({ xValue: point.x ?? 0, yValue: point.value }); } }}><title>{point.label}</title></circle>)}
     </svg>;
   }
 
@@ -136,7 +173,7 @@ export function ChartCanvas({ mark, data }: { mark: VizMark; data: readonly Visu
         const box = point.box!;
         const cx = padding + index * slotWidth + slotWidth / 2;
         const top = scaleY(box.q3), bottom = scaleY(box.q1), median = scaleY(box.median);
-        return <g key={index}>
+        return <g key={index} className={selectable ? "viz-mark-selectable" : undefined} tabIndex={selectable ? 0 : undefined} role={selectable ? "button" : undefined} aria-label={selectable ? `Inspect group ${point.label}` : undefined} onClick={() => onSelectMark?.({ dimensionValue: point.label })} onKeyDown={(event) => { if (selectable && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); onSelectMark?.({ dimensionValue: point.label }); } }}>
           <line x1={cx} x2={cx} y1={scaleY(box.whisker_high)} y2={top} />
           <line x1={cx} x2={cx} y1={bottom} y2={scaleY(box.whisker_low)} />
           <rect x={cx - boxWidth / 2} y={top} width={boxWidth} height={Math.max(1, bottom - top)} />
@@ -157,11 +194,21 @@ export function ChartCanvas({ mark, data }: { mark: VizMark; data: readonly Visu
   const scaleY = (v: number) => height - padding - ((v - min) / span) * (height - 2 * padding);
   if (mark === "line") {
     const points = data.map((point, index) => `${padding + (index / Math.max(1, data.length - 1)) * (width - 2 * padding)},${scaleY(point.value)}`).join(" ");
-    return <svg role="img" aria-label={`Line chart across ${data.length} categories`} viewBox={`0 0 ${width} ${height}`} className="viz-svg"><polyline points={points} fill="none" /></svg>;
+    const lineSelectable = Boolean(onSelectMark);
+    return <svg role="img" aria-label={`Line chart across ${data.length} categories`} viewBox={`0 0 ${width} ${height}`} className="viz-svg">
+      <polyline points={points} fill="none" />
+      {lineSelectable ? data.map((point, index) => <circle key={index} className="viz-mark-selectable" tabIndex={0} role="button" aria-label={`Inspect ${point.label}`} cx={padding + (index / Math.max(1, data.length - 1)) * (width - 2 * padding)} cy={scaleY(point.value)} r={4} onClick={() => onSelectMark?.({ dimensionValue: point.label })} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onSelectMark?.({ dimensionValue: point.label }); } }}><title>{`${point.label}: ${point.value}`}</title></circle>) : null}
+    </svg>;
   }
   const barWidth = (width - 2 * padding) / data.length;
   const zeroY = scaleY(0);
   return <svg role="img" aria-label={`Bar chart with ${data.length} categories`} viewBox={`0 0 ${width} ${height}`} className="viz-svg">
-    {data.map((point, index) => { const valueY = scaleY(point.value); const y = Math.min(valueY, zeroY); const barHeight = Math.max(1, Math.abs(valueY - zeroY)); return <g key={index}><rect x={padding + index * barWidth + 2} y={y} width={Math.max(1, barWidth - 4)} height={barHeight} /><title>{`${point.label}: ${point.value}`}</title></g>; })}
+    {data.map((point, index) => { const valueY = scaleY(point.value); const y = Math.min(valueY, zeroY); const barHeight = Math.max(1, Math.abs(valueY - zeroY)); return <g key={index} className={selectable ? "viz-mark-selectable" : undefined} tabIndex={selectable ? 0 : undefined} role={selectable ? "button" : undefined} aria-label={selectable ? `Inspect ${point.label}` : undefined} onClick={() => onSelectMark?.({ dimensionValue: point.label })} onKeyDown={(event) => { if (selectable && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); onSelectMark?.({ dimensionValue: point.label }); } }}><rect x={padding + index * barWidth + 2} y={y} width={Math.max(1, barWidth - 4)} height={barHeight} /><title>{`${point.label}: ${point.value}`}</title></g>; })}
   </svg>;
+}
+
+function DrillDownTable({ rows }: { rows: readonly Record<string, unknown>[] }) {
+  if (!rows.length) return <p className="quiet-note">No rows.</p>;
+  const columns = Object.keys(rows[0] ?? {});
+  return <div className="data-table-wrap" tabIndex={0}><table><thead><tr>{columns.map((key) => <th key={key}>{key}</th>)}</tr></thead><tbody>{rows.map((row, index) => <tr key={index}>{columns.map((key) => <td key={key}>{row[key] === null || row[key] === undefined ? "—" : String(row[key])}</td>)}</tr>)}</tbody></table></div>;
 }
