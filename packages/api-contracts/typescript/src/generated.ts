@@ -2391,6 +2391,24 @@ export type VizIntent = "comparison" | "distribution" | "relationship" | "compos
 
 export type VizMark = "bar" | "line" | "scatter" | "histogram" | "box";
 
+export interface WorkspaceProposalRequest {
+  kind: "clean" | "chart" | "sql";
+  dataset_id: string;
+  intent: string;
+}
+
+export interface WorkspaceProposalResponse {
+  kind: "clean" | "chart" | "sql";
+  provider: "ollama" | "unavailable";
+  explanation: string;
+  evidence?: string[];
+  clean_operation?: CleanTransformationRequest;
+  clean_preview?: CleanPreviewResponse;
+  chart_spec?: VisualizationSpec;
+  chart_preview?: VisualizationDataResponse;
+  sql_draft?: string;
+}
+
 export interface ApiTransport {
   request<TResponse>(request: ApiRequest): Promise<TResponse>;
   subscribe(request: SseRequest): AsyncIterable<SseEvent>;

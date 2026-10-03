@@ -615,3 +615,16 @@ def test_atlas_explains_an_issue_and_proposes_a_previewable_fix_without_applying
     # Atlas never applied anything - the dataset is still at revision 0.
     state = client.get(f"/api/v1/clean/datasets/{dataset_id}/state").json()
     assert state["dataset"]["revision"] == 0
+
+
+def test_missing_value_issue_explanation_includes_a_valid_fill_strategy() -> None:
+    client = TestClient(create_app())
+    dataset_id = client.post("/api/v1/overview/datasets", files={"file": ("numeric-missing.csv", b"id,revenue\n1,10\n2,20\n3,\n4,30\n", "text/csv")}).json()["dataset_id"]
+    issues = client.get(f"/api/v1/clean/datasets/{dataset_id}/state").json()["issues"]
+    issue = next(item for item in issues if item["kind"] == "missing_values")
+    explained = client.post(f"/api/v1/clean/datasets/{dataset_id}/atlas", json={"action": "explain_issue", "issue_id": issue["issue_id"]})
+    assert explained.status_code == 200
+    operation = explained.json()["proposed_operation"]
+    assert operation["fill_strategy"] in {"median", "mode"}
+    preview = client.post(f"/api/v1/clean/datasets/{dataset_id}/preview", json=operation)
+    assert preview.status_code == 200

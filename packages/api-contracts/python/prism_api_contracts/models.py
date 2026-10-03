@@ -808,6 +808,24 @@ class VisualizationSuggestion(ContractModel):
     alternatives: list[VizMark] = Field(default_factory=list)
 
 
+class WorkspaceProposalRequest(ContractModel):
+    kind: Literal["clean", "chart", "sql"]
+    dataset_id: str = Field(min_length=1)
+    intent: str = Field(min_length=3, max_length=500)
+
+
+class WorkspaceProposalResponse(ContractModel):
+    kind: Literal["clean", "chart", "sql"]
+    provider: Literal["ollama", "unavailable"]
+    explanation: str
+    evidence: list[str] = Field(default_factory=list)
+    clean_operation: Optional[CleanTransformationRequest] = None
+    clean_preview: Optional[CleanPreviewResponse] = None
+    chart_spec: Optional[VisualizationSpec] = None
+    chart_preview: Optional[VisualizationDataResponse] = None
+    sql_draft: Optional[str] = None
+
+
 class BoxStats(ContractModel):
     q1: float
     median: float

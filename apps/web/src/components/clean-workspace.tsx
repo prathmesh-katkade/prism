@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import type { AtlasCleanResponse, CleanIssue, CleanOperation, CleanPreviewResponse, CleanRecipe, CleanRecipeDraftPreviewResponse, CleanRecipePreviewResponse, CleanRecipeStep, CleanRowInspection, CleanStateResponse, CleanTransformationRequest, ColumnValueCount, ColumnValueCountsResponse, DatasetRowsResponse, FillStrategy, OverviewProfileResponse, ValidationRule, ValidationRuleKind, ValidationRunResult } from "@prism/api-contracts";
 import { apiUrl } from "../config/api";
 import type { InspectorObjectState } from "../state/shell-model";
+import { WorkspaceProposalPanel } from "./workspace-proposal-panel";
 
 type CleanUiState = "empty" | "loading" | "ready" | "error";
 const ROWS_PER_PAGE = 30;
@@ -518,6 +519,7 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
         {pendingRequest ? <div className="inspector-actions"><button disabled={applying || !preview} onClick={() => void apply()}>{applying ? "Applying…" : "Apply transformation"}</button><button className="secondary" onClick={() => { setPreview(null); setPendingRequest(null); }}>Discard preview</button></div> : <p className="quiet-note">Preview this operation on the left before it can be applied.</p>}
       </> : <p className="quiet-note">Select an issue from the navigator, or start a manual operation, to inspect it and preview a fix.</p>}
       {error ? <p className="query-error" role="alert">{error}</p> : null}
+      <WorkspaceProposalPanel kind="clean" datasetId={datasetId} onReview={(proposal) => { if (proposal.clean_operation) { setManualMode(true); void previewOperation(proposal.clean_operation); } }} />
     </aside>
   </article>;
 }

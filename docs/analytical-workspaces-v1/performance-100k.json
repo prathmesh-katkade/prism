@@ -1,0 +1,64 @@
+{
+  "fixture": "generated deterministic 100,000-row business export; 1,000 exact duplicate rows; 2,000 intended missing revenue cells before duplicate substitution",
+  "fixture_bytes": 2679927,
+  "expected": {
+    "rows": 100000,
+    "exact_duplicate_rows": 1000,
+    "north_rows_renamed": 25000
+  },
+  "actual": {
+    "rows": 100000,
+    "north_rows_renamed": 25000,
+    "sql_group_rows": {
+      "East": 26000,
+      "Northern": 25000,
+      "South": 25000,
+      "West": 24000
+    },
+    "chart_points": [
+      {
+        "label": "Northern",
+        "value": 25000.0,
+        "x": null,
+        "box": null,
+        "bin_start": null,
+        "bin_end": null
+      },
+      {
+        "label": "South",
+        "value": 25000.0,
+        "x": null,
+        "box": null,
+        "bin_start": null,
+        "bin_end": null
+      }
+    ]
+  },
+  "durations_ms": {
+    "fixture_generation_ms": 33.88,
+    "upload_ms": 128.47,
+    "profile_ms": 1672.32,
+    "clean_preview_ms": 6580.79,
+    "clean_apply_ms": 4011.0,
+    "sql_submit_ms": 295.28,
+    "sql_to_terminal_ms": 63.84,
+    "chart_render_ms": 194.77,
+    "chart_save_ms": 192.43,
+    "report_add_chart_ms": 187.17,
+    "report_reopen_ms": 182.68
+  },
+  "environment": {
+    "system": "Windows-10-10.0.26200-SP0",
+    "processor": "AMD64 Family 26 Model 68 Stepping 0, AuthenticAMD",
+    "logical_cpus": 12,
+    "python": "3.11.9",
+    "database": "isolated SQLite file in Temp"
+  },
+  "limits": {
+    "clean_row_inspection_sample": 100,
+    "sql_result_limit": 1000,
+    "scatter_sample_limit": 500,
+    "report_table_snapshot_limit": 100
+  },
+  "measurement_scope": "In-process FastAPI TestClient wall clock; includes local persistence and service work, excludes network/browser rendering. Single observed run, no warmup or threshold."
+}

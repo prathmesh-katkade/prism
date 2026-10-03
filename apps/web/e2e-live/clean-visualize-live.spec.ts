@@ -67,7 +67,7 @@ test("Visualize suggests a deterministic chart, renders it with provenance, and 
   await expect(page.getByLabel("Central tabbed workspace").getByRole("heading", { name: "viz-live.csv" })).toBeVisible({ timeout: 10_000 });
 
   await page.getByRole("button", { name: /Visualize native/i }).click();
-  await expect(page.getByRole("img", { name: /chart with \d+ categor/i })).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole("img", { name: /(chart with \d+ categor|histogram with \d+ bins)/i })).toBeVisible({ timeout: 10_000 });
   await expect(page.getByText(/question →/)).toBeVisible();
 
   // Provenance: source fingerprint and revision are shown.

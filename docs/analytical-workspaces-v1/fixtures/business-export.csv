@@ -1,0 +1,6 @@
+customer_id,segment,revenue,ordered_at
+c1,North,10,2025-01-01
+c1,North,10,2025-01-01
+c2,South,20,2025-01-02
+c3,North,,2025-01-03
+c4,South,30,2025-01-04

@@ -1,0 +1,5 @@
+sample_id,site,observed_at,measurement
+s1,field-a,01/02/2025,1.20
+s2,field-a,13/02/2025,invalid
+s3,field-b,02/01/2025,2.50
+s4,field-b,31/02/2025,3.10

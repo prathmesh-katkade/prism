@@ -747,12 +747,14 @@ def atlas_action(dataset_id: str, request: AtlasCleanRequest) -> AtlasCleanRespo
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="That issue was not found in the current revision.")
         summary = issue.description
         evidence = [AtlasEvidence(label="Affected rows", value=f"{issue.affected_rows:,}"), AtlasEvidence(label="Severity", value=issue.severity)]
-        proposed = CleanTransformationRequest(operation=issue.suggested_operation, column=issue.column) if issue.suggested_operation else None
+        proposed = _issue_proposal(stored.frame, issue)
         return AtlasCleanResponse(action=request.action, summary=summary, uncertainty=uncertainty, evidence=evidence, proposed_operation=proposed)
     if request.action is AtlasCleanAction.PROPOSE_FIX:
         if issue is None or issue.suggested_operation is None:
             return AtlasCleanResponse(action=request.action, summary="No deterministic safe fix is available for this issue; it needs analyst judgment.", uncertainty=uncertainty, evidence=[], proposed_operation=None)
-        proposal = CleanTransformationRequest(operation=issue.suggested_operation, column=issue.column, fill_strategy="median" if issue.suggested_operation is CleanOperation.FILL_MISSING else None)
+        proposal = _issue_proposal(stored.frame, issue)
+        if proposal is None:
+            return AtlasCleanResponse(action=request.action, summary="No deterministic safe fix is available for this issue; it needs analyst judgment.", uncertainty=uncertainty, evidence=[], proposed_operation=None)
         return AtlasCleanResponse(
             action=request.action, summary=f"Proposed: {issue.suggested_operation.value.replace('_', ' ')} on {issue.column or 'the dataset'}. Preview it before applying — Atlas does not clean data without visibility.",
             uncertainty=uncertainty, evidence=[AtlasEvidence(label="Affected rows", value=f"{issue.affected_rows:,}")], proposed_operation=proposal,
@@ -760,3 +762,14 @@ def atlas_action(dataset_id: str, request: AtlasCleanRequest) -> AtlasCleanRespo
     history = _durable_history(dataset_id)
     summary = f"{len(history)} transformation(s) applied so far, from revision 0 to {stored.dataset.revision}." if history else "No transformations have been applied to this dataset yet."
     return AtlasCleanResponse(action=request.action, summary=summary, uncertainty=uncertainty, evidence=[], proposed_operation=None)
+
+
+def _issue_proposal(frame: pd.DataFrame, issue: CleanIssue) -> CleanTransformationRequest | None:
+    if issue.suggested_operation is None:
+        return None
+    if issue.suggested_operation is CleanOperation.FILL_MISSING:
+        if issue.column is None or frame[issue.column].dropna().empty:
+            return None
+        strategy = "median" if pd.api.types.is_numeric_dtype(frame[issue.column]) else "mode"
+        return CleanTransformationRequest(operation=issue.suggested_operation, column=issue.column, fill_strategy=strategy)
+    return CleanTransformationRequest(operation=issue.suggested_operation, column=issue.column)

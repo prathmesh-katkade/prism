@@ -30,3 +30,8 @@ Focused gate: `tests/api/test_reports.py -q` — **10 passed, 1 warning**. The r
 ## Gate note
 
 The first full Python run after enforcing review tickets had **1 failed, 1,295 passed, 7 skipped**: the explicit stored-plan rerun called the now guarded user apply function. That internal rerun was changed to use its own stored-plan commit path. Its focused test passed, and the subsequent full run above passed. The earlier failure remains in the raw log rather than being erased.
+# Current working-tree verification, 2026-10-03
+
+The earlier counts below document prior checkpoints. The current full isolated SQLite run is **1,309 passed, 7 skipped, 43 warnings in 129.67s**. Focused Clean is **35 passed** after fixing the numeric missing-value explanation to include the required fill strategy. Optional local-model proposal cases are **4 passed** (disabled, valid Clean preview, invalid SQL/chart, timeout). Web is **104 passed across 16 files**; lint, typecheck, build, a11y, Ruff, mypy, boundaries, secrets and generated-contract check passed.
+
+Live Chromium connected proof passed with chart/table/note add, reorder and removal through cross-origin PUT/DELETE, stale-source warning and actual chart refresh. The 100k live browser run passed; it observed 100 returned rows from the default `LIMIT 100` SQL query and did not mistake that for a 100k scan. Raw current logs are appended to the Documents upgrade log. The seven skips are four unconfigured MySQL parity cases and three Atlas environment-specific checks. Release scope still remains open as described in the acceptance matrix.

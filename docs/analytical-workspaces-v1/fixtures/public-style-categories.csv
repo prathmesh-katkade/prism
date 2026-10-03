@@ -1,0 +1,7 @@
+district,year,service_type,requests,completed
+Central,2023,Water,120,109
+Central,2024,Water,135,127
+East,2023,Transit,88,72
+East,2024,Transit,101,92
+West,2023,Water,76,70
+West,2024,Transit,94,84

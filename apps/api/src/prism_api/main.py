@@ -48,6 +48,7 @@ from .sql_lab_join_diagnostics import router as sql_lab_join_diagnostics_router
 from .stats import router as stats_router
 from .transport import phase_1_event_stream, sse_response
 from .visualize import router as visualize_router
+from .workspace_proposals import router as workspace_proposals_router
 
 REQUEST_ID = re.compile(r"^[A-Za-z0-9._:-]{8,128}$")
 logger = logging.getLogger("prism_api")
@@ -90,7 +91,7 @@ def create_app() -> FastAPI:
             CORSMiddleware,
             allow_origins=[str(origin) for origin in settings.allowed_origins],
             allow_credentials=False,
-            allow_methods=["GET", "POST", "OPTIONS"],
+            allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
             allow_headers=["Content-Type", "X-Request-ID"],
         )
     app.include_router(overview_router)
@@ -116,6 +117,7 @@ def create_app() -> FastAPI:
     app.include_router(clean_router)
     app.include_router(clean_validation_router)
     app.include_router(visualize_router)
+    app.include_router(workspace_proposals_router)
     app.include_router(stats_router)
     app.include_router(forecasting_router)
     app.include_router(mllab_router)

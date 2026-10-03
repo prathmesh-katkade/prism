@@ -291,6 +291,8 @@ from .models import (
     VizAggregation,
     VizIntent,
     VizMark,
+    WorkspaceProposalRequest,
+    WorkspaceProposalResponse,
 )
 
 __all__ = [
@@ -340,7 +342,7 @@ __all__ = [
     "ValidationRuleKind", "ValidationRuleCreateRequest", "ValidationRule", "ValidationRunResult",
     "AtlasVisualizeAction", "AtlasVisualizeRequest", "AtlasVisualizeResponse", "VisualizationDataResponse",
     "ChartDrillDownRequest", "ChartDrillDownResponse",
-    "VisualizationDatum", "VisualizationSpec", "VisualizationSuggestion", "VizAggregation", "VizIntent", "VizMark", "BoxStats",
+    "VisualizationDatum", "VisualizationSpec", "VisualizationSuggestion", "VizAggregation", "VizIntent", "VizMark", "BoxStats", "WorkspaceProposalRequest", "WorkspaceProposalResponse",
     "ProviderReadiness", "ReadinessResponse",
     "AtlasStatsAction", "AtlasStatsRequest", "AtlasStatsResponse", "StatNormalityCheck",
     "StatSuggestionResponse", "StatTestKind", "StatTestRequest", "StatTestResult",

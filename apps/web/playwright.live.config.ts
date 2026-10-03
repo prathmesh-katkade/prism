@@ -4,6 +4,7 @@ import path from "node:path";
 const python = process.env.PRISM_PYTHON ?? (process.platform === "win32" ? path.resolve(".venv/Scripts/python.exe") : "python");
 const apiDirectory = path.resolve("apps/api/src");
 const externalBaseUrl = process.env.PRISM_LIVE_E2E_BASE_URL;
+const apiPort = Number(process.env.PRISM_LIVE_E2E_API_PORT ?? "8000");
 const localPythonPath = [
   "apps/api/src",
   "packages/api-contracts/python",
@@ -34,11 +35,12 @@ export default defineConfig({
   // isolated servers because it never supplies this opt-in base URL.
   ...(externalBaseUrl ? {} : { webServer: [
     {
-      command: `"${python}" -m uvicorn --app-dir "${apiDirectory}" prism_api.main:app --host 127.0.0.1 --port 8000`,
-      url: "http://127.0.0.1:8000/api/v1/platform/health",
+      command: `"${python}" -m uvicorn --app-dir "${apiDirectory}" prism_api.main:app --host 127.0.0.1 --port ${apiPort}`,
+      url: `http://127.0.0.1:${apiPort}/api/v1/platform/health`,
       reuseExistingServer: false,
       env: {
         PRISM_ALLOWED_ORIGINS: '["http://127.0.0.1:3100"]',
+        PRISM_ANALYTICAL_HISTORY_DATABASE_URL: process.env.PRISM_ANALYTICAL_HISTORY_DATABASE_URL ?? "",
         PYTHONPATH: localPythonPath,
       }
     },
