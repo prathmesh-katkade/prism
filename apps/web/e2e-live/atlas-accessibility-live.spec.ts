@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-const API = "http://127.0.0.1:8000/api/v1";
+const API = `${process.env.NEXT_PUBLIC_PRISM_API_URL ?? "http://127.0.0.1:8000"}/api/v1`;
 
 async function seriousViolations(page: Page, selector: string) {
   await page.addScriptTag({ path: "node_modules/axe-core/axe.min.js" });

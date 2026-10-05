@@ -1,7 +1,9 @@
 import { expect, test } from "@playwright/test";
 
+const API = `${process.env.NEXT_PUBLIC_PRISM_API_URL ?? "http://127.0.0.1:8000"}/api/v1`;
+
 test("SQL Lab completes a real browser to FastAPI analytical flow", async ({ page, request }) => {
-  const upload = await request.post("http://127.0.0.1:8000/api/v1/overview/datasets", {
+  const upload = await request.post(`${API}/overview/datasets`, {
     multipart: {
       file: {
         name: "phase4-live.csv",
@@ -40,12 +42,17 @@ test("SQL Lab completes a real browser to FastAPI analytical flow", async ({ pag
   await page.getByRole("button", { name: "Inspect plan", exact: true }).click();
   await expect(page.getByRole("tab", { name: "plan" })).toHaveAttribute("aria-selected", "true");
   await page.getByRole("tab", { name: "results" }).click();
-  await page.getByRole("button", { name: "Create dataset" }).click();
-  await expect(page.getByRole("heading", { name: /SQL result run_/ })).toBeVisible();
+  const [promotion] = await Promise.all([
+    page.waitForResponse((response) => /\/sql-lab\/runs\/[^/]+\/promote$/.test(response.url()) && response.status() === 201),
+    page.getByRole("button", { name: "Create dataset" }).click(),
+  ]);
+  const promoted = await promotion.json() as { dataset: { dataset_id: string; row_count: number; source_name: string } };
+  expect(promoted.dataset.row_count).toBe(3);
+  expect(promoted.dataset.source_name).toMatch(/SQL result run_/);
 });
 
 test("AI Analyst streams through the live API and returns SQL Lab evidence", async ({ page, request }) => {
-  const upload = await request.post("http://127.0.0.1:8000/api/v1/overview/datasets", {
+  const upload = await request.post(`${API}/overview/datasets`, {
     multipart: {
       file: {
         name: "phase5-live.csv",

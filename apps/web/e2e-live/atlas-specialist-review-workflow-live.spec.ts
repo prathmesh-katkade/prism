@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-const API = "http://127.0.0.1:8000/api/v1";
+const API = `${process.env.NEXT_PUBLIC_PRISM_API_URL ?? "http://127.0.0.1:8000"}/api/v1`;
 const PROOF = "docs/atlas/production-investigation-v1/verification";
 
 test.use({ video: "on" });

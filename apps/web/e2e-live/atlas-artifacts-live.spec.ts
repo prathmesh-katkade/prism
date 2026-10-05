@@ -3,7 +3,7 @@ import path from "node:path";
 import { expect, test } from "@playwright/test";
 
 const output = path.resolve("docs/atlas/investigation-collaboration");
-const API = "http://127.0.0.1:8000/api/v1";
+const API = `${process.env.NEXT_PUBLIC_PRISM_API_URL ?? "http://127.0.0.1:8000"}/api/v1`;
 
 test("capture Atlas investigation proof from isolated real records and labelled samples", async ({ page, request, browser }) => {
   await mkdir(output, { recursive: true });

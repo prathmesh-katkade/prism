@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-const API = "http://127.0.0.1:8000/api/v1";
+const API = `${process.env.NEXT_PUBLIC_PRISM_API_URL ?? "http://127.0.0.1:8000"}/api/v1`;
 const CSV = "segment,revenue\nNorth,10\nSouth,12\nNorth,14\n";
 
 test("Atlas shows a real run, preserves its refusal, and persists a targeted human intervention", async ({ page, request }) => {

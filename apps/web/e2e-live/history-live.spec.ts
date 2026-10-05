@@ -1,7 +1,9 @@
 import { expect, test } from "@playwright/test";
 
+const API = `${process.env.NEXT_PUBLIC_PRISM_API_URL ?? "http://127.0.0.1:8000"}/api/v1`;
+
 test("History workspace shows a real SQL Lab result through the live API and opens its evidence", async ({ page, request }) => {
-  const upload = await request.post("http://127.0.0.1:8000/api/v1/overview/datasets", {
+  const upload = await request.post(`${API}/overview/datasets`, {
     multipart: {
       file: {
         name: "history-live.csv",

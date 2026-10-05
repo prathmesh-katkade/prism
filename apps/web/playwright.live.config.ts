@@ -41,6 +41,10 @@ export default defineConfig({
       env: {
         PRISM_ALLOWED_ORIGINS: '["http://127.0.0.1:3100"]',
         PRISM_ANALYTICAL_HISTORY_DATABASE_URL: process.env.PRISM_ANALYTICAL_HISTORY_DATABASE_URL ?? "",
+        PRISM_AI_PROVIDER: process.env.PRISM_AI_PROVIDER ?? "deterministic",
+        PRISM_OLLAMA_MODEL: process.env.PRISM_OLLAMA_MODEL ?? "llama3.2:3b",
+        PRISM_OLLAMA_BASE_URL: process.env.PRISM_OLLAMA_BASE_URL ?? "http://127.0.0.1:11434",
+        PRISM_OLLAMA_TIMEOUT_SECONDS: process.env.PRISM_OLLAMA_TIMEOUT_SECONDS ?? "10",
         PYTHONPATH: localPythonPath,
       }
     },

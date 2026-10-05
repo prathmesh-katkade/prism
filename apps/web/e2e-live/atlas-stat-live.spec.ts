@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-const API = "http://127.0.0.1:8000/api/v1";
+const API = `${process.env.NEXT_PUBLIC_PRISM_API_URL ?? "http://127.0.0.1:8000"}/api/v1`;
 
 test("missing statistical inputs wait durably and resume with a recorded result", async ({ page, request }) => {
   const upload = await request.post(`${API}/overview/datasets`, { multipart: {

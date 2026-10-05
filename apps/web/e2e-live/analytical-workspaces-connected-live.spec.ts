@@ -45,7 +45,22 @@ test("real Clean to SQL to Visualize to Report flow keeps source versions explic
   await page.getByRole("button", { name: /Dataset/ }).click();
   await expect(page.getByRole("tab", { name: /Affected rows/ })).toBeVisible();
   await capture(page, "clean-review");
-  await page.getByRole("button", { name: "Apply transformation" }).first().click();
+  await page.getByRole("button", { name: "Discard preview" }).click();
+  await page.getByRole("button", { name: "+ New manual operation" }).click();
+  await page.getByLabel("Operation", { exact: true }).selectOption("drop_duplicates");
+  await page.getByRole("button", { name: "Add step to draft" }).click();
+  await expect(page.getByLabel("Recipe draft editor")).toContainText("01");
+  await page.getByRole("button", { name: "Disable step 1" }).click();
+  await expect(page.getByLabel("Recipe draft editor")).toContainText("disabled");
+  await page.getByRole("button", { name: "Enable step 1" }).click();
+  await expect(page.getByLabel("Recipe draft editor")).toContainText("Downstream preview recomputed");
+  await page.getByLabel("Recipe name").fill("Business duplicate review");
+  await page.getByRole("button", { name: "Save as recipe" }).click();
+  const savedRecipe = page.locator(".clean-recipe-list > li").filter({ hasText: "Business duplicate review" });
+  await savedRecipe.getByRole("button", { name: "Preview", exact: true }).click();
+  await expect(savedRecipe).toContainText("Reviewed revision 0");
+  await capture(page, "clean-recipe");
+  await savedRecipe.getByRole("button", { name: "Apply reviewed recipe" }).click();
   await expect(page.getByRole("tabpanel", { name: "Clean" })).toContainText("revision 1");
 
   await page.getByRole("button", { name: /SQL Lab native/i }).click();
@@ -60,6 +75,12 @@ test("real Clean to SQL to Visualize to Report flow keeps source versions explic
   await page.getByRole("button", { name: /Visualize native/i }).click();
   await expect(page.getByRole("img", { name: /(chart with|Histogram with)/ })).toBeVisible();
   await capture(page, "visualize-chart");
+  await page.getByLabel("Chart inspector").getByLabel("Mark").selectOption("bar");
+  await page.getByLabel("Data fields").getByRole("button", { name: /customer_id/ }).click();
+  await page.getByLabel("Chart inspector").getByLabel("Small multiples by").selectOption("segment");
+  await expect(page.getByLabel(/Small multiples by segment/).getByRole("img")).toHaveCount(2);
+  await page.getByLabel(/Small multiples by segment/).getByRole("button", { name: /Inspect c2/ }).click();
+  await expect(page.getByText(/contributing row\(s\)/)).toBeVisible();
   await page.getByRole("button", { name: "Save chart" }).click();
   await expect(page.getByText(/Chart saved with its source revision/)).toBeVisible();
 
@@ -68,15 +89,17 @@ test("real Clean to SQL to Visualize to Report flow keeps source versions explic
   await page.getByRole("button", { name: "Create report" }).click();
   await page.getByLabel("Add saved chart").selectOption({ index: 1 });
   await page.getByRole("button", { name: "Add chart" }).click();
-  await expect(page.getByLabel("Report canvas").getByRole("img", { name: /(chart with|Histogram with)/ })).toBeVisible();
+  await expect(page.getByLabel("Report canvas").getByLabel(/Small multiples by segment/).getByRole("img")).toHaveCount(2);
   await page.getByRole("textbox", { name: "New note" }).fill("North and South revenue after duplicate review.");
   await page.getByRole("button", { name: "Add note" }).click();
   await expect(page.getByText("North and South revenue after duplicate review.")).toBeVisible();
+  await page.getByText(/Table snapshot controls/).click();
   await page.getByRole("textbox", { name: "Table title" }).fill("Reviewed source rows");
   await page.getByRole("checkbox", { name: "segment" }).check();
   await page.getByRole("checkbox", { name: "revenue" }).check();
   await page.getByRole("button", { name: "Add table snapshot" }).click();
   await expect(page.getByRole("heading", { name: "Reviewed source rows" })).toBeVisible();
+  await page.getByText(/Table snapshot controls/).click();
   await page.getByRole("button", { name: "Move item 3 up" }).click();
   await expect(page.getByLabel("Report canvas")).not.toContainText("Report change failed");
   await page.getByRole("textbox", { name: "New note" }).fill("Temporary note to remove.");
@@ -100,5 +123,10 @@ test("real Clean to SQL to Visualize to Report flow keeps source versions explic
   await expect(page.getByText(/Source changed: saved revision/)).toBeVisible();
   await page.getByRole("button", { name: "Refresh from reviewed current source" }).click();
   await expect(page.getByLabel("Report canvas")).toContainText("Source revision 2");
-  await expect(page.getByLabel("Report canvas")).toContainText("Previous version:");
+  await page.getByText("Inspect previous chart version").click();
+  await expect(page.getByLabel("Report canvas")).toContainText("Saved revision 1");
+  await page.getByRole("button", { name: "Refresh table from reviewed current source" }).click();
+  await expect(page.getByLabel("Report canvas")).toContainText("TABLE · REVISION 2");
+  await page.getByText("Inspect previous table versions").click();
+  await expect(page.getByLabel("Report canvas")).toContainText("revision 1 · 4 saved row(s)");
 });
