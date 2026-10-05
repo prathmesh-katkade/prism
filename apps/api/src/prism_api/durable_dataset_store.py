@@ -32,9 +32,12 @@ from sqlalchemy import (
     desc,
     func,
     insert,
+    inspect,
     select,
+    text,
     update,
 )
+from sqlalchemy.dialects.mysql import LONGTEXT
 from sqlalchemy.exc import IntegrityError, OperationalError
 
 from .durable_registry import history_database_url
@@ -48,7 +51,7 @@ _revisions = Table(
     Column("source_name", String(1024), nullable=False),
     Column("row_count", Integer, nullable=False),
     Column("column_count", Integer, nullable=False),
-    Column("frame_json", Text, nullable=False),
+    Column("frame_json", Text().with_variant(LONGTEXT(), "mysql"), nullable=False),
     Column("is_active", Boolean, nullable=False, index=True),
     Column("activated_at", DateTime(timezone=True), nullable=False, index=True),
 )
@@ -74,6 +77,12 @@ class DurableDatasetStore:
         url = database_url or history_database_url()
         self.engine = create_engine(url, future=True, pool_pre_ping=True, connect_args={"check_same_thread": False} if url.startswith("sqlite") else {})
         _metadata.create_all(self.engine)
+        if self.engine.dialect.name == "mysql":
+            columns = inspect(self.engine).get_columns("prism_dataset_revisions")
+            frame_column = next(column for column in columns if column["name"] == "frame_json")
+            if not isinstance(frame_column["type"], LONGTEXT):
+                with self.engine.begin() as connection:
+                    connection.execute(text("ALTER TABLE prism_dataset_revisions MODIFY COLUMN frame_json LONGTEXT NOT NULL"))
         with self.engine.begin() as connection:
             if connection.execute(select(_schema.c.version).limit(1)).scalar_one_or_none() is None:
                 connection.execute(insert(_schema).values(version=1))

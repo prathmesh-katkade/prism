@@ -1,14 +1,4 @@
-"""Durable store for saved charts and reports.
-
-A SavedChart is append-only and immutable once created (captures the spec,
-rationale, and the dataset revision/fingerprint it was saved against — a frozen
-record of "this chart, against this data, as of this point"). A Report references
-charts by id and tracks, per reference, the dataset revision the user last
-explicitly acknowledged ("refreshed") — comparing that against the dataset's
-*current* revision is what drives the needs_refresh flag. Refreshing never rewrites
-a SavedChart or silently changes what a report's saved charts mean; it only updates
-which revision has been acknowledged, and when.
-"""
+"""Durable immutable chart snapshots and versioned report content."""
 
 from __future__ import annotations
 
@@ -64,8 +54,9 @@ _reports = Table(
     Column("name", String(500), nullable=False),
     Column("chart_refs_json", Text, nullable=False),
     Column("notes_json", Text, nullable=False),
-    Column("tables_json", Text, nullable=False, server_default="[]"),
-    Column("item_order_json", Text, nullable=False, server_default="[]"),
+    Column("tables_json", Text, nullable=False),
+    Column("table_history_json", Text, nullable=False),
+    Column("item_order_json", Text, nullable=False),
     Column("created_at", DateTime(timezone=True), nullable=False, index=True),
     Column("updated_at", DateTime(timezone=True), nullable=False),
 )
@@ -83,10 +74,13 @@ class DurableReportStore:
             if "previous_chart_id" not in existing:
                 connection.execute(text("ALTER TABLE prism_saved_charts ADD COLUMN previous_chart_id VARCHAR(255)"))
             report_columns = {column["name"] for column in inspect(self.engine).get_columns("prism_reports")}
-            if "tables_json" not in report_columns:
-                connection.execute(text("ALTER TABLE prism_reports ADD COLUMN tables_json TEXT NOT NULL DEFAULT '[]'"))
-            if "item_order_json" not in report_columns:
-                connection.execute(text("ALTER TABLE prism_reports ADD COLUMN item_order_json TEXT NOT NULL DEFAULT '[]'"))
+            # Add nullable columns then backfill: literal TEXT defaults are not
+            # portable to MySQL. Application writes always supply these fields.
+            # Repeat the backfill on startup to recover an interrupted migration.
+            for column in ("tables_json", "table_history_json", "item_order_json"):
+                if column not in report_columns:
+                    connection.execute(text(f"ALTER TABLE prism_reports ADD COLUMN {column} TEXT"))
+                connection.execute(text(f"UPDATE prism_reports SET {column} = '[]' WHERE {column} IS NULL"))
 
     # -- saved charts ----------------------------------------------------
     def save_chart(self, name: str, dataset_id: str, dataset_revision: int, source_fingerprint: str, spec: VisualizationSpec, rationale: str, result: VisualizationDataResponse, previous_chart_id: str | None = None) -> SavedChart:
@@ -175,6 +169,15 @@ class DurableReportStore:
         report = self.get_report(report_id)
         return self._update_report(report, tables=[table for table in report.tables if table.table_id != table_id], item_order=[item for item in report.item_order if item != table_id])
 
+    def replace_table(self, report_id: str, previous_table_id: str, table: ReportTable) -> Report:
+        report = self.get_report(report_id)
+        previous = next((item for item in report.tables if item.table_id == previous_table_id), None)
+        if previous is None:
+            raise HTTPException(status_code=404, detail="Table is not in this report.")
+        tables = [table if item.table_id == previous_table_id else item for item in report.tables]
+        order = [table.table_id if item == previous_table_id else item for item in report.item_order]
+        return self._update_report(report, tables=tables, table_history=[*report.table_history, previous], item_order=order)
+
     def reorder(self, report_id: str, item_order: list[str]) -> Report:
         report = self.get_report(report_id)
         actual = [ref.chart_id for ref in report.chart_refs] + [note.note_id for note in report.notes] + [table.table_id for table in report.tables]
@@ -197,15 +200,17 @@ class DurableReportStore:
                 chart_refs_json=json.dumps([ref.model_dump(mode="json") for ref in report.chart_refs]),
                 notes_json=json.dumps([note.model_dump(mode="json") for note in report.notes]),
                 tables_json=json.dumps([table.model_dump(mode="json") for table in report.tables]),
+                table_history_json=json.dumps([table.model_dump(mode="json") for table in report.table_history]),
                 item_order_json=json.dumps(report.item_order),
                 created_at=report.created_at, updated_at=report.updated_at,
             ))
 
-    def _update_report(self, report: Report, chart_refs: list[ReportChartRef] | None = None, notes: list[ReportNote] | None = None, tables: list[ReportTable] | None = None, item_order: list[str] | None = None) -> Report:
+    def _update_report(self, report: Report, chart_refs: list[ReportChartRef] | None = None, notes: list[ReportNote] | None = None, tables: list[ReportTable] | None = None, table_history: list[ReportTable] | None = None, item_order: list[str] | None = None) -> Report:
         updated = report.model_copy(update={
             "chart_refs": chart_refs if chart_refs is not None else report.chart_refs,
             "notes": notes if notes is not None else report.notes,
             "tables": tables if tables is not None else report.tables,
+            "table_history": table_history if table_history is not None else report.table_history,
             "item_order": item_order if item_order is not None else report.item_order,
             "updated_at": datetime.now(timezone.utc),
         })
@@ -214,6 +219,7 @@ class DurableReportStore:
                 chart_refs_json=json.dumps([ref.model_dump(mode="json") for ref in updated.chart_refs]),
                 notes_json=json.dumps([note.model_dump(mode="json") for note in updated.notes]),
                 tables_json=json.dumps([table.model_dump(mode="json") for table in updated.tables]),
+                table_history_json=json.dumps([table.model_dump(mode="json") for table in updated.table_history]),
                 item_order_json=json.dumps(updated.item_order),
                 updated_at=updated.updated_at,
             ))
@@ -236,7 +242,8 @@ def _row_to_report(row: object) -> Report:
     chart_refs = [ReportChartRef(**item) for item in json.loads(mapping["chart_refs_json"])]
     notes = [ReportNote(**item) for item in json.loads(mapping["notes_json"])]
     tables = [ReportTable(**item) for item in json.loads(mapping.get("tables_json") or "[]")]
+    table_history = [ReportTable(**item) for item in json.loads(mapping.get("table_history_json") or "[]")]
     order = json.loads(mapping.get("item_order_json") or "[]")
     if not order:
         order = [ref.chart_id for ref in chart_refs] + [note.note_id for note in notes] + [table.table_id for table in tables]
-    return Report(report_id=mapping["report_id"], name=mapping["name"], chart_refs=chart_refs, notes=notes, tables=tables, item_order=order, created_at=mapping["created_at"], updated_at=mapping["updated_at"])
+    return Report(report_id=mapping["report_id"], name=mapping["name"], chart_refs=chart_refs, notes=notes, tables=tables, table_history=table_history, item_order=order, created_at=mapping["created_at"], updated_at=mapping["updated_at"])
