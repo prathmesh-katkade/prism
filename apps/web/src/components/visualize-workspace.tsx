@@ -50,7 +50,7 @@ export function VisualizeWorkspace({ datasetId, onSelectContext, onOpenWorkflow 
       const response = await fetch(apiUrl(`/api/v1/visualize/datasets/${id}/render`), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(nextSpec) });
       if (!response.ok) throw new Error((await response.json() as { detail?: string }).detail ?? "This chart could not be rendered.");
       const body = await response.json() as VisualizationDataResponse;
-      setData(body);
+      setData(body); setError(null);
       const analyticalObjectId = await newestAnalyticalObjectId(id, "visualization");
       onSelectContext({ objectId: `chart:${nextSpec.dimension ?? "distribution"}:${nextSpec.measure ?? ""}`, label: `${nextSpec.mark} chart`, type: "finding", state: "ready", actions: [{ id: "atlas-explain-chart", label: "Ask Atlas to explain this chart" }], metadata: [`${body.data.length} points shown`, body.truncated ? "truncated" : "complete"], ...(analyticalObjectId ? { analyticalObjectId } : {}) });
     } catch (reason) { setError(reason instanceof Error ? reason.message : "This chart could not be rendered."); }
@@ -59,14 +59,16 @@ export function VisualizeWorkspace({ datasetId, onSelectContext, onOpenWorkflow 
   useEffect(() => { if (datasetId && spec) void render(datasetId, spec); }, [datasetId, spec, render]);
 
   function updateSpec(patch: Partial<VisualizationSpec>) { if (spec) setSpec({ ...spec, ...patch }); setDrilldown(null); }
+  function updateFacet(value: string) { if (!spec) return; const next = { ...spec }; if (value) next.facet = value; else delete next.facet; setSpec(next); setDrilldown(null); }
+  function updateMark(mark: VizMark) { if (!spec) return; const next = { ...spec, mark, aggregation: (mark === "bar" || mark === "line") && spec.aggregation === "none" ? (spec.measure ? "sum" : "count") : spec.aggregation }; if (mark !== "bar" && mark !== "line") delete next.facet; setSpec(next); setDrilldown(null); }
 
-  async function selectMark(params: { dimensionValue?: string; xValue?: number; yValue?: number; binStart?: number; binEnd?: number }) {
+  async function selectMark(params: { dimensionValue?: string; xValue?: number; yValue?: number; binStart?: number; binEnd?: number; facetValue?: string }) {
     if (!datasetId || !spec) return;
     setDrilldownLoading(true); setDrilldownError(null); setDrilldown(null);
     try {
       const response = await fetch(apiUrl(`/api/v1/visualize/datasets/${datasetId}/drilldown`), {
         method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ spec, offset: 0, limit: 50, ...(params.dimensionValue !== undefined ? { dimension_value: params.dimensionValue } : {}), ...(params.xValue !== undefined ? { x_value: params.xValue, y_value: params.yValue } : {}), ...(params.binStart !== undefined ? { bin_start: params.binStart, bin_end: params.binEnd } : {}) }),
+        body: JSON.stringify({ spec: params.facetValue && spec.facet ? { ...spec, filters: { ...spec.filters, [spec.facet]: params.facetValue } } : spec, offset: 0, limit: 50, ...(params.dimensionValue !== undefined ? { dimension_value: params.dimensionValue } : {}), ...(params.xValue !== undefined ? { x_value: params.xValue, y_value: params.yValue } : {}), ...(params.binStart !== undefined ? { bin_start: params.binStart, bin_end: params.binEnd } : {}) }),
       });
       if (!response.ok) throw new Error((await response.json() as { detail?: string }).detail ?? "Could not resolve this mark's contributing rows.");
       const body = await response.json() as ChartDrillDownResponse;
@@ -138,7 +140,7 @@ export function VisualizeWorkspace({ datasetId, onSelectContext, onOpenWorkflow 
     </nav>
     <section className="viz-canvas" aria-label="Visual canvas" tabIndex={0}>
       <header><span className="eyebrow">{rationale}</span><h1>{spec.mark === "histogram" ? `Distribution of ${spec.measure ?? spec.dimension}` : spec.measure && spec.dimension ? `${spec.measure} by ${spec.dimension}` : spec.dimension ?? spec.measure}</h1></header>
-      {data ? <><ChartCanvas mark={spec.mark} data={data.data} onSelectMark={selectMark} referenceLine={spec.reference_line} /><div className="viz-axis-labels"><span>{spec.x_label || spec.dimension || spec.measure || "X"}</span><span>{spec.y_label || (spec.aggregation === "count" || spec.mark === "histogram" ? "Count" : `${spec.aggregation} ${spec.measure ?? "value"}`)}{spec.unit ? ` (${spec.unit})` : ""}</span></div>{spec.annotation ? <p className="quiet-note">Annotation: {spec.annotation}</p> : null}</> : <p className="quiet-note">Rendering…</p>}
+      {data ? <>{data.facets?.length ? <FacetCharts result={data} onSelectMark={selectMark} /> : <ChartCanvas mark={spec.mark} data={data.data} onSelectMark={selectMark} referenceLine={spec.reference_line} />}<div className="viz-axis-labels"><span>{spec.x_label || spec.dimension || spec.measure || "X"}</span><span>{spec.y_label || (spec.aggregation === "count" || spec.mark === "histogram" ? "Count" : `${spec.aggregation} ${spec.measure ?? "value"}`)}{spec.unit ? ` (${spec.unit})` : ""}</span></div>{spec.annotation ? <p className="quiet-note">Annotation: {spec.annotation}</p> : null}</> : <p className="quiet-note">Rendering…</p>}
       {(data?.warnings ?? []).length ? <ul className="clean-warnings">{(data?.warnings ?? []).map((warning) => <li key={warning}>{warning}</li>)}</ul> : null}
       {drilldownLoading ? <p className="quiet-note">Resolving contributing rows…</p> : null}
       {drilldownError ? <p className="query-error" role="alert">{drilldownError}</p> : null}
@@ -151,7 +153,8 @@ export function VisualizeWorkspace({ datasetId, onSelectContext, onOpenWorkflow 
     </section>
     <aside className="inspector viz-inspector" aria-label="Chart inspector">
       <div className="inspector-heading"><span className="eyebrow">ENCODING</span></div>
-      <label>Mark<select value={spec.mark} onChange={(event) => updateSpec({ mark: event.target.value as VizMark })}>{MARKS.map((mark) => <option key={mark} value={mark}>{mark}</option>)}</select></label>
+      <label>Mark<select value={spec.mark} onChange={(event) => updateMark(event.target.value as VizMark)}>{MARKS.map((mark) => <option key={mark} value={mark}>{mark}</option>)}</select></label>
+      {spec.mark === "bar" || spec.mark === "line" ? <label>Small multiples by<select value={spec.facet ?? ""} onChange={(event) => updateFacet(event.target.value)}><option value="">No split</option>{profile.columns.filter((column) => (column.semantic_type === "categorical" || (column.semantic_type === "text" && column.unique_count <= 20)) && column.name !== spec.dimension).map((column) => <option key={column.name} value={column.name}>{column.name}</option>)}</select></label> : null}
       <label>Aggregation<select value={spec.aggregation} onChange={(event) => updateSpec({ aggregation: event.target.value as VisualizationSpec["aggregation"] })}><option value="count">count</option><option value="sum">sum</option><option value="mean">mean</option><option value="median">median</option><option value="none">none</option></select></label>
       {spec.mark === "histogram" ? <label>Histogram bins<input type="number" min={2} max={100} value={spec.histogram_bins ?? 10} onChange={(event) => updateSpec({ histogram_bins: Number(event.target.value) })} /></label> : null}
       <label>X axis label<input value={spec.x_label ?? ""} onChange={(event) => updateSpec({ x_label: event.target.value })} /></label>
@@ -170,9 +173,18 @@ export function VisualizeWorkspace({ datasetId, onSelectContext, onOpenWorkflow 
   </article>;
 }
 
-type MarkSelection = { dimensionValue?: string; xValue?: number; yValue?: number; binStart?: number; binEnd?: number };
+type MarkSelection = { dimensionValue?: string; xValue?: number; yValue?: number; binStart?: number; binEnd?: number; facetValue?: string };
 
-export function ChartCanvas({ mark, data, onSelectMark, referenceLine }: { mark: VizMark; data: readonly VisualizationDatum[]; onSelectMark?(selection: MarkSelection): void; referenceLine?: number | null | undefined }) {
+export function FacetCharts({ result, onSelectMark }: { result: VisualizationDataResponse; onSelectMark?(selection: MarkSelection): void }) {
+  const values = (result.facets ?? []).flatMap((facet) => facet.data.map((point) => point.value));
+  const min = Math.min(0, ...values, result.spec.reference_line ?? 0);
+  const max = Math.max(0, ...values, result.spec.reference_line ?? 0);
+  return <div className="viz-facet-grid" aria-label={`Small multiples by ${result.spec.facet}; shared scale ${min} to ${max}`}>
+    {(result.facets ?? []).map((facet) => <section key={facet.value}><h3>{result.spec.facet} = {facet.value}</h3><ChartCanvas mark={result.spec.mark} data={facet.data} referenceLine={result.spec.reference_line} scaleRange={[min, max]} onSelectMark={onSelectMark ? (selection) => onSelectMark({ ...selection, facetValue: facet.value }) : undefined} /></section>)}
+  </div>;
+}
+
+export function ChartCanvas({ mark, data, onSelectMark, referenceLine, scaleRange }: { mark: VizMark; data: readonly VisualizationDatum[]; onSelectMark?: ((selection: MarkSelection) => void) | undefined; referenceLine?: number | null | undefined; scaleRange?: readonly [number, number] }) {
   if (!data.length) return <p className="quiet-note">No data to chart.</p>;
   const width = 640, height = 280, padding = 32;
   const selectable = Boolean(onSelectMark);
@@ -219,7 +231,7 @@ export function ChartCanvas({ mark, data, onSelectMark, referenceLine }: { mark:
   // non-zero span via the `|| 1` fallback, and a negative value draws below the
   // zero baseline instead of producing an invalid negative-height rect.
   const values = data.map((d) => d.value);
-  const min = Math.min(0, ...values, ...(referenceLine === null || referenceLine === undefined ? [] : [referenceLine])), max = Math.max(0, ...values, ...(referenceLine === null || referenceLine === undefined ? [] : [referenceLine]));
+  const min = scaleRange?.[0] ?? Math.min(0, ...values, ...(referenceLine === null || referenceLine === undefined ? [] : [referenceLine])), max = scaleRange?.[1] ?? Math.max(0, ...values, ...(referenceLine === null || referenceLine === undefined ? [] : [referenceLine]));
   const span = max - min || 1;
   const scaleY = (v: number) => height - padding - ((v - min) / span) * (height - 2 * padding);
   if (mark === "line") {

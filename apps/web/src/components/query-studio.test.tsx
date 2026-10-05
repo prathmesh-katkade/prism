@@ -12,6 +12,30 @@ const provenance = { connection_id: connection.connection_id, source_fingerprint
 afterEach(() => vi.restoreAllMocks());
 
 describe("Query Studio", () => {
+  it("resolves an explicit handoff source even when discovery lists a different latest dataset", async () => {
+    const requested = { ...connection, connection_id: "local:ds_requested" };
+    vi.stubGlobal("fetch", vi.fn(async (input: string | URL) => {
+      const path = String(input);
+      const body = path.endsWith("/connections") ? [connection]
+        : path.includes("/schema") ? { ...schema, connection: requested } : [];
+      return new Response(JSON.stringify(body), { status: 200 });
+    }));
+    render(<QueryStudio onSelectContext={vi.fn()} initialConnectionId={requested.connection_id} />);
+    await waitFor(() => expect(screen.getByRole("combobox", { name: "Source" })).toHaveValue(requested.connection_id));
+  });
+
+  it("fails closed when the requested handoff source cannot be resolved", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: string | URL) => {
+      const path = String(input);
+      return path.includes("/schema")
+        ? new Response(JSON.stringify({ detail: "Requested dataset is unavailable" }), { status: 404 })
+        : new Response(JSON.stringify(path.endsWith("/connections") ? [connection] : []), { status: 200 });
+    }));
+    render(<QueryStudio onSelectContext={vi.fn()} initialConnectionId="local:missing" />);
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Query Studio could not establish its source." })).toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: /Run query/ })).not.toBeInTheDocument();
+  });
+
   it("loads schema metadata and runs a keyboard-first query into the result grid", async () => {
     const fetchMock = vi.fn(async (input: string | URL) => {
       const path = String(input);

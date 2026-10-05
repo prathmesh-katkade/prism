@@ -379,6 +379,13 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
 
   return <article className="clean-workspace three-pane">
     <nav className="clean-issues" aria-label="Data quality issue navigator and manual operation editor" tabIndex={0}>
+      {recipePreview ? <section className="clean-recipe-draft" aria-label="Reviewed recipe steps">
+        <span className="eyebrow">RECIPE · PREVIEW</span>
+        <ol>{recipes.find((recipe) => recipe.recipe_id === recipePreview.recipe_id)?.steps.map((step, index) => <li key={step.step_id}>
+          <span className="clean-step-number">{String(index + 1).padStart(2, "0")}</span>
+          <div><strong>{step.request.operation.replaceAll("_", " ")}</strong><small>{step.enabled ? "reviewed" : "disabled"} · {recipePreview.step_impacts[index] ?? 0} affected</small></div>
+        </li>)}</ol>
+      </section> : null}
       <div className="section-title"><div><span className="eyebrow">ISSUES</span><h2>{clean.issues.length ? `${clean.issues.length} found` : "No issues detected"}</h2></div><span className={`health-pill ${clean.health.total >= 80 ? "good" : clean.health.total >= 60 ? "warn" : "risk"}`}>{clean.health.total}/100</span></div>
       <div className="finding-list">{clean.issues.map((issue) => <button key={issue.issue_id} className={!manualMode && issue.issue_id === selectedIssue?.issue_id ? "is-selected" : ""} onClick={() => void selectIssue(issue)}><span className={`finding-dot ${issue.severity === "high" ? "issue" : issue.severity === "medium" ? "warning" : "good"}`} /><strong>{issue.column ?? "Dataset"}</strong><small>{issue.description}</small></button>)}</div>
 
@@ -509,7 +516,10 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
       </>}
     </section>
     <aside className="inspector clean-inspector" aria-label="Selected issue and transformation inspector">
-      {selectedIssue ? <>
+      {recipePreview ? <>
+        <div className="inspector-heading"><div><span className="eyebrow">REVIEWED RECIPE</span><h2>Ready for your decision</h2></div></div>
+        <p>Version {recipePreview.recipe_version} was reviewed against source revision {recipePreview.source_revision}. Apply the reviewed recipe in the recipe list, or discard its preview there. No data has changed.</p>
+      </> : selectedIssue ? <>
         <div className="inspector-heading"><div><span className="eyebrow">SELECTED ISSUE</span><h2>{selectedIssue.column ?? "Dataset"}</h2></div></div>
         <p>{selectedIssue.description}</p>
         {atlas ? <aside className="atlas-result" aria-live="polite"><span className="eyebrow">ATLAS · {atlas.action.replaceAll("_", " ")}</span><strong>{atlas.summary}</strong><small>{atlas.uncertainty}</small></aside> : null}
