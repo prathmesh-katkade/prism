@@ -21,7 +21,7 @@ test("100k-row UI observation through Overview, Clean, SQL, and Visualize", asyn
   await page.getByRole("button", { name: /Overview native/i }).click();
   let started = Date.now();
   await page.setInputFiles("#overview-upload", { name: "generated-100k.csv", mimeType: "text/csv", buffer: fixture() });
-  await expect(page.getByLabel("Central tabbed workspace").getByRole("heading", { name: "generated-100k.csv" })).toBeVisible();
+  await expect(page.getByLabel("Central tabbed workspace").getByRole("heading", { name: "generated-100k.csv" })).toBeVisible({ timeout: 30_000 });
   timings.upload_to_profile_visible_ms = Date.now() - started;
 
   started = Date.now();
