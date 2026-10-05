@@ -197,3 +197,27 @@ def test_histogram_bin_bounds_resolve_to_same_contributing_row_count() -> None:
         inspected = client.post(f"/api/v1/visualize/datasets/{dataset_id}/drilldown", json={"spec": spec, "bin_start": bin_data["bin_start"], "bin_end": bin_data["bin_end"]})
         assert inspected.status_code == 200
         assert inspected.json()["total_matching_rows"] == bin_data["value"]
+
+
+def test_small_multiples_share_a_saved_spec_and_mark_rows_respect_panel_filter() -> None:
+    client = TestClient(create_app())
+    csv = b"region,product,revenue\nNorth,A,10\nNorth,B,20\nSouth,A,30\nSouth,B,40\n"
+    dataset_id = client.post("/api/v1/overview/datasets", files={"file": ("facets.csv", csv, "text/csv")}).json()["dataset_id"]
+    spec = {"mark": "bar", "intent": "comparison", "dimension": "product", "measure": "revenue",
+            "aggregation": "sum", "facet": "region"}
+    rendered = client.post(f"/api/v1/visualize/datasets/{dataset_id}/render", json=spec)
+    assert rendered.status_code == 200
+    facets = rendered.json()["facets"]
+    assert [(facet["value"], {point["label"]: point["value"] for point in facet["data"]}) for facet in facets] == [
+        ("North", {"B": 20.0, "A": 10.0}), ("South", {"B": 40.0, "A": 30.0}),
+    ]
+    inspected = client.post(f"/api/v1/visualize/datasets/{dataset_id}/drilldown", json={
+        "spec": {**spec, "filters": {"region": "South"}}, "dimension_value": "A",
+    })
+    assert inspected.json()["total_matching_rows"] == 1
+    assert inspected.json()["rows"][0]["revenue"] == 30
+    saved = client.post("/api/v1/reports/charts", json={"name": "Products by region", "dataset_id": dataset_id, "spec": spec})
+    assert saved.status_code == 201
+    assert saved.json()["result"]["facets"] == facets
+    unsupported = client.post(f"/api/v1/visualize/datasets/{dataset_id}/render", json={**spec, "mark": "scatter"})
+    assert unsupported.status_code == 422

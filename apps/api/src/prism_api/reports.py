@@ -24,6 +24,7 @@ from prism_api_contracts import (
     ReportReorderRequest,
     ReportTable,
     ReportTableFreshnessStatus,
+    ReportTableRefreshRequest,
     SavedChart,
     SavedChartCreateRequest,
     VisualizationDataResponse,
@@ -32,7 +33,7 @@ from prism_api_contracts import (
 from .clean import _json_value
 from .durable_report_store import DurableReportStore
 from .overview import store as overview_store
-from .visualize import _aggregate, _provenance
+from .visualize import _aggregate, _facets, _provenance
 
 router = APIRouter(prefix="/api/v1/reports", tags=["reports"])
 
@@ -46,8 +47,10 @@ def save_chart(request: SavedChartCreateRequest) -> SavedChart:
             (request.source_fingerprint is not None and request.source_fingerprint != stored.source_fingerprint)):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Chart source changed since it was rendered; render again before saving.")
     data, truncated, warnings = _aggregate(stored.frame, request.spec)
+    facets, facet_warnings = _facets(stored.frame, request.spec)
+    warnings.extend(facet_warnings)
     result = VisualizationDataResponse(spec=request.spec, data=data, truncated=truncated,
-                                       warnings=warnings, provenance=_provenance(stored))
+                                       warnings=warnings, provenance=_provenance(stored), facets=facets)
     return store.save_chart(
         name=request.name, dataset_id=request.dataset_id, dataset_revision=stored.dataset.revision,
         source_fingerprint=stored.source_fingerprint, spec=request.spec, rationale=request.rationale, result=result,
@@ -161,7 +164,8 @@ def add_table_to_report(report_id: str, request: ReportAddTableRequest) -> Repor
     table = ReportTable(table_id=f"table_{uuid.uuid4().hex}", title=request.title,
                         dataset_id=request.dataset_id, dataset_revision=source.dataset.revision,
                         source_fingerprint=source.source_fingerprint, columns=request.columns,
-                        rows=rows, source_row_count=len(source.frame), created_at=datetime.now(timezone.utc))
+                        rows=rows, source_row_count=len(source.frame), row_limit=request.limit,
+                        created_at=datetime.now(timezone.utc))
     report = store.add_table(report_id, table)
     return _detail(report)
 
@@ -170,6 +174,33 @@ def add_table_to_report(report_id: str, request: ReportAddTableRequest) -> Repor
 def remove_table_from_report(report_id: str, table_id: str) -> ReportDetail:
     report = store.remove_table(report_id, table_id)
     return _detail(report)
+
+
+@router.post("/{report_id}/tables/{table_id}/refresh", response_model=ReportDetail)
+def refresh_table(report_id: str, table_id: str, request: ReportTableRefreshRequest) -> ReportDetail:
+    """Publish a new bounded table snapshot only for the reviewed current source."""
+    report = store.get_report(report_id)
+    previous = next((table for table in report.tables if table.table_id == table_id), None)
+    if previous is None:
+        raise HTTPException(status_code=404, detail="Table is not in this report.")
+    try:
+        source = overview_store.get(previous.dataset_id)
+    except HTTPException as error:
+        raise HTTPException(status_code=409, detail="Table source is unavailable; refresh was not performed.") from error
+    if source.dataset.revision != request.source_revision or source.source_fingerprint != request.source_fingerprint:
+        raise HTTPException(status_code=409, detail="Table source changed since review; reload its current revision and fingerprint.")
+    missing = [column for column in previous.columns if column not in source.frame.columns]
+    if missing:
+        raise HTTPException(status_code=422, detail=f"Table columns are absent from the current source: {', '.join(missing)}.")
+    rows = [{str(key): _json_value(value) for key, value in row.items()}
+            for row in source.frame[previous.columns].head(previous.row_limit).to_dict(orient="records")]
+    replacement = ReportTable(
+        table_id=f"table_{uuid.uuid4().hex}", title=previous.title, dataset_id=previous.dataset_id,
+        dataset_revision=source.dataset.revision, source_fingerprint=source.source_fingerprint,
+        columns=previous.columns, rows=rows, source_row_count=len(source.frame), row_limit=previous.row_limit,
+        created_at=datetime.now(timezone.utc), previous_table_id=previous.table_id,
+    )
+    return _detail(store.replace_table(report_id, table_id, replacement))
 
 
 @router.put("/{report_id}/order", response_model=ReportDetail)
@@ -202,8 +233,10 @@ def refresh_report(report_id: str, request: ReportRefreshRequest) -> ReportDetai
                 request.source_fingerprints.get(ref.chart_id) != current.source_fingerprint):
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Source for chart {ref.chart_id} changed since review; reload and select its current revision and fingerprint.")
         data, truncated, warnings = _aggregate(current.frame, chart.spec)
+        facets, facet_warnings = _facets(current.frame, chart.spec)
+        warnings.extend(facet_warnings)
         result = VisualizationDataResponse(spec=chart.spec, data=data, truncated=truncated,
-                                           warnings=warnings, provenance=_provenance(current))
+                                           warnings=warnings, provenance=_provenance(current), facets=facets)
         prepared.append((chart, current, result))
     for chart, current, result in prepared:
         new_chart = store.save_chart(name=chart.name, dataset_id=chart.dataset_id,

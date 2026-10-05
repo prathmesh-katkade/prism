@@ -1993,6 +1993,7 @@ export interface Report {
   chart_refs?: ReportChartRef[];
   notes?: ReportNote[];
   tables?: ReportTable[];
+  table_history?: ReportTable[];
   item_order?: string[];
   created_at: string;
   updated_at: string;
@@ -2041,6 +2042,7 @@ export interface ReportNote {
 
 export interface ReportRefreshRequest {
   chart_ids?: string[];
+  table_ids?: string[];
   source_revisions?: Record<string, number>;
   source_fingerprints?: Record<string, string>;
 }
@@ -2058,7 +2060,9 @@ export interface ReportTable {
   columns: string[];
   rows: Record<string, unknown>[];
   source_row_count: number;
+  row_limit?: number;
   created_at: string;
+  previous_table_id?: string;
 }
 
 export interface ReportTableFreshnessStatus {
@@ -2067,6 +2071,11 @@ export interface ReportTableFreshnessStatus {
   current_fingerprint?: string;
   needs_refresh: boolean;
   dataset_unavailable?: boolean;
+}
+
+export interface ReportTableRefreshRequest {
+  source_revision: number;
+  source_fingerprint: string;
 }
 
 export type ReproductionMode = "same_revision" | "current_revision";
@@ -2352,6 +2361,7 @@ export interface VisualizationDataResponse {
   truncated: boolean;
   warnings?: string[];
   provenance: OverviewProvenance;
+  facets?: VisualizationFacet[];
 }
 
 export interface VisualizationDatum {
@@ -2361,6 +2371,11 @@ export interface VisualizationDatum {
   box?: BoxStats;
   bin_start?: number;
   bin_end?: number;
+}
+
+export interface VisualizationFacet {
+  value: string;
+  data: VisualizationDatum[];
 }
 
 export interface VisualizationSpec {
@@ -2377,6 +2392,7 @@ export interface VisualizationSpec {
   unit?: string;
   reference_line?: number;
   annotation?: string;
+  facet?: string;
 }
 
 export interface VisualizationSuggestion {

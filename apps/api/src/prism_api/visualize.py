@@ -27,6 +27,7 @@ from prism_api_contracts import (
     OverviewProvenance,
     VisualizationDataResponse,
     VisualizationDatum,
+    VisualizationFacet,
     VisualizationSpec,
     VisualizationSuggestion,
     VizAggregation,
@@ -171,6 +172,8 @@ def _aggregate(frame: pd.DataFrame, spec: VisualizationSpec) -> tuple[list[Visua
             boxes = boxes[: spec.max_categories]
         return [VisualizationDatum(label=label, value=median, box=box) for label, median, box in boxes], truncated, warnings
     grouped = frame.groupby(dimension, dropna=True)
+    if spec.aggregation is VizAggregation.NONE and spec.measure is not None:
+        raise HTTPException(status_code=422, detail="Grouped bar and line charts need count, sum, mean, or median aggregation.")
     if spec.aggregation is VizAggregation.COUNT or spec.measure is None:
         series = grouped.size()
     else:
@@ -197,13 +200,35 @@ def _aggregate(frame: pd.DataFrame, spec: VisualizationSpec) -> tuple[list[Visua
     return [VisualizationDatum(label=str(index), value=float(value)) for index, value in series.items()], truncated, warnings
 
 
+def _facets(frame: pd.DataFrame, spec: VisualizationSpec) -> tuple[list[VisualizationFacet], list[str]]:
+    if not spec.facet:
+        return [], []
+    if spec.mark not in {VizMark.BAR, VizMark.LINE}:
+        raise HTTPException(status_code=422, detail="Shared-scale small multiples currently support bar and line charts.")
+    column = _require_column(frame, spec.facet, "facet")
+    filtered = _filtered_frame(frame, spec)
+    values = sorted(str(value) for value in filtered[column].dropna().unique())
+    if not values:
+        raise HTTPException(status_code=422, detail=f"Facet {column!r} has no non-missing values after filtering.")
+    warnings = [f"Showing the first 6 of {len(values)} {column!r} panels; filter the source to inspect the others."] if len(values) > 6 else []
+    facets: list[VisualizationFacet] = []
+    for value in values[:6]:
+        panel_spec = spec.model_copy(update={"facet": None, "filters": {**spec.filters, column: value}})
+        data, _, panel_warnings = _aggregate(frame, panel_spec)
+        warnings.extend(f"{column}={value}: {warning}" for warning in panel_warnings)
+        facets.append(VisualizationFacet(value=value, data=data))
+    return facets, warnings
+
+
 @router.post("/datasets/{dataset_id}/render", response_model=VisualizationDataResponse)
 def render(dataset_id: str, spec: VisualizationSpec) -> VisualizationDataResponse:
     stored = overview_store.get(dataset_id)
     data, truncated, warnings = _aggregate(stored.frame, spec)
+    facets, facet_warnings = _facets(stored.frame, spec)
+    warnings.extend(facet_warnings)
     provenance = _provenance(stored)
     register_visualization(stored, spec, truncated, warnings)
-    return VisualizationDataResponse(spec=spec, data=data, truncated=truncated, warnings=warnings, provenance=provenance)
+    return VisualizationDataResponse(spec=spec, data=data, truncated=truncated, warnings=warnings, provenance=provenance, facets=facets)
 
 
 DRILL_DOWN_SAMPLE_LIMIT = 500

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import patch
 
 from fastapi import HTTPException
@@ -8,6 +9,26 @@ from reviewing_client import ReviewingTestClient as TestClient
 
 CSV = b"segment,revenue\na,10\nb,20\nc,30\n"
 SPEC = {"mark": "bar", "intent": "comparison", "dimension": "segment", "measure": "revenue", "aggregation": "sum", "filters": {}, "max_categories": 20}
+
+
+def test_legacy_report_columns_are_backfilled_without_losing_saved_content(tmp_path: Path) -> None:
+    from prism_api.durable_report_store import DurableReportStore
+    from sqlalchemy import create_engine, text
+
+    url = f"sqlite:///{tmp_path / 'legacy-reports.sqlite'}"
+    engine = create_engine(url)
+    with engine.begin() as connection:
+        connection.execute(text("CREATE TABLE prism_reports (report_id VARCHAR(255) PRIMARY KEY, name VARCHAR(500) NOT NULL, chart_refs_json TEXT NOT NULL, notes_json TEXT NOT NULL, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL)"))
+        connection.execute(text("INSERT INTO prism_reports VALUES ('legacy', 'Preserved report', '[]', '[]', '2026-01-01 00:00:00', '2026-01-01 00:00:00')"))
+    engine.dispose()
+    first = DurableReportStore(url)
+    report = first.get_report("legacy")
+    assert report.name == "Preserved report"
+    assert report.tables == report.table_history == report.item_order == []
+    first.engine.dispose()
+    reopened = DurableReportStore(url)
+    assert reopened.get_report("legacy") == report
+    reopened.engine.dispose()
 
 
 def _dataset(client: TestClient) -> str:
@@ -80,6 +101,41 @@ def test_report_tables_are_source_bound_durable_and_ordered_with_notes() -> None
     restored = DurableReportStore(history_database_url()).get_report(report_id)
     assert restored.tables[0].rows == table["rows"]
     assert restored.item_order == [note["note_id"], table["table_id"]]
+
+
+def test_table_refresh_recomputes_reviewed_source_and_keeps_previous_version() -> None:
+    from prism_api.durable_registry import history_database_url
+    from prism_api.durable_report_store import DurableReportStore
+
+    client = TestClient(create_app())
+    dataset_id = _dataset(client)
+    profile = client.get(f"/api/v1/overview/datasets/{dataset_id}/profile").json()["dataset"]
+    report_id = client.post("/api/v1/reports", json={"name": "Versioned rows"}).json()["report_id"]
+    created = client.post(f"/api/v1/reports/{report_id}/tables", json={
+        "title": "Source rows", "dataset_id": dataset_id, "source_revision": profile["revision"],
+        "source_fingerprint": profile["source_fingerprint"], "columns": ["segment", "revenue"], "limit": 2,
+    }).json()["report"]["tables"][0]
+    applied = client.post(f"/api/v1/clean/datasets/{dataset_id}/apply", json={
+        "operation": "category_mapping", "column": "segment", "category_mapping": {"a": "renamed"},
+    })
+    assert applied.status_code == 201
+    freshness = client.get(f"/api/v1/reports/{report_id}").json()["table_freshness"][0]
+    assert freshness["needs_refresh"] is True
+    endpoint = f"/api/v1/reports/{report_id}/tables/{created['table_id']}/refresh"
+    assert client.post(endpoint, json={"source_revision": 0, "source_fingerprint": profile["source_fingerprint"]}).status_code == 409
+    assert client.get(f"/api/v1/reports/{report_id}").json()["report"]["tables"][0] == created
+    refreshed = client.post(endpoint, json={
+        "source_revision": freshness["current_revision"], "source_fingerprint": freshness["current_fingerprint"],
+    })
+    assert refreshed.status_code == 200
+    report = refreshed.json()["report"]
+    replacement = report["tables"][0]
+    assert replacement["previous_table_id"] == created["table_id"]
+    assert replacement["rows"][0]["segment"] == "renamed"
+    assert replacement["row_limit"] == 2
+    assert report["table_history"] == [created]
+    assert report["item_order"] == [replacement["table_id"]]
+    assert DurableReportStore(history_database_url()).get_report(report_id).table_history[0].rows == created["rows"]
 
 
 def test_report_flags_needs_refresh_after_the_source_dataset_changes_and_clears_on_explicit_refresh() -> None:

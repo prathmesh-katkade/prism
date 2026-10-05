@@ -800,6 +800,7 @@ class VisualizationSpec(ContractModel):
     unit: Optional[str] = Field(default=None, max_length=40)
     reference_line: Optional[float] = None
     annotation: Optional[str] = Field(default=None, max_length=500)
+    facet: Optional[str] = None
 
 
 class VisualizationSuggestion(ContractModel):
@@ -844,12 +845,18 @@ class VisualizationDatum(ContractModel):
     bin_end: Optional[float] = None
 
 
+class VisualizationFacet(ContractModel):
+    value: str
+    data: list[VisualizationDatum]
+
+
 class VisualizationDataResponse(ContractModel):
     spec: VisualizationSpec
     data: list[VisualizationDatum]
     truncated: bool
     warnings: list[str] = Field(default_factory=list)
     provenance: OverviewProvenance
+    facets: list[VisualizationFacet] = Field(default_factory=list)
 
 
 class ChartDrillDownRequest(ContractModel):
@@ -3008,7 +3015,9 @@ class ReportTable(ContractModel):
     columns: list[str]
     rows: list[dict[str, Any]]
     source_row_count: int = Field(ge=0)
+    row_limit: int = Field(default=50, ge=1, le=100)
     created_at: datetime
+    previous_table_id: Optional[str] = None
 
 
 class ReportReorderRequest(ContractModel):
@@ -3021,6 +3030,7 @@ class Report(ContractModel):
     chart_refs: list[ReportChartRef] = Field(default_factory=list)
     notes: list[ReportNote] = Field(default_factory=list)
     tables: list[ReportTable] = Field(default_factory=list)
+    table_history: list[ReportTable] = Field(default_factory=list)
     item_order: list[str] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
@@ -3053,5 +3063,11 @@ class ReportDetail(ContractModel):
 
 class ReportRefreshRequest(ContractModel):
     chart_ids: Optional[list[str]] = None
+    table_ids: Optional[list[str]] = None
     source_revisions: dict[str, int] = Field(default_factory=dict)
     source_fingerprints: dict[str, str] = Field(default_factory=dict)
+
+
+class ReportTableRefreshRequest(ContractModel):
+    source_revision: int = Field(ge=0)
+    source_fingerprint: str = Field(min_length=1)
