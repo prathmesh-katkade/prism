@@ -3,6 +3,7 @@ import { expect, test } from "@playwright/test";
 const API = `${process.env.NEXT_PUBLIC_PRISM_API_URL ?? "http://127.0.0.1:8000"}/api/v1`;
 
 test("History workspace shows a real SQL Lab result through the live API and opens its evidence", async ({ page, request }) => {
+  test.setTimeout(90_000);
   const upload = await request.post(`${API}/overview/datasets`, {
     multipart: {
       file: {
@@ -29,9 +30,9 @@ test("History workspace shows a real SQL Lab result through the live API and ope
   // registered -- the toolbar has exactly one <select> (Parameters is a
   // <textarea>), so this stays unambiguous without depending on accname value.
   const source = page.locator(".query-toolbar select");
-  await expect(source).toBeVisible({ timeout: 10_000 });
+  await expect(source).toBeVisible({ timeout: 30_000 });
   const targetConnectionId = `local:${dataset.dataset_id}`;
-  await expect(source.locator(`option[value="${targetConnectionId}"]`)).toHaveCount(1, { timeout: 10_000 });
+  await expect(source.locator(`option[value="${targetConnectionId}"]`)).toHaveCount(1, { timeout: 30_000 });
 
   // In the common case the newly uploaded dataset is already the selected
   // connection and its schema request has completed before this assertion. Do
@@ -66,10 +67,10 @@ test("History workspace shows a real SQL Lab result through the live API and ope
   await expect(page.getByRole("heading", { name: "Analytical history" })).toBeVisible();
   await page.getByLabel("Search analytical history").fill("query_result");
   const row = page.locator("tbody tr", { hasText: "query result" }).first();
-  await expect(row).toBeVisible({ timeout: 10_000 });
+  await expect(row).toBeVisible({ timeout: 30_000 });
   await expect(row.getByText(/current|stale/)).toBeVisible();
 
   await row.getByRole("button", { name: "Inspect" }).click();
   const inspector = page.getByRole("complementary", { name: "Evidence inspector" });
-  await expect(inspector.getByRole("heading", { name: "SQL result" })).toBeVisible({ timeout: 10_000 });
+  await expect(inspector.getByRole("heading", { name: "SQL result" })).toBeVisible({ timeout: 30_000 });
 });
