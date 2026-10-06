@@ -517,6 +517,9 @@ class CleanOperation(str, Enum):
     NORMALIZE_CASE = "normalize_case"
     CATEGORY_MAPPING = "category_mapping"
     DEDUPLICATE_SURVIVORSHIP = "deduplicate_survivorship"
+    EXTRACT_IDENTIFIER_COMPONENTS = "extract_identifier_components"
+    EXTRACT_NUMERIC_UNIT = "extract_numeric_unit"
+    SPLIT_DELIMITED = "split_delimited"
 
 
 class FillStrategy(str, Enum):
@@ -553,6 +556,10 @@ class CleanTransformationRequest(ContractModel):
     survivorship_tiebreak_column: Optional[str] = None
     date_format: Optional[str] = Field(default=None, min_length=1, max_length=64)
     number_locale: Optional[Literal["standard", "european"]] = None
+    family_signature: Optional[str] = Field(default=None, min_length=1, max_length=200)
+    delimiter: Optional[str] = Field(default=None, min_length=1, max_length=8)
+    max_parts: Optional[int] = Field(default=None, ge=2, le=20)
+    output_columns: Optional[list[str]] = Field(default=None, min_length=1, max_length=20)
     review_token: Optional[str] = None
 
 
@@ -709,6 +716,7 @@ class ValidationRuleKind(str, Enum):
     UNIQUENESS = "uniqueness"
     NONNEGATIVE = "nonnegative"
     DATE_ORDER = "date_order"
+    PATTERN_FAMILY = "pattern_family"
 
 
 class ValidationRuleCreateRequest(ContractModel):
@@ -717,6 +725,10 @@ class ValidationRuleCreateRequest(ContractModel):
     column: Optional[str] = Field(default=None, min_length=1)
     before_column: Optional[str] = Field(default=None, min_length=1)
     after_column: Optional[str] = Field(default=None, min_length=1)
+    accepted_family_signatures: Optional[list[str]] = Field(default=None, min_length=1, max_length=20)
+    missing_value_policy: Optional[Literal["allow", "reject"]] = None
+    group_by_column: Optional[str] = Field(default=None, min_length=1)
+    group_value: Optional[str] = None
 
 
 class ValidationRule(ContractModel):
@@ -726,6 +738,10 @@ class ValidationRule(ContractModel):
     column: Optional[str] = None
     before_column: Optional[str] = None
     after_column: Optional[str] = None
+    accepted_family_signatures: Optional[list[str]] = None
+    missing_value_policy: Optional[Literal["allow", "reject"]] = None
+    group_by_column: Optional[str] = None
+    group_value: Optional[str] = None
     created_at: datetime
 
 
@@ -737,6 +753,85 @@ class ValidationRunResult(ContractModel):
     passed: bool
     sample_violations: list[dict[str, Optional[Any]]] = Field(default_factory=list)
     violation_source_rows: list[str] = Field(default_factory=list)
+
+
+# --- Clean Pattern Review v1 --------------------------------------------------
+#
+# A pattern finding is read-only discovery, never a mutation: it reports what
+# format families a column's values fall into, with explicit sample-vs-full-scan
+# provenance. A family's `signature` is a canonical, detector-generated token
+# string (e.g. "LLL-NNNNNN" for 3 letters, a dash, 6 digits) - never a raw regex
+# from the client - so extraction operations that reference a signature cannot
+# smuggle in arbitrary user-supplied regular expressions.
+
+
+class PatternDetectorKind(str, Enum):
+    IDENTIFIER_STRUCTURE = "identifier_structure"
+    NUMERIC_UNIT = "numeric_unit"
+    DELIMITED_COMPOUND = "delimited_compound"
+    DATE_AMBIGUITY = "date_ambiguity"
+
+
+class PatternFamily(ContractModel):
+    family_signature: str = Field(min_length=1, max_length=200)
+    label: str = Field(min_length=1)
+    matching_count: int = Field(ge=0)
+    example_values: list[str] = Field(default_factory=list)
+
+
+class PatternFinding(ContractModel):
+    finding_id: str = Field(min_length=1)
+    dataset_id: str = Field(min_length=1)
+    column: str = Field(min_length=1)
+    detector_kind: PatternDetectorKind
+    detector_version: int = Field(ge=1)
+    source_revision: int = Field(ge=0)
+    source_fingerprint: str = Field(min_length=16)
+    rows_examined: int = Field(ge=0)
+    total_rows: int = Field(ge=0)
+    sampling_method: Literal["bounded_sample", "full_scan"]
+    verified: bool
+    families: list[PatternFamily] = Field(default_factory=list)
+    missing_count: int = Field(ge=0)
+    exception_count: int = Field(ge=0)
+    exception_examples: list[str] = Field(default_factory=list)
+    exception_source_rows: list[str] = Field(default_factory=list)
+    group_by_column: Optional[str] = None
+    group_value: Optional[str] = None
+    insufficient_evidence: bool = False
+    created_at: datetime
+
+
+class PatternScanRequest(ContractModel):
+    column: str = Field(min_length=1)
+    detector_kind: Optional[PatternDetectorKind] = None
+    group_by_column: Optional[str] = Field(default=None, min_length=1)
+    group_value: Optional[str] = None
+
+
+class PatternReviewDecisionKind(str, Enum):
+    ACCEPT_FAMILY = "accept_family"
+    IGNORE_REVISION = "ignore_revision"
+    SUPPRESS_RULE = "suppress_rule"
+
+
+class PatternReviewDecisionRequest(ContractModel):
+    column: str = Field(min_length=1)
+    decision: PatternReviewDecisionKind
+    family_signatures: Optional[list[str]] = Field(default=None, min_length=1, max_length=20)
+    detector_kind: Optional[PatternDetectorKind] = None
+
+
+class PatternReviewDecision(ContractModel):
+    decision_id: str = Field(min_length=1)
+    dataset_id: str = Field(min_length=1)
+    column: str = Field(min_length=1)
+    decision: PatternReviewDecisionKind
+    family_signatures: list[str] = Field(default_factory=list)
+    detector_kind: Optional[PatternDetectorKind] = None
+    source_revision: int = Field(ge=0)
+    source_fingerprint: str = Field(min_length=16)
+    created_at: datetime
 
 
 class AtlasCleanAction(str, Enum):

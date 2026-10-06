@@ -32,6 +32,7 @@ from .atlas_operational_cert import router as atlas_operational_cert_router
 from .atlas_runtime import reconcile_deep_refinements_once, reconcile_stale_in_flight_runs_once
 from .atlas_runtime import runs as atlas_runs
 from .clean import router as clean_router
+from .clean_patterns import router as clean_patterns_router
 from .clean_validation import router as clean_validation_router
 from .deployment_security import resolve_deployment_security
 from .durable_registry import DurableAnalyticalObjectRegistry
@@ -115,6 +116,7 @@ def create_app() -> FastAPI:
     app.include_router(atlas_promotion_router)
     app.include_router(atlas_adapter_router)
     app.include_router(clean_router)
+    app.include_router(clean_patterns_router)
     app.include_router(clean_validation_router)
     app.include_router(visualize_router)
     app.include_router(workspace_proposals_router)

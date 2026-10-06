@@ -416,7 +416,153 @@ def _apply_operation(frame: pd.DataFrame, request: CleanTransformationRequest) -
         if tied_group_count:
             warnings.append(f"{tied_group_count} group(s) tied under the {rule!r} rule; the earliest source row was kept deterministically.")
         return updated, affected, list(columns), warnings, []
+    if request.operation is CleanOperation.EXTRACT_IDENTIFIER_COMPONENTS:
+        return _extract_identifier_components(frame, request)
+    if request.operation is CleanOperation.EXTRACT_NUMERIC_UNIT:
+        return _extract_numeric_unit(frame, request)
+    if request.operation is CleanOperation.SPLIT_DELIMITED:
+        return _split_delimited(frame, request)
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported operation.")
+
+
+_SIGNATURE_TOKEN = re.compile(r"L(\d+)|N(\d+)|([^LN\d]+)")
+
+
+def _check_output_collisions(frame: pd.DataFrame, names: list[str]) -> None:
+    if len(set(names)) != len(names):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Output column names must be distinct.")
+    collisions = [name for name in names if name in frame.columns]
+    if collisions:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            detail=f"Output column(s) {', '.join(collisions)!r} already exist. Provide explicit output_columns to resolve the collision.")
+
+
+def _extract_identifier_components(frame: pd.DataFrame, request: CleanTransformationRequest) -> tuple[pd.DataFrame, int, list[str], list[str], list[str]]:
+    from .clean_patterns import (
+        _identifier_signature,  # local import: clean_patterns depends on this module
+    )
+
+    column = _require_column(frame, request.column)
+    signature = request.family_signature
+    if not signature:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="family_signature is required to extract identifier components.")
+    tokens = _SIGNATURE_TOKEN.findall(signature)
+    if not tokens or "".join(letters or digits or literal for letters, digits, literal in tokens) == "":
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"{signature!r} is not a recognized identifier family signature.")
+    component_positions = [index for index, (letters, digits, _literal) in enumerate(tokens) if letters or digits]
+    if not component_positions:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"{signature!r} has no extractable letter/digit components.")
+    output_names = request.output_columns or [f"{column}_part{i + 1}" for i in range(len(component_positions))]
+    if len(output_names) != len(component_positions):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            detail=f"{signature!r} has {len(component_positions)} component(s); output_columns must have exactly that many names.")
+    _check_output_collisions(frame, output_names)
+
+    columns_data: dict[str, list[object]] = {name: [] for name in output_names}
+    unresolved_values: list[str] = []
+    for value in frame[column]:
+        if pd.isna(value):
+            for name in output_names:
+                columns_data[name].append(None)
+            continue
+        text_value = str(value)
+        if _identifier_signature(text_value) != signature:
+            for name in output_names:
+                columns_data[name].append(None)
+            if text_value not in unresolved_values and len(unresolved_values) < 20:
+                unresolved_values.append(text_value)
+            continue
+        pieces = [match.group(0) for match in re.finditer(r"[A-Za-z]+|\d+|[^A-Za-z0-9]+", text_value)]
+        component_index = 0
+        for piece_index, (letters, digits, _literal) in enumerate(tokens):
+            if letters or digits:
+                columns_data[output_names[component_index]].append(pieces[piece_index])
+                component_index += 1
+
+    updated = frame.copy()
+    for name in output_names:
+        updated[name] = columns_data[name]
+    warnings = [f"{len(unresolved_values)} distinct value(s) did not match family {signature!r} and were left blank in the new columns."] if unresolved_values else []
+    return updated, len(frame), output_names, warnings, unresolved_values
+
+
+def _extract_numeric_unit(frame: pd.DataFrame, request: CleanTransformationRequest) -> tuple[pd.DataFrame, int, list[str], list[str], list[str]]:
+    from .clean_patterns import (
+        _NUMERIC_UNIT_PATTERN,  # local import: clean_patterns depends on this module
+    )
+
+    column = _require_column(frame, request.column)
+    output_names = request.output_columns or [f"{column}_value", f"{column}_unit", f"{column}_comparator"]
+    if len(output_names) != 3:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Numeric/unit extraction produces exactly 3 columns: value, unit, comparator.")
+    _check_output_collisions(frame, output_names)
+    value_name, unit_name, comparator_name = output_names
+
+    values: list[object] = []
+    units: list[object] = []
+    comparators: list[object] = []
+    unresolved_values: list[str] = []
+    for raw in frame[column]:
+        if pd.isna(raw):
+            values.append(None)
+            units.append(None)
+            comparators.append(None)
+            continue
+        text_value = str(raw)
+        match = _NUMERIC_UNIT_PATTERN.match(text_value)
+        if not match:
+            values.append(None)
+            units.append(None)
+            comparators.append(None)
+            if text_value not in unresolved_values and len(unresolved_values) < 20:
+                unresolved_values.append(text_value)
+            continue
+        sign = -1 if match.group("sign") == "-" else 1
+        values.append(sign * float(match.group("num")))
+        units.append(match.group("unit"))
+        comparators.append(match.group("cmp"))
+
+    updated = frame.copy()
+    updated[value_name] = values
+    updated[unit_name] = units
+    updated[comparator_name] = comparators
+    warnings = [f"{len(unresolved_values)} distinct value(s) did not match a numeric[+unit] shape and were left blank."] if unresolved_values else []
+    return updated, len(frame), output_names, warnings, unresolved_values
+
+
+def _split_delimited(frame: pd.DataFrame, request: CleanTransformationRequest) -> tuple[pd.DataFrame, int, list[str], list[str], list[str]]:
+    column = _require_column(frame, request.column)
+    delimiter = request.delimiter
+    if not delimiter:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="delimiter is required to split a compound value.")
+    maxsplit = (request.max_parts - 1) if request.max_parts else -1
+    split_values = [str(value).split(delimiter, maxsplit) if pd.notna(value) else None for value in frame[column]]
+    observed_parts = max((len(parts) for parts in split_values if parts is not None), default=0)
+    part_count = request.max_parts or observed_parts
+    if part_count < 2:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"No value in {column!r} contains delimiter {delimiter!r}.")
+    output_names = request.output_columns or [f"{column}_part{i + 1}" for i in range(part_count)]
+    if len(output_names) != part_count:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            detail=f"Splitting on {delimiter!r} produces {part_count} part(s); output_columns must have exactly that many names.")
+    _check_output_collisions(frame, output_names)
+
+    columns_data = {name: [] for name in output_names}  # type: dict[str, list[object]]
+    short_rows = 0
+    for parts in split_values:
+        for index, name in enumerate(output_names):
+            if parts is None or index >= len(parts):
+                columns_data[name].append(None)
+            else:
+                columns_data[name].append(parts[index])
+        if parts is not None and len(parts) < part_count:
+            short_rows += 1
+
+    updated = frame.copy()
+    for name in output_names:
+        updated[name] = columns_data[name]
+    warnings = [f"{short_rows} row(s) had fewer than {part_count} part(s) after splitting on {delimiter!r}; missing trailing part(s) are blank."] if short_rows else []
+    return updated, len(frame), output_names, warnings, []
 
 
 def _health(frame: pd.DataFrame):  # type: ignore[no-untyped-def]

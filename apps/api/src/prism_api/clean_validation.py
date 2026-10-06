@@ -17,6 +17,7 @@ from prism_api_contracts import (
 )
 
 from .clean import _require_column, _sample
+from .clean_patterns import _identifier_signature
 from .durable_validation_rule_store import DurableValidationRuleStore
 from .overview import store as overview_store
 
@@ -32,6 +33,13 @@ def create_validation_rule(request: ValidationRuleCreateRequest) -> ValidationRu
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"A column is required for a {request.kind.value} rule.")
     if request.kind is ValidationRuleKind.DATE_ORDER and not (request.before_column and request.after_column):
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Both a before-column and an after-column are required for a date_order rule.")
+    if request.kind is ValidationRuleKind.PATTERN_FAMILY:
+        if not request.column:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="A column is required for a pattern_family rule.")
+        if not request.accepted_family_signatures:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="At least one accepted family signature is required for a pattern_family rule.")
+        if not request.missing_value_policy:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="A missing_value_policy ('allow' or 'reject') is required for a pattern_family rule.")
     return rules.create(request)
 
 
@@ -65,6 +73,21 @@ def _run_rule(frame: pd.DataFrame, rule: ValidationRule) -> tuple[int, pd.DataFr
         valid_pair = before.notna() & after.notna()
         mask = valid_pair & (before > after)
         return int(valid_pair.sum()), frame.loc[mask]
+    if rule.kind is ValidationRuleKind.PATTERN_FAMILY:
+        column = _require_column(frame, rule.column)
+        scoped = frame
+        if rule.group_by_column:
+            _require_column(frame, rule.group_by_column)
+            scoped = frame.loc[frame[rule.group_by_column].astype(str) == rule.group_value]
+        accepted = set(rule.accepted_family_signatures or [])
+        missing_mask = scoped[column].isna()
+        signatures = scoped[column].dropna().astype(str).map(_identifier_signature)
+        violates_pattern = ~signatures.isin(accepted)
+        violation_index = signatures.index[violates_pattern]
+        if rule.missing_value_policy == "reject":
+            violation_index = violation_index.union(scoped.index[missing_mask])
+        total_checked = len(scoped)
+        return total_checked, scoped.loc[violation_index]
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported validation rule kind.")
 
 

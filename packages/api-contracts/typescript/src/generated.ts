@@ -1347,7 +1347,7 @@ export interface CleanIssue {
 
 export type CleanIssueKind = "missing_values" | "duplicate_rows" | "all_null_column" | "type_mismatch" | "outlier_burden";
 
-export type CleanOperation = "drop_duplicates" | "fill_missing" | "drop_missing_rows" | "convert_type" | "rename_column" | "drop_column" | "trim_whitespace" | "normalize_case" | "category_mapping" | "deduplicate_survivorship";
+export type CleanOperation = "drop_duplicates" | "fill_missing" | "drop_missing_rows" | "convert_type" | "rename_column" | "drop_column" | "trim_whitespace" | "normalize_case" | "category_mapping" | "deduplicate_survivorship" | "extract_identifier_components" | "extract_numeric_unit" | "split_delimited";
 
 export interface CleanPreviewResponse {
   operation: CleanOperation;
@@ -1484,6 +1484,10 @@ export interface CleanTransformationRequest {
   survivorship_tiebreak_column?: string;
   date_format?: string;
   number_locale?: "standard" | "european";
+  family_signature?: string;
+  delimiter?: string;
+  max_parts?: number;
+  output_columns?: string[];
   review_token?: string;
 }
 
@@ -1963,6 +1967,66 @@ export interface ParentRef {
   relation?: string;
 }
 
+export type PatternDetectorKind = "identifier_structure" | "numeric_unit" | "delimited_compound" | "date_ambiguity";
+
+export interface PatternFamily {
+  family_signature: string;
+  label: string;
+  matching_count: number;
+  example_values?: string[];
+}
+
+export interface PatternFinding {
+  finding_id: string;
+  dataset_id: string;
+  column: string;
+  detector_kind: PatternDetectorKind;
+  detector_version: number;
+  source_revision: number;
+  source_fingerprint: string;
+  rows_examined: number;
+  total_rows: number;
+  sampling_method: "bounded_sample" | "full_scan";
+  verified: boolean;
+  families?: PatternFamily[];
+  missing_count: number;
+  exception_count: number;
+  exception_examples?: string[];
+  exception_source_rows?: string[];
+  group_by_column?: string;
+  group_value?: string;
+  insufficient_evidence?: boolean;
+  created_at: string;
+}
+
+export interface PatternReviewDecision {
+  decision_id: string;
+  dataset_id: string;
+  column: string;
+  decision: PatternReviewDecisionKind;
+  family_signatures?: string[];
+  detector_kind?: PatternDetectorKind;
+  source_revision: number;
+  source_fingerprint: string;
+  created_at: string;
+}
+
+export type PatternReviewDecisionKind = "accept_family" | "ignore_revision" | "suppress_rule";
+
+export interface PatternReviewDecisionRequest {
+  column: string;
+  decision: PatternReviewDecisionKind;
+  family_signatures?: string[];
+  detector_kind?: PatternDetectorKind;
+}
+
+export interface PatternScanRequest {
+  column: string;
+  detector_kind?: PatternDetectorKind;
+  group_by_column?: string;
+  group_value?: string;
+}
+
 export interface Producer {
   service: string;
   version: string;
@@ -2332,6 +2396,10 @@ export interface ValidationRule {
   column?: string;
   before_column?: string;
   after_column?: string;
+  accepted_family_signatures?: string[];
+  missing_value_policy?: "allow" | "reject";
+  group_by_column?: string;
+  group_value?: string;
   created_at: string;
 }
 
@@ -2341,9 +2409,13 @@ export interface ValidationRuleCreateRequest {
   column?: string;
   before_column?: string;
   after_column?: string;
+  accepted_family_signatures?: string[];
+  missing_value_policy?: "allow" | "reject";
+  group_by_column?: string;
+  group_value?: string;
 }
 
-export type ValidationRuleKind = "uniqueness" | "nonnegative" | "date_order";
+export type ValidationRuleKind = "uniqueness" | "nonnegative" | "date_order" | "pattern_family";
 
 export interface ValidationRunResult {
   rule: ValidationRule;
