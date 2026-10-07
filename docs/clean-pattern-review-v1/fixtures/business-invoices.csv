@@ -1,0 +1,10 @@
+supplier_name,country,invoice_id,order_date,amount
+Acme Corp,US,INV-000123,03/15/2026,"$1,250.00"
+Acme Corp,US,INV-000456,05/12/2026,$980.50
+Acme Corp,US,INV-007007,11/20/2026,$600.00
+Acme Corporation,US,INV-000321,01/02/2026,$500.00
+Gamma LLC,US,INV-000999,,$300.00
+Gamma LLC,US,,02/02/2026,$450.00
+Acme Corp Ltd,UK,AB12,01/01/2026,£99.99
+Beta Industries,DE,RE-2024-001,13/02/2026,"€750,00"
+Beta Industries,DE,RE-2024-002,20/03/2026,"€1.200,50"
