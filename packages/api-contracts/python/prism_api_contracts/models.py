@@ -820,6 +820,10 @@ class PatternReviewDecisionRequest(ContractModel):
     decision: PatternReviewDecisionKind
     family_signatures: Optional[list[str]] = Field(default=None, min_length=1, max_length=20)
     detector_kind: Optional[PatternDetectorKind] = None
+    detector_version: Optional[int] = Field(default=None, ge=1)
+    revokes_decision_id: Optional[str] = Field(default=None, min_length=1)
+    reviewed_source_revision: Optional[int] = Field(default=None, ge=0)
+    reviewed_source_fingerprint: Optional[str] = Field(default=None, min_length=16)
 
 
 class PatternReviewDecision(ContractModel):
@@ -829,6 +833,9 @@ class PatternReviewDecision(ContractModel):
     decision: PatternReviewDecisionKind
     family_signatures: list[str] = Field(default_factory=list)
     detector_kind: Optional[PatternDetectorKind] = None
+    detector_version: Optional[int] = None
+    revokes_decision_id: Optional[str] = None
+    revoked: bool = False
     source_revision: int = Field(ge=0)
     source_fingerprint: str = Field(min_length=16)
     created_at: datetime

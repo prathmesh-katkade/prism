@@ -238,7 +238,8 @@ describe("Clean workspace", () => {
     expect(screen.getByRole("button", { name: "Preview" })).toBeDisabled();
     expect(screen.getByText("Choose at least one column to group duplicates by.")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByText("customer_id").closest("label")!.querySelector("input")!);
+    const survivorshipColumnList = document.querySelector(".clean-survivorship")!;
+    fireEvent.click(Array.from(survivorshipColumnList.querySelectorAll("label")).find((label) => label.textContent?.includes("customer_id"))!.querySelector("input")!);
     fireEvent.change(screen.getByLabelText("Survivorship rule"), { target: { value: "max_by_column" } });
     expect(screen.getByText("Choose a column to keep the highest value from.")).toBeInTheDocument();
 

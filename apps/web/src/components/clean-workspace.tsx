@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
-import type { AtlasCleanResponse, CleanIssue, CleanOperation, CleanPreviewResponse, CleanRecipe, CleanRecipeDraftPreviewResponse, CleanRecipePreviewResponse, CleanRecipeStep, CleanRowInspection, CleanStateResponse, CleanTransformationRequest, ColumnValueCount, ColumnValueCountsResponse, DatasetRowsResponse, FillStrategy, OverviewProfileResponse, ValidationRule, ValidationRuleKind, ValidationRunResult } from "@prism/api-contracts";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import type { AtlasCleanResponse, CleanIssue, CleanOperation, CleanPreviewResponse, CleanRecipe, CleanRecipeDraftPreviewResponse, CleanRecipePreviewResponse, CleanRecipeStep, CleanRowInspection, CleanStateResponse, CleanTransformationRequest, ColumnValueCount, ColumnValueCountsResponse, DatasetRowsResponse, FillStrategy, OverviewProfileResponse, PatternFamily, PatternFinding, PatternReviewDecision, PatternReviewDecisionKind, ValidationRule, ValidationRuleKind, ValidationRunResult } from "@prism/api-contracts";
 import { apiUrl } from "../config/api";
 import type { InspectorObjectState } from "../state/shell-model";
 import { WorkspaceProposalPanel } from "./workspace-proposal-panel";
@@ -116,6 +116,41 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
     } catch { /* validation rules are a convenience; Clean stays usable without this list. */ }
   }, []);
 
+  const [patternFindings, setPatternFindings] = useState<PatternFinding[]>([]);
+  const [patternsLoading, setPatternsLoading] = useState(false);
+  const [patternsError, setPatternsError] = useState<string | null>(null);
+  const [selectedFinding, setSelectedFinding] = useState<PatternFinding | null>(null);
+  const [exploreColumn, setExploreColumn] = useState("");
+  const [groupByColumn, setGroupByColumn] = useState("");
+  const [groupValue, setGroupValue] = useState("");
+  const [verifying, setVerifying] = useState(false);
+  const verifyController = useRef<AbortController | null>(null);
+  const verifyRequestId = useRef(0);
+  const [patternDecisions, setPatternDecisions] = useState<PatternReviewDecision[]>([]);
+  const [acceptedFamilies, setAcceptedFamilies] = useState<ReadonlySet<string>>(new Set());
+  const [missingValuePolicy, setMissingValuePolicy] = useState<"allow" | "reject">("allow");
+  const [decisionBusy, setDecisionBusy] = useState(false);
+  const [decisionError, setDecisionError] = useState<string | null>(null);
+  const [ruleNameForPattern, setRuleNameForPattern] = useState("");
+
+  const loadPatterns = useCallback(async (id: string) => {
+    setPatternsLoading(true); setPatternsError(null);
+    try {
+      const response = await fetch(apiUrl(`/api/v1/clean/datasets/${id}/patterns/discover`), { method: "POST" });
+      if (!response.ok) throw new Error((await response.json() as { detail?: string }).detail ?? "Pattern discovery failed.");
+      setPatternFindings(await response.json() as PatternFinding[]);
+    } catch (reason) {
+      setPatternsError(reason instanceof Error ? reason.message : "Pattern discovery failed."); setPatternFindings([]);
+    } finally { setPatternsLoading(false); }
+  }, []);
+
+  const loadPatternDecisions = useCallback(async (id: string) => {
+    try {
+      const response = await fetch(apiUrl(`/api/v1/clean/datasets/${id}/patterns/decisions`));
+      if (response.ok) setPatternDecisions(await response.json() as PatternReviewDecision[]);
+    } catch { /* decisions are a convenience list; Patterns stays usable without it. */ }
+  }, []);
+
   const loadRows = useCallback(async (id: string, offset: number) => {
     try {
       const response = await fetch(apiUrl(`/api/v1/overview/datasets/${id}/rows?offset=${offset}&limit=${ROWS_PER_PAGE}`));
@@ -137,10 +172,12 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
       await loadRecipes();
       await loadValidationRules();
       setState("ready");
+      void loadPatterns(id);
+      void loadPatternDecisions(id);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Clean is unavailable."); setState("error");
     }
-  }, [loadRows, loadRecipes, loadValidationRules]);
+  }, [loadRows, loadRecipes, loadValidationRules, loadPatterns, loadPatternDecisions]);
 
   useEffect(() => { if (datasetId) void refresh(datasetId); else { setState("empty"); setClean(null); setProfile(null); setRows(null); } }, [datasetId, refresh]);
 
@@ -359,6 +396,131 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
     finally { setApplying(false); }
   }
 
+  function selectFinding(finding: PatternFinding) {
+    setManualMode(false); setSelectedIssue(null); setRecipePreview(null); setPreview(null); setPendingRequest(null); setAtlas(null);
+    verifyController.current?.abort(); verifyRequestId.current += 1; setVerifying(false);
+    setSelectedFinding(finding); setAcceptedFamilies(new Set()); setMissingValuePolicy("allow"); setDecisionError(null);
+    onSelectContext({
+      objectId: finding.finding_id, label: finding.column, type: "finding", state: "ready", actions: [],
+      metadata: [finding.detector_kind.replaceAll("_", " "), finding.verified ? "verified · full scan" : `sample of ${finding.rows_examined.toLocaleString()}`],
+    });
+  }
+
+  async function scanColumn(column: string) {
+    if (!datasetId || !column) return;
+    setPatternsError(null);
+    try {
+      const response = await fetch(apiUrl(`/api/v1/clean/datasets/${datasetId}/patterns/columns/${encodeURIComponent(column)}/scan`), {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ column, ...(groupByColumn ? { group_by_column: groupByColumn, group_value: groupValue } : {}) }),
+      });
+      if (!response.ok) throw new Error((await response.json() as { detail?: string }).detail ?? "Scanning this column failed.");
+      const findings = await response.json() as PatternFinding[];
+      if (findings.length) {
+        selectFinding(findings[0]!);
+        setPatternFindings((current) => [...findings, ...current.filter((item) => item.column !== column || !findings.some((found) => found.detector_kind === item.detector_kind))]);
+      } else {
+        setSelectedFinding(null);
+        setPatternsError(`No pattern detector found usable evidence in ${column}.`);
+      }
+    } catch (reason) { setPatternsError(reason instanceof Error ? reason.message : "Scanning this column failed."); }
+  }
+
+  async function verifyFinding() {
+    if (!datasetId || !selectedFinding) return;
+    const requestId = ++verifyRequestId.current;
+    const controller = new AbortController();
+    verifyController.current = controller;
+    setVerifying(true); setPatternsError(null);
+    try {
+      const response = await fetch(apiUrl(`/api/v1/clean/datasets/${datasetId}/patterns/columns/${encodeURIComponent(selectedFinding.column)}/verify`), {
+        method: "POST", headers: { "content-type": "application/json" }, signal: controller.signal,
+        body: JSON.stringify({
+          column: selectedFinding.column, detector_kind: selectedFinding.detector_kind,
+          ...(selectedFinding.group_by_column ? { group_by_column: selectedFinding.group_by_column, group_value: selectedFinding.group_value } : {}),
+        }),
+      });
+      if (requestId !== verifyRequestId.current) return; // a newer action superseded this one; discard
+      if (!response.ok) throw new Error((await response.json() as { detail?: string }).detail ?? "Verification failed.");
+      const verified = await response.json() as PatternFinding;
+      if (requestId !== verifyRequestId.current) return;
+      setSelectedFinding(verified);
+    } catch (reason) {
+      if (controller.signal.aborted) return; // cancelled, not an error
+      if (requestId === verifyRequestId.current) setPatternsError(reason instanceof Error ? reason.message : "Verification failed.");
+    } finally {
+      if (requestId === verifyRequestId.current) setVerifying(false);
+    }
+  }
+
+  function cancelVerify() {
+    verifyController.current?.abort();
+    verifyRequestId.current += 1;
+    setVerifying(false);
+  }
+
+  async function saveDecision(kind: PatternReviewDecisionKind, options?: { revokesDecisionId?: string }) {
+    if (!datasetId || !selectedFinding) return;
+    if (kind === "accept_family" && acceptedFamilies.size === 0) { setDecisionError("Select at least one family to accept first."); return; }
+    setDecisionBusy(true); setDecisionError(null);
+    try {
+      const response = await fetch(apiUrl(`/api/v1/clean/datasets/${datasetId}/patterns/decisions`), {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          column: selectedFinding.column, decision: kind,
+          ...(kind === "accept_family" ? { family_signatures: Array.from(acceptedFamilies) } : {}),
+          detector_kind: selectedFinding.detector_kind,
+          reviewed_source_revision: selectedFinding.source_revision, reviewed_source_fingerprint: selectedFinding.source_fingerprint,
+          ...(options?.revokesDecisionId ? { revokes_decision_id: options.revokesDecisionId } : {}),
+        }),
+      });
+      if (response.status === 409) throw new Error("The dataset changed since this finding was reviewed. Re-scan the column before deciding.");
+      if (!response.ok) throw new Error((await response.json() as { detail?: string }).detail ?? "Saving the decision failed.");
+      setAcceptedFamilies(new Set());
+      await loadPatternDecisions(datasetId);
+    } catch (reason) { setDecisionError(reason instanceof Error ? reason.message : "Saving the decision failed."); }
+    finally { setDecisionBusy(false); }
+  }
+
+  async function savePatternValidationRule() {
+    if (!datasetId || !selectedFinding) return;
+    if (acceptedFamilies.size === 0) { setDecisionError("Select at least one family to accept before saving a rule."); return; }
+    if (!ruleNameForPattern.trim()) { setDecisionError("Name the rule before saving it."); return; }
+    setDecisionBusy(true); setDecisionError(null);
+    try {
+      const response = await fetch(apiUrl("/api/v1/clean/validation-rules"), {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          name: ruleNameForPattern.trim(), kind: "pattern_family", column: selectedFinding.column,
+          accepted_family_signatures: Array.from(acceptedFamilies), missing_value_policy: missingValuePolicy,
+          ...(selectedFinding.group_by_column ? { group_by_column: selectedFinding.group_by_column, group_value: selectedFinding.group_value } : {}),
+        }),
+      });
+      if (!response.ok) throw new Error((await response.json() as { detail?: string }).detail ?? "Saving the rule failed.");
+      setRuleNameForPattern("");
+      await loadValidationRules();
+      await saveDecision("accept_family");
+    } catch (reason) { setDecisionError(reason instanceof Error ? reason.message : "Saving the rule failed."); }
+    finally { setDecisionBusy(false); }
+  }
+
+  function previewExtraction(family?: PatternFamily) {
+    if (!selectedFinding) return;
+    let request: CleanTransformationRequest | null = null;
+    if (selectedFinding.detector_kind === "identifier_structure" && family) {
+      request = { operation: "extract_identifier_components", column: selectedFinding.column, family_signature: family.family_signature };
+    } else if (selectedFinding.detector_kind === "numeric_unit") {
+      request = { operation: "extract_numeric_unit", column: selectedFinding.column };
+    } else if (selectedFinding.detector_kind === "delimited_compound" && family) {
+      const match = /^delim:(.+):parts:(\d+)$/.exec(family.family_signature);
+      const delimiter = match?.[1];
+      const parts = match?.[2];
+      if (delimiter && parts) request = { operation: "split_delimited", column: selectedFinding.column, delimiter, max_parts: Number(parts) };
+    }
+    if (request) void previewOperation(request);
+    else setDecisionError("This finding does not support an extraction operation.");
+  }
+
   async function undoTo(revision: number) {
     if (!datasetId) return;
     await fetch(apiUrl(`/api/v1/clean/datasets/${datasetId}/undo`), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ to_revision: revision }) });
@@ -475,6 +637,23 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
         {validationError ? <p className="quiet-note">{validationError}</p> : null}
       </div>
 
+      <div className="section-title"><div><span className="eyebrow">PATTERNS</span><h2>{patternsLoading ? "Scanning…" : patternFindings.length ? `${patternFindings.length} finding(s)` : "No findings yet"}</h2></div></div>
+      <div className="clean-manual-form clean-pattern-controls">
+        <label>Group by (optional)<select aria-label="Group pattern discovery by column" value={groupByColumn} onChange={(event) => { setGroupByColumn(event.target.value); setGroupValue(""); }}>
+          <option value="">No grouping</option>
+          {(profile?.columns ?? []).map((column) => <option key={column.name} value={column.name}>{column.name}</option>)}
+        </select></label>
+        {groupByColumn ? <label>Group value<input aria-label="Group value" value={groupValue} onChange={(event) => setGroupValue(event.target.value)} placeholder="e.g. US" /></label> : null}
+        <label>Explore a column<input aria-label="Column to explore for patterns" list="clean-column-options" value={exploreColumn} onChange={(event) => setExploreColumn(event.target.value)} placeholder="Search columns…" /></label>
+        <button type="button" className="secondary" disabled={!exploreColumn} onClick={() => void scanColumn(exploreColumn)}>Scan column</button>
+      </div>
+      {patternsError ? <p className="query-error" role="alert">{patternsError}</p> : null}
+      {patternFindings.length ? <div className="finding-list">{patternFindings.map((finding) => <button key={finding.finding_id} className={selectedFinding?.finding_id === finding.finding_id ? "is-selected" : ""} onClick={() => selectFinding(finding)}>
+        <span className="finding-dot good" />
+        <strong>{finding.column}{finding.group_value ? ` · ${finding.group_value}` : ""}</strong>
+        <small>{finding.detector_kind.replaceAll("_", " ")} · {(finding.families ?? []).length ? `${(finding.families ?? []).length} famil${(finding.families ?? []).length === 1 ? "y" : "ies"}, top ${(finding.families ?? [])[0]!.matching_count} of ${finding.rows_examined}` : `${finding.exception_count} exception(s)`}{finding.verified ? " · verified" : ""}</small>
+      </button>)}</div> : !patternsLoading ? <p className="quiet-note">No format-family evidence surfaced in a bounded sample. Try the column explorer above for a deliberate look, or choose a grouping column.</p> : null}
+
       <div className="section-title"><span className="eyebrow">HISTORY</span></div>
       <ol className="clean-history">
         <li><button className={clean.dataset.revision === 0 ? "is-selected" : ""} onClick={() => void undoTo(0)}>Revision 0 · original</button></li>
@@ -505,6 +684,34 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
       </> : draftPreview ? <>
         <p className="clean-preview-summary">Draft recipe recalculated against revision {draftPreview.source_revision}. Projected health: <strong>{draftPreview.projected_health.total}/100</strong>. Save the recipe and preview its version before Apply.</p>
         <div className="clean-diff"><div><span className="eyebrow">BEFORE</span><SampleTable rows={draftPreview.before_sample} /></div><div><span className="eyebrow">AFTER</span><SampleTable rows={draftPreview.after_sample} /></div></div>
+      </> : selectedFinding ? <>
+        <p className="clean-preview-summary">
+          <strong>{selectedFinding.column}</strong> — {selectedFinding.detector_kind.replaceAll("_", " ")} (detector v{selectedFinding.detector_version})
+          {selectedFinding.group_by_column ? <> · grouped by <strong>{selectedFinding.group_by_column} = {selectedFinding.group_value}</strong></> : null}
+        </p>
+        <p className="quiet-note" aria-live="polite">
+          {selectedFinding.verified
+            ? `Verified against all ${selectedFinding.total_rows.toLocaleString()} row(s) — ${selectedFinding.sampling_method === "full_scan" ? "a completed full scan" : "sample"}.`
+            : `Provisional: sampled ${selectedFinding.rows_examined.toLocaleString()} of ${selectedFinding.total_rows.toLocaleString()} row(s). This is not yet a dataset-wide fact.`}
+          {" "}{selectedFinding.missing_count.toLocaleString()} missing value(s), counted separately from matches and exceptions.
+        </p>
+        {selectedFinding.insufficient_evidence ? <p className="quiet-note">Not enough evidence to describe a convention here — examined values are too varied, or too few, to support one.</p> : null}
+        {(selectedFinding.families ?? []).length ? <ul className="pattern-family-list" aria-label="Candidate format families">
+          {(selectedFinding.families ?? []).map((family) => <li key={family.family_signature}>
+            <label className="clean-inline-toggle">
+              <input type="checkbox" checked={acceptedFamilies.has(family.family_signature)} onChange={() => setAcceptedFamilies((current) => { const next = new Set(current); if (next.has(family.family_signature)) next.delete(family.family_signature); else next.add(family.family_signature); return next; })} />
+              <span><strong>{family.label}</strong> — {family.matching_count.toLocaleString()} of {selectedFinding.rows_examined.toLocaleString()} examined</span>
+            </label>
+            <small>e.g. {(family.example_values ?? []).length ? (family.example_values ?? []).join(", ") : "no examples captured"}</small>
+            <button type="button" className="secondary" onClick={() => previewExtraction(family)}>Preview extraction for this family</button>
+          </li>)}
+        </ul> : <p className="quiet-note">No family met the minimum-evidence threshold (at least 2 matching rows).</p>}
+        {selectedFinding.detector_kind === "numeric_unit" ? <button type="button" className="secondary" onClick={() => previewExtraction()}>Preview value/unit extraction</button> : null}
+        <div className="clean-review-tabs" role="tablist" aria-label="Pattern exceptions"><button role="tab" aria-selected>Exceptions ({selectedFinding.exception_count.toLocaleString()})</button></div>
+        {(selectedFinding.exception_examples ?? []).length ? <div className="data-table-wrap" tabIndex={0}><table><thead><tr><th>Source row</th><th>Value</th></tr></thead><tbody>
+          {(selectedFinding.exception_examples ?? []).map((value, index) => <tr key={index}><td><code>{(selectedFinding.exception_source_rows ?? [])[index] ?? "—"}</code></td><td><code>{value}</code></td></tr>)}
+        </tbody></table></div> : <p className="quiet-note">No exceptions in the examined rows.</p>}
+        <p className="quiet-note">Source revision {selectedFinding.source_revision} · fingerprint {selectedFinding.source_fingerprint.slice(0, 12)}…</p>
       </> : <>
         <p className="quiet-note">{selectedIssue ? "Select an issue to preview a proposed fix before applying it." : manualMode ? "Fill in the operation on the left and select Preview — nothing is changed until you apply." : "This is the dataset as it stands at the current revision. Select an issue or start a manual operation to preview a fix."} Nothing is changed until you apply.</p>
         <div className="clean-table-toolbar">
@@ -519,6 +726,37 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
       {recipePreview ? <>
         <div className="inspector-heading"><div><span className="eyebrow">REVIEWED RECIPE</span><h2>Ready for your decision</h2></div></div>
         <p>Version {recipePreview.recipe_version} was reviewed against source revision {recipePreview.source_revision}. Apply the reviewed recipe in the recipe list, or discard its preview there. No data has changed.</p>
+      </> : selectedFinding ? <>
+        <div className="inspector-heading"><div><span className="eyebrow">PATTERN REVIEW</span><h2>{selectedFinding.column}</h2></div></div>
+        {pendingRequest ? <>
+          <p>Reviewing a proposed extraction. Nothing has changed yet.</p>
+          <div className="inspector-actions"><button disabled={applying || !preview} onClick={() => void apply()}>{applying ? "Applying…" : "Apply transformation"}</button><button className="secondary" onClick={() => { setPreview(null); setPendingRequest(null); }}>Discard preview</button></div>
+        </> : <>
+          <p>{selectedFinding.verified ? "Verified across every examined row." : "Based on a bounded sample — not yet a dataset-wide fact."} Accepting a family records a reviewed decision; it never changes data on its own.</p>
+          <div className="inspector-actions">
+            <button type="button" disabled={verifying} onClick={() => void verifyFinding()}>{verifying ? "Verifying…" : "Verify all rows"}</button>
+            {verifying ? <button type="button" className="secondary" onClick={cancelVerify}>Cancel</button> : null}
+          </div>
+          <label>Missing-value policy<select aria-label="Missing value policy" value={missingValuePolicy} onChange={(event) => setMissingValuePolicy(event.target.value as "allow" | "reject")}>
+            <option value="allow">Allow missing values</option>
+            <option value="reject">Missing counts as a violation</option>
+          </select></label>
+          <div className="inspector-actions">
+            <button type="button" disabled={decisionBusy || acceptedFamilies.size === 0} onClick={() => void saveDecision("accept_family")}>Accept {acceptedFamilies.size > 0 ? `${acceptedFamilies.size} ` : ""}selected famil{acceptedFamilies.size === 1 ? "y" : "ies"}</button>
+            <button type="button" className="secondary" disabled={decisionBusy} onClick={() => void saveDecision("ignore_revision")}>Ignore this revision</button>
+            <button type="button" className="secondary" disabled={decisionBusy} onClick={() => void saveDecision("suppress_rule")}>Suppress this rule</button>
+          </div>
+          <label>Save as reusable rule<input aria-label="Pattern validation rule name" value={ruleNameForPattern} onChange={(event) => setRuleNameForPattern(event.target.value)} placeholder="e.g. Invoice ID format" /></label>
+          <button type="button" className="secondary" disabled={decisionBusy || acceptedFamilies.size === 0} onClick={() => void savePatternValidationRule()}>Save selected families as a validation rule</button>
+          {decisionError ? <p className="query-error" role="alert">{decisionError}</p> : null}
+        </>}
+        <div className="section-title"><span className="eyebrow">DECISIONS FOR THIS COLUMN</span></div>
+        {patternDecisions.filter((entry) => entry.column === selectedFinding.column).length ? <ul className="clean-recipe-list">
+          {patternDecisions.filter((entry) => entry.column === selectedFinding.column).map((entry) => <li key={entry.decision_id}>
+            <div><strong>{entry.decision.replaceAll("_", " ")}</strong><small>{entry.revoked ? "revoked" : "active"} · {new Date(entry.created_at).toLocaleString()}{(entry.family_signatures ?? []).length ? ` · ${(entry.family_signatures ?? []).join(", ")}` : ""}</small></div>
+            {!entry.revoked ? <button type="button" className="secondary" disabled={decisionBusy} onClick={() => void saveDecision("ignore_revision", { revokesDecisionId: entry.decision_id })}>Revoke</button> : null}
+          </li>)}
+        </ul> : <p className="quiet-note">No decisions recorded yet for this column.</p>}
       </> : selectedIssue ? <>
         <div className="inspector-heading"><div><span className="eyebrow">SELECTED ISSUE</span><h2>{selectedIssue.column ?? "Dataset"}</h2></div></div>
         <p>{selectedIssue.description}</p>

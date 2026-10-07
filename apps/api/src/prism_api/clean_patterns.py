@@ -75,8 +75,12 @@ def _identifier_signature(value: str) -> str:
 
 
 def _signature_label(signature: str) -> str:
+    # The literal-run branch must stop before a position that starts a new L<digits>
+    # or N<digits> run marker - otherwise it greedily swallows the marker letter
+    # itself (e.g. "-N6" parsing as literal "-N" + stray "6" instead of literal "-"
+    # followed by a 6-digit run).
     described = []
-    for part in re.finditer(r"L(\d+)|N(\d+)|([^\d]+)", signature):
+    for part in re.finditer(r"L(\d+)|N(\d+)|((?:(?!L\d)(?!N\d)[^\d])+)", signature):
         if part.group(1):
             described.append(f"{part.group(1)} letter{'s' if part.group(1) != '1' else ''}")
         elif part.group(2):
@@ -343,6 +347,21 @@ def create_decision(dataset_id: str, request: PatternReviewDecisionRequest) -> P
     _require_column(stored.frame, request.column)
     if request.decision is PatternReviewDecisionKind.ACCEPT_FAMILY and not request.family_signatures:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Accepting a family requires at least one family_signature.")
+    if request.reviewed_source_revision is None or request.reviewed_source_fingerprint is None:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            detail="reviewed_source_revision and reviewed_source_fingerprint are required: a decision must say which finding it is about.")
+    if request.reviewed_source_revision != stored.dataset.revision or request.reviewed_source_fingerprint != stored.source_fingerprint:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail="The dataset changed since this finding was computed; re-run discovery and review the current evidence before deciding.")
+    if request.revokes_decision_id:
+        target = decisions.get(request.revokes_decision_id)
+        if target is None or target.dataset_id != dataset_id or target.column != request.column:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                                detail="revokes_decision_id must reference an existing decision on the same dataset and column.")
+    detector_version = request.detector_version
+    if detector_version is None and request.detector_kind is not None:
+        detector_version = DETECTOR_VERSIONS[request.detector_kind]
+    request = request.model_copy(update={"detector_version": detector_version})
     return decisions.create(dataset_id, request, stored.dataset.revision, stored.source_fingerprint)
 
 

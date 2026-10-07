@@ -19,6 +19,10 @@ def _dataset(client: TestClient, csv: bytes = IDENTIFIER_CSV, name: str = "patte
     return response.json()["dataset_id"]
 
 
+def _profile(client: TestClient, dataset_id: str) -> dict:
+    return client.get(f"/api/v1/overview/datasets/{dataset_id}/profile").json()["dataset"]
+
+
 def test_identifier_structure_finds_legitimate_families_and_buckets_singletons_as_exceptions() -> None:
     client = TestClient(create_app())
     dataset_id = _dataset(client)
@@ -151,24 +155,87 @@ def test_split_delimited_handles_short_rows_without_crashing() -> None:
 def test_review_decisions_are_source_bound_and_do_not_mutate_data() -> None:
     client = TestClient(create_app())
     dataset_id = _dataset(client)
-    before = client.get(f"/api/v1/overview/datasets/{dataset_id}/profile").json()["dataset"]["revision"]
+    before = _profile(client, dataset_id)
     decision = client.post(f"/api/v1/clean/datasets/{dataset_id}/patterns/decisions", json={
         "column": "invoice_id", "decision": "accept_family", "family_signatures": ["L3-N6"],
+        "detector_kind": "identifier_structure",
+        "reviewed_source_revision": before["revision"], "reviewed_source_fingerprint": before["source_fingerprint"],
     })
     assert decision.status_code == 201
     body = decision.json()
-    assert body["source_revision"] == before
-    after = client.get(f"/api/v1/overview/datasets/{dataset_id}/profile").json()["dataset"]["revision"]
-    assert after == before  # saving a decision never mutates data
+    assert body["source_revision"] == before["revision"]
+    assert body["detector_version"] == 1  # auto-filled from the detector_kind's current version
+    after = _profile(client, dataset_id)
+    assert after["revision"] == before["revision"]  # saving a decision never mutates data
     listed = client.get(f"/api/v1/clean/datasets/{dataset_id}/patterns/decisions").json()
     assert len(listed) == 1 and listed[0]["decision_id"] == body["decision_id"]
+    assert listed[0]["revoked"] is False
 
 
 def test_accept_family_decision_requires_at_least_one_family_signature() -> None:
     client = TestClient(create_app())
     dataset_id = _dataset(client)
+    before = _profile(client, dataset_id)
     response = client.post(f"/api/v1/clean/datasets/{dataset_id}/patterns/decisions", json={
         "column": "invoice_id", "decision": "accept_family",
+        "reviewed_source_revision": before["revision"], "reviewed_source_fingerprint": before["source_fingerprint"],
+    })
+    assert response.status_code == 422
+
+
+def test_decision_requires_the_reviewed_source_identity() -> None:
+    client = TestClient(create_app())
+    dataset_id = _dataset(client)
+    response = client.post(f"/api/v1/clean/datasets/{dataset_id}/patterns/decisions", json={
+        "column": "invoice_id", "decision": "ignore_revision",
+    })
+    assert response.status_code == 422
+
+
+def test_decision_rejects_a_stale_reviewed_source() -> None:
+    client = TestClient(create_app())
+    dataset_id = _dataset(client)
+    before = _profile(client, dataset_id)
+    # mutate the dataset so its revision/fingerprint move on
+    preview = client.post(f"/api/v1/clean/datasets/{dataset_id}/preview", json={"operation": "drop_duplicates"})
+    client.post(f"/api/v1/clean/datasets/{dataset_id}/apply", json={"operation": "drop_duplicates", "review_token": preview.json()["review_token"]})
+    stale_decision = client.post(f"/api/v1/clean/datasets/{dataset_id}/patterns/decisions", json={
+        "column": "invoice_id", "decision": "ignore_revision",
+        "reviewed_source_revision": before["revision"], "reviewed_source_fingerprint": before["source_fingerprint"],
+    })
+    assert stale_decision.status_code == 409
+
+
+def test_suppress_rule_decision_is_revocable_without_rewriting_history() -> None:
+    client = TestClient(create_app())
+    dataset_id = _dataset(client)
+    before = _profile(client, dataset_id)
+    suppressed = client.post(f"/api/v1/clean/datasets/{dataset_id}/patterns/decisions", json={
+        "column": "invoice_id", "decision": "suppress_rule", "detector_kind": "identifier_structure",
+        "reviewed_source_revision": before["revision"], "reviewed_source_fingerprint": before["source_fingerprint"],
+    }).json()
+    assert suppressed["revoked"] is False
+
+    revoke = client.post(f"/api/v1/clean/datasets/{dataset_id}/patterns/decisions", json={
+        "column": "invoice_id", "decision": "ignore_revision", "revokes_decision_id": suppressed["decision_id"],
+        "reviewed_source_revision": before["revision"], "reviewed_source_fingerprint": before["source_fingerprint"],
+    })
+    assert revoke.status_code == 201
+
+    listed = client.get(f"/api/v1/clean/datasets/{dataset_id}/patterns/decisions").json()
+    assert len(listed) == 2  # both records preserved, nothing rewritten
+    by_id = {entry["decision_id"]: entry for entry in listed}
+    assert by_id[suppressed["decision_id"]]["revoked"] is True
+    assert by_id[revoke.json()["decision_id"]]["revoked"] is False
+
+
+def test_revoke_rejects_an_unrelated_decision_id() -> None:
+    client = TestClient(create_app())
+    dataset_id = _dataset(client)
+    before = _profile(client, dataset_id)
+    response = client.post(f"/api/v1/clean/datasets/{dataset_id}/patterns/decisions", json={
+        "column": "invoice_id", "decision": "ignore_revision", "revokes_decision_id": "patterndecision_doesnotexist",
+        "reviewed_source_revision": before["revision"], "reviewed_source_fingerprint": before["source_fingerprint"],
     })
     assert response.status_code == 422
 

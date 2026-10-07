@@ -2006,6 +2006,9 @@ export interface PatternReviewDecision {
   decision: PatternReviewDecisionKind;
   family_signatures?: string[];
   detector_kind?: PatternDetectorKind;
+  detector_version?: number;
+  revokes_decision_id?: string;
+  revoked?: boolean;
   source_revision: number;
   source_fingerprint: string;
   created_at: string;
@@ -2018,6 +2021,10 @@ export interface PatternReviewDecisionRequest {
   decision: PatternReviewDecisionKind;
   family_signatures?: string[];
   detector_kind?: PatternDetectorKind;
+  detector_version?: number;
+  revokes_decision_id?: string;
+  reviewed_source_revision?: number;
+  reviewed_source_fingerprint?: string;
 }
 
 export interface PatternScanRequest {
