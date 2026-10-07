@@ -779,7 +779,9 @@ function SampleTable({ rows }: { rows: readonly Record<string, unknown>[] }) {
   return <div className="data-table-wrap" tabIndex={0}><table><thead><tr>{columns.map((key) => <th key={key}>{key}</th>)}</tr></thead><tbody>{rows.map((row, index) => <tr key={index}>{columns.map((key) => <td key={key}>{row[key] === null || row[key] === undefined ? "—" : String(row[key])}</td>)}</tr>)}</tbody></table></div>;
 }
 
+const ROW_STATUS_TONE: Record<CleanRowInspection["status"], "good" | "warn" | "risk"> = { changed: "good", removed: "warn", unresolved: "risk", newly_missing: "risk" };
+
 function InspectionTable({ rows, total }: { rows: readonly CleanRowInspection[]; total: number }) {
   if (!total) return <p className="quiet-note">No rows in this view.</p>;
-  return <><p className="quiet-note">Showing {rows.length.toLocaleString()} of {total.toLocaleString()} source row(s){total > rows.length ? " (inspection sample limited to 100)" : ""}.</p><div className="data-table-wrap" tabIndex={0}><table><thead><tr><th>Source row</th><th>Status</th><th>Before</th><th>After</th></tr></thead><tbody>{rows.map((row) => <tr key={row.source_row}><td><code>{row.source_row}</code></td><td>{row.status.replaceAll("_", " ")}</td><td><code>{JSON.stringify(row.before)}</code></td><td><code>{row.after ? JSON.stringify(row.after) : "removed"}</code></td></tr>)}</tbody></table></div></>;
+  return <><p className="quiet-note">Showing {rows.length.toLocaleString()} of {total.toLocaleString()} source row(s){total > rows.length ? " (inspection sample limited to 100)" : ""}.</p><div className="data-table-wrap" tabIndex={0}><table><thead><tr><th>Source row</th><th>Status</th><th>Before</th><th>After</th></tr></thead><tbody>{rows.map((row) => <tr key={row.source_row}><td><code>{row.source_row}</code></td><td><span className={`health-pill ${ROW_STATUS_TONE[row.status]}`}>{row.status.replaceAll("_", " ")}</span></td><td><code>{JSON.stringify(row.before)}</code></td><td><code>{row.after ? JSON.stringify(row.after) : "removed"}</code></td></tr>)}</tbody></table></div></>;
 }
