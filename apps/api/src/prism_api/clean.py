@@ -160,11 +160,16 @@ def _row_inspection(before: pd.DataFrame, after: pd.DataFrame, request: CleanTra
                      if index in after_indices else None)
         return CleanRowInspection(source_row=str(index), status=kind, before=before_row, after=after_row)
 
-    changed = [item(index, "removed" if index in removed_indices else "changed")
-               for index in before.index if index in affected_indices][:INSPECTION_LIMIT]
+    # Slice the index list to INSPECTION_LIMIT *before* building row-detail objects:
+    # an operation like extraction that touches nearly every row (e.g. 99,500 of
+    # 100,000) must not pay for ~99,500 individual .loc[]/.to_dict() conversions
+    # just to display the first 100.
+    changed_index_order = [index for index in before.index if index in affected_indices][:INSPECTION_LIMIT]
+    changed = [item(index, "removed" if index in removed_indices else "changed") for index in changed_index_order]
+    exception_index_order = [index for index in before.index if index in exception_indices][:INSPECTION_LIMIT]
     exceptions = [item(index, "newly_missing" if index in after_indices and request.column and
                        request.column in after.columns and pd.isna(after.at[index, request.column]) else "unresolved")
-                  for index in before.index if index in exception_indices][:INSPECTION_LIMIT]
+                  for index in exception_index_order]
     return changed, changed_total, exceptions, len(exception_indices)
 
 

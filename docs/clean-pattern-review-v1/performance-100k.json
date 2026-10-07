@@ -1,0 +1,14 @@
+{
+  "rows": 100000,
+  "timings_ms": {
+    "upload_to_profile_visible_ms": 3569,
+    "sample_discovery_visible_ms": 20732,
+    "finding_review_render_ms": 71,
+    "full_verify_100k_ms": 888,
+    "exception_table_render_ms": 5,
+    "extraction_preview_ms": 17929,
+    "extraction_apply_ms": 28252,
+    "cancel_response_ms": 124
+  },
+  "scope": "Single local Chromium run at 1440x900; browser navigation plus local API and rendering wall clock; SQLite-backed default history store; no warmup or pass threshold. Discovery/verify/extract all operate on the invoice_id column (identifier_structure detector)."
+}
