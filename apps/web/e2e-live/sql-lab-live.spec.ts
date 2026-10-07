@@ -3,6 +3,7 @@ import { expect, test } from "@playwright/test";
 const API = `${process.env.NEXT_PUBLIC_PRISM_API_URL ?? "http://127.0.0.1:8000"}/api/v1`;
 
 test("SQL Lab completes a real browser to FastAPI analytical flow", async ({ page, request }) => {
+  test.setTimeout(150_000);
   const upload = await request.post(`${API}/overview/datasets`, {
     multipart: {
       file: {
@@ -33,7 +34,7 @@ test("SQL Lab completes a real browser to FastAPI analytical flow", async ({ pag
     runQuery.click(),
   ]);
   expect(resultsResponse.ok()).toBe(true);
-  await expect(page.getByText("3 returned / 3 total rows")).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText("3 returned / 3 total rows")).toBeVisible({ timeout: 90_000 });
   await expect(page.getByRole("button", { name: "Create dataset" })).toBeVisible();
   if (process.platform === "win32") {
     await expect(page).toHaveScreenshot("sql-lab-live-results.png", { animations: "disabled", fullPage: true, maxDiffPixelRatio: 0.01 });

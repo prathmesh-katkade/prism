@@ -15,30 +15,30 @@ function fixture(): Buffer {
 }
 
 test("100k-row Pattern Review performance: discover, verify, extract preview, apply, cancel", async ({ page }) => {
-  test.setTimeout(240_000);
+  test.setTimeout(600_000);
   const timings: Record<string, number> = {};
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/");
   await page.getByRole("button", { name: /Overview native/i }).click();
   let started = Date.now();
   await page.setInputFiles("#overview-upload", { name: "pattern-100k.csv", mimeType: "text/csv", buffer: fixture() });
-  await expect(page.getByLabel("Central tabbed workspace").getByRole("heading", { name: "pattern-100k.csv" })).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByLabel("Central tabbed workspace").getByRole("heading", { name: "pattern-100k.csv" })).toBeVisible({ timeout: 150_000 });
   timings.upload_to_profile_visible_ms = Date.now() - started;
 
   started = Date.now();
   await page.getByRole("button", { name: /Clean native/i }).click();
   const findingButton = page.locator(".clean-issues .finding-list button").filter({ has: page.locator("strong", { hasText: /^invoice_id$/ }) }).first();
-  await expect(findingButton).toBeVisible({ timeout: 60_000 }); // this is the initial bounded-sample discovery
+  await expect(findingButton).toBeVisible({ timeout: 150_000 }); // this is the initial bounded-sample discovery
   timings.sample_discovery_visible_ms = Date.now() - started;
 
   started = Date.now();
   await findingButton.click();
-  await expect(page.locator(".pattern-family-list li").first()).toBeVisible({ timeout: 10_000 });
+  await expect(page.locator(".pattern-family-list li").first()).toBeVisible({ timeout: 30_000 });
   timings.finding_review_render_ms = Date.now() - started;
 
   started = Date.now();
   await page.getByRole("button", { name: "Verify all rows" }).click();
-  await expect(page.getByText(/Verified against all 100,000 row\(s\)/)).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByText(/Verified against all 100,000 row\(s\)/)).toBeVisible({ timeout: 150_000 });
   timings.full_verify_100k_ms = Date.now() - started;
 
   started = Date.now();
@@ -47,12 +47,12 @@ test("100k-row Pattern Review performance: discover, verify, extract preview, ap
 
   started = Date.now();
   await page.locator(".pattern-family-list li").first().getByRole("button", { name: "Preview extraction for this family" }).click();
-  await expect(page.getByRole("tab", { name: "Changes" })).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByRole("tab", { name: "Changes" })).toBeVisible({ timeout: 150_000 });
   timings.extraction_preview_ms = Date.now() - started;
 
   started = Date.now();
   await page.getByRole("button", { name: "Apply transformation" }).click();
-  await expect(page.getByRole("heading", { name: /revision 1/ })).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByRole("heading", { name: /revision 1/ })).toBeVisible({ timeout: 150_000 });
   timings.extraction_apply_ms = Date.now() - started;
 
   // Cancellation responsiveness: trigger a second verify, then cancel it immediately

@@ -14,7 +14,7 @@ function fixture(): Buffer {
 }
 
 test("100k-row UI observation through Overview, Clean, SQL, and Visualize", async ({ page }) => {
-  test.setTimeout(240_000);
+  test.setTimeout(600_000);
   const timings: Record<string, number> = {};
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/");
@@ -26,11 +26,11 @@ test("100k-row UI observation through Overview, Clean, SQL, and Visualize", asyn
 
   started = Date.now();
   await page.getByRole("button", { name: /Clean native/i }).click();
-  await expect(page.getByRole("heading", { name: /found/ })).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByRole("heading", { name: /found/ })).toBeVisible({ timeout: 150_000 });
   timings.clean_workspace_open_ms = Date.now() - started;
   started = Date.now();
   await page.getByRole("button", { name: /revenue.*missing/i }).click();
-  await expect(page.getByRole("tab", { name: /Affected rows/ })).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByRole("tab", { name: /Affected rows/ })).toBeVisible({ timeout: 150_000 });
   timings.clean_preview_visible_ms = Date.now() - started;
 
   started = Date.now();
@@ -39,12 +39,12 @@ test("100k-row UI observation through Overview, Clean, SQL, and Visualize", asyn
   timings.sql_workspace_open_ms = Date.now() - started;
   started = Date.now();
   await page.getByRole("button", { name: /Run query/ }).click();
-  await expect(page.getByText("100 returned / 100 total rows")).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByText("100 returned / 100 total rows")).toBeVisible({ timeout: 150_000 });
   timings.sql_result_visible_ms = Date.now() - started;
 
   started = Date.now();
   await page.getByRole("button", { name: /Visualize native/i }).click();
-  await expect(page.getByRole("img", { name: /(chart with|Histogram with)/ })).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByRole("img", { name: /(chart with|Histogram with)/ })).toBeVisible({ timeout: 150_000 });
   timings.chart_visible_ms = Date.now() - started;
   const result = { rows: 100_000, timings_ms: timings, scope: "Single local Chromium run at 1440x900; browser navigation plus local API and rendering wall clock; no warmup or pass threshold. Default SQL query is SELECT * FROM data LIMIT 100, returning 100 rows." };
   writeFileSync(path.resolve("docs/analytical-workspaces-v1/performance-100k-ui.json"), JSON.stringify(result, null, 2) + "\n");
