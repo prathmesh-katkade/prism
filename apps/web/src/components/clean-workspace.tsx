@@ -548,6 +548,24 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
           <div><strong>{step.request.operation.replaceAll("_", " ")}<span className={`clean-step-status ${step.enabled ? "is-reviewed" : "is-disabled"}`}>{step.enabled ? "preview" : "disabled"}</span></strong><small>{recipePreview.step_impacts[index] ?? 0} affected</small></div>
         </li>)}</ol>
       </section> : null}
+
+      {draftSteps.length ? <section className="clean-recipe-draft" aria-label="Recipe draft editor"><span className="eyebrow">DRAFT RECIPE · {draftSteps.length} STEP(S)</span>
+        <ol>{draftSteps.map((step, index) => <li key={step.step_id}><span className="clean-step-number">{String(index + 1).padStart(2, "0")}</span><div><strong>{step.request.operation.replaceAll("_", " ")}<span className={`clean-step-status ${step.enabled ? "is-draft" : "is-disabled"}`}>{step.enabled ? "draft" : "disabled"}</span></strong><small>{step.request.column ?? "dataset"}{draftPreview ? ` · ${draftPreview.step_impacts[index] ?? 0} affected` : ""}</small></div><div className="clean-step-actions"><button aria-label={`Move step ${index + 1} up`} disabled={index === 0} onClick={() => setDraftSteps((current) => { const next = [...current]; [next[index - 1], next[index]] = [next[index]!, next[index - 1]!]; return next; })}>↑</button><button aria-label={`Move step ${index + 1} down`} disabled={index === draftSteps.length - 1} onClick={() => setDraftSteps((current) => { const next = [...current]; [next[index], next[index + 1]] = [next[index + 1]!, next[index]!]; return next; })}>↓</button><button aria-label={`Edit step ${index + 1}`} onClick={() => loadDraftStep(index)}>Edit</button><button aria-label={`${step.enabled ? "Disable" : "Enable"} step ${index + 1}`} onClick={() => setDraftSteps((current) => current.map((item, at) => at === index ? { ...item, enabled: !item.enabled } : item))}>{step.enabled ? "Disable" : "Enable"}</button><button aria-label={`Remove step ${index + 1}`} onClick={() => setDraftSteps((current) => current.filter((_, at) => at !== index))}>Remove</button></div></li>)}</ol>
+        {draftError ? <p role="alert" className="query-error">{draftError}</p> : draftPreview ? <p className="quiet-note">Downstream preview recomputed from revision {draftPreview.source_revision}. Projected health {draftPreview.projected_health.total}/100.</p> : <p className="quiet-note">Recomputing downstream preview…</p>}
+      </section> : null}
+
+      <div className="section-title"><div><span className="eyebrow">RECIPES</span><h2>{recipes.length ? `${recipes.length} saved` : "None saved yet"}</h2></div></div>
+      {recipes.length ? <ul className="clean-recipe-list">{recipes.map((recipe) => {
+        const enabledCount = recipe.steps.filter((step) => step.enabled).length;
+        return <li key={recipe.recipe_id}>
+          <div><strong>{recipe.name}</strong><small>v{recipe.version} · {enabledCount}/{recipe.steps.length} step(s) enabled</small></div>
+          <button className="secondary" disabled={applyingRecipeId === recipe.recipe_id} onClick={() => void previewSavedRecipe(recipe)}>Preview</button>
+          <button className="secondary" onClick={() => editSavedRecipe(recipe)}>Edit steps</button>
+          {recipePreview?.recipe_id === recipe.recipe_id ? <div className="clean-recipe-review"><small>Reviewed revision {recipePreview.source_revision} · {recipePreview.step_impacts.join(" / ")} affected row(s) by step</small><button disabled={applyingRecipeId === recipe.recipe_id} onClick={() => void applyRecipe(recipe)}>{applyingRecipeId === recipe.recipe_id ? "Applying…" : "Apply reviewed recipe"}</button><button className="secondary" onClick={() => setRecipePreview(null)}>Discard</button></div> : null}
+        </li>;
+      })}</ul> : <p className="quiet-note">Build an operation above and save it as a recipe to reuse it later, or on another dataset with the same schema.</p>}
+      {recipeError ? <p className="query-error" role="alert">{recipeError}</p> : null}
+
       <div className="section-title"><div><span className="eyebrow">ISSUES</span><h2>{clean.issues.length ? `${clean.issues.length} found` : "No issues detected"}</h2></div><span className={`health-pill ${clean.health.total >= 80 ? "good" : clean.health.total >= 60 ? "warn" : "risk"}`}>{clean.health.total}/100</span></div>
       <div className="finding-list">{clean.issues.map((issue) => <button key={issue.issue_id} className={!manualMode && issue.issue_id === selectedIssue?.issue_id ? "is-selected" : ""} onClick={() => void selectIssue(issue)}><span className={`finding-dot ${issue.severity === "high" ? "issue" : issue.severity === "medium" ? "warning" : "good"}`} /><strong>{issue.column ?? "Dataset"}</strong><small>{issue.description}</small></button>)}</div>
 
@@ -593,23 +611,6 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
         <label>Recipe name<input aria-label="Recipe name" value={recipeName} onChange={(event) => setRecipeName(event.target.value)} placeholder="e.g. Standard monthly cleanup" /></label>
         <button className="secondary" disabled={!manualBuild.request && !draftSteps.length} title={!manualBuild.request && !draftSteps.length ? (manualBuild.reason ?? undefined) : "Save the ordered steps as a reusable, versioned recipe"} onClick={() => void saveAsRecipe(manualBuild.request ?? draftSteps[0]!.request)}>{editingRecipeId ? "Save recipe changes" : "Save as recipe"}</button>
       </div> : null}
-
-      {draftSteps.length ? <section className="clean-recipe-draft" aria-label="Recipe draft editor"><span className="eyebrow">DRAFT RECIPE · {draftSteps.length} STEP(S)</span>
-        <ol>{draftSteps.map((step, index) => <li key={step.step_id}><span className="clean-step-number">{String(index + 1).padStart(2, "0")}</span><div><strong>{step.request.operation.replaceAll("_", " ")}<span className={`clean-step-status ${step.enabled ? "is-draft" : "is-disabled"}`}>{step.enabled ? "draft" : "disabled"}</span></strong><small>{step.request.column ?? "dataset"}{draftPreview ? ` · ${draftPreview.step_impacts[index] ?? 0} affected` : ""}</small></div><div className="clean-step-actions"><button aria-label={`Move step ${index + 1} up`} disabled={index === 0} onClick={() => setDraftSteps((current) => { const next = [...current]; [next[index - 1], next[index]] = [next[index]!, next[index - 1]!]; return next; })}>↑</button><button aria-label={`Move step ${index + 1} down`} disabled={index === draftSteps.length - 1} onClick={() => setDraftSteps((current) => { const next = [...current]; [next[index], next[index + 1]] = [next[index + 1]!, next[index]!]; return next; })}>↓</button><button aria-label={`Edit step ${index + 1}`} onClick={() => loadDraftStep(index)}>Edit</button><button aria-label={`${step.enabled ? "Disable" : "Enable"} step ${index + 1}`} onClick={() => setDraftSteps((current) => current.map((item, at) => at === index ? { ...item, enabled: !item.enabled } : item))}>{step.enabled ? "Disable" : "Enable"}</button><button aria-label={`Remove step ${index + 1}`} onClick={() => setDraftSteps((current) => current.filter((_, at) => at !== index))}>Remove</button></div></li>)}</ol>
-        {draftError ? <p role="alert" className="query-error">{draftError}</p> : draftPreview ? <p className="quiet-note">Downstream preview recomputed from revision {draftPreview.source_revision}. Projected health {draftPreview.projected_health.total}/100.</p> : <p className="quiet-note">Recomputing downstream preview…</p>}
-      </section> : null}
-
-      <div className="section-title"><div><span className="eyebrow">RECIPES</span><h2>{recipes.length ? `${recipes.length} saved` : "None saved yet"}</h2></div></div>
-      {recipes.length ? <ul className="clean-recipe-list">{recipes.map((recipe) => {
-        const enabledCount = recipe.steps.filter((step) => step.enabled).length;
-        return <li key={recipe.recipe_id}>
-          <div><strong>{recipe.name}</strong><small>v{recipe.version} · {enabledCount}/{recipe.steps.length} step(s) enabled</small></div>
-          <button className="secondary" disabled={applyingRecipeId === recipe.recipe_id} onClick={() => void previewSavedRecipe(recipe)}>Preview</button>
-          <button className="secondary" onClick={() => editSavedRecipe(recipe)}>Edit steps</button>
-          {recipePreview?.recipe_id === recipe.recipe_id ? <div className="clean-recipe-review"><small>Reviewed revision {recipePreview.source_revision} · {recipePreview.step_impacts.join(" / ")} affected row(s) by step</small><button disabled={applyingRecipeId === recipe.recipe_id} onClick={() => void applyRecipe(recipe)}>{applyingRecipeId === recipe.recipe_id ? "Applying…" : "Apply reviewed recipe"}</button><button className="secondary" onClick={() => setRecipePreview(null)}>Discard</button></div> : null}
-        </li>;
-      })}</ul> : <p className="quiet-note">Build an operation above and save it as a recipe to reuse it later, or on another dataset with the same schema.</p>}
-      {recipeError ? <p className="query-error" role="alert">{recipeError}</p> : null}
 
       <div className="section-title"><div><span className="eyebrow">VALIDATION</span><h2>{validationRules.length ? `${validationRules.length} rule(s)` : "No rules saved"}</h2></div></div>
       {validationRules.length ? <ul className="clean-recipe-list">{validationRules.map((rule) => {

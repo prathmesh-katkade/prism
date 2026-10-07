@@ -142,7 +142,7 @@ describe("Clean workspace", () => {
     await waitFor(() => expect(screen.getByText("Drop duplicates nightly")).toBeInTheDocument());
     expect(screen.getByText("v1 · 1/1 step(s) enabled")).toBeInTheDocument();
 
-    fireEvent.click(screen.getAllByRole("button", { name: "Preview" })[1]!);
+    fireEvent.click(screen.getAllByRole("button", { name: "Preview" })[0]!);
     await waitFor(() => expect(screen.getByText(/Recipe version 1 reviewed/)).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "Apply reviewed recipe" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/recipes/recipe_1/apply"), expect.objectContaining({ method: "POST" })));
