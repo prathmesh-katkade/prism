@@ -290,17 +290,50 @@ def _scoped_frame(frame: pd.DataFrame, group_by_column: str | None, group_value:
 decisions = DurablePatternReviewStore()
 
 
+def _passively_hidden_keys(dataset_id: str, source_revision: int, source_fingerprint: str) -> set[tuple[str, PatternDetectorKind | None]]:
+    """(column, detector_kind) pairs the ranked shortlist should not surface passively.
+
+    A suppressed rule stays hidden across revisions until explicitly revoked - that
+    is the entire point of "suppress" versus "ignore": ignoring is scoped to the
+    exact revision/fingerprint it was decided against (ADR 0025's "a revision-only
+    ignore must not silently carry into a new upload"), suppressing is not. Neither
+    ever hides a column from the deliberate column-explorer scan - only the passive
+    ranked list.
+    """
+    hidden: set[tuple[str, PatternDetectorKind | None]] = set()
+    for decision in decisions.list_for_dataset(dataset_id):
+        if decision.revoked:
+            continue
+        if decision.revokes_decision_id:
+            # A revoking decision's purpose is to cancel the one it references,
+            # not to independently hide anything itself - otherwise "revoke" (which
+            # the UI currently carries as an ignore_revision/accept_family record)
+            # would re-hide the very finding it just restored.
+            continue
+        if decision.decision is PatternReviewDecisionKind.SUPPRESS_RULE:
+            hidden.add((decision.column, decision.detector_kind))
+        elif decision.decision is PatternReviewDecisionKind.IGNORE_REVISION:
+            if decision.source_revision == source_revision and decision.source_fingerprint == source_fingerprint:
+                hidden.add((decision.column, decision.detector_kind))
+    return hidden
+
+
 @router.post("/datasets/{dataset_id}/patterns/discover", response_model=list[PatternFinding])
 def discover_patterns(dataset_id: str) -> list[PatternFinding]:
     """Dataset-wide bounded scan: the ranked shortlist. Runs every applicable
     detector against every column's bounded sample and returns every non-trivial
     finding, ranked by how much evidence it carries (largest non-exception family
-    first)."""
+    first). A finding the analyst suppressed or ignored for this exact revision is
+    left out of this passive list - it stays reachable through the column explorer
+    (/patterns/columns/{column}/scan), which never filters."""
     stored = overview_store.get(dataset_id)
+    hidden = _passively_hidden_keys(dataset_id, stored.dataset.revision, stored.source_fingerprint)
     findings: list[PatternFinding] = []
     for column in stored.frame.columns:
         series = stored.frame[column].head(BOUNDED_SAMPLE_ROWS)
         for detector_kind in _applicable_detectors(series):
+            if (column, detector_kind) in hidden or (column, None) in hidden:
+                continue
             finding = _run_detector(dataset_id, stored.frame, column, detector_kind,
                                     stored.dataset.revision, stored.source_fingerprint, full_scan=False)
             if finding.families or finding.exception_count:

@@ -325,7 +325,13 @@ def test_group_by_column_scopes_discovery_and_requires_group_value() -> None:
     assert finding["families"][0]["matching_count"] == 3  # only the 3 US rows, not all 5
 
 
-def test_saved_pattern_rule_survives_a_fresh_store_instance() -> None:
+def test_saved_pattern_rule_survives_reopening_the_store() -> None:
+    # NOTE: this proves the SQL row round-trips through a fresh Python object bound
+    # to the same database file - it does NOT prove persistence across a real API
+    # process restart (same interpreter, same in-memory caches never torn down).
+    # See apps/web/e2e-live/pattern-review-restart-live.spec.ts and
+    # docs/clean-pattern-review-v1/restart-evidence.md for the genuine proof: two
+    # separate uvicorn OS processes against the same database file.
     from prism_api.durable_registry import history_database_url
     from prism_api.durable_validation_rule_store import DurableValidationRuleStore
     from prism_api_contracts import ValidationRuleCreateRequest, ValidationRuleKind
@@ -340,3 +346,175 @@ def test_saved_pattern_rule_survives_a_fresh_store_instance() -> None:
     reloaded = reopened.get(created.rule_id)
     assert reloaded.accepted_family_signatures == ["L3-N6"]
     assert reloaded.missing_value_policy == "reject"
+
+
+def test_multiple_legitimate_families_can_be_accepted_together() -> None:
+    client = TestClient(create_app())
+    dataset_id = _dataset(client, csv=(
+        b"code\nAB-001\nAB-002\nAB-003\nXYZ-9000\nXYZ-9001\nXYZ-9002\n"
+    ), name="multi-family.csv")
+    before = _profile(client, dataset_id)
+    findings = client.post(f"/api/v1/clean/datasets/{dataset_id}/patterns/discover").json()
+    finding = next(f for f in findings if f["column"] == "code" and f["detector_kind"] == "identifier_structure")
+    signatures = [fam["family_signature"] for fam in finding["families"]]
+    assert len(signatures) == 2  # AB-### and XYZ-#### are both legitimate, different families
+    decision = client.post(f"/api/v1/clean/datasets/{dataset_id}/patterns/decisions", json={
+        "column": "code", "decision": "accept_family", "family_signatures": signatures,
+        "detector_kind": "identifier_structure",
+        "reviewed_source_revision": before["revision"], "reviewed_source_fingerprint": before["source_fingerprint"],
+    })
+    assert decision.status_code == 201
+    assert decision.json()["family_signatures"] == signatures
+
+    rule = client.post("/api/v1/clean/validation-rules", json={
+        "name": "Code formats", "kind": "pattern_family", "column": "code",
+        "accepted_family_signatures": signatures, "missing_value_policy": "allow",
+    }).json()
+    run = client.post(f"/api/v1/clean/datasets/{dataset_id}/validation-rules/{rule['rule_id']}/run")
+    assert run.json()["violation_count"] == 0  # every row matches one of the two accepted families
+
+
+def test_full_counts_reconcile_exactly_against_rows_examined() -> None:
+    client = TestClient(create_app())
+    dataset_id = _dataset(client)
+    verified = client.post(f"/api/v1/clean/datasets/{dataset_id}/patterns/columns/invoice_id/verify", json={
+        "column": "invoice_id", "detector_kind": "identifier_structure",
+    }).json()
+    family_total = sum(fam["matching_count"] for fam in verified["families"])
+    assert family_total + verified["exception_count"] + verified["missing_count"] == verified["rows_examined"]
+    assert verified["rows_examined"] == verified["total_rows"]
+
+
+def test_output_collision_rejects_without_any_mutation() -> None:
+    client = TestClient(create_app())
+    dataset_id = _dataset(client, csv=b"invoice_id,amount,amount_value\nINV-000123,10.5 kg,1\n", name="collide2.csv")
+    before = _profile(client, dataset_id)
+    response = client.post(f"/api/v1/clean/datasets/{dataset_id}/preview", json={"operation": "extract_numeric_unit", "column": "amount"})
+    assert response.status_code == 422
+    after = _profile(client, dataset_id)
+    assert after["revision"] == before["revision"]
+    assert after["source_fingerprint"] == before["source_fingerprint"]
+
+
+def test_date_ambiguity_is_flagged_not_silently_resolved() -> None:
+    client = TestClient(create_app())
+    dataset_id = _dataset(client, csv=b"event_date\n03/04/2026\n05/06/2026\n13/02/2026\n", name="dates.csv")
+    findings = client.post(f"/api/v1/clean/datasets/{dataset_id}/patterns/discover").json()
+    finding = next((f for f in findings if f["column"] == "event_date" and f["detector_kind"] == "date_ambiguity"), None)
+    assert finding is not None
+    assert "03/04/2026" in finding["families"][0]["example_values"]
+    assert "05/06/2026" in finding["families"][0]["example_values"]
+    assert "13/02/2026" not in finding["families"][0]["example_values"]  # unambiguous: day > 12 rules out month-first
+
+
+def test_extraction_apply_rejects_a_stale_preview_after_the_source_changes() -> None:
+    client = TestClient(create_app())
+    dataset_id = _dataset(client)
+    preview = client.post(f"/api/v1/clean/datasets/{dataset_id}/preview", json={
+        "operation": "extract_identifier_components", "column": "invoice_id", "family_signature": "L3-N6",
+    })
+    token = preview.json()["review_token"]
+    # the source changes after the preview was issued
+    other_preview = client.post(f"/api/v1/clean/datasets/{dataset_id}/preview", json={"operation": "drop_duplicates"})
+    client.post(f"/api/v1/clean/datasets/{dataset_id}/apply", json={"operation": "drop_duplicates", "review_token": other_preview.json()["review_token"]})
+    stale_apply = client.post(f"/api/v1/clean/datasets/{dataset_id}/apply", json={
+        "operation": "extract_identifier_components", "column": "invoice_id", "family_signature": "L3-N6", "review_token": token,
+    })
+    assert stale_apply.status_code == 409
+
+
+def test_extraction_apply_is_one_use_and_rejects_a_second_apply_with_the_same_token() -> None:
+    client = TestClient(create_app())
+    dataset_id = _dataset(client)
+    preview = client.post(f"/api/v1/clean/datasets/{dataset_id}/preview", json={"operation": "extract_numeric_unit", "column": "amount"})
+    token = preview.json()["review_token"]
+    first_apply = client.post(f"/api/v1/clean/datasets/{dataset_id}/apply", json={"operation": "extract_numeric_unit", "column": "amount", "review_token": token})
+    assert first_apply.status_code == 201
+    second_apply = client.post(f"/api/v1/clean/datasets/{dataset_id}/apply", json={"operation": "extract_numeric_unit", "column": "amount", "review_token": token})
+    assert second_apply.status_code in (404, 409, 422)  # the token was already consumed
+
+
+def test_saving_a_pattern_rule_never_mutates_the_dataset() -> None:
+    client = TestClient(create_app())
+    dataset_id = _dataset(client)
+    before = _profile(client, dataset_id)
+    client.post("/api/v1/clean/validation-rules", json={
+        "name": "Invoice ID format", "kind": "pattern_family", "column": "invoice_id",
+        "accepted_family_signatures": ["L3-N6"], "missing_value_policy": "allow",
+    })
+    after = _profile(client, dataset_id)
+    assert after == before
+
+
+def test_grouped_rule_actually_scopes_checking_to_its_grouping_condition() -> None:
+    client = TestClient(create_app())
+    dataset_id = _dataset(client, csv=(
+        b"country,invoice_id\n"
+        b"US,INV-000123\nUS,INV-000456\nUS,INV-000789\n"
+        b"DE,RE-2024-001\nDE,RE-2024-002\n"
+    ), name="grouped2.csv")
+    rule = client.post("/api/v1/clean/validation-rules", json={
+        "name": "US invoice format", "kind": "pattern_family", "column": "invoice_id",
+        "accepted_family_signatures": ["L3-N6"], "missing_value_policy": "allow",
+        "group_by_column": "country", "group_value": "US",
+    }).json()
+    assert rule["group_by_column"] == "country" and rule["group_value"] == "US"
+    run = client.post(f"/api/v1/clean/datasets/{dataset_id}/validation-rules/{rule['rule_id']}/run")
+    result = run.json()
+    assert result["total_checked"] == 3  # only the 3 US rows - DE rows are out of scope, not violations
+    assert result["violation_count"] == 0
+
+
+def test_ignore_revision_and_suppress_rule_have_different_scopes() -> None:
+    client = TestClient(create_app())
+    dataset_id = _dataset(client)
+    before = _profile(client, dataset_id)
+
+    # Ignore is scoped to this exact revision: it hides the finding from the
+    # passive ranked list now, but the column explorer still reaches it.
+    client.post(f"/api/v1/clean/datasets/{dataset_id}/patterns/decisions", json={
+        "column": "invoice_id", "decision": "ignore_revision", "detector_kind": "identifier_structure",
+        "reviewed_source_revision": before["revision"], "reviewed_source_fingerprint": before["source_fingerprint"],
+    })
+    findings_after_ignore = client.post(f"/api/v1/clean/datasets/{dataset_id}/patterns/discover").json()
+    assert not any(f["column"] == "invoice_id" and f["detector_kind"] == "identifier_structure" for f in findings_after_ignore)
+    explored = client.post(f"/api/v1/clean/datasets/{dataset_id}/patterns/columns/invoice_id/scan", json={
+        "column": "invoice_id", "detector_kind": "identifier_structure",
+    })
+    assert explored.status_code == 200 and explored.json()  # column explorer never filters
+
+    # Mutate the dataset to a new revision: the ignore must NOT carry forward.
+    preview = client.post(f"/api/v1/clean/datasets/{dataset_id}/preview", json={"operation": "drop_duplicates"})
+    client.post(f"/api/v1/clean/datasets/{dataset_id}/apply", json={"operation": "drop_duplicates", "review_token": preview.json()["review_token"]})
+    findings_new_revision = client.post(f"/api/v1/clean/datasets/{dataset_id}/patterns/discover").json()
+    assert any(f["column"] == "invoice_id" and f["detector_kind"] == "identifier_structure" for f in findings_new_revision)
+
+    # Suppress is NOT scoped to a revision: it stays hidden even after the dataset changes.
+    after_drop = _profile(client, dataset_id)
+    client.post(f"/api/v1/clean/datasets/{dataset_id}/patterns/decisions", json={
+        "column": "invoice_id", "decision": "suppress_rule", "detector_kind": "identifier_structure",
+        "reviewed_source_revision": after_drop["revision"], "reviewed_source_fingerprint": after_drop["source_fingerprint"],
+    })
+    preview2 = client.post(f"/api/v1/clean/datasets/{dataset_id}/preview", json={"operation": "trim_whitespace", "column": "amount"})
+    client.post(f"/api/v1/clean/datasets/{dataset_id}/apply", json={"operation": "trim_whitespace", "column": "amount", "review_token": preview2.json()["review_token"]})
+    findings_after_suppress_and_another_change = client.post(f"/api/v1/clean/datasets/{dataset_id}/patterns/discover").json()
+    assert not any(f["column"] == "invoice_id" and f["detector_kind"] == "identifier_structure" for f in findings_after_suppress_and_another_change)
+
+
+def test_revoking_a_suppression_restores_it_to_the_ranked_list() -> None:
+    client = TestClient(create_app())
+    dataset_id = _dataset(client)
+    before = _profile(client, dataset_id)
+    suppressed = client.post(f"/api/v1/clean/datasets/{dataset_id}/patterns/decisions", json={
+        "column": "invoice_id", "decision": "suppress_rule", "detector_kind": "identifier_structure",
+        "reviewed_source_revision": before["revision"], "reviewed_source_fingerprint": before["source_fingerprint"],
+    }).json()
+    hidden = client.post(f"/api/v1/clean/datasets/{dataset_id}/patterns/discover").json()
+    assert not any(f["column"] == "invoice_id" and f["detector_kind"] == "identifier_structure" for f in hidden)
+
+    client.post(f"/api/v1/clean/datasets/{dataset_id}/patterns/decisions", json={
+        "column": "invoice_id", "decision": "ignore_revision", "revokes_decision_id": suppressed["decision_id"],
+        "reviewed_source_revision": before["revision"], "reviewed_source_fingerprint": before["source_fingerprint"],
+    })
+    restored = client.post(f"/api/v1/clean/datasets/{dataset_id}/patterns/discover").json()
+    assert any(f["column"] == "invoice_id" and f["detector_kind"] == "identifier_structure" for f in restored)
