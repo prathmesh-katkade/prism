@@ -146,7 +146,7 @@ export function VisualizeWorkspace({ datasetId, onSelectContext, onOpenWorkflow 
       {drilldownError ? <p className="query-error" role="alert">{drilldownError}</p> : null}
       {drilldown ? <div className="viz-drilldown">
         <p className="clean-preview-summary">
-          <strong>{drilldown.total_matching_rows.toLocaleString()}</strong> contributing row(s){drilldown.truncated ? <> — showing the first <strong>{drilldown.rows.length}</strong> (truncated, not downloaded in full)</> : null}, filtered by {Object.entries((drilldown.filters_applied ?? {})).map(([key, value]) => `${key} = ${value}`).join(", ")}.
+          <strong>{drilldown.total_matching_rows.toLocaleString()}</strong> contributing row(s){drilldown.truncated ? <> — showing the first <strong>{drilldown.rows.length}</strong> (truncated, not downloaded in full)</> : null}, filtered by {Object.entries((drilldown.filters_applied ?? {})).map(([key, value]) => `${key} = ${value}`).join(", ")}. <button type="button" className="secondary viz-drilldown-clear" onClick={() => setDrilldown(null)}>Clear selection</button>
         </p>
         <DrillDownTable rows={drilldown.rows} />
       </div> : null}
