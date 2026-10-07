@@ -769,6 +769,10 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
       </> : <p className="quiet-note">Select an issue from the navigator, or start a manual operation, to inspect it and preview a fix.</p>}
       {error ? <p className="query-error" role="alert">{error}</p> : null}
       <WorkspaceProposalPanel kind="clean" datasetId={datasetId} onReview={(proposal) => { if (proposal.clean_operation) { setManualMode(true); void previewOperation(proposal.clean_operation); } }} />
+      <div className="inspector-actions clean-next-workspace"><span className="eyebrow">NEXT WORKSPACE</span>
+        <button type="button" className="secondary" onClick={() => onOpenWorkflow("sql-lab")}>Use this revision in SQL Lab</button>
+        <button type="button" className="secondary" onClick={() => onOpenWorkflow("visualize")}>Visualize this revision</button>
+      </div>
     </aside>
   </article>;
 }
