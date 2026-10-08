@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+﻿import { expect, test } from "@playwright/test";
 import { writeFileSync } from "node:fs";
 import path from "node:path";
 
@@ -45,14 +45,24 @@ test("100k-row Pattern Review performance: discover, verify, extract preview, ap
   await expect(page.locator(".data-table-wrap table tbody tr").first()).toBeVisible();
   timings.exception_table_render_ms = Date.now() - started;
 
+  const numericFinding = page.locator(".clean-issues .finding-list button").filter({ hasText: "numeric unit" }).filter({ has: page.locator("strong", { hasText: /^amount$/ }) }).first();
+  await numericFinding.click();
+  await page.getByRole("button", { name: "Verify all rows" }).click();
+  await expect(page.getByText(/Verified against all 100,000 row\(s\)/)).toBeVisible({ timeout: 150_000 });
+  started = Date.now();
+  await page.getByRole("button", { name: "Next exceptions" }).click();
+  await expect(page.getByText(/Showing 11–20 of 334 exception row\(s\)/)).toBeVisible({ timeout: 30_000 });
+  timings.exception_page_ms = Date.now() - started;
+  await findingButton.click();
+
   started = Date.now();
   await page.locator(".pattern-family-list li").first().getByRole("button", { name: "Preview extraction for this family" }).click();
   await expect(page.getByRole("tab", { name: "Changes" })).toBeVisible({ timeout: 150_000 });
   timings.extraction_preview_ms = Date.now() - started;
 
   started = Date.now();
-  await page.getByRole("button", { name: "Apply transformation" }).click();
-  await expect(page.getByRole("heading", { name: /revision 1/ })).toBeVisible({ timeout: 150_000 });
+  await page.getByRole("button", { name: "Apply reviewed change" }).click();
+  await expect(page.locator(".clean-preview header")).toContainText("revision 1", { timeout: 150_000 });
   timings.extraction_apply_ms = Date.now() - started;
 
   // Cancellation responsiveness: trigger a second verify, then cancel it immediately
@@ -70,7 +80,7 @@ test("100k-row Pattern Review performance: discover, verify, extract preview, ap
   const result = {
     rows: 100_000,
     timings_ms: timings,
-    scope: "Single local Chromium run at 1440x900; browser navigation plus local API and rendering wall clock; SQLite-backed default history store; no warmup or pass threshold. Discovery/verify/extract all operate on the invoice_id column (identifier_structure detector).",
+    scope: `Single local Chromium run at 1440x900; browser navigation plus local API and rendering wall clock; ${process.env.PRISM_ANALYTICAL_HISTORY_DATABASE_URL?.startsWith("mysql") ? "MySQL" : "SQLite"} history store; no warmup or pass threshold. Discovery/extraction use invoice_id (identifier_structure); exception paging uses amount (numeric_unit).`,
   };
   writeFileSync(path.resolve("docs/clean-pattern-review-v1/performance-100k.json"), JSON.stringify(result, null, 2) + "\n");
   console.log(`PRISM_PATTERNS_100K ${JSON.stringify(result)}`);

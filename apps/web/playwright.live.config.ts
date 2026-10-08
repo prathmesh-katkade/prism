@@ -45,6 +45,10 @@ export default defineConfig({
         PRISM_OLLAMA_MODEL: process.env.PRISM_OLLAMA_MODEL ?? "llama3.2:3b",
         PRISM_OLLAMA_BASE_URL: process.env.PRISM_OLLAMA_BASE_URL ?? "http://127.0.0.1:11434",
         PRISM_OLLAMA_TIMEOUT_SECONDS: process.env.PRISM_OLLAMA_TIMEOUT_SECONDS ?? "10",
+        // Opt-in only (see pattern-review-verify-cancellation-live.spec.ts): unset/zero
+        // in every normal suite run, so it never affects the 100k timings measured
+        // elsewhere in this same suite.
+        PRISM_PATTERN_VERIFY_TEST_DELAY_MS: process.env.PRISM_PATTERN_VERIFY_TEST_DELAY_MS ?? "0",
         PYTHONPATH: localPythonPath,
       }
     },

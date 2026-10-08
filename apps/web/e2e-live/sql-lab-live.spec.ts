@@ -18,7 +18,7 @@ test("SQL Lab completes a real browser to FastAPI analytical flow", async ({ pag
   const started = Date.now();
   await page.goto("/");
   await page.getByRole("button", { name: /SQL Lab native/i }).click();
-  await expect(page.getByRole("heading", { name: "Write against evidence, not assumptions." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Untitled query" })).toBeVisible();
   await expect(page.locator(".monaco-editor")).toBeVisible();
   expect(Date.now() - started).toBeLessThan(8_000);
 
@@ -40,7 +40,7 @@ test("SQL Lab completes a real browser to FastAPI analytical flow", async ({ pag
     await expect(page).toHaveScreenshot("sql-lab-live-results.png", { animations: "disabled", fullPage: true, maxDiffPixelRatio: 0.01 });
   }
 
-  await page.getByRole("button", { name: "Inspect plan", exact: true }).click();
+  await page.getByRole("button", { name: "Plan", exact: true }).click();
   await expect(page.getByRole("tab", { name: "plan" })).toHaveAttribute("aria-selected", "true");
   await page.getByRole("tab", { name: "results" }).click();
   const [promotion] = await Promise.all([
@@ -72,7 +72,7 @@ test("AI Analyst streams through the live API and returns SQL Lab evidence", asy
   await expect(page.getByText("I prepared a schema-grounded, read-only SQL draft.")).toBeVisible();
 
   await page.getByRole("button", { name: "Open draft in SQL Lab" }).click();
-  await expect(page.getByRole("heading", { name: "Write against evidence, not assumptions." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Untitled query" })).toBeVisible();
   const runQuery = page.getByRole("button", { name: /Run query/ });
   await expect(runQuery).toBeEnabled();
   await runQuery.click();

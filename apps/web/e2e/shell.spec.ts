@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+﻿import { expect, test } from "@playwright/test";
 
 test("native shell has no automated axe accessibility violations", async ({ page }) => {
   await page.goto("/");
@@ -73,7 +73,7 @@ test("native SQL Lab has a stable keyboard-first query studio surface", async ({
   await page.route("**/api/v1/sql-lab/connections/local%3Ads_sales/schema", async (route) => route.fulfill({ json: { connection: { connection_id: "local:ds_sales", label: "sales.csv · local dataset", source_type: "local_dataset", dialect: "duckdb", status: "ready", capabilities: [{ name: "query_execution", supported: true }], source_fingerprint: "a".repeat(64) }, tables: [{ name: "data", columns: [{ name: "revenue", data_type: "float64", nullable: true, sample_count: 2 }] }], schema_fingerprint: "b".repeat(64) } }));
   await page.goto("/");
   await page.getByRole("button", { name: /SQL Lab native/i }).click();
-  await expect(page.getByRole("heading", { name: "Write against evidence, not assumptions." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Untitled query" })).toBeVisible();
   await expect(page.getByText("revenue")).toBeVisible();
   await expect(page.locator(".monaco-editor")).toBeVisible();
   await expect(page).toHaveScreenshot("sql-lab-dark.png", { animations: "disabled", fullPage: true, maxDiffPixelRatio: 0.01 });
@@ -117,7 +117,7 @@ test("native Clean workspace previews a proposed fix and applies it as a new, re
   let applied = false;
   await page.route("**/api/v1/clean/datasets/*/state", async (route) => route.fulfill({ json: applied ? { dataset: { ...cleanDataset, revision: 1, row_count: 4 }, issues: [], history: [{ transformation_id: "t1", operation: "drop_duplicates", column: null, parameters: {}, affected_rows: 1, affected_columns: [], source_revision: 0, resulting_revision: 1, source_fingerprint: cleanDataset.source_fingerprint, resulting_fingerprint: "b".repeat(64), reversible: true, created_at: "2026-08-28T00:00:00Z" }], health: cleanHealth } : { dataset: cleanDataset, issues: [cleanIssue], history: [], health: cleanHealth } }));
   await page.route("**/api/v1/clean/datasets/*/atlas", async (route) => route.fulfill({ json: { action: "explain_issue", summary: cleanIssue.description, uncertainty: "Issue detection is a deterministic screening pass; it flags candidates for review, not confirmed defects.", evidence: [], proposed_operation: { operation: "drop_duplicates" } } }));
-  await page.route("**/api/v1/clean/datasets/*/preview", async (route) => route.fulfill({ json: { operation: "drop_duplicates", affected_rows: 1, affected_columns: [], before_sample: [{ segment: "a" }], after_sample: [{ segment: "a" }], warnings: [], projected_health: cleanHealth } }));
+  await page.route("**/api/v1/clean/datasets/*/preview", async (route) => route.fulfill({ json: { operation: "drop_duplicates", review_token: "review_clean_visual", source_revision: 0, affected_rows: 1, affected_columns: [], before_sample: [{ segment: "a" }], after_sample: [{ segment: "a" }], warnings: [], projected_health: cleanHealth } }));
   await page.route("**/api/v1/clean/datasets/*/apply", async (route) => { applied = true; return route.fulfill({ status: 201, json: { dataset: { ...cleanDataset, revision: 1, row_count: 4 }, transformation: { transformation_id: "t1", operation: "drop_duplicates", column: null, parameters: {}, affected_rows: 1, affected_columns: [], source_revision: 0, resulting_revision: 1, source_fingerprint: cleanDataset.source_fingerprint, resulting_fingerprint: "b".repeat(64), reversible: true, created_at: "2026-08-28T00:00:00Z" }, issues: [], health: cleanHealth } }); });
 
   await page.goto("/");
@@ -128,10 +128,10 @@ test("native Clean workspace previews a proposed fix and applies it as a new, re
   await expect(page.getByRole("heading", { name: "1 found" })).toBeVisible();
   await page.getByRole("button", { name: /Dataset/ }).click();
   await expect(page.getByText(/affects/)).toBeVisible();
-  await page.getByRole("button", { name: "Apply transformation" }).focus();
-  await expect(page.getByRole("button", { name: "Apply transformation" })).toBeFocused();
-  await page.getByRole("button", { name: "Apply transformation" }).click();
-  await expect(page.getByRole("heading", { name: /revision 1/ })).toBeVisible();
+  await page.getByRole("button", { name: "Apply reviewed change" }).focus();
+  await expect(page.getByRole("button", { name: "Apply reviewed change" })).toBeFocused();
+  await page.getByRole("button", { name: "Apply reviewed change" }).click();
+  await expect(page.locator(".clean-preview header")).toContainText("revision 1");
   // Scoped to Clean's own subtree: the shell chrome (tabs, rail, command palette) is covered by
   // the dedicated "native shell has no automated axe accessibility violations" baseline above.
   const violations = await page.addScriptTag({ path: "node_modules/axe-core/axe.min.js" }).then(() => page.evaluate(async () => (await (window as typeof window & { axe: { run(context: unknown): Promise<{ violations: unknown[] }> } }).axe.run(document.querySelector(".clean-workspace"))).violations));

@@ -34,6 +34,8 @@ def test_identifier_structure_finds_legitimate_families_and_buckets_singletons_a
     assert invoice_finding["families"][0]["matching_count"] == 3
     assert invoice_finding["exception_count"] == 2
     assert set(invoice_finding["exception_examples"]) == {"AB12", "ZZZZZZ"}
+    assert list(zip(invoice_finding["exception_source_rows"], invoice_finding["exception_examples"])) == [("3", "AB12"), ("4", "ZZZZZZ")]
+    assert invoice_finding["nonmatching_count"] == 0
 
 
 def test_numeric_unit_never_merges_distinct_units_and_flags_detection_limit_and_no_match() -> None:
@@ -45,6 +47,9 @@ def test_numeric_unit_never_merges_distinct_units_and_flags_detection_limit_and_
     assert families == {"unit:kg": 2}
     assert amount_finding["exception_count"] == 3  # limit:unit:kg (1), unit:lb (1), and "abc" which matches nothing
     assert "abc" in amount_finding["exception_examples"]
+    assert list(zip(amount_finding["exception_source_rows"], amount_finding["exception_examples"])) == [
+        ("2", "<0.05 kg"), ("3", "99 lb"), ("4", "abc")]
+    assert amount_finding["nonmatching_count"] == 0
 
 
 def test_verify_runs_a_real_full_scan_not_a_sample() -> None:
@@ -69,6 +74,27 @@ def test_verify_requires_an_explicit_detector_kind() -> None:
         json={"column": "invoice_id"},
     )
     assert response.status_code == 422
+
+
+def test_exception_pages_are_bounded_and_bound_to_the_reviewed_source() -> None:
+    client = TestClient(create_app())
+    values = ["INV-000123", "INV-000456", "INV-000789"] + [f"A-{'1' * width}" for width in range(1, 14)]
+    dataset_id = _dataset(client, ("invoice_id\n" + "\n".join(values) + "\n").encode(), "many-exceptions.csv")
+    finding = client.post(f"/api/v1/clean/datasets/{dataset_id}/patterns/columns/invoice_id/verify",
+                          json={"column": "invoice_id", "detector_kind": "identifier_structure"}).json()
+    request = {"detector_kind": "identifier_structure", "reviewed_source_revision": finding["source_revision"],
+               "reviewed_source_fingerprint": finding["source_fingerprint"], "verified": True, "offset": 10, "limit": 2}
+    page = client.post(f"/api/v1/clean/datasets/{dataset_id}/patterns/columns/invoice_id/exceptions", json=request)
+    assert page.status_code == 200
+    assert page.json() == {"total": 13, "offset": 10, "limit": 2,
+                           "rows": [{"source_row": "13", "value": "A-11111111111"},
+                                    {"source_row": "14", "value": "A-111111111111"}]}
+    stale = client.post(f"/api/v1/clean/datasets/{dataset_id}/patterns/columns/invoice_id/exceptions",
+                        json={**request, "reviewed_source_revision": finding["source_revision"] + 1})
+    assert stale.status_code == 409
+    oversized = client.post(f"/api/v1/clean/datasets/{dataset_id}/patterns/columns/invoice_id/exceptions",
+                            json={**request, "limit": 101})
+    assert oversized.status_code == 422
 
 
 def test_extract_identifier_components_preserves_leading_zeros_and_leaves_non_matching_rows_blank() -> None:
@@ -405,6 +431,7 @@ def test_date_ambiguity_is_flagged_not_silently_resolved() -> None:
     assert "03/04/2026" in finding["families"][0]["example_values"]
     assert "05/06/2026" in finding["families"][0]["example_values"]
     assert "13/02/2026" not in finding["families"][0]["example_values"]  # unambiguous: day > 12 rules out month-first
+    assert finding["nonmatching_count"] == 1
 
 
 def test_extraction_apply_rejects_a_stale_preview_after_the_source_changes() -> None:
@@ -518,3 +545,102 @@ def test_revoking_a_suppression_restores_it_to_the_ranked_list() -> None:
     })
     restored = client.post(f"/api/v1/clean/datasets/{dataset_id}/patterns/discover").json()
     assert any(f["column"] == "invoice_id" and f["detector_kind"] == "identifier_structure" for f in restored)
+
+
+def _large_identifier_csv(rows: int) -> bytes:
+    lines = [b"invoice_id,amount"]
+    for i in range(rows):
+        lines.append(f"INV-{i:06d},{10 + i % 50}.5 kg".encode())
+    return b"\n".join(lines) + b"\n"
+
+
+def test_verify_job_runs_to_completion_with_real_progress_and_a_verified_finding() -> None:
+    client = TestClient(create_app())
+    dataset_id = _dataset(client, csv=_large_identifier_csv(500), name="verify-job.csv")
+    started = client.post(f"/api/v1/clean/datasets/{dataset_id}/patterns/columns/invoice_id/verify/start",
+                          json={"column": "invoice_id", "detector_kind": "identifier_structure"})
+    assert started.status_code == 202
+    job_id = started.json()["job_id"]
+    assert started.json()["rows_total"] == 500
+
+    for _ in range(200):
+        status_body = client.get(f"/api/v1/clean/datasets/{dataset_id}/patterns/columns/invoice_id/verify/jobs/{job_id}").json()
+        if status_body["state"] != "running":
+            break
+    assert status_body["state"] == "succeeded"
+    assert status_body["rows_checked"] == 500
+    assert status_body["finding"]["verified"] is True
+    assert status_body["finding"]["sampling_method"] == "full_scan"
+    assert status_body["finding"]["rows_examined"] == 500
+
+
+def test_verify_job_can_be_cancelled_mid_scan_and_the_server_genuinely_stops(monkeypatch) -> None:
+    """Proves SERVER-side termination, not merely a fast client return: a slow,
+    deterministic checkpoint delay (opt-in, test-only env var) keeps a 20,000-row
+    scan running long enough to reliably catch it mid-flight, cancel it, and then
+    show the job's own recorded rows_checked stayed below rows_total - i.e. the
+    scan loop itself stopped early, which a client-side AbortController alone
+    could never demonstrate."""
+    monkeypatch.setenv("PRISM_PATTERN_VERIFY_TEST_DELAY_MS", "60")
+    client = TestClient(create_app())
+    dataset_id = _dataset(client, csv=_large_identifier_csv(20_000), name="verify-cancel.csv")
+    started = client.post(f"/api/v1/clean/datasets/{dataset_id}/patterns/columns/invoice_id/verify/start",
+                          json={"column": "invoice_id", "detector_kind": "identifier_structure"})
+    assert started.status_code == 202
+    job_id = started.json()["job_id"]
+    assert started.json()["rows_total"] == 20_000
+
+    # Wait for at least one real checkpoint so there is genuine in-flight
+    # progress to interrupt (not a job that hasn't started its scan loop yet).
+    progressed = None
+    for _ in range(100):
+        progressed = client.get(f"/api/v1/clean/datasets/{dataset_id}/patterns/columns/invoice_id/verify/jobs/{job_id}").json()
+        if progressed["rows_checked"] > 0:
+            break
+    assert progressed is not None and progressed["rows_checked"] > 0
+    assert progressed["state"] == "running"  # confirms the job was genuinely still in flight when cancelled below
+
+    cancelled = client.post(f"/api/v1/clean/datasets/{dataset_id}/patterns/columns/invoice_id/verify/jobs/{job_id}/cancel").json()
+
+    final = cancelled
+    for _ in range(300):
+        if final["state"] != "running":
+            break
+        final = client.get(f"/api/v1/clean/datasets/{dataset_id}/patterns/columns/invoice_id/verify/jobs/{job_id}").json()
+    assert final["state"] == "cancelled"
+    assert final["finding"] is None  # a cancelled job never publishes verified=true
+    # The decisive proof of server-side (not client-side) termination: the
+    # job's own last recorded checkpoint is strictly short of the full 20,000
+    # rows - the scan loop itself stopped, it did not quietly finish in the
+    # background while only the client gave up waiting.
+    assert final["rows_checked"] < 20_000
+
+    # A second poll after cancellation must keep reporting the same terminal
+    # state, never silently resume or flip to succeeded.
+    again = client.get(f"/api/v1/clean/datasets/{dataset_id}/patterns/columns/invoice_id/verify/jobs/{job_id}").json()
+    assert again["state"] == "cancelled" and again["finding"] is None
+
+
+def test_cancelling_an_already_succeeded_verify_job_does_not_change_its_state() -> None:
+    client = TestClient(create_app())
+    dataset_id = _dataset(client, csv=_large_identifier_csv(50), name="verify-race.csv")
+    started = client.post(f"/api/v1/clean/datasets/{dataset_id}/patterns/columns/invoice_id/verify/start",
+                          json={"column": "invoice_id", "detector_kind": "identifier_structure"})
+    job_id = started.json()["job_id"]
+    status_body = started.json()
+    for _ in range(200):
+        if status_body["state"] != "running":
+            break
+        status_body = client.get(f"/api/v1/clean/datasets/{dataset_id}/patterns/columns/invoice_id/verify/jobs/{job_id}").json()
+    assert status_body["state"] == "succeeded"
+
+    late_cancel = client.post(f"/api/v1/clean/datasets/{dataset_id}/patterns/columns/invoice_id/verify/jobs/{job_id}/cancel").json()
+    assert late_cancel["state"] == "succeeded"  # a late cancel on finished work is a no-op, not a retroactive downgrade
+    assert late_cancel["finding"] is not None
+
+
+def test_verify_job_status_for_an_unknown_job_id_is_a_clean_404() -> None:
+    client = TestClient(create_app())
+    dataset_id = _dataset(client)
+    response = client.get(f"/api/v1/clean/datasets/{dataset_id}/patterns/columns/invoice_id/verify/jobs/patternverify_doesnotexist")
+    assert response.status_code == 404

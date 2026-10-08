@@ -1,5 +1,40 @@
 # Pattern Review restart evidence
 
+## FINAL rerun on the server-side-cancellation tree — 2026-10-08
+
+Rerun after adding server-side verification cancellation
+(`clean_patterns.py`'s job-based `/verify/start`/`/verify/jobs/{id}`
+endpoints), to confirm the new job-record dict (`_verify_records`, in-process
+only, never persisted) does not and should not survive a restart - in-flight
+verification jobs are not expected to, and are not claimed to; only durable
+decisions and saved validation rules are.
+
+First invocation: fresh process, uploaded a dataset, persisted one accepted
+`identifier_structure` family decision and one `pattern_family` validation
+rule, then exited with its deliberate one-test skip (port 8000 confirmed
+free immediately after). Second invocation, a genuinely separate OS process
+(`PRISM_PATTERN_RESTART_PROOF=1`), confirmed the dataset, decision, and rule
+all survived, successfully ran the restored rule against the original
+dataset from Clean's "Run" action (0 violations - the compatible case), and
+correctly rejected running it against a newly-uploaded, incompatible second
+dataset with 422 (schema-compatibility check still enforced after restart,
+not bypassed). Result: **1 passed (649ms)**.
+
+## Fresh integration rerun — 2026-10-07
+
+Using only `.prism/pattern-restart-20261007.sqlite`, the first Playwright
+invocation started API PID 25540, uploaded a dataset, persisted one accepted
+family decision and one validation rule, then exited with its deliberate
+one-test skip. Port 8000 was free before the next invocation. The second
+invocation started API PID 380 against the same file and passed its browser
+test. It confirmed the original decision and rule, uploaded a compatible
+second dataset, ran the rule from Clean, and asserted exactly two violations
+at source rows `3` and `4` out of five checked. An incompatible upload's rule
+run returned 422. Raw outputs:
+`.prism/pattern-restart-first.log` and `.prism/pattern-restart-second.log`.
+These logs are local verification artifacts; the process and outcome summary
+is recorded here for the feature documentation.
+
 ## What this proves and what it doesn't
 
 `test_clean_patterns.py::test_saved_pattern_rule_survives_reopening_the_store`

@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+﻿import { expect, test, type Page } from "@playwright/test";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 
@@ -70,10 +70,10 @@ test("Pattern Review: discover, inspect evidence, accept a family, extract, and 
   await familyItem.getByRole("button", { name: "Preview extraction for this family" }).click();
   await expect(page.getByRole("tab", { name: "Changes" })).toBeVisible({ timeout: 10_000 });
   await capture(page, "extraction-preview");
-  const applyButton = page.getByRole("button", { name: "Apply transformation" });
+  const applyButton = page.getByRole("button", { name: "Apply reviewed change" });
   await expect(applyButton).toBeEnabled();
   await applyButton.click();
-  await expect(page.getByRole("heading", { name: /revision 1/ })).toBeVisible({ timeout: 10_000 });
+  await expect(page.locator(".clean-preview header")).toContainText("revision 1", { timeout: 10_000 });
 
   await page.getByRole("button", { name: /Overview native/i }).click();
   await page.locator(".column-card", { hasText: "invoice_id_part2" }).click();

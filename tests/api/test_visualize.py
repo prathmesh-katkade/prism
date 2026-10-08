@@ -44,6 +44,21 @@ def test_render_aggregates_server_side_and_never_returns_raw_row_count_of_data()
     assert body["provenance"]["source_fingerprint"]
 
 
+def test_horizontal_bar_uses_the_same_aggregation_and_contributing_rows_as_bar() -> None:
+    client = TestClient(create_app())
+    dataset_id = _dataset(client)
+    spec = {"mark": "horizontal_bar", "intent": "comparison", "dimension": "segment", "measure": "revenue", "aggregation": "sum", "filters": {"segment": "a"}}
+    rendered = client.post(f"/api/v1/visualize/datasets/{dataset_id}/render", json=spec)
+    assert rendered.status_code == 200
+    vertical = client.post(f"/api/v1/visualize/datasets/{dataset_id}/render", json={**spec, "mark": "bar"})
+    assert vertical.status_code == 200
+    assert rendered.json()["data"] == vertical.json()["data"]
+    inspected = client.post(f"/api/v1/visualize/datasets/{dataset_id}/drilldown", json={"spec": spec, "dimension_value": "a"})
+    assert inspected.status_code == 200
+    assert inspected.json()["total_matching_rows"] == 3
+    assert all(row["segment"] == "a" for row in inspected.json()["rows"])
+
+
 def test_render_caps_categories_and_warns_instead_of_silently_truncating() -> None:
     client = TestClient(create_app())
     dataset_id = _dataset(client)

@@ -20,6 +20,16 @@
   --prism-completed:#30754d; --prism-blocked:#ac3d37;
   --prism-running:#966f1c; --prism-recorded:#0768aa;
 }
+.prism-shell:has(.shell-body.has-local-inspector) {
+  --prism-canvas:#101315; --prism-surface:#15191b; --prism-raised:#1c2225;
+  --prism-text:#edf2f4; --prism-muted:#b6c2c9; --prism-border:#30393e;
+  --prism-selection:#efbd4e; --prism-completed:#72cb8a;
+}
+.prism-shell.theme-light:has(.shell-body.has-local-inspector) {
+  --prism-canvas:#f6f7f6; --prism-surface:#fff; --prism-raised:#f2f4f4;
+  --prism-text:#17232a; --prism-muted:#40525b; --prism-border:#c8d0d3;
+  --prism-selection:#865d00; --prism-completed:#247544;
+}
 @media (prefers-reduced-motion:reduce) {
   :root { --prism-motion-feedback:0ms; --prism-motion-handoff:0ms; }
 }

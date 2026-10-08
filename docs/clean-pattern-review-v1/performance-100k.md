@@ -94,3 +94,23 @@ No pass/fail latency threshold is declared. 100k rows with a single
 extraction operation is a single local measurement, not a service-level
 guarantee, and the remaining multi-second cost in `_health()`/`add_revision()`
 is real and un-optimized - it is out of this feature's scope, not hidden.
+
+## Later reference-driven MySQL browser measurement (2026-10-07)
+
+The newer `performance-100k.json` supersedes the JSON example above. In the
+complete local Chromium 1440 x 900 MySQL 8.4 live-suite run with 100,000
+uploaded rows, the timed stages were: upload to profile visible 5.60s,
+sample discovery visible 21.84s, full verification 0.90s, explicit next
+exception page 0.92s, extraction preview 18.45s, apply 30.06s, and browser
+Cancel response 121ms. A separate targeted run measured 2.42s for the same
+exception-page step and 44.98s for apply, illustrating run-to-run variation.
+The page request used `amount`/`numeric_unit`; the
+discovery and extraction used `invoice_id`/`identifier_structure`. These are
+wall-clock browser intervals, including local API and rendering as applicable;
+there was no warmup or preselected passing threshold. The host was Windows 11
+Pro with an AMD Ryzen 5 9600X (12 logical processors) and 14.9 GiB physical
+RAM. This single local run is not a portable benchmark.
+
+**Cancel response is UI-only evidence.** The API scan remains synchronous and
+can continue after the browser aborts. The requested server cancellation and
+progress are still open, despite the sub-second verification observed here.

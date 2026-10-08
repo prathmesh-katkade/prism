@@ -53,11 +53,16 @@ test("pattern decisions and a saved validation rule survive a fresh API process"
   expect(datasetList.some((entry) => entry.source_name === "restart-proof.csv")).toBe(true);
 
   const rules = await request.get(`${API}/clean/validation-rules`);
-  const ruleList = await rules.json() as Array<{ name: string; kind: string; accepted_family_signatures?: string[] }>;
+  const ruleList = await rules.json() as Array<{ rule_id: string; name: string; kind: string; accepted_family_signatures?: string[] }>;
   const restartRule = ruleList.find((rule) => rule.name === "Restart-proof invoice format");
   expect(restartRule).toBeDefined();
   expect(restartRule?.kind).toBe("pattern_family");
   expect(restartRule?.accepted_family_signatures).toEqual(["L3-N6"]);
+  const original = datasetList.find((entry) => entry.source_name === "restart-proof.csv")!;
+  const decisions = await request.get(`${API}/clean/datasets/${original.dataset_id}/patterns/decisions`);
+  expect(decisions.status()).toBe(200);
+  expect((await decisions.json() as Array<{ decision: string; family_signatures: string[] }>).some(
+    (entry) => entry.decision === "accept_family" && entry.family_signatures.includes("L3-N6"))).toBe(true);
 
   // Pattern decisions are listed per dataset_id; confirm via the UI's own saved-rule
   // list, which is what the user actually sees, rather than reaching for an id the
@@ -67,4 +72,20 @@ test("pattern decisions and a saved validation rule survive a fresh API process"
   await expect(page.getByLabel("Central tabbed workspace").getByRole("heading", { name: "restart-check.csv" })).toBeVisible();
   await page.getByRole("button", { name: /Clean native/i }).click();
   await expect(page.getByText("Restart-proof invoice format")).toBeVisible({ timeout: 10_000 });
+  const [compatibleResponse] = await Promise.all([
+    page.waitForResponse((response) => response.url().endsWith(`/validation-rules/${restartRule!.rule_id}/run`) && response.status() === 200),
+    page.locator(".clean-validation-row").filter({ hasText: "Restart-proof invoice format" }).getByRole("button", { name: "Run" }).click(),
+  ]);
+  const compatibleResult = await compatibleResponse.json() as { total_checked: number; violation_count: number; violation_source_rows: string[] };
+  expect(compatibleResult.total_checked).toBe(5);
+  expect(compatibleResult.violation_count).toBe(2);
+  expect(compatibleResult.violation_source_rows).toEqual(["3", "4"]);
+
+  const incompatible = await request.post(`${API}/overview/datasets`, {
+    multipart: { file: { name: "restart-incompatible.csv", mimeType: "text/csv", buffer: Buffer.from("other_column\nfoo\n") } },
+  });
+  expect(incompatible.status()).toBe(201);
+  const incompatibleId = (await incompatible.json() as { dataset_id: string }).dataset_id;
+  const incompatibleRun = await request.post(`${API}/clean/datasets/${incompatibleId}/validation-rules/${restartRule!.rule_id}/run`);
+  expect(incompatibleRun.status()).toBe(422);
 });

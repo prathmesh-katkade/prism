@@ -68,7 +68,7 @@ test("real workflow recording: computation, specialist objection, evidence inspe
 
   // 4. Exact-query handoff.
   await page.getByRole("button", { name: "Open exact query in SQL Lab" }).click();
-  await expect(page.getByRole("heading", { name: "Write against evidence, not assumptions." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Untitled query" })).toBeVisible();
   await expect(page.locator(".monaco-editor")).toContainText('SUM("revenue")');
   await page.screenshot({ path: `${PROOF}/specialist-review-04-exact-query-handoff.png`, fullPage: true });
 

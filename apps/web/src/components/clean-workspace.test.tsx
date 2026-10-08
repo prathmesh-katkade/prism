@@ -1,4 +1,4 @@
-import React from "react";
+﻿import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { CleanWorkspace } from "./clean-workspace";
@@ -28,7 +28,7 @@ describe("Clean workspace", () => {
       if (path.includes("/profile")) return json({});
       if (path.includes("/recipes")) return json([]);
       if (path.endsWith("/atlas")) return json({ action: "explain_issue", summary: "1 rows are exact duplicates of another row.", uncertainty: "Issue detection is a deterministic screening pass; it flags candidates for review, not confirmed defects.", evidence: [], proposed_operation: { operation: "drop_duplicates" } });
-      if (path.endsWith("/preview")) return json({ operation: "drop_duplicates", affected_rows: 1, affected_columns: [], before_sample: [{ segment: "a" }], after_sample: [{ segment: "a" }], warnings: [], projected_health: health });
+      if (path.endsWith("/preview")) return json({ operation: "drop_duplicates", review_token: "review_issue", source_revision: 0, affected_rows: 1, affected_columns: [], before_sample: [{ segment: "a" }], after_sample: [{ segment: "a" }], warnings: [], projected_health: health });
       if (path.endsWith("/apply")) { applied = true; return json({ dataset: dataset1, transformation, issues: [], health }, 201); }
       return json({});
     });
@@ -40,10 +40,12 @@ describe("Clean workspace", () => {
     fireEvent.click(screen.getByRole("button", { name: /Dataset[\s\S]*exact duplicates/ }));
 
     await waitFor(() => expect(screen.getByText(/affects/)).toBeInTheDocument());
-    expect(screen.getByRole("button", { name: "Apply transformation" })).not.toBeDisabled();
+    expect(screen.getByRole("button", { name: "Apply reviewed change" })).not.toBeDisabled();
 
-    fireEvent.click(screen.getByRole("button", { name: "Apply transformation" }));
+    fireEvent.click(screen.getByRole("button", { name: "Apply reviewed change" }));
+    fireEvent.click(screen.getByRole("button", { name: /Apply reviewed change|Applying/ }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/apply"), expect.objectContaining({ method: "POST" })));
+    expect(fetchMock.mock.calls.filter(([input]) => String(input).endsWith("/apply"))).toHaveLength(1);
     await waitFor(() => expect(screen.getByText(/revision 1/)).toBeInTheDocument());
   });
 
@@ -81,7 +83,7 @@ describe("Clean workspace", () => {
       if (path.includes("/rows")) return json(rowsPage);
       if (path.includes("/profile")) return json({ columns: [{ name: "notes", semantic_type: "text" }] });
       if (path.includes("/recipes")) return json([]);
-      if (path.endsWith("/preview")) return json({ operation: "drop_column", affected_rows: 5, affected_columns: ["notes"], before_sample: [{ notes: "x" }], after_sample: [{}], warnings: [], projected_health: health });
+      if (path.endsWith("/preview")) return json({ operation: "drop_column", review_token: "review_manual", source_revision: 0, affected_rows: 5, affected_columns: ["notes"], before_sample: [{ notes: "x" }], after_sample: [{}], warnings: [], projected_health: health });
       if (path.endsWith("/apply")) { applied = true; return json({ dataset: dataset1, transformation, issues: [], health }, 201); }
       return json({});
     });
@@ -102,7 +104,7 @@ describe("Clean workspace", () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/preview"), expect.objectContaining({ method: "POST", body: JSON.stringify({ operation: "drop_column", column: "notes" }) })));
     await waitFor(() => expect(screen.getByText(/affects/)).toBeInTheDocument());
 
-    fireEvent.click(screen.getByRole("button", { name: "Apply transformation" }));
+    fireEvent.click(screen.getByRole("button", { name: "Apply reviewed change" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/apply"), expect.objectContaining({ method: "POST" })));
     await waitFor(() => expect(screen.getByText(/revision 1/)).toBeInTheDocument());
   });
@@ -141,6 +143,8 @@ describe("Clean workspace", () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/recipes"), expect.objectContaining({ method: "POST", body: JSON.stringify({ name: "Drop duplicates nightly", steps: [{ request: { operation: "drop_duplicates" }, enabled: true }] }) })));
     await waitFor(() => expect(screen.getByText("Drop duplicates nightly")).toBeInTheDocument());
     expect(screen.getByText("v1 · 1/1 step(s) enabled")).toBeInTheDocument();
+    expect(screen.getByLabelText("Drop duplicates nightly steps")).toHaveTextContent("01");
+    expect(screen.getByLabelText("Drop duplicates nightly steps")).toHaveTextContent("Saved");
 
     fireEvent.click(screen.getAllByRole("button", { name: "Preview" })[0]!);
     await waitFor(() => expect(screen.getByText(/Recipe version 1 reviewed/)).toBeInTheDocument());
@@ -180,7 +184,7 @@ describe("Clean workspace", () => {
       if (path.includes("/rows")) return json(rowsPage);
       if (path.includes("/profile")) return json({ columns: [{ name: "region", semantic_type: "categorical" }] });
       if (path.includes("/recipes")) return json([]);
-      if (path.endsWith("/preview")) return json({ operation: "category_mapping", affected_rows: 11, changed_rows_total: 11, changed_rows: [{ source_row: "0", status: "changed", before: { region: "Bangalore" }, after: { region: "Bengaluru" } }], exception_rows_total: 1, exception_rows: [{ source_row: "3", status: "unresolved", before: { region: "Mumbai" }, after: { region: "Mumbai" } }], affected_columns: ["region"], before_sample: [{ region: "Bangalore" }], after_sample: [{ region: "Bengaluru" }], warnings: ["1 distinct value(s) in 'region' were not covered by the mapping and were left unchanged."], unresolved_values: ["Mumbai"], projected_health: health });
+      if (path.endsWith("/preview")) return json({ operation: "category_mapping", review_token: "review_mapping", source_revision: 0, affected_rows: 11, changed_rows_total: 11, changed_rows: [{ source_row: "0", status: "changed", before: { region: "Bangalore" }, after: { region: "Bengaluru" } }], exception_rows_total: 1, exception_rows: [{ source_row: "3", status: "unresolved", before: { region: "Mumbai" }, after: { region: "Mumbai" } }], affected_columns: ["region"], before_sample: [{ region: "Bangalore" }], after_sample: [{ region: "Bengaluru" }], warnings: ["1 distinct value(s) in 'region' were not covered by the mapping and were left unchanged."], unresolved_values: ["Mumbai"], projected_health: health });
       if (path.endsWith("/apply")) { applied = true; return json({ dataset: dataset1, transformation: { transformation_id: "t3", operation: "category_mapping", column: "region", parameters: {}, affected_rows: 11, affected_columns: ["region"], source_revision: 0, resulting_revision: 1, source_fingerprint: dataset0.source_fingerprint, resulting_fingerprint: "e".repeat(64), reversible: true, created_at: "2026-08-28T00:00:00Z" }, issues: [], health }, 201); }
       return json({});
     });
@@ -215,7 +219,7 @@ describe("Clean workspace", () => {
     await waitFor(() => expect(screen.getByText(/1 distinct unresolved value/)).toBeInTheDocument());
     expect(screen.getAllByText(/Mumbai/, { selector: "code" }).length).toBeGreaterThan(0); // source row and unresolved value remain inspectable
 
-    fireEvent.click(screen.getByRole("button", { name: "Apply transformation" }));
+    fireEvent.click(screen.getByRole("button", { name: "Apply reviewed change" }));
     await waitFor(() => expect(screen.getByText(/revision 1/)).toBeInTheDocument());
   });
 
@@ -265,6 +269,7 @@ describe("Clean workspace", () => {
     render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
 
     await waitFor(() => expect(screen.getByText("No rules saved")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("Add validation rule"));
     fireEvent.change(screen.getByLabelText("Validation rule name"), { target: { value: "Unique customers" } });
     fireEvent.change(screen.getByLabelText("Validation rule column"), { target: { value: "customer_id" } });
     fireEvent.click(screen.getByRole("button", { name: "Save rule" }));
@@ -291,6 +296,7 @@ describe("Clean workspace", () => {
     render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
 
     await waitFor(() => expect(screen.getByText("No rules saved")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("Add validation rule"));
     fireEvent.click(screen.getByRole("button", { name: "Save rule" }));
     await waitFor(() => expect(screen.getByText("Name the rule before saving it.")).toBeInTheDocument());
     expect(fetchMock).not.toHaveBeenCalledWith(expect.stringContaining("/validation-rules"), expect.objectContaining({ method: "POST" }));

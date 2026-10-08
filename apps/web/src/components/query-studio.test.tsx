@@ -52,7 +52,7 @@ describe("Query Studio", () => {
     vi.stubGlobal("fetch", fetchMock);
     render(<QueryStudio onSelectContext={vi.fn()} />);
 
-    await waitFor(() => expect(screen.getByRole("heading", { name: "Write against evidence, not assumptions." })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Untitled query" })).toBeInTheDocument());
     await waitFor(() => expect(screen.getByText("revenue")).toBeInTheDocument());
     fireEvent.keyDown(screen.getByLabelText("PRISM Query Studio editor"), { key: "Enter", ctrlKey: true });
     await waitFor(() => expect(screen.getByText("2 returned / 2 total rows")).toBeInTheDocument());
@@ -110,7 +110,7 @@ describe("Query Studio", () => {
     vi.stubGlobal("fetch", fetchMock);
     render(<QueryStudio onSelectContext={vi.fn()} />);
 
-    await waitFor(() => expect(screen.getByRole("heading", { name: "Write against evidence, not assumptions." })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Untitled query" })).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "Inspect joins" }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/joins/diagnose"), expect.objectContaining({ method: "POST" })));
@@ -134,7 +134,7 @@ describe("Query Studio", () => {
     vi.stubGlobal("fetch", fetchMock);
     render(<QueryStudio onSelectContext={vi.fn()} />);
 
-    await waitFor(() => expect(screen.getByRole("heading", { name: "Write against evidence, not assumptions." })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Untitled query" })).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "Find CTEs" }));
 
     await waitFor(() => expect(screen.getByRole("button", { name: "Inspect recent" })).toBeInTheDocument());
@@ -166,7 +166,7 @@ describe("Query Studio", () => {
     vi.stubGlobal("fetch", fetchMock);
     render(<QueryStudio onSelectContext={vi.fn()} />);
 
-    await waitFor(() => expect(screen.getByRole("heading", { name: "Write against evidence, not assumptions." })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Untitled query" })).toBeInTheDocument());
     fireEvent.keyDown(screen.getByLabelText("PRISM Query Studio editor"), { key: "Enter", ctrlKey: true });
     await waitFor(() => expect(screen.getByRole("button", { name: "Create dataset" })).toBeInTheDocument());
 
@@ -202,7 +202,7 @@ describe("Query Studio", () => {
     const onOpenWorkflow = vi.fn();
     render(<QueryStudio onSelectContext={vi.fn()} onDatasetReady={onDatasetReady} onOpenWorkflow={onOpenWorkflow} />);
 
-    await waitFor(() => expect(screen.getByRole("heading", { name: "Write against evidence, not assumptions." })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Untitled query" })).toBeInTheDocument());
     fireEvent.keyDown(screen.getByLabelText("PRISM Query Studio editor"), { key: "Enter", ctrlKey: true });
     await waitFor(() => expect(screen.getByRole("button", { name: "Use in Clean" })).toBeInTheDocument());
 

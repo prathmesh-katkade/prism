@@ -25,7 +25,7 @@ test("uploaded data produces a recorded SQL result and exact-query handoff", asy
   await expect(page.getByText('SELECT "region" AS group_value, SUM("revenue") AS result_value FROM "data" GROUP BY "region" ORDER BY "region" LIMIT 100')).toBeVisible();
   await page.screenshot({ path: `${PROOF}/atlas-sql-evidence.png`, fullPage: true });
   await page.getByRole("button", { name: "Open exact query in SQL Lab" }).click();
-  await expect(page.getByRole("heading", { name: "Write against evidence, not assumptions." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Untitled query" })).toBeVisible();
   await expect(page.getByRole("combobox", { name: "Source" })).toHaveValue(`local:${dataset.dataset_id}`);
   await expect(page.locator(".monaco-editor")).toContainText('SUM("revenue")');
   await page.screenshot({ path: `${PROOF}/atlas-sql-lab-handoff.png`, fullPage: true });
@@ -76,6 +76,9 @@ test("declared two-source join keeps the sales grain and opens its query in SQL 
   await expect(page.getByRole("grid", { name: "Query results" })).toBeVisible();
   await expect(page.getByRole("gridcell", { name: "west" })).toBeVisible();
   await expect(page.getByRole("gridcell", { name: "15" })).toBeVisible();
+  await expect(page.getByLabel("Join evidence")).toContainText("row(s) have no match", { timeout: 10_000 });
+  await page.setViewportSize({ width: 1586, height: 992 });
+  await page.screenshot({ path: "docs/clean-pattern-review-v1/evidence/sql-join-dark-1586x992.png" });
   await page.getByRole("tab", { name: "Atlas" }).click();
   await expect(page.getByText(/Recorded SQL result run_/)).toBeVisible();
   await page.screenshot({ path: `${PROOF}/atlas-join-evidence.png`, fullPage: true });

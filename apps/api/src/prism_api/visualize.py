@@ -195,7 +195,7 @@ def _aggregate(frame: pd.DataFrame, spec: VisualizationSpec) -> tuple[list[Visua
         if truncated:
             warnings.append(f"{len(series) - spec.max_categories} additional {dimension!r} categories are not shown (top {spec.max_categories} by value); a bar chart with this many categories would be unreadable, not just long.")
             series = series.iloc[: spec.max_categories]
-        if len(series) > 12 and spec.mark is VizMark.BAR:
+        if len(series) > 12 and spec.mark in {VizMark.BAR, VizMark.HORIZONTAL_BAR}:
             warnings.append("More than 12 categories are shown; consider a Pareto/ranking view or filtering to the segment you care about.")
     return [VisualizationDatum(label=str(index), value=float(value)) for index, value in series.items()], truncated, warnings
 
@@ -203,7 +203,7 @@ def _aggregate(frame: pd.DataFrame, spec: VisualizationSpec) -> tuple[list[Visua
 def _facets(frame: pd.DataFrame, spec: VisualizationSpec) -> tuple[list[VisualizationFacet], list[str]]:
     if not spec.facet:
         return [], []
-    if spec.mark not in {VizMark.BAR, VizMark.LINE}:
+    if spec.mark not in {VizMark.BAR, VizMark.HORIZONTAL_BAR, VizMark.LINE}:
         raise HTTPException(status_code=422, detail="Shared-scale small multiples currently support bar and line charts.")
     column = _require_column(frame, spec.facet, "facet")
     filtered = _filtered_frame(frame, spec)

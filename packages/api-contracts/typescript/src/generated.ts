@@ -1969,6 +1969,29 @@ export interface ParentRef {
 
 export type PatternDetectorKind = "identifier_structure" | "numeric_unit" | "delimited_compound" | "date_ambiguity";
 
+export interface PatternExceptionPage {
+  total: number;
+  offset: number;
+  limit: number;
+  rows?: PatternExceptionRow[];
+}
+
+export interface PatternExceptionPageRequest {
+  detector_kind: PatternDetectorKind;
+  reviewed_source_revision: number;
+  reviewed_source_fingerprint: string;
+  verified?: boolean;
+  group_by_column?: string;
+  group_value?: string;
+  offset?: number;
+  limit?: number;
+}
+
+export interface PatternExceptionRow {
+  source_row: string;
+  value: string;
+}
+
 export interface PatternFamily {
   family_signature: string;
   label: string;
@@ -1991,6 +2014,7 @@ export interface PatternFinding {
   families?: PatternFamily[];
   missing_count: number;
   exception_count: number;
+  nonmatching_count?: number;
   exception_examples?: string[];
   exception_source_rows?: string[];
   group_by_column?: string;
@@ -2032,6 +2056,17 @@ export interface PatternScanRequest {
   detector_kind?: PatternDetectorKind;
   group_by_column?: string;
   group_value?: string;
+}
+
+export type PatternVerifyJobState = "running" | "succeeded" | "cancelled" | "failed";
+
+export interface PatternVerifyJobStatus {
+  job_id: string;
+  state: PatternVerifyJobState;
+  rows_checked: number;
+  rows_total: number;
+  finding?: PatternFinding;
+  error?: string;
 }
 
 export interface Producer {
@@ -2484,7 +2519,7 @@ export type VizAggregation = "count" | "sum" | "mean" | "median" | "none";
 
 export type VizIntent = "comparison" | "distribution" | "relationship" | "composition" | "trend" | "ranking";
 
-export type VizMark = "bar" | "line" | "scatter" | "histogram" | "box";
+export type VizMark = "bar" | "horizontal_bar" | "line" | "scatter" | "histogram" | "box";
 
 export interface WorkspaceProposalRequest {
   kind: "clean" | "chart" | "sql";

@@ -28,6 +28,17 @@ bounded sample (`BOUNDED_SAMPLE_ROWS = 2000`) or the full column, and returns
   `_row_inspection` already uses elsewhere in Clean, so they are stable
   across a preview/apply cycle as long as the operation doesn't reset the
   index (none in this codebase do).
+- **Count denominator**: `rows_examined` is the explicit denominator for a
+  sampled or verified finding. `missing_count`, `exception_count`, and
+  `nonmatching_count` are disjoint from reported family matches and reconcile
+  to that denominator. Delimiter values without the winning separator and
+  unambiguous dates are nonmatching; they are not called malformed.
+- **Exception identity and paging**: example values and source-row IDs are
+  captured as pairs in source order. A separate explicit exception-page
+  request returns at most 100 pairs, checks the reviewed revision and
+  fingerprint, and rejects stale requests with 409. Paging recomputes the
+  selected detector on request; opening or rendering the UI does not repeat
+  a full verification scan.
 
 ## `identifier_structure` (version 1)
 

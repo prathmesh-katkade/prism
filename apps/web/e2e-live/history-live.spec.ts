@@ -20,16 +20,9 @@ test("History workspace shows a real SQL Lab result through the live API and ope
   await page.getByRole("button", { name: /SQL Lab native/i }).click();
   await expect(page.locator(".monaco-editor")).toBeVisible();
 
-  // The live suite shares one API process, so earlier tests may have created
-  // other local datasets. Bind SQL Lab to the dataset created by THIS test
-  // instead of relying on connection-list ordering. Use the toolbar's actual
-  // select rather than its accessible label because Monaco/query hydration can
-  // render before the labelled control is exposed to the accessibility tree,
-  // and because the <select>'s accessible name computation includes its
-  // currently selected option text once earlier tests have left connections
-  // registered -- the toolbar has exactly one <select> (Parameters is a
-  // <textarea>), so this stays unambiguous without depending on accname value.
-  const source = page.locator(".query-toolbar select");
+  // Bind SQL Lab to this test's uploaded dataset. The source selector lives in
+  // the left data-source pane after the reference-driven layout change.
+  const source = page.getByRole("combobox", { name: "Source" });
   await expect(source).toBeVisible({ timeout: 90_000 });
   const targetConnectionId = `local:${dataset.dataset_id}`;
   await expect(source.locator(`option[value="${targetConnectionId}"]`)).toHaveCount(1, { timeout: 90_000 });

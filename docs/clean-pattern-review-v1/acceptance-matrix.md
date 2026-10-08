@@ -1,5 +1,151 @@
 # Clean Pattern Review v1 — acceptance matrix
 
+## FINAL acceptance status — 2026-10-08 (read this section first)
+
+This section is authoritative. The "Superseding integration status — 2026-10-07"
+section below it, and the original table below that, are retained as a
+historical record of what was known at each earlier point — they are not
+current and must not be read as approval. If anything below conflicts with
+an earlier section in this file, this section wins.
+
+**What changed since the 2026-10-07 superseding note.** That note named two
+open, mandatory criteria: (1) server-side verification cancellation did not
+exist — a browser `AbortController` stopped the client from listening, but
+the server's synchronous scan kept running; (2) exact-GUI visual comparison
+against the three supplied references was in progress but unfinished. Both
+are now closed:
+
+1. **Server-side cancellation and progress** (`apps/api/src/prism_api/clean_patterns.py`):
+   full verification now runs as a background job (`QueryJobRuntime`, reused
+   as-is from SQL Lab's existing interruptible-job seam, not a new mechanism).
+   The scan loop checkpoints every `PROGRESS_CHECKPOINT_ROWS` (2,000) rows,
+   recording real `rows_checked`/`rows_total` progress and observing a
+   cancellation flag there — not only after the scan already finished. New
+   endpoints: `POST .../verify/start`, `GET .../verify/jobs/{id}`,
+   `POST .../verify/jobs/{id}/cancel`. A cancelled job's `finding` is always
+   `null`; `verified=true` can only follow an uninterrupted scan, checked
+   again at the moment the scan loop returns (closing the completion/cancel
+   race). The pre-existing synchronous `POST .../verify` endpoint is
+   unchanged and still available for direct/programmatic callers; the UI now
+   calls the job endpoints instead, since only those can be cancelled.
+   - **API-level proof** (`tests/api/test_clean_patterns.py`): a 20,000-row
+     scan with a test-only, env-var-gated per-checkpoint delay
+     (`PRISM_PATTERN_VERIFY_TEST_DELAY_MS`, unset/zero in production and in
+     every other test) is cancelled mid-scan; the job reaches
+     `state="cancelled"` with `rows_checked < rows_total` and `finding=None`,
+     a second poll stays cancelled, and cancelling an already-succeeded job
+     is a verified no-op (no retroactive downgrade).
+   - **Live-browser proof**, separating UI latency from server termination
+     (`apps/web/e2e-live/pattern-review-verify-cancellation-live.spec.ts`,
+     opt-in via the same env var so the normal suite run isn't slowed):
+     `PRISM_VERIFY_CANCELLATION_PROOF {"ui_cancel_response_ms":471,"server_rows_checked_at_cancel":12000,"server_rows_total":20000}`.
+     The server's own scan loop stopped at row 12,000 of 20,000 — a client
+     `AbortController` alone could never demonstrate this, since it only
+     stops the browser from listening.
+2. **Visual fidelity against the three supplied references**: see
+   `reference-discrepancy-audit.md` for the full, itemized comparison;
+   `reference-comparisons/*-side-by-side.png` for the actual side-by-side
+   captures at the references' exact 1586×992 size, dark/light, plus
+   400×844 narrow; `evidence/connected-workflow-20261007.webm` for a real
+   connected-workflow recording. Visual acceptance is **substantially
+   aligned, with named remaining discrepancies that are not release
+   blockers**: typography/control density in Clean and SQL Lab remain
+   somewhat smaller than the references; Visualize's bar thickness/margins
+   and saved-view composition remain less dense than pictured; Reports has
+   no approved reference and is styled from the shared system only. None of
+   these are content fabrications (no invented totals, no fake avatars, no
+   auto-approved mappings, no fictional join counts) — they are composition/
+   density gaps, named rather than hidden.
+
+**Fresh final gates, run on this exact tree (not inherited from an earlier
+run) immediately before this section was written:**
+
+| Gate | Result |
+|---|---|
+| `npm run lint` | clean |
+| `npm run typecheck` | clean |
+| `npm run test:web` | 106 passed / 16 files |
+| `npm run build:web` | clean |
+| `npm run a11y:baseline` | passed |
+| `ruff check` (CI's exact path set) | all checks passed |
+| `mypy` (CI's exact flags) | no issues in 102 source files |
+| `python tools/check_boundaries.py` | passed |
+| `python tools/check_secrets.py` | passed |
+| `python tools/generate_typescript_contracts.py --check` | clean (no diff) |
+| Full `pytest` | 1,359 passed, 7 skipped, 43 warnings |
+| `npm run test:visual` (desktop/mobile, Playwright) | 14 passed, 0 failed, no snapshot changes needed |
+| `npm run test:e2e:live` against disposable MySQL 8.4.9 (matches CI's `phase-4-live-e2e` exactly) | 23 passed, 5 skipped, 0 failed (2.6m) |
+| `npm run test:e2e:live` against isolated SQLite | 23 passed, 5 skipped, 0 failed (2.7m) |
+| Genuine two-OS-process restart proof | passed (649ms) — see `restart-evidence.md` for the current-tree rerun, including both process IDs and the second process's own request log |
+
+A false alarm during this verification pass is worth recording precisely
+because it was investigated rather than assumed: an initial SQLite live-suite
+rerun showed two tests failing on "strict mode violation: resolved to N
+elements" (apparent duplicate validation-rule entries). Direct reproduction
+proved the backend's `/clean/validation-rules` list was always correct
+(count 1) for a single created rule; the duplication was a self-inflicted
+test-environment artifact — Playwright's `webServer.command` runs with its
+cwd at the config file's directory (`apps/web/`), so the SQLite history file
+actually in use was `apps/web/.prism/runtime/analytical-history.sqlite`, a
+57MB file accumulated across this session's many earlier runs, not the
+repo-root `.prism/runtime/` path being cleared between attempts. Once the
+correct file was cleared, every rerun passed cleanly and reproducibly. No
+product code changed to "fix" this - there was nothing in the product to fix.
+
+The MySQL run's 5 skipped is one more than the historical 4: the new
+cancellation-proof spec correctly self-skips when the opt-in env var isn't
+set, rather than running unreliably fast and flaking.
+
+**Fresh 100k measurement** (`performance-100k.json`, regenerated by this
+MySQL run, not reused from before this feature's changes):
+`upload_to_profile_visible_ms=4547, sample_discovery_visible_ms=17670,
+full_verify_100k_ms=895, exception_page_ms=885,
+extraction_preview_ms=10689, extraction_apply_ms=26471,
+cancel_response_ms=123`. The uncancelled full-scan path still completes
+in under a second at 100k rows with the new job/checkpoint machinery in
+place — the checkpoint overhead (progress callback + cancellation check
+every 2,000 rows) is not measurable at this scale.
+
+## Superseding integration status — 2026-10-07
+
+The table below records an earlier Pattern Review backend/UI checkpoint and
+its then-current gate results. It is **not** the acceptance state of the
+reference-driven Clean/SQL Lab/Visualize/Reports integration requested later.
+At the current unlanded feature worktree, exact GUI comparison remains open.
+The new exception paging, nonmatching counts, horizontal bars, shared visual
+pass and browser workflow fixes require final fresh gates and visual review.
+Do not use the historical “Verified” labels below to approve landing.
+
+| Added integration criterion | Current state |
+|---|---|
+| Supplied 1586 × 992 references copied and compared with live captures | Captured; discrepancies in `reference-discrepancy-audit.md`; visual acceptance open. |
+| Pattern exception row identity and bounded paging | New API/UI and focused API test pass; full suite pending. |
+| Horizontal bar aggregation and contributing rows | Focused API test and live browser capture pass; full suite pending. |
+| Connected Clean → SQL → Visualize → Reports workflow | Targeted live browser rerun passed after fixing an Atlas control obstruction. |
+| SQLite entire live browser suite | First full run: 20 passed, 3 failed, 4 skipped; fixes made; full rerun pending. |
+| MySQL entire live browser suite | Disposable MySQL 8.4 parity tests: 31 passed; full browser run in progress. |
+| Genuine restart, second-dataset validation, stale/duplicate/suppression proof after latest changes | Historical evidence exists; current-SHA repeat pending. |
+| Main integration, exact-SHA CI, tag, and user app switch | Not done. |
+
+Update after the latest targeted MySQL browser run: exception paging and the
+join inspector passed in a 3/3 run; the 100k measurement is in
+`performance-100k.json`. The earlier "Cancellation during
+verification" row below proves UI cancellation only. It does **not** meet the
+requested cancellable API scan with progress; the server can continue working
+after the browser aborts. This remains a mandatory open criterion. The
+historical "This file reflects the final" sentence below is superseded by
+this section.
+
+The later full MySQL browser run passed 23 tests with 4 skips on fresh,
+disposable databases after the latest code changes. Full pytest passed 1,355
+with 7 skips and 43 warnings; 106/106 web unit tests passed on rerun; 14/14
+desktop/mobile visual tests passed without snapshot update. Static/build
+gates passed. The live connected-flow recording is
+`evidence/connected-workflow-20261007.webm`; the two-source SQL inspector
+capture is `evidence/sql-join-dark-1586x992.png`. Server-side cancellation
+and progress, final visual acceptance, main landing and exact-SHA CI remain
+open. No release assertion is warranted.
+
 Baseline snapshot: 2026-10-07, branch `prism/clean-pattern-review-v1`, branched
 from verified `origin/main` at `bc72625` (tag `prism-native-v1.0`, CI success
 confirmed via `gh run list` immediately before branching — not assumed).

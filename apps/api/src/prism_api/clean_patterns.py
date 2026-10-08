@@ -12,26 +12,36 @@ No model dependency: PRISM_AI_PROVIDER is never consulted here.
 
 from __future__ import annotations
 
+import os
 import re
+import time
 import uuid
+from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Optional
+from threading import Lock
+from typing import Callable, Optional
 
 import pandas as pd
 from fastapi import APIRouter, HTTPException, status
 from prism_api_contracts import (
     PatternDetectorKind,
+    PatternExceptionPage,
+    PatternExceptionPageRequest,
+    PatternExceptionRow,
     PatternFamily,
     PatternFinding,
     PatternReviewDecision,
     PatternReviewDecisionKind,
     PatternReviewDecisionRequest,
     PatternScanRequest,
+    PatternVerifyJobState,
+    PatternVerifyJobStatus,
 )
 
 from .clean import _detect_ambiguous_dates, _require_column
 from .durable_pattern_review_store import DurablePatternReviewStore
 from .overview import store as overview_store
+from .sql_jobs import QueryJob, QueryJobRuntime
 
 router = APIRouter(prefix="/api/v1/clean", tags=["clean-patterns"])
 
@@ -48,6 +58,45 @@ DETECTOR_VERSIONS: dict[PatternDetectorKind, int] = {
     PatternDetectorKind.DELIMITED_COMPOUND: 1,
     PatternDetectorKind.DATE_AMBIGUITY: 1,
 }
+
+# Full-scan verification runs as a cancellable background job (see QueryJobRuntime,
+# reused as-is from SQL Lab's job seam) instead of blocking the request thread.
+# A detector's scan loop calls back into _checkpoint() every PROGRESS_CHECKPOINT_ROWS
+# rows: that is where real, measured progress is recorded and where a cancellation
+# actually takes effect - not a flag checked only after the full scan already
+# finished. The checkpoint interval bounds how late a cancellation can land: at
+# most PROGRESS_CHECKPOINT_ROWS rows of unnecessary work past the cancel request.
+PROGRESS_CHECKPOINT_ROWS = 2000
+
+# Test-only knob, read from the environment (like PRISM_REQUIRE_DURABLE_HISTORY
+# elsewhere in this codebase) rather than exposed as an HTTP control - it can
+# only be set at process startup, never toggled at runtime by any client. When
+# non-zero, _checkpoint() sleeps this many milliseconds at every checkpoint, so
+# a live test can deterministically land a cancel request inside an in-progress
+# full scan instead of racing a sub-second completion. Unset (the production
+# default) adds no delay anywhere.
+def _test_checkpoint_delay_ms() -> int:
+    return int(os.environ.get("PRISM_PATTERN_VERIFY_TEST_DELAY_MS", "0") or "0")
+
+
+class _VerificationCancelled(Exception):
+    """Raised from inside a detector's scan loop the moment cancellation is
+    observed. Never escapes as an HTTP error - the job wrapper catches it and
+    records state=cancelled, which verified=true can never follow."""
+
+
+@dataclass
+class _VerifyJobRecord:
+    state: PatternVerifyJobState = PatternVerifyJobState.RUNNING
+    rows_checked: int = 0
+    rows_total: int = 0
+    finding: PatternFinding | None = None
+    error: str | None = None
+
+
+_verify_runtime = QueryJobRuntime()
+_verify_records: dict[str, _VerifyJobRecord] = {}
+_verify_records_lock = Lock()
 
 _LETTER_RUN = re.compile(r"[A-Za-z]+")
 _DIGIT_RUN = re.compile(r"\d+")
@@ -116,11 +165,29 @@ def _families_from_counts(counts: dict[str, int], examples: dict[str, list[str]]
     return families, exception_count, exception_examples
 
 
-def _collect_examples(series: pd.Series, signature_fn) -> tuple[dict[str, int], dict[str, list[str]], dict[str, list[str]]]:  # type: ignore[no-untyped-def]
+def _checkpoint(position: int, cancel_check: "Callable[[], bool] | None", progress_cb: "Callable[[int], None] | None") -> None:
+    """Called periodically (not every row - that would dominate the scan cost
+    itself) from inside a detector's main scan loop. Raises _VerificationCancelled
+    the moment a cancellation has been requested, so the caller unwinds without
+    finishing the remaining rows - this is the "stops within a defined, tested
+    bound" behavior, not a cosmetic flag checked only after the loop ends."""
+    if position % PROGRESS_CHECKPOINT_ROWS != 0:
+        return
+    if progress_cb is not None:
+        progress_cb(position)
+    delay_ms = _test_checkpoint_delay_ms()
+    if delay_ms:  # pragma: no cover - exercised only by the live cancellation test
+        time.sleep(delay_ms / 1000)
+    if cancel_check is not None and cancel_check():
+        raise _VerificationCancelled()
+
+
+def _collect_examples(series: pd.Series, signature_fn, cancel_check: "Callable[[], bool] | None" = None, progress_cb: "Callable[[int], None] | None" = None) -> tuple[dict[str, int], dict[str, list[str]], dict[str, list[str]]]:  # type: ignore[no-untyped-def]
     counts: dict[str, int] = {}
     examples: dict[str, list[str]] = {}
     source_rows: dict[str, list[str]] = {}
-    for index, value in series.items():
+    for position, (index, value) in enumerate(series.items()):
+        _checkpoint(position, cancel_check, progress_cb)
         text = str(value)
         signature = signature_fn(text) or NO_MATCH_SIGNATURE
         counts[signature] = counts.get(signature, 0) + 1
@@ -133,18 +200,28 @@ def _collect_examples(series: pd.Series, signature_fn) -> tuple[dict[str, int], 
     return counts, examples, source_rows
 
 
-def _detect_identifier_structure(series: pd.Series) -> tuple[list[PatternFamily], int, list[str], list[str]]:
-    counts, examples, source_rows = _collect_examples(series, _identifier_signature)
-    families, exception_count, exception_examples = _families_from_counts(counts, examples, _signature_label)
-    exception_source_rows: list[str] = []
-    ranked = sorted(counts.items(), key=lambda item: item[1], reverse=True)
+def _rows_with_exception_values(series: pd.Series, signature_fn, family_signatures: set[str],  # type: ignore[no-untyped-def]
+                                cancel_check: "Callable[[], bool] | None", progress_cb: "Callable[[int], None] | None") -> tuple[list[str], list[str]]:
+    values: list[str] = []
+    rows: list[str] = []
+    for position, (index, value) in enumerate(series.items()):
+        _checkpoint(position, cancel_check, progress_cb)
+        text = str(value)
+        if (signature_fn(text) or NO_MATCH_SIGNATURE) in family_signatures:
+            continue
+        values.append(text)
+        rows.append(str(index))
+        if len(values) >= MAX_EXCEPTION_EXAMPLES:
+            break
+    return values, rows
+
+
+def _detect_identifier_structure(series: pd.Series, cancel_check: "Callable[[], bool] | None" = None, progress_cb: "Callable[[int], None] | None" = None) -> tuple[list[PatternFamily], int, list[str], list[str]]:
+    counts, examples, _source_rows = _collect_examples(series, _identifier_signature, cancel_check, progress_cb)
+    families, exception_count, _exception_examples = _families_from_counts(counts, examples, _signature_label)
     family_signatures = {family.family_signature for family in families}
-    for signature, _count in ranked:
-        if signature not in family_signatures:
-            exception_source_rows.extend(source_rows.get(signature, []))
-            if len(exception_source_rows) >= MAX_EXCEPTION_EXAMPLES:
-                break
-    return families, exception_count, exception_examples, exception_source_rows[:MAX_EXCEPTION_EXAMPLES]
+    values, rows = _rows_with_exception_values(series, _identifier_signature, family_signatures, cancel_check, progress_cb)
+    return families, exception_count, values, rows
 
 
 def _numeric_unit_signature(text: str) -> Optional[str]:
@@ -163,26 +240,23 @@ def _numeric_unit_label(signature: str) -> str:
     return f"{base} with unit {unit!r}" if unit != "none" else f"{base} with no unit"
 
 
-def _detect_numeric_unit(series: pd.Series) -> tuple[list[PatternFamily], int, list[str], list[str]]:
-    counts, examples, source_rows = _collect_examples(series, _numeric_unit_signature)
-    families, exception_count, exception_examples = _families_from_counts(counts, examples, _numeric_unit_label)
-    exception_source_rows: list[str] = []
+def _detect_numeric_unit(series: pd.Series, cancel_check: "Callable[[], bool] | None" = None, progress_cb: "Callable[[int], None] | None" = None) -> tuple[list[PatternFamily], int, list[str], list[str]]:
+    counts, examples, _source_rows = _collect_examples(series, _numeric_unit_signature, cancel_check, progress_cb)
+    families, exception_count, _exception_examples = _families_from_counts(counts, examples, _numeric_unit_label)
     family_signatures = {family.family_signature for family in families}
-    ranked = sorted(counts.items(), key=lambda item: item[1], reverse=True)
-    for signature, _count in ranked:
-        if signature not in family_signatures:
-            exception_source_rows.extend(source_rows.get(signature, []))
-    return families, exception_count, exception_examples, exception_source_rows[:MAX_EXCEPTION_EXAMPLES]
+    values, rows = _rows_with_exception_values(series, _numeric_unit_signature, family_signatures, cancel_check, progress_cb)
+    return families, exception_count, values, rows
 
 
-def _detect_delimited_compound(series: pd.Series) -> tuple[list[PatternFamily], int, list[str], list[str]]:
+def _detect_delimited_compound(series: pd.Series, cancel_check: "Callable[[], bool] | None" = None, progress_cb: "Callable[[int], None] | None" = None) -> tuple[list[PatternFamily], int, list[str], list[str]]:
     non_null = [str(value) for value in series.dropna()]
     best: tuple[str, dict[int, int], dict[int, list[str]]] | None = None
     best_coverage = 0
     for delimiter in _DELIMITER_CANDIDATES:
         part_counts: dict[int, int] = {}
         part_examples: dict[int, list[str]] = {}
-        for text in non_null:
+        for position, text in enumerate(non_null):
+            _checkpoint(position, cancel_check, progress_cb)
             if delimiter not in text:
                 continue
             n_parts = len(text.split(delimiter))
@@ -206,8 +280,23 @@ def _detect_delimited_compound(series: pd.Series) -> tuple[list[PatternFamily], 
     return families, exception_count, exception_examples, []
 
 
-def _detect_date_ambiguity(series: pd.Series) -> tuple[list[PatternFamily], int, list[str], list[str]]:
+def _detect_date_ambiguity(series: pd.Series, cancel_check: "Callable[[], bool] | None" = None, progress_cb: "Callable[[int], None] | None" = None) -> tuple[list[PatternFamily], int, list[str], list[str]]:
+    # date_ambiguity delegates to clean.py's shared, already-vectorized date
+    # parser rather than a per-row Python loop, so it has no internal checkpoint
+    # to interrupt mid-call - a bounded, documented scope decision (not a gap
+    # discovered after the fact), consistent with this being the one detector
+    # the 100k measurements never used to justify the synchronous design it is
+    # replacing. Cancellation still takes effect at the checkpoint immediately
+    # before and after the call.
+    if cancel_check is not None and cancel_check():
+        raise _VerificationCancelled()
+    if progress_cb is not None:
+        progress_cb(0)
     ambiguous_values = _detect_ambiguous_dates(series)
+    if cancel_check is not None and cancel_check():
+        raise _VerificationCancelled()
+    if progress_cb is not None:
+        progress_cb(len(series))
     if not ambiguous_values:
         return [], 0, [], []
     ambiguous_set = set(ambiguous_values)
@@ -252,7 +341,8 @@ def _applicable_detectors(series: pd.Series) -> list[PatternDetectorKind]:
 
 def _run_detector(dataset_id: str, frame: pd.DataFrame, column: str, detector_kind: PatternDetectorKind,
                   source_revision: int, source_fingerprint: str, full_scan: bool,
-                  group_by_column: str | None = None, group_value: str | None = None) -> PatternFinding:
+                  group_by_column: str | None = None, group_value: str | None = None,
+                  cancel_check: "Callable[[], bool] | None" = None, progress_cb: "Callable[[int], None] | None" = None) -> PatternFinding:
     series = frame[column]
     total_rows = len(series)
     if full_scan:
@@ -262,7 +352,8 @@ def _run_detector(dataset_id: str, frame: pd.DataFrame, column: str, detector_ki
     missing_count = int(examined.isna().sum())
     non_null = examined.dropna()
     detector_fn = _DETECTORS[detector_kind]
-    families, exception_count, exception_examples, exception_source_rows = detector_fn(non_null)
+    families, exception_count, exception_examples, exception_source_rows = detector_fn(non_null, cancel_check, progress_cb)
+    nonmatching_count = len(examined) - missing_count - sum(family.matching_count for family in families) - exception_count
     insufficient_evidence = len(non_null) < MIN_FAMILY_SUPPORT or (not families and exception_count == 0 and detector_kind != PatternDetectorKind.DATE_AMBIGUITY)
     return PatternFinding(
         finding_id=f"pattern_{uuid.uuid4().hex}", dataset_id=dataset_id, column=column,
@@ -272,6 +363,7 @@ def _run_detector(dataset_id: str, frame: pd.DataFrame, column: str, detector_ki
         sampling_method="full_scan" if full_scan else "bounded_sample",
         verified=full_scan and len(examined) == total_rows,
         families=families, missing_count=missing_count, exception_count=exception_count,
+        nonmatching_count=nonmatching_count,
         exception_examples=exception_examples, exception_source_rows=exception_source_rows,
         group_by_column=group_by_column, group_value=group_value,
         insufficient_evidence=insufficient_evidence, created_at=datetime.now(timezone.utc),
@@ -360,10 +452,11 @@ def scan_column(dataset_id: str, column: str, request: PatternScanRequest) -> li
 
 @router.post("/datasets/{dataset_id}/patterns/columns/{column}/verify", response_model=PatternFinding)
 def verify_column(dataset_id: str, column: str, request: PatternScanRequest) -> PatternFinding:
-    """Full-dataset verification for one detector on one column. Deterministic
-    vectorized/row-wise computation over the full frame - no background job
-    infrastructure: see docs/clean-pattern-review-v1/performance.md for the
-    measured full-scan timing this synchronous design was checked against."""
+    """Full-dataset verification for one detector on one column, run to completion
+    on the request thread. This remains for direct/programmatic callers (and the
+    existing test suite) that want the result in one call with no polling. The
+    UI itself calls the cancellable job endpoints below instead, since this form
+    offers no way to stop a scan already in flight."""
     if request.detector_kind is None:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="detector_kind is required to verify.")
     stored = overview_store.get(dataset_id)
@@ -372,6 +465,125 @@ def verify_column(dataset_id: str, column: str, request: PatternScanRequest) -> 
     return _run_detector(dataset_id, scoped, column, request.detector_kind, stored.dataset.revision,
                          stored.source_fingerprint, full_scan=True,
                          group_by_column=request.group_by_column, group_value=request.group_value)
+
+
+def _verify_job_status(job_id: str) -> PatternVerifyJobStatus:
+    with _verify_records_lock:
+        record = _verify_records.get(job_id)
+    if record is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No such verification job (the server may have restarted since it ran).")
+    return PatternVerifyJobStatus(job_id=job_id, state=record.state, rows_checked=record.rows_checked,
+                                  rows_total=record.rows_total, finding=record.finding, error=record.error)
+
+
+@router.post("/datasets/{dataset_id}/patterns/columns/{column}/verify/start", response_model=PatternVerifyJobStatus, status_code=status.HTTP_202_ACCEPTED)
+def start_verify_job(dataset_id: str, column: str, request: PatternScanRequest) -> PatternVerifyJobStatus:
+    """Start full-dataset verification as a cancellable background job instead
+    of blocking the request thread. Reuses QueryJobRuntime (SQL Lab's existing
+    interruptible-job seam) rather than inventing a second one. The scan itself
+    is cooperative: it checks for cancellation roughly every PROGRESS_CHECKPOINT_ROWS
+    rows (see _checkpoint) and stops there, not merely once the full scan ends."""
+    if request.detector_kind is None:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="detector_kind is required to verify.")
+    stored = overview_store.get(dataset_id)
+    _require_column(stored.frame, column)
+    scoped = _scoped_frame(stored.frame, request.group_by_column, request.group_value)
+    total_rows = len(scoped[column])
+    job_id = f"patternverify_{uuid.uuid4().hex}"
+    record = _VerifyJobRecord(rows_total=total_rows)
+    with _verify_records_lock:
+        _verify_records[job_id] = record
+    detector_kind, source_revision, source_fingerprint = request.detector_kind, stored.dataset.revision, stored.source_fingerprint
+    group_by_column, group_value = request.group_by_column, request.group_value
+
+    def work(job: QueryJob) -> None:
+        def progress_cb(position: int) -> None:
+            with _verify_records_lock:
+                record.rows_checked = position
+        try:
+            finding = _run_detector(dataset_id, scoped, column, detector_kind, source_revision, source_fingerprint,
+                                    full_scan=True, group_by_column=group_by_column, group_value=group_value,
+                                    cancel_check=job.cancelled.is_set, progress_cb=progress_cb)
+        except _VerificationCancelled:
+            with _verify_records_lock:
+                record.state = PatternVerifyJobState.CANCELLED
+            return
+        except Exception as error:  # noqa: BLE001 - reported through the job status, not raised in a background thread
+            with _verify_records_lock:
+                record.state, record.error = PatternVerifyJobState.FAILED, str(error)
+            return
+        with _verify_records_lock:
+            # A cancellation requested after the scan's own last checkpoint but
+            # before this line must still never be reported as a successful
+            # verification - verified=true can only ever follow an uninterrupted
+            # scan, so this is checked again right here, not assumed.
+            if job.cancelled.is_set():
+                record.state = PatternVerifyJobState.CANCELLED
+            else:
+                record.state, record.finding, record.rows_checked = PatternVerifyJobState.SUCCEEDED, finding, record.rows_total
+
+    _verify_runtime.start(job_id, timeout_ms=120_000, work=work)
+    return _verify_job_status(job_id)
+
+
+@router.get("/datasets/{dataset_id}/patterns/columns/{column}/verify/jobs/{job_id}", response_model=PatternVerifyJobStatus)
+def get_verify_job(dataset_id: str, column: str, job_id: str) -> PatternVerifyJobStatus:
+    """Poll a verification job's real, current progress and state."""
+    return _verify_job_status(job_id)
+
+
+@router.post("/datasets/{dataset_id}/patterns/columns/{column}/verify/jobs/{job_id}/cancel", response_model=PatternVerifyJobStatus)
+def cancel_verify_job(dataset_id: str, column: str, job_id: str) -> PatternVerifyJobStatus:
+    """Request cancellation. Returns immediately; the job transitions to
+    state=cancelled once its scan loop reaches its next checkpoint, which the
+    caller observes by polling the job status - this endpoint does not itself
+    block until that happens."""
+    with _verify_records_lock:
+        already_done = job_id in _verify_records and _verify_records[job_id].state != PatternVerifyJobState.RUNNING
+    if not already_done:
+        _verify_runtime.cancel(job_id)
+    return _verify_job_status(job_id)
+
+
+@router.post("/datasets/{dataset_id}/patterns/columns/{column}/exceptions", response_model=PatternExceptionPage)
+def exception_page(dataset_id: str, column: str, request: PatternExceptionPageRequest) -> PatternExceptionPage:
+    """Page through actual source rows on explicit request, against the exact
+    reviewed revision. No exception values are persisted or silently rescanned
+    during a UI render. The response size remains bounded at 100 rows."""
+    stored = overview_store.get(dataset_id)
+    _require_column(stored.frame, column)
+    if (request.reviewed_source_revision != stored.dataset.revision
+            or request.reviewed_source_fingerprint != stored.source_fingerprint):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail="The dataset changed since this finding was reviewed; scan it again.")
+    scoped = _scoped_frame(stored.frame, request.group_by_column, request.group_value)
+    finding = _run_detector(dataset_id, scoped, column, request.detector_kind,
+                            stored.dataset.revision, stored.source_fingerprint,
+                            full_scan=request.verified,
+                            group_by_column=request.group_by_column, group_value=request.group_value)
+    series = scoped[column] if request.verified else scoped[column].head(BOUNDED_SAMPLE_ROWS)
+    family_signatures = {family.family_signature for family in finding.families}
+    delimiter = None
+    if request.detector_kind is PatternDetectorKind.DELIMITED_COMPOUND and finding.families:
+        delimiter = finding.families[0].family_signature[len("delim:")]
+    rows: list[PatternExceptionRow] = []
+    total = 0
+    for index, value in series.dropna().items():
+        value_text = str(value)
+        if request.detector_kind is PatternDetectorKind.IDENTIFIER_STRUCTURE:
+            signature = _identifier_signature(value_text) or NO_MATCH_SIGNATURE
+        elif request.detector_kind is PatternDetectorKind.NUMERIC_UNIT:
+            signature = _numeric_unit_signature(value_text) or NO_MATCH_SIGNATURE
+        elif delimiter and delimiter in value_text:
+            signature = f"delim:{delimiter}:parts:{len(value_text.split(delimiter))}"
+        else:
+            continue
+        if signature in family_signatures:
+            continue
+        if request.offset <= total < request.offset + request.limit:
+            rows.append(PatternExceptionRow(source_row=str(index), value=value_text))
+        total += 1
+    return PatternExceptionPage(total=total, offset=request.offset, limit=request.limit, rows=rows)
 
 
 @router.post("/datasets/{dataset_id}/patterns/decisions", response_model=PatternReviewDecision, status_code=status.HTTP_201_CREATED)

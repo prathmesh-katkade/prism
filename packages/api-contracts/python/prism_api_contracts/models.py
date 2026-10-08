@@ -794,6 +794,7 @@ class PatternFinding(ContractModel):
     families: list[PatternFamily] = Field(default_factory=list)
     missing_count: int = Field(ge=0)
     exception_count: int = Field(ge=0)
+    nonmatching_count: int = Field(default=0, ge=0)
     exception_examples: list[str] = Field(default_factory=list)
     exception_source_rows: list[str] = Field(default_factory=list)
     group_by_column: Optional[str] = None
@@ -807,6 +808,45 @@ class PatternScanRequest(ContractModel):
     detector_kind: Optional[PatternDetectorKind] = None
     group_by_column: Optional[str] = Field(default=None, min_length=1)
     group_value: Optional[str] = None
+
+
+class PatternExceptionPageRequest(ContractModel):
+    detector_kind: PatternDetectorKind
+    reviewed_source_revision: int = Field(ge=0)
+    reviewed_source_fingerprint: str = Field(min_length=16)
+    verified: bool = False
+    group_by_column: Optional[str] = Field(default=None, min_length=1)
+    group_value: Optional[str] = None
+    offset: int = Field(default=0, ge=0)
+    limit: int = Field(default=25, ge=1, le=100)
+
+
+class PatternExceptionRow(ContractModel):
+    source_row: str
+    value: str
+
+
+class PatternExceptionPage(ContractModel):
+    total: int = Field(ge=0)
+    offset: int = Field(ge=0)
+    limit: int = Field(ge=1)
+    rows: list[PatternExceptionRow] = Field(default_factory=list)
+
+
+class PatternVerifyJobState(str, Enum):
+    RUNNING = "running"
+    SUCCEEDED = "succeeded"
+    CANCELLED = "cancelled"
+    FAILED = "failed"
+
+
+class PatternVerifyJobStatus(ContractModel):
+    job_id: str = Field(min_length=1)
+    state: PatternVerifyJobState
+    rows_checked: int = Field(ge=0)
+    rows_total: int = Field(ge=0)
+    finding: Optional[PatternFinding] = None
+    error: Optional[str] = None
 
 
 class PatternReviewDecisionKind(str, Enum):
@@ -865,6 +905,7 @@ class AtlasCleanResponse(ContractModel):
 
 class VizMark(str, Enum):
     BAR = "bar"
+    HORIZONTAL_BAR = "horizontal_bar"
     LINE = "line"
     SCATTER = "scatter"
     HISTOGRAM = "histogram"

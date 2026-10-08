@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+﻿import { expect, test } from "@playwright/test";
 
 const CSV = "segment,revenue\na,10\na,10\nb,\nc,30\n"; // row 2 duplicates row 1; row 3 is missing revenue
 
@@ -28,10 +28,10 @@ test("Clean detects an issue, previews it, applies it as a new revision Overview
   await page.getByRole("button", { name: /Dataset/ }).click(); // the duplicate-rows issue has no column
   await expect(page.getByText(/affects/)).toBeVisible({ timeout: 10_000 });
 
-  const applyButton = page.getByRole("button", { name: "Apply transformation" });
+  const applyButton = page.getByRole("button", { name: "Apply reviewed change" });
   await expect(applyButton).toBeEnabled();
   await applyButton.click();
-  await expect(page.getByRole("heading", { name: /revision 1/ })).toBeVisible({ timeout: 10_000 });
+  await expect(page.locator(".clean-preview header")).toContainText("revision 1", { timeout: 10_000 });
 
   // Overview reflects the cleaned revision under the same object identity.
   await page.getByRole("button", { name: /Overview native/i }).click();
