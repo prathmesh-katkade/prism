@@ -1,26 +1,50 @@
 # Clean Pattern Review v1 — release status
 
-## FINAL status — 2026-10-08 (read this section first; supersedes everything below)
+## FINAL status — 2026-10-08, second pass (read this section first; supersedes everything below)
 
-**Release is no longer blocked.** The two criteria the 2026-10-07 section
-below named as blocking have both been closed:
+**Functional acceptance and visual acceptance are tracked separately below.
+Passing functional/gate tests is not visual acceptance, and visual
+discrepancies are not downgraded to "non-blocking" by this document - that
+is the owner's call to make, not this report's.** An earlier draft of this
+section described the remaining Clean/SQL Lab/Visualize composition and
+typography differences as "non-blocking." That characterization is
+withdrawn here; the owner asked for the GUI to match the supplied images
+closely, and differences from that are left open and unresolved below
+rather than silently accepted on the owner's behalf.
 
-1. Server-side, cooperative, cancellable verification with truthful progress
-   now exists (`QueryJobRuntime` reused from SQL Lab; new `/verify/start`,
-   `/verify/jobs/{id}`, `/verify/jobs/{id}/cancel` endpoints; checkpoints
-   every 2,000 rows). Proven at the API level (`tests/api/test_clean_patterns.py`,
-   4 new tests, a deterministic mid-scan cancellation using a test-only
-   env-var-gated delay) and at the live-browser level
-   (`pattern-review-verify-cancellation-live.spec.ts`, opt-in): the server's
-   own scan stopped at row 12,000 of 20,000 after a cancel request, 471ms of
-   which was UI latency and the rest genuine server-side scan time that
-   never resumed. See `acceptance-matrix.md`'s FINAL section for the full
-   gate table.
-2. Visual comparison against the three supplied references is substantially
-   aligned, with named, non-blocking remaining discrepancies (typography/
-   control density in Clean and SQL Lab, Visualize's bar thickness/margins
-   and saved-view composition). See `reference-discrepancy-audit.md` and
-   `reference-comparisons/*-side-by-side.png`.
+**Server-side cancellation (functional, closed):** cooperative, cancellable
+full verification exists (`QueryJobRuntime` reused from SQL Lab; new
+`/verify/start`, `/verify/jobs/{id}`, `/verify/jobs/{id}/cancel` endpoints,
+each enforcing the job belongs to the URL's dataset/column). `rows_checked`
+is checkpointed and rescaled to stay monotonically non-decreasing across
+every detector's internal passes (`identifier_structure`, `numeric_unit`,
+`delimited_compound`); `date_ambiguity` is cancellable only before/after its
+one vectorized call, not at row granularity - a stated, bounded limit, not
+a universal claim. 6 API-level tests
+(`tests/api/test_clean_patterns.py`) cover a deterministic mid-scan
+cancellation, dataset/column ownership enforcement, progress monotonicity,
+and the completion/cancel race. The live-browser proof
+(`pattern-review-verify-cancellation-live.spec.ts`, opt-in) showed the
+server's own scan stopped at row 12,000 of 20,000 after a cancel request,
+471ms of which was UI latency and the rest genuine server-side scan time
+that never resumed. See `acceptance-matrix.md`'s FINAL section for the full
+review findings and gate table.
+
+**Visual acceptance against the three supplied references (open, not
+accepted):** substantial, real progress exists - reference images copied
+in, side-by-side captures taken at the references' own 1586×992 size plus
+1440×900 and ~400px narrow in both themes, a horizontal-bar chart mark
+implemented, SQL Lab's schema/source pane moved to match the reference
+layout, Clean's recipe promoted to the dominant visual. This is not the
+same as the owner's "match closely" requirement being met. Concrete,
+named, unresolved differences remain in Clean (typography/control/pane
+sizing smaller than the reference), SQL Lab (toolbar/result-action density
+higher than the reference), and Visualize (thinner bars, wider margins,
+sparser saved-view composition, different settings hierarchy than the
+reference) - see `reference-discrepancy-audit.md` for the itemized list and
+`reference-comparisons/*-side-by-side.png` for the actual images. These
+remain **open** until corrected or the owner explicitly accepts the current
+state; this document does not make that acceptance for them.
 
 **Fresh, final gate counts on this exact tree**, all rerun in this
 verification pass (not inherited): full pytest **1,359 passed, 7 skipped,

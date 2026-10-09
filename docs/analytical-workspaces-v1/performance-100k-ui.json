@@ -1,12 +1,12 @@
 {
   "rows": 100000,
   "timings_ms": {
-    "upload_to_profile_visible_ms": 2569,
-    "clean_workspace_open_ms": 11518,
-    "clean_preview_visible_ms": 8628,
-    "sql_workspace_open_ms": 949,
-    "sql_result_visible_ms": 888,
-    "chart_visible_ms": 9027
+    "upload_to_profile_visible_ms": 3091,
+    "clean_workspace_open_ms": 12585,
+    "clean_preview_visible_ms": 8131,
+    "sql_workspace_open_ms": 977,
+    "sql_result_visible_ms": 885,
+    "chart_visible_ms": 9555
   },
   "scope": "Single local Chromium run at 1440x900; browser navigation plus local API and rendering wall clock; no warmup or pass threshold. Default SQL query is SELECT * FROM data LIMIT 100, returning 100 rows."
 }

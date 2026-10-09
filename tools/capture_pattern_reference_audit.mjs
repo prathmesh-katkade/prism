@@ -46,6 +46,19 @@ try {
     await page.getByRole("button", { name: button }).click();
     if (name === "clean") {
       await page.getByLabel("Data and transformation preview").waitFor();
+      // Genuine multi-step recipe, built through the real draft flow (never a
+      // fabricated "Applied" status or an invented recipe entry) - this is
+      // what makes the numbered-step hierarchy in the capture below real
+      // rather than decorative. Step 1: trim whitespace, added to the draft.
+      await page.getByRole("button", { name: "+ New manual operation" }).click();
+      await page.getByLabel("Operation", { exact: true }).selectOption("trim_whitespace");
+      await page.getByLabel("Column", { exact: true }).fill("region");
+      await page.locator(".clean-manual-form").getByRole("button", { name: "Preview", exact: true }).click();
+      await page.getByRole("button", { name: "Add step to draft" }).waitFor();
+      await page.getByRole("button", { name: "Add step to draft" }).click();
+      await page.locator(".clean-recipe-draft").filter({ hasText: "DRAFT RECIPE" }).waitFor();
+      // Step 2: the category-mapping review this file already exercised -
+      // built the same real way and added as the draft's second step.
       await page.getByRole("button", { name: "+ New manual operation" }).click();
       await page.getByLabel("Operation", { exact: true }).selectOption("category_mapping");
       await page.getByLabel("Column", { exact: true }).fill("region");

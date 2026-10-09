@@ -18,16 +18,46 @@ are now closed:
 1. **Server-side cancellation and progress** (`apps/api/src/prism_api/clean_patterns.py`):
    full verification now runs as a background job (`QueryJobRuntime`, reused
    as-is from SQL Lab's existing interruptible-job seam, not a new mechanism).
-   The scan loop checkpoints every `PROGRESS_CHECKPOINT_ROWS` (2,000) rows,
-   recording real `rows_checked`/`rows_total` progress and observing a
-   cancellation flag there — not only after the scan already finished. New
-   endpoints: `POST .../verify/start`, `GET .../verify/jobs/{id}`,
-   `POST .../verify/jobs/{id}/cancel`. A cancelled job's `finding` is always
-   `null`; `verified=true` can only follow an uninterrupted scan, checked
-   again at the moment the scan loop returns (closing the completion/cancel
-   race). The pre-existing synchronous `POST .../verify` endpoint is
-   unchanged and still available for direct/programmatic callers; the UI now
-   calls the job endpoints instead, since only those can be cancelled.
+   New endpoints: `POST .../verify/start`, `GET .../verify/jobs/{id}`,
+   `POST .../verify/jobs/{id}/cancel`, each enforcing that the job actually
+   belongs to the `dataset_id`/`column` named in the URL, not just a bare
+   `job_id` lookup (`test_verify_job_poll_and_cancel_enforce_dataset_and_column_ownership`).
+   A cancelled job's `finding` is always `null`; `verified=true` can only
+   follow an uninterrupted scan, checked again at the moment the scan loop
+   returns (closing the completion/cancel race).
+   - **Exact checkpoint guarantee, per detector** (do not round this up to a
+     universal claim): `identifier_structure` and `numeric_unit` checkpoint
+     every `PROGRESS_CHECKPOINT_ROWS` (2,000) row-equivalents, rescaled across
+     their two internal passes so `rows_checked` is monotonically
+     non-decreasing end to end
+     (`test_verify_job_progress_never_decreases_across_a_multi_pass_detector`);
+     `delimited_compound` likewise checkpoints every 2,000 rows, rescaled
+     across its up-to-7 per-delimiter passes. `date_ambiguity` does **not**
+     have row-level checkpoints - it delegates to `clean.py`'s shared,
+     already-vectorized date parser, which has no internal interruption
+     point. Its cancellation is coarse: checked immediately before and
+     immediately after that one call, so a cancel request lands either before
+     the parse starts or after it has already finished the whole column, not
+     at a 2,000-row granularity mid-parse. This is a stated, bounded scope
+     decision (`_detect_date_ambiguity`'s own comment), not a gap discovered
+     after the fact, and not the detector either the 100k measurements or the
+     live cancellation proof exercise (both use `identifier_structure`).
+   - **Completion/cancel race and job lifecycle**: `_verify_records` is
+     in-memory only, keyed by job_id, never persisted - a process restart
+     wipes it, so a GET for a pre-restart job_id correctly 404s rather than
+     claiming a false result; an in-flight job is not expected to, and does
+     not, survive a restart (`restart-evidence.md`'s FINAL section). Jobs run
+     under a 120-second timeout via `QueryJobRuntime`'s existing `Timer`
+     mechanism (the same one SQL Lab's query runs already use). Finished job
+     records are retained for the life of the process (not evicted) - this is
+     a real, acknowledged resource-bound limitation for long-running
+     production use, not something this pass claims to have solved; it is
+     bounded in practice by job records being small (no row data, only
+     counts/state) and by the existing `_verify_records` dict never growing
+     across a restart.
+   - The pre-existing synchronous `POST .../verify` endpoint is unchanged and
+     still available for direct/programmatic callers; the UI now calls the
+     job endpoints instead, since only those can be cancelled.
    - **API-level proof** (`tests/api/test_clean_patterns.py`): a 20,000-row
      scan with a test-only, env-var-gated per-checkpoint delay
      (`PRISM_PATTERN_VERIFY_TEST_DELAY_MS`, unset/zero in production and in
@@ -42,19 +72,22 @@ are now closed:
      The server's own scan loop stopped at row 12,000 of 20,000 — a client
      `AbortController` alone could never demonstrate this, since it only
      stops the browser from listening.
-2. **Visual fidelity against the three supplied references**: see
+2. **Visual fidelity against the three supplied references - OPEN, not
+   accepted.** The owner asked for the GUI to match the supplied images
+   closely. That has not been fully achieved, and this document does not
+   decide on the owner's behalf that the remaining gap is acceptable. See
    `reference-discrepancy-audit.md` for the full, itemized comparison;
    `reference-comparisons/*-side-by-side.png` for the actual side-by-side
    captures at the references' exact 1586×992 size, dark/light, plus
    400×844 narrow; `evidence/connected-workflow-20261007.webm` for a real
-   connected-workflow recording. Visual acceptance is **substantially
-   aligned, with named remaining discrepancies that are not release
-   blockers**: typography/control density in Clean and SQL Lab remain
-   somewhat smaller than the references; Visualize's bar thickness/margins
-   and saved-view composition remain less dense than pictured; Reports has
-   no approved reference and is styled from the shared system only. None of
-   these are content fabrications (no invented totals, no fake avatars, no
-   auto-approved mappings, no fictional join counts) — they are composition/
+   connected-workflow recording. Named, unresolved differences: typography/
+   control density in Clean and SQL Lab remain smaller than the references;
+   SQL Lab's toolbar/result-action density is higher than the reference;
+   Visualize's bar thickness/margins and saved-view composition remain less
+   dense than pictured; Reports has no approved reference and is styled from
+   the shared system only. None of these are content fabrications (no
+   invented totals, no fake avatars, no auto-approved mappings, no fictional
+   join counts) — they are composition/
    density gaps, named rather than hidden.
 
 **Fresh final gates, run on this exact tree (not inherited from an earlier

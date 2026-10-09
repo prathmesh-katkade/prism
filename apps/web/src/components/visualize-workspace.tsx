@@ -10,6 +10,18 @@ import { WorkspaceProposalPanel } from "./workspace-proposal-panel";
 type VizUiState = "empty" | "loading" | "ready" | "error";
 const MARKS: readonly VizMark[] = ["horizontal_bar", "bar", "line", "scatter", "histogram", "box"];
 
+/** Mirrors the backend's own rationale formula (visualize.py's `rationale =`
+ * line) so the header always describes the chart actually on screen. The
+ * server-returned `rationale` on a VisualizationSuggestion is frozen at
+ * suggestion time and stays accurate only until the inspector's own mark/
+ * category/measure controls change the spec - at which point displaying
+ * that frozen string would describe a chart that is no longer rendered. */
+function describeSpec(spec: VisualizationSpec): string {
+  const intent = spec.intent.charAt(0).toUpperCase() + spec.intent.slice(1);
+  const subject = spec.dimension && spec.measure ? `${spec.measure} by ${spec.dimension}.` : (spec.dimension ?? spec.measure ?? "").concat(".");
+  return `${intent} question → ${spec.mark.replaceAll("_", " ")} chart of ${subject}`;
+}
+
 /** Phase 6B: intent → deterministic mark suggestion → server-aggregated data → renderer-agnostic spec. */
 export function VisualizeWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: { datasetId: string | undefined; onSelectContext(state: InspectorObjectState): void; onOpenWorkflow(workflow: string): void }) {
   const [state, setState] = useState<VizUiState>(datasetId ? "loading" : "empty");
@@ -147,7 +159,7 @@ export function VisualizeWorkspace({ datasetId, onSelectContext, onOpenWorkflow 
       <div className="finding-list">{measureCandidates.map((column) => <button key={column.name} className={column.name === spec.measure ? "is-selected" : ""} onClick={() => updateSpec({ measure: column.name })}><span className="finding-dot good" /><strong>{column.name}</strong><small>numeric</small></button>)}</div>
     </nav>
     <section className="viz-canvas" aria-label="Visual canvas" tabIndex={0}>
-      <header><span className="eyebrow">{rationale}</span><h1>{spec.mark === "histogram" ? `Distribution of ${spec.measure ?? spec.dimension}` : spec.measure && spec.dimension ? `${spec.measure} by ${spec.dimension}` : spec.dimension ?? spec.measure}</h1></header>
+      <header><span className="eyebrow">{describeSpec(spec)}</span><h1>{spec.mark === "histogram" ? `Distribution of ${spec.measure ?? spec.dimension}` : spec.measure && spec.dimension ? `${spec.measure} by ${spec.dimension}` : spec.dimension ?? spec.measure}</h1></header>
       <div className="clean-review-tabs viz-view-tabs" role="tablist" aria-label="Visualization views"><button role="tab" aria-selected={chartView === "chart"} onClick={() => setChartView("chart")}>Chart</button><button role="tab" aria-selected={chartView === "data"} onClick={() => setChartView("data")}>Data</button><button role="tab" aria-selected={chartView === "small-multiples"} onClick={() => setChartView("small-multiples")}>Small multiples</button></div>
       {Object.keys(spec.filters ?? {}).length ? <div className="viz-filter-chips" aria-label="Active chart filters">{Object.entries(spec.filters ?? {}).map(([column, value]) => <button key={column} type="button" onClick={() => { const filters = { ...spec.filters }; delete filters[column]; updateSpec({ filters }); }} aria-label={`Remove filter ${column} equals ${String(value)}`}>{column}: {String(value)} ×</button>)}</div> : null}
       {data && chartView === "chart" ? <>{data.facets?.length ? <FacetCharts result={data} onSelectMark={selectMark} /> : <ChartCanvas mark={spec.mark} data={data.data} onSelectMark={selectMark} referenceLine={spec.reference_line} />}<div className="viz-axis-labels"><span>{spec.x_label || spec.dimension || spec.measure || "X"}</span><span>{spec.y_label || (spec.aggregation === "count" || spec.mark === "histogram" ? "Count" : `${spec.aggregation} ${spec.measure ?? "value"}`)}{spec.unit ? ` (${spec.unit})` : ""}</span></div>{spec.annotation ? <p className="quiet-note">Annotation: {spec.annotation}</p> : null}</> : null}
@@ -250,7 +262,7 @@ export function ChartCanvas({ mark, data, onSelectMark, referenceLine, scaleRang
   const span = max - min || 1;
   const scaleY = (v: number) => height - padding - ((v - min) / span) * (height - 2 * padding);
   if (mark === "horizontal_bar") {
-    const left = 125, right = 74, top = 18, bottom = 32;
+    const left = 108, right = 54, top = 12, bottom = 28;
     const plotWidth = width - left - right;
     const scaleX = (value: number) => left + ((value - min) / span) * plotWidth;
     const zeroX = scaleX(0);
@@ -259,7 +271,7 @@ export function ChartCanvas({ mark, data, onSelectMark, referenceLine, scaleRang
     return <svg role="img" aria-label={`Horizontal bar chart with ${data.length} categories`} viewBox={`0 0 ${width} ${height}`} className="viz-svg viz-horizontal-bars">
       {[min, min + span / 2, max].map((tick, index) => <g key={index}><line x1={scaleX(tick)} x2={scaleX(tick)} y1={top} y2={height - bottom} className="viz-grid-line" /><text x={scaleX(tick)} y={height - 10} textAnchor="middle" className="viz-tick-label">{format(tick)}</text></g>)}
       {referenceLine != null ? <line x1={scaleX(referenceLine)} x2={scaleX(referenceLine)} y1={top} y2={height - bottom} className="viz-reference-line"><title>Reference value {referenceLine}</title></line> : null}
-      {data.map((point, index) => { const centre = top + index * slot + slot / 2; const valueX = scaleX(point.value); const positive = point.value >= 0; return <g key={index} className={`${selectable ? "viz-mark-selectable" : ""} ${index === 0 ? "is-leading" : ""}`} tabIndex={selectable ? 0 : undefined} role={selectable ? "button" : undefined} aria-label={selectable ? `Inspect ${point.label}` : undefined} onClick={() => onSelectMark?.({ dimensionValue: point.label })} onKeyDown={(event) => { if (selectable && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); onSelectMark?.({ dimensionValue: point.label }); } }}><text x={left - 10} y={centre + 4} textAnchor="end" className="viz-category-label">{point.label.length > 18 ? `${point.label.slice(0, 17)}…` : point.label}</text><rect x={Math.min(valueX, zeroX)} y={centre - Math.min(17, slot * .32)} width={Math.max(1, Math.abs(valueX - zeroX))} height={Math.min(34, slot * .64)} /><text x={valueX + (positive ? 7 : -7)} y={centre + 4} textAnchor={positive ? "start" : "end"} className="viz-value-label">{format(point.value)}</text><title>{`${point.label}: ${point.value}`}</title></g>; })}
+      {data.map((point, index) => { const centre = top + index * slot + slot / 2; const valueX = scaleX(point.value); const positive = point.value >= 0; return <g key={index} className={`${selectable ? "viz-mark-selectable" : ""} ${index === 0 ? "is-leading" : ""}`} tabIndex={selectable ? 0 : undefined} role={selectable ? "button" : undefined} aria-label={selectable ? `Inspect ${point.label}` : undefined} onClick={() => onSelectMark?.({ dimensionValue: point.label })} onKeyDown={(event) => { if (selectable && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); onSelectMark?.({ dimensionValue: point.label }); } }}><text x={left - 10} y={centre + 4} textAnchor="end" className="viz-category-label">{point.label.length > 18 ? `${point.label.slice(0, 17)}…` : point.label}</text><rect x={Math.min(valueX, zeroX)} y={centre - Math.min(22, slot * .4)} width={Math.max(1, Math.abs(valueX - zeroX))} height={Math.min(44, slot * .8)} /><text x={valueX + (positive ? 7 : -7)} y={centre + 4} textAnchor={positive ? "start" : "end"} className="viz-value-label">{format(point.value)}</text><title>{`${point.label}: ${point.value}`}</title></g>; })}
     </svg>;
   }
   if (mark === "line") {

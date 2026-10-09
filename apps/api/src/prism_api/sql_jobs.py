@@ -39,8 +39,8 @@ class QueryJob:
 class QueryJobRuntime:
     """Small job seam that can be replaced by the future durable PRISM runtime."""
 
-    def __init__(self) -> None:
-        self._executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="prism-sql")
+    def __init__(self, max_workers: int = 4, thread_name_prefix: str = "prism-sql") -> None:
+        self._executor = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix=thread_name_prefix)
         self._jobs: dict[str, QueryJob] = {}
         self._lock = Lock()
 

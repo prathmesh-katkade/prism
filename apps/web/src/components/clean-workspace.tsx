@@ -32,6 +32,8 @@ const SURVIVORSHIP_RULES: readonly { value: "first" | "last" | "most_complete" |
 export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: { datasetId: string | undefined; onSelectContext(state: InspectorObjectState): void; onOpenWorkflow(workflow: string): void }) {
   const [state, setState] = useState<CleanUiState>(datasetId ? "loading" : "empty");
   const [clean, setClean] = useState<CleanStateResponse | null>(null);
+  const cleanRef = useRef<CleanStateResponse | null>(null);
+  cleanRef.current = clean; // always-fresh read for the recursive pollVerifyJob closure below, which is not re-created per render
   const [profile, setProfile] = useState<OverviewProfileResponse | null>(null);
   const [rows, setRows] = useState<DatasetRowsResponse | null>(null);
   const [selectedIssue, setSelectedIssue] = useState<CleanIssue | null>(null);
@@ -185,7 +187,20 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
     }
   }, [loadRows, loadRecipes, loadValidationRules, loadPatterns, loadPatternDecisions]);
 
-  useEffect(() => { if (datasetId) void refresh(datasetId); else { setState("empty"); setClean(null); setProfile(null); setRows(null); } }, [datasetId, refresh]);
+  useEffect(() => {
+    // Switching datasets must invalidate any in-flight verification: without
+    // this, a poll loop started against the previous dataset would still
+    // resolve and call setSelectedFinding with a finding computed against
+    // data the workspace is no longer showing - a stale-source result
+    // presented as if it were current. requestId invalidation already
+    // guards every other branch inside pollVerifyJob; this is the one path
+    // (switching datasets, not switching findings within one dataset) that
+    // selectFinding()'s own reset doesn't cover.
+    if (verifyPollTimer.current) clearTimeout(verifyPollTimer.current);
+    verifyJobId.current = null; verifyRequestId.current += 1; setVerifying(false); setVerifyProgress(null);
+    setSelectedFinding(null);
+    if (datasetId) void refresh(datasetId); else { setState("empty"); setClean(null); setProfile(null); setRows(null); }
+  }, [datasetId, refresh]);
 
   useEffect(() => {
     if (!datasetId || manualOperation !== "category_mapping" || !manualColumn) { setColumnValues(null); return; }
@@ -478,8 +493,21 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
     }
     setVerifying(false);
     if (body.state === "succeeded" && body.finding) {
-      exceptionRequestId.current += 1; setExceptionPage(null);
-      setSelectedFinding(body.finding);
+      const current = cleanRef.current?.dataset;
+      // A revision/apply can land on this same dataset while the job was
+      // still running (selectFinding and the datasetId-change effect only
+      // guard against switching findings or datasets, not an apply to the
+      // SAME dataset mid-poll). The finding is never dishonest - it always
+      // carries the exact revision/fingerprint it was computed against -
+      // but presenting it as the current answer here, unlabelled, would be.
+      // Reject it the same way the existing exceptions endpoint rejects a
+      // stale reviewed_source_revision, rather than silently accepting it.
+      if (current && (body.finding.source_revision !== current.revision || body.finding.source_fingerprint !== current.source_fingerprint)) {
+        setPatternsError("The dataset changed while this was verifying. Re-scan the column to verify the current revision.");
+      } else {
+        exceptionRequestId.current += 1; setExceptionPage(null);
+        setSelectedFinding(body.finding);
+      }
     } else if (body.state === "failed") {
       setPatternsError(body.error ?? "Verification failed.");
     } // "cancelled": the prior sample finding stays displayed as-is; nothing to apply.

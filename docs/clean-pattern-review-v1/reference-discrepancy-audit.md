@@ -1,3 +1,68 @@
+# Reference discrepancy audit — 2026-10-08, second pass (read first)
+
+Capture SHA: `5be551bd80e3db26b446cdd6bdad0a2e2601d978` plus uncommitted
+Phase-3-review fixes on `prism/clean-pattern-review-v1` (ownership
+enforcement, progress monotonicity, stale-revision rejection, Visualize bar
+thickness/margins, a real stale-subtitle bug fix - see below). Viewport
+1586×992 (the references' own size), dark and light, plus 400×844 narrow.
+Fixture: the same 8-row `reference-customers.csv` this audit has used
+throughout (`tools/capture_pattern_reference_audit.mjs`), captured against a
+disposable local dev server (not the stable or preview app, no user data
+touched). Comparisons regenerated with
+`tools/build_pattern_reference_comparisons.py`; raw images in
+`reference-comparisons/*-side-by-side.png`.
+
+**This pass's functional finding, not merely cosmetic:** inspecting the
+Visualize side-by-side surfaced a real bug, not just a styling gap - the
+chart's descriptive subtitle (the "Distribution question → ... chart of
+..." line) was frozen at whatever the initial auto-suggestion computed and
+never updated again, even after the user changed mark/category/measure via
+the inspector. The chart itself re-rendered correctly; only the sentence
+describing it went stale, so a user who switched from a suggested histogram
+to a horizontal bar of revenue-by-region would keep seeing "Distribution
+question → histogram chart of revenue." under a chart that no longer
+matched that description. Fixed by deriving the subtitle from the live spec
+on every render (`describeSpec` in `visualize-workspace.tsx`), mirroring
+the backend's own rationale formula exactly, instead of freezing the
+server's one-time suggestion string. Reproduced before the fix and
+confirmed corrected after it, with console-logged before/after text in this
+session's verification (not just a visual glance).
+
+**Still-open, named visual discrepancies found this pass (not fixed, not
+claimed as acceptable):**
+- Visualize: no "Sort by" control exists in Chart settings, unlike the
+  reference; the reference's gold-highlighted bar is explicitly the
+  "sorted-first" (largest) category, which the current implementation can
+  only coincidentally match depending on data order, not by an actual sort
+  setting. No inline filter-chip row above the chart matching the
+  reference's "Region: All ×  [+ Add filter]" pattern - filtering exists
+  but only via the right-panel "Server filters" field/equals form, a
+  different interaction pattern than the reference. The settings panel has
+  extra controls the reference doesn't show (Small multiples by, X/Y axis
+  label, Unit) and is missing "Axis starts at" and a currency-specific
+  control (a generic "Unit" field stands in for it).
+- Clean: the reference's top progress stepper (1 Clean → 2 Query →
+  3 Visualize → 4 Report) has no equivalent in the current shell. This is
+  believed to be an intentional difference, not an oversight - an earlier
+  instruction in this same effort states Clean→SQL→Visualize→Report are
+  optional handoffs, not a compulsory wizard, and a numbered stepper
+  strongly implies the latter. Recorded here as a deliberate, explained
+  deviation rather than a silently-dropped reference element.
+- Clean: this pass's capture shows a genuinely-built 1-step draft recipe
+  (`DRAFT RECIPE · 1 STEP(S)`, built via the real "+ New manual operation"
+  → "Preview" → "Add step to draft" flow, not a fabricated entry) plus a
+  second operation under active review in the center panel. This is closer
+  to the reference's populated 4-step hierarchy than earlier captures (which
+  showed only one operation with no draft list at all) but is still short
+  of a 4-step, mixed-status (Applied/Preview/Draft) hierarchy. The
+  underlying UI genuinely supports numbered badges with Applied/Preview/
+  Draft/Disabled status pills (confirmed directly, not assumed) - building a
+  capture fixture that exercises all four states remains open, not done.
+- SQL Lab and Clean typography/control density: unchanged from the prior
+  pass's findings below - still smaller/denser than the references.
+
+None of the above are content fabrications. They are named, open items.
+
 # Reference discrepancy audit — 2026-10-07
 
 Starting feature SHA: `19ddfb3e22a9a552d73e2c9f80ed23638b5f8807`.

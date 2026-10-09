@@ -644,3 +644,60 @@ def test_verify_job_status_for_an_unknown_job_id_is_a_clean_404() -> None:
     dataset_id = _dataset(client)
     response = client.get(f"/api/v1/clean/datasets/{dataset_id}/patterns/columns/invoice_id/verify/jobs/patternverify_doesnotexist")
     assert response.status_code == 404
+
+
+def test_verify_job_poll_and_cancel_enforce_dataset_and_column_ownership(monkeypatch) -> None:
+    """A job_id is not a bearer token: polling or cancelling it through a URL
+    naming the wrong dataset or the wrong column must behave exactly as if
+    that job_id did not exist, not silently serve another context's job."""
+    monkeypatch.setenv("PRISM_PATTERN_VERIFY_TEST_DELAY_MS", "50")
+    client = TestClient(create_app())
+    dataset_id = _dataset(client, csv=_large_identifier_csv(2_000), name="verify-ownership.csv")
+    other_dataset_id = _dataset(client, csv=_large_identifier_csv(50), name="verify-ownership-other.csv")
+    started = client.post(f"/api/v1/clean/datasets/{dataset_id}/patterns/columns/invoice_id/verify/start",
+                          json={"column": "invoice_id", "detector_kind": "identifier_structure"})
+    job_id = started.json()["job_id"]
+
+    wrong_dataset = client.get(f"/api/v1/clean/datasets/{other_dataset_id}/patterns/columns/invoice_id/verify/jobs/{job_id}")
+    assert wrong_dataset.status_code == 404
+    wrong_column = client.get(f"/api/v1/clean/datasets/{dataset_id}/patterns/columns/amount/verify/jobs/{job_id}")
+    assert wrong_column.status_code == 404
+    wrong_dataset_cancel = client.post(f"/api/v1/clean/datasets/{other_dataset_id}/patterns/columns/invoice_id/verify/jobs/{job_id}/cancel")
+    assert wrong_dataset_cancel.status_code == 404
+
+    # The mismatched requests above must not have cancelled the real job -
+    # confirmed by polling it correctly and finding it still running or since
+    # finished on its own, never cancelled by a request that named the wrong context.
+    correct = client.get(f"/api/v1/clean/datasets/{dataset_id}/patterns/columns/invoice_id/verify/jobs/{job_id}").json()
+    assert correct["state"] != "cancelled"
+
+    correct_cancel = client.post(f"/api/v1/clean/datasets/{dataset_id}/patterns/columns/invoice_id/verify/jobs/{job_id}/cancel")
+    assert correct_cancel.status_code == 200
+
+
+def test_verify_job_progress_never_decreases_across_a_multi_pass_detector(monkeypatch) -> None:
+    """identifier_structure scans non_null twice (_collect_examples, then
+    _rows_with_exception_values); without an offset the second pass's
+    checkpoints would restart at 0 and rows_checked would visibly drop mid-scan.
+    Poll throughout a deliberately slowed scan and assert it never does."""
+    monkeypatch.setenv("PRISM_PATTERN_VERIFY_TEST_DELAY_MS", "40")
+    client = TestClient(create_app())
+    dataset_id = _dataset(client, csv=_large_identifier_csv(4_000), name="verify-monotonic.csv")
+    started = client.post(f"/api/v1/clean/datasets/{dataset_id}/patterns/columns/invoice_id/verify/start",
+                          json={"column": "invoice_id", "detector_kind": "identifier_structure"})
+    job_id = started.json()["job_id"]
+
+    observed: list[int] = [started.json()["rows_checked"]]
+    status_body = started.json()
+    for _ in range(400):
+        if status_body["state"] != "running":
+            break
+        status_body = client.get(f"/api/v1/clean/datasets/{dataset_id}/patterns/columns/invoice_id/verify/jobs/{job_id}").json()
+        observed.append(status_body["rows_checked"])
+    assert status_body["state"] == "succeeded"
+    assert observed == sorted(observed), f"rows_checked went backwards: {observed}"
+    assert observed[-1] == 4_000
+    # A real regression would show a sawtooth here (climb to ~4000, drop near
+    # 0, climb again for the second pass); confirm genuine mid-scan samples
+    # were actually captured, not just the first and last polls.
+    assert len(set(observed)) > 2
