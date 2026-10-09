@@ -51,10 +51,29 @@ pub fn spawn(app: &AppHandle) -> tauri::Result<bool> {
         }
     );
 
+    // apps/api resolves its SQLite stores (analytical history, SQL Lab
+    // history, Foundry jobs/exports, Atlas sandboxes) as `.prism/runtime/...`
+    // *relative to the process's own working directory* when no override is
+    // set - fine for `uvicorn` always launched from the repo root, but a
+    // packaged sidecar's inherited cwd depends on how the app was launched
+    // (Explorer double-click, a pinned taskbar icon, a shortcut with its own
+    // "Start in" field) and isn't something this app controls. Pinning the
+    // sidecar's cwd to Tauri's own stable, OS-appropriate app-data directory
+    // makes all four of those stores land in one real, predictable place
+    // every launch, regardless of how the app was opened.
+    let data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| tauri::Error::Anyhow(anyhow::anyhow!(e)))?;
+    std::fs::create_dir_all(&data_dir)
+        .map_err(|e| tauri::Error::Anyhow(anyhow::anyhow!(e)))?;
+    log::info!("[prism-api] working directory: {}", data_dir.display());
+
     let shell = app.shell();
     let mut command = shell
         .sidecar("prism-api")
-        .map_err(|e| tauri::Error::Anyhow(anyhow::anyhow!(e)))?;
+        .map_err(|e| tauri::Error::Anyhow(anyhow::anyhow!(e)))?
+        .current_dir(data_dir);
     if ollama_ready {
         // Flips a switch apps/api already has (PRISM_AI_PROVIDER, see
         // ai_analyst.py / atlas_candidate_runtime.py) rather than adding a
@@ -116,17 +135,28 @@ fn wait_until_ready() {
 /// Quit, Cmd+Q -- not just one of them.
 ///
 /// Confirmed for real, not assumed safe because `child.kill()` returns
-/// `Ok`: `CommandChild::kill()` sends SIGKILL to exactly the PID Tauri
-/// spawned, which is PyInstaller's `--onefile` *bootloader* process, not
-/// the real work it runs -- onefile self-extracts to a temp dir and execs
-/// the actual Python process as a **child** of the bootloader, which it
-/// forwards SIGTERM to and waits for before exiting. SIGKILL can't be
-/// forwarded at all (it's not catchable by anything), so killing only the
-/// bootloader with SIGKILL orphans its child, reparented to init, running
-/// indefinitely. Reproduced directly: `kill -9 <bootloader-pid>` left the
-/// real process alive; `kill -TERM <bootloader-pid>` cleaned up both
-/// immediately. So: SIGTERM first, give it a moment, SIGKILL only as a
-/// fallback if it's still alive after that.
+/// `Ok`: `CommandChild::kill()` terminates exactly the PID Tauri spawned,
+/// which is PyInstaller's `--onefile` *bootloader* process, not the real
+/// work it runs -- onefile self-extracts to a temp dir and execs the
+/// actual Python process as a **child** of the bootloader. This is a real
+/// problem on both platforms this app ships for, confirmed by actually
+/// closing the window and checking what's left running, not assumed from
+/// the Unix case alone:
+///
+/// - **Unix**: the bootloader forwards SIGTERM to its child and waits for
+///   it before exiting; SIGKILL can't be forwarded at all (not catchable
+///   by anything). `kill -9 <bootloader-pid>` left the real process alive;
+///   `kill -TERM <bootloader-pid>` cleaned up both immediately. So:
+///   SIGTERM first, give it a moment, SIGKILL only as a fallback.
+/// - **Windows**: `CommandChild::kill()` calls `TerminateProcess` on the
+///   bootloader only, same gap -- there is no SIGTERM-equivalent the
+///   bootloader can forward here either way. Reproduced directly: closing
+///   the window left the bootloader's PID gone but its child (parented to
+///   it, confirmed via `Get-CimInstance Win32_Process`) still running and
+///   still answering HTTP requests on port 8000. `taskkill /PID <pid> /T
+///   /F` kills the bootloader's whole process tree in one call and is the
+///   standard tool for exactly this gap -- there's no stdlib equivalent
+///   without a Job Object, which is more code for the same result here.
 pub fn kill(app: &AppHandle) {
     let Some(child) = app.state::<SidecarState>().0.lock().unwrap().take() else {
         return;
@@ -147,6 +177,19 @@ pub fn kill(app: &AppHandle) {
             std::thread::sleep(std::time::Duration::from_millis(100));
         }
         log::warn!("[prism-api] didn't exit within 2s of SIGTERM, sending SIGKILL");
+    }
+
+    #[cfg(windows)]
+    {
+        let pid = child.pid();
+        let status = std::process::Command::new("taskkill")
+            .args(["/PID", &pid.to_string(), "/T", "/F"])
+            .status();
+        match status {
+            Ok(s) if s.success() => return,
+            Ok(s) => log::warn!("[prism-api] taskkill exited with {s}, falling back to killing the bootloader only"),
+            Err(e) => log::warn!("[prism-api] failed to run taskkill ({e}), falling back to killing the bootloader only"),
+        }
     }
 
     if let Err(e) = child.kill() {
