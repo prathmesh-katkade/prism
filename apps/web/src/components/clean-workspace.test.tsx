@@ -109,6 +109,39 @@ describe("Clean workspace", () => {
     await waitFor(() => expect(screen.getByText(/revision 1/)).toBeInTheDocument());
   });
 
+  it("switches the inspector away from a selected pattern finding when starting a manual operation or selecting an issue, instead of leaving it stuck on the old finding", async () => {
+    const finding = { finding_id: "find_1", dataset_id: "ds_1", column: "invoice_id", detector_kind: "identifier_structure", detector_version: 1, source_revision: 0, source_fingerprint: dataset0.source_fingerprint, rows_examined: 5, total_rows: 5, sampling_method: "bounded_sample", verified: false, families: [{ family_signature: "sig1", label: "3 letters, '-', 6 digits", matching_count: 3, example_values: ["INV-000123"] }], missing_count: 0, exception_count: 2, created_at: "2026-08-28T00:00:00Z" };
+    const fetchMock = vi.fn(async (input: string | URL) => {
+      const path = String(input);
+      if (path.endsWith("/state")) return json({ dataset: dataset0, issues: [issue], history: [], health });
+      if (path.includes("/rows")) return json(rowsPage);
+      if (path.includes("/profile")) return json({});
+      if (path.includes("/recipes")) return json([]);
+      if (path.endsWith("/discover")) return json([finding]);
+      if (path.includes("/decisions")) return json([]);
+      if (path.endsWith("/atlas")) return json({ action: "explain_issue", summary: "x", uncertainty: "x", evidence: [] });
+      return json({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
+
+    await waitFor(() => expect(screen.getByText("invoice_id")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /invoice_id[\s\S]*identifier structure/ }));
+    await waitFor(() => expect(screen.getByText("PATTERN REVIEW")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "+ New manual operation" }));
+    expect(screen.getByText("MANUAL OPERATION")).toBeInTheDocument();
+    expect(screen.queryByText("PATTERN REVIEW")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Operation")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /invoice_id[\s\S]*identifier structure/ }));
+    await waitFor(() => expect(screen.getByText("PATTERN REVIEW")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: /Dataset[\s\S]*exact duplicates/ }));
+    await waitFor(() => expect(screen.getByText("SELECTED ISSUE")).toBeInTheDocument());
+    expect(screen.queryByText("PATTERN REVIEW")).not.toBeInTheDocument();
+  });
+
   it("saves a manual operation as a named recipe, lists it, and applies it from the recipe list", async () => {
     let saved: { recipe_id: string; name: string; version: number; steps: unknown[] } | null = null;
     let applied = false;

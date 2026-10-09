@@ -215,6 +215,8 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
 
   async function selectIssue(issue: CleanIssue) {
     if (!datasetId) return;
+    if (verifying) cancelVerify();
+    setSelectedFinding(null);
     setManualMode(false); setSelectedIssue(issue); setPreview(null); setAtlas(null); setPendingRequest(null);
     onSelectContext({ objectId: issue.issue_id, label: issue.column ?? "Dataset-level issue", type: "finding", state: "ready", actions: [{ id: "atlas-explain-issue", label: "Ask Atlas to explain" }], metadata: [`${issue.affected_rows.toLocaleString()} affected rows`, `${issue.severity} severity`] });
     try {
@@ -227,6 +229,8 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
   }
 
   function startManualOperation() {
+    if (verifying) cancelVerify();
+    setSelectedFinding(null);
     setManualMode(true); setSelectedIssue(null); setAtlas(null); setPreview(null); setPendingRequest(null);
     onSelectContext({ objectId: "manual-operation", label: "Manual operation", type: "finding", state: "ready", actions: [], metadata: ["Not yet previewed"] });
   }
