@@ -1,15 +1,15 @@
 {
   "rows": 100000,
   "timings_ms": {
-    "upload_to_profile_visible_ms": 5042,
-    "sample_discovery_visible_ms": 21814,
-    "finding_review_render_ms": 68,
-    "full_verify_100k_ms": 1419,
-    "exception_table_render_ms": 6,
-    "exception_page_ms": 897,
-    "extraction_preview_ms": 23475,
-    "extraction_apply_ms": 25833,
+    "upload_to_profile_visible_ms": 4545,
+    "sample_discovery_visible_ms": 21296,
+    "finding_review_render_ms": 80,
+    "full_verify_100k_ms": 900,
+    "exception_table_render_ms": 5,
+    "exception_page_ms": 883,
+    "extraction_preview_ms": 16263,
+    "extraction_apply_ms": 29456,
     "cancel_response_ms": 121
   },
-  "scope": "Single local Chromium run at 1440x900; browser navigation plus local API and rendering wall clock; SQLite history store; no warmup or pass threshold. Discovery/extraction use invoice_id (identifier_structure); exception paging uses amount (numeric_unit)."
+  "scope": "Single local Chromium run at 1440x900; browser navigation plus local API and rendering wall clock; MySQL history store; no warmup or pass threshold. Discovery/extraction use invoice_id (identifier_structure); exception paging uses amount (numeric_unit)."
 }

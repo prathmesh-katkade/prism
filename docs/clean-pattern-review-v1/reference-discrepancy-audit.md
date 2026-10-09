@@ -1,4 +1,82 @@
-# Reference discrepancy audit — 2026-10-08, second pass (read first)
+# Reference discrepancy audit — 2026-10-09, third pass (read first)
+
+Capture SHA: `7f0f9da` on `prism/clean-pattern-review-v1`. Viewport
+1586×992 (the references' own size), plus 1440×900 and ~400px narrow,
+both themes. Fixture: the same 8-row `reference-customers.csv` this audit
+has used throughout, captured against a disposable local dev server (API
+`127.0.0.1:8201`, web `127.0.0.1:3201`, isolated SQLite at
+`C:\Users\Admin\prism-patterns-reference-capture\`), not the stable or
+preview app. Comparisons regenerated with the same two tools; raw images in
+`reference-comparisons/*-side-by-side.png` (overwritten in place - this is
+the current state, not an additional historical copy).
+
+**What this pass closed.** The previous pass's concrete, itemized
+Visualize gaps are implemented as real, tested functionality, not styling
+alone:
+- **Sort by** - a persisted `sort_by` field on `VisualizationSpec`
+  (`value_desc`/`value_asc`/`label_asc`/`label_desc`), applied server-side
+  with a deterministic label tie-break. Truncation (which categories survive
+  `max_categories`) always uses the top-by-value ranking regardless of the
+  chosen display order, so switching sort never changes which categories are
+  shown, only how they're ordered.
+- **Axis starts at** - an explicit, honest baseline control. Auto (the
+  prior default) stays truthful by construction. A non-zero baseline adds a
+  warning (`"The axis starts at X, not the truthful Y..."`) whenever the
+  shown baseline differs from the true one; a bar below the baseline clamps
+  to the plot's left edge instead of going negative or disappearing.
+- **Currency** - a display-only format hint (`USD`/`EUR`/`GBP`/`INR`/`JPY`),
+  never a value conversion; applied via `Intl.NumberFormat` in the
+  horizontal-bar renderer.
+- **Saved views** - a real list in the Fields panel, backed by
+  `GET /api/v1/reports/charts` filtered to the active dataset; clicking one
+  loads its spec back into the workspace.
+- **Filter chips** - consolidated to one `+ Add filter` popover above the
+  chart; the previously duplicated sidebar filter form is gone.
+
+All three new spec fields (`sort_by`, `axis_start`, `currency`) persist
+through saved charts and Reports because they live on the spec itself -
+verified by a dedicated backend test
+(`test_sort_by_axis_start_and_currency_persist_through_a_saved_chart`).
+
+SQL Lab's toolbar is decluttered to match the reference's density: `Run
+query` / `Save query` / a single `⋮` disclosure holding `Format` / `Plan` /
+`Join checks` / `Find CTEs` (previously six buttons in a row). Clean's
+header gained a freely-navigable `Clean → SQL Lab → Visualize → Reports`
+strip, echoing the reference's stepper composition - deliberately not a
+gated wizard: every destination is reachable at any time, and nothing
+claims a workspace is "done," because there is no dataset-wide notion of
+Clean/SQL/Visualize/Report completion to report honestly, only this
+revision's own applied-or-not state (shown elsewhere, correctly).
+
+**Still open, named specifically (not re-stated as a vague "styling gap"):**
+1. SQL Lab's left panel shows a single "Active source" dropdown selector;
+   the reference shows a list of dataset cards (icon, name, revision, row
+   count, overflow menu) above the schema tree. Functionally equivalent
+   (both let you pick the query's source), visually different.
+2. Field-type glyphs (`Ab` text / `#` integer / `123` numeric / a calendar
+   icon) are not implemented in either SQL Lab's schema navigator or
+   Visualize's Fields panel; both use a plain colored status dot instead.
+3. Visualize's horizontal bars are close to the reference's thickness but
+   not verified pixel-identical; the reference's bars read very slightly
+   bolder/taller for the same chart height.
+4. No per-chart "Report context" card in Visualize's right inspector (the
+   reference shows which report a chart is destined for, with a note about
+   what gets saved). Chart → Report association exists and works (save
+   chart, then add it to a report), just not surfaced as this preview card.
+5. Clean's category-mapping "AI suggestion" panel uses a flat
+   "distinct-value checkbox + rows" list rather than the reference's
+   compact arrow-grouping card (`Bangalore → Bengaluru`); functionally
+   equivalent (same real mapping flow, same real data), visually different
+   information density.
+6. Typography is close throughout but not verified pixel-identical against
+   the reference's exact font sizes/weights at every heading level.
+
+None of these six are fabricated-data concerns - every screenshot above was
+captured through real application flows against a real uploaded CSV, with
+real server-computed values. They are composition/density items for the
+owner's judgment, not claimed as resolved.
+
+# Reference discrepancy audit — 2026-10-08, second pass
 
 Capture SHA: `5be551bd80e3db26b446cdd6bdad0a2e2601d978` plus uncommitted
 Phase-3-review fixes on `prism/clean-pattern-review-v1` (ownership

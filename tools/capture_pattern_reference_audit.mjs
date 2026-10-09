@@ -82,7 +82,12 @@ try {
       await page.getByLabel("Chart inspector").getByLabel("Aggregation").selectOption("sum");
       try { await page.getByRole("img", { name: /Horizontal bar chart/ }).waitFor({ timeout: 5000 }); }
       catch (error) { console.error(await page.locator(".viz-canvas").innerText()); await page.screenshot({ path: path.join(output, "visualize-debug.png") }); throw error; }
-      await page.getByRole("button", { name: /Inspect Bangalore/ }).click();
+      // Exercise the reference's own Sort by / Currency controls so the
+      // capture below shows real, interacted-with state, not just the
+      // first-render default.
+      await page.getByLabel("Chart inspector").getByLabel("Sort by").selectOption("value_desc");
+      await page.getByLabel("Chart inspector").getByLabel("Currency").selectOption("INR");
+      await page.getByRole("button", { name: /Inspect Bengaluru/ }).click();
       await page.getByText(/contributing row\(s\)/).waitFor();
     }
     await captureVariants(name);
