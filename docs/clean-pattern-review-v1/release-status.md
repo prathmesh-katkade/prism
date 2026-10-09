@@ -1,6 +1,34 @@
 # Clean Pattern Review v1 — release status
 
-## FINAL status — 2026-10-08, second pass (read this section first; supersedes everything below)
+## FINAL status — 2026-10-09, third pass (read this section first; supersedes everything below)
+
+Landed `644a09a` (the second-pass commit below) and then independently
+smoke-tested it with a real Chromium browser walkthrough against that exact
+build, outside of any mocked test. This found one genuine, reproducible bug
+that none of the unit/API/live-e2e suites had caught: after accepting a
+pattern family and applying its extraction, clicking **"+ New manual
+operation"** (or selecting a different quality issue) left the right
+inspector frozen on the old **PATTERN REVIEW** panel instead of switching to
+the requested one — `selectedFinding` was never cleared by
+`startManualOperation()`/`selectIssue()`, and it took render precedence over
+`manualMode`/`selectedIssue` in `clean-workspace.tsx`'s inspector branch
+chain. The manual-operation form (Operation select, Preview, Add step to
+draft) was unreachable from that state, and a still-running verify job for
+the old finding could also resolve late and resurrect it. Fixed by clearing
+`selectedFinding` (and cancelling any in-flight verify poll) in both
+`startManualOperation()` and `selectIssue()`; a new regression test
+(`clean-workspace.test.tsx`, "switches the inspector away from a selected
+pattern finding...") covers both directions. Commit `439e4c3`, fast-forwarded
+to `main` the same way as `644a09a`. Full web unit suite: **107 passed**
+(106 + 1 new), 0 failed.
+
+This is exactly why the smoke test existed: automated suites exercise one
+flow per test and reset state between them, so they never clicked "new
+manual operation" *after* a finding was already selected and applied. A real
+walkthrough does. See the final report for the CI result and tag status at
+this exact SHA.
+
+## FINAL status — 2026-10-08, second pass
 
 **Functional acceptance and visual acceptance are tracked separately below.
 Passing functional/gate tests is not visual acceptance, and visual

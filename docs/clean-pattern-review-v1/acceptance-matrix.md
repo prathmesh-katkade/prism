@@ -1,6 +1,47 @@
 # Clean Pattern Review v1 — acceptance matrix
 
-## FINAL acceptance status — 2026-10-08 (read this section first)
+## FINAL acceptance status — 2026-10-09, third pass (read this section first)
+
+After landing `644a09a` (the 2026-10-08 section below), this pass
+independently smoke-tested the landed build end to end with a real browser
+(upload → discover a pattern → verify all rows via the job-based flow →
+accept a family → preview and apply the extraction → build a second manual
+recipe step → run a SQL Lab join → select a Visualize bar and inspect
+contributing rows → save the chart and build a Report). This is deliberate:
+every automated suite exercises one flow per test case and resets component
+state between cases, so none of them click "+ New manual operation" (or
+select a different quality issue) *immediately after* a pattern finding was
+selected and its extraction applied in the same session — exactly the order
+a real analyst follows.
+
+That walkthrough found a real bug on the first pass: step 6 (building a
+second recipe step right after applying the pattern extraction) hung
+waiting for the "Operation" selector, because the right inspector stayed
+stuck on the just-used **PATTERN REVIEW** panel. Root cause in
+`apps/web/src/components/clean-workspace.tsx`: `startManualOperation()` and
+`selectIssue()` never cleared `selectedFinding`, and the inspector's render
+chain checks `selectedFinding` before `manualMode`/`selectedIssue`, so the
+manual-operation form and the selected-issue panel were both unreachable
+whenever a pattern finding had been selected first — including after that
+finding's own decision was already applied. A late-resolving verify-job poll
+for the abandoned finding could also have resurrected the stale panel.
+Fixed by clearing `selectedFinding` and cancelling any in-flight verify poll
+in both entry points. Regression test added:
+`clean-workspace.test.tsx` → "switches the inspector away from a selected
+pattern finding when starting a manual operation or selecting an issue,
+instead of leaving it stuck on the old finding" — asserts both directions
+(manual-operation entry, and issue selection) actually swap the inspector
+panel. Full web unit suite after the fix: **107 passed**, 0 failed (106 +
+this 1 new test). Commit `439e4c3`, landed to `main` the same way as
+`644a09a` (fetch, fast-forward, push — no rebase, no force-push).
+
+After the fix, the same 10-step walkthrough (now including the previously
+untested Reports step: save chart → create report → attach chart → verify
+it renders with its explicit source revision/fingerprint) passed completely
+against the rebuilt landed preview. See the final report for the exact CI
+result and tag status at `439e4c3`.
+
+## FINAL acceptance status — 2026-10-08, second pass
 
 This section is authoritative. The "Superseding integration status — 2026-10-07"
 section below it, and the original table below that, are retained as a
