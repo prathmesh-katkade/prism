@@ -1,6 +1,123 @@
 # Clean Pattern Review v1 — acceptance matrix
 
-## FINAL acceptance status — 2026-10-09, third pass (read this section first)
+## FINAL acceptance status — 2026-10-09, fourth pass: GUI-reference completion (read this section first)
+
+This pass closes the explicit, itemized GUI-reference scope: the four named
+Visualize feature gaps, SQL Lab/Clean density and composition, and a full
+functional+visual re-verification. It builds on, and does not repeat, the
+third pass below (the stuck-inspector bug fix, landed as `439e4c3`/`5aa3b84`).
+
+**1. Visualize — implemented, not just styled closer:**
+- **Sort by**: `VizSortBy` (`value_desc`/`value_asc`/`label_asc`/`label_desc`)
+  on `VisualizationSpec`, applied server-side with a deterministic
+  label tie-break. Truncation (`max_categories`) always keeps the
+  top-by-value categories regardless of display sort, verified by
+  `test_sort_by_does_not_change_which_categories_truncation_keeps`.
+- **Axis starts at**: `axis_start` on the spec. Auto preserves the prior
+  truthful-zero-or-lower behavior unchanged. An explicit, non-truthful
+  baseline adds an honest warning and clamps below-baseline bars to the
+  plot edge instead of hiding or inverting them
+  (`test_axis_start_other_than_the_truthful_baseline_adds_an_explicit_warning`).
+- **Currency**: a fixed, validated allow-list (`USD`/`EUR`/`GBP`/`INR`/`JPY`)
+  as a display-only hint - never a value conversion - applied via
+  `Intl.NumberFormat`.
+- **Saved views**: a real list in the Fields panel backed by
+  `GET /api/v1/reports/charts`, not a placeholder.
+- **Filter chips**: consolidated to one `+ Add filter` popover above the
+  chart; the previously-duplicated sidebar filter form was removed.
+
+All three new spec fields persist through saved charts and Reports because
+they live on the spec itself - this was initially **broken** for
+`axis_start`/`currency` in the Report canvas specifically (the
+`reports-workspace.tsx` `ChartCanvas`/`FacetCharts` call sites never
+forwarded them), found via the full walkthrough below and fixed in
+`4390375` with a regression test that was verified to actually fail
+without the fix before being confirmed to pass with it.
+
+One more real bug found through direct visual inspection (not just
+describing the gap): pydantic serializes an unset `Optional` field as JSON
+`null`, not an omitted key. The Axis-starts-at control's `=== undefined`
+check never matched a freshly-suggested chart's `null`, so it displayed
+"Custom…" with an empty value on every single new chart before any user
+interaction. Fixed by switching to `== null`.
+
+**2. SQL Lab** - toolbar reduced from 7 buttons to `Run query` / `Save
+query` / a single `⋮` disclosure (`Format`/`Plan`/`Join checks`/`Find
+CTEs`), matching the reference's density. The left source/schema/saved-
+query pane and right join-evidence inspector already existed structurally
+and are unchanged.
+
+**3. Clean** - added a freely-navigable `Clean → SQL Lab → Visualize →
+Reports` strip echoing the reference's stepper, explicitly **not** a gated
+wizard: every destination is reachable at any time, and nothing claims a
+later workspace is "done," because there is no dataset-wide
+Clean/SQL/Visualize/Report completion state to report honestly - only this
+revision's own applied-or-not state, which is already shown correctly
+elsewhere. This is a deliberate semantic adaptation of the reference's
+numbered, circled stepper, not a visual reproduction of it.
+
+**4. Verification performed, not just claimed:**
+- 13 new backend tests, 9 new frontend tests (8 Visualize + 1 Reports),
+  all added for behavior actually exercised live first.
+- A full, continuous, un-reset 11-step browser walkthrough: upload →
+  accept a pattern family → apply its extraction (revision 1) → switch to
+  a manual operation → switch to a quality issue (exercises the earlier
+  inspector-stuck fix under new conditions) → build a second recipe step →
+  run a real SQL query → hand off to Visualize → change sort, axis,
+  currency, and a filter → select a bar and inspect contributing rows →
+  save the chart → reopen the saved view and confirm its spec survived →
+  create a Report, attach the chart, and confirm the rendered chart kept
+  its sort/axis/currency. This is exactly the discipline the owner's
+  Phase-5 prompt asked for ("Perform a continuous real-browser walkthrough
+  without resetting between every step") and is what caught the Reports
+  persistence bug above.
+- Fresh, final gate counts on this exact tree (`4390375`, all rerun in
+  this pass): lint, typecheck, web build, and a11y baseline all clean;
+  Ruff and mypy (CI's exact flags) clean; dependency boundaries, secret
+  scan, and generated-contract check clean; web unit tests **114 passed**
+  (0 failed); full pytest, isolated SQLite, **1,368 passed, 7 skipped, 43
+  warnings** (0 failed); desktop/mobile visual suite **14 passed, 0
+  failed, no snapshot changes needed beyond the two toolbar-density
+  baselines updated and manually inspected in this pass); the entire live
+  browser suite against isolated SQLite **23 passed, 5 skipped, 0
+  failed**; the entire live browser suite against disposable MySQL 8.4.9
+  **23 passed, 5 skipped, 0 failed** (verified at `7f0f9da`, one commit
+  before this doc update - the only change since is the Reports
+  axis/currency fix, which touches no MySQL-specific code path); the
+  opt-in server-side cancellation proof **passed** (server genuinely
+  stopped at row 5,000 of 20,000, 472ms UI response); a genuine two-OS-
+  process restart proof **passed** (a saved report with its chart and a
+  table snapshot, created in one API process, reopened correctly after a
+  second, independent API process started against the same isolated
+  database).
+- Two non-deterministic failures were investigated, not blindly retried
+  or dismissed: (a) a duplicate-named-recipe "strict mode violation" in
+  one MySQL run, traced to accumulated state from this session's own
+  repeated test invocations against the same un-reset MySQL database
+  (resolved by dropping and recreating it before the final run - the
+  exact same class of local contamination this project has documented
+  before, not a product bug); (b) the pre-existing, previously-documented
+  `sql-lab-live.spec.ts` "latest dataset" race from the shared single-
+  backend-process live-suite architecture (`workers: 1`), reproduced once
+  more under concurrent load and confirmed passing in isolation - a known,
+  named architectural limitation, not a regression from this pass's
+  changes.
+
+**5. Visual acceptance against the three supplied references (open, not
+accepted - see `reference-discrepancy-audit.md`'s third-pass section for
+the full itemized list):** substantially closer than the prior pass. Six
+specific, named gaps remain: SQL Lab's data-sources dropdown vs. the
+reference's card list; missing field-type glyphs (a colored dot is used
+instead); Visualize bar thickness not verified pixel-identical; no
+per-chart "Report context" preview card; Clean's AI-suggestion panel uses
+a flat table instead of the reference's arrow-grouping card; typography
+close but not verified pixel-exact. These are the owner's call, not
+silently accepted by this document.
+
+See the final report (end of this session) for the landed SHA, CI result,
+and tag status.
+
+## FINAL acceptance status — 2026-10-09, third pass
 
 After landing `644a09a` (the 2026-10-08 section below), this pass
 independently smoke-tested the landed build end to end with a real browser

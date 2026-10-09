@@ -1,6 +1,66 @@
 # Clean Pattern Review v1 — release status
 
-## FINAL status — 2026-10-09, third pass (read this section first; supersedes everything below)
+## FINAL status — 2026-10-09, fourth pass (read this section first; supersedes everything below)
+
+**Scope closed this pass:** the owner's explicit GUI-reference completion
+request - the four named Visualize functionality gaps (Sort by, Axis
+starts at, Currency, a real Saved-views list / consolidated filter chips),
+SQL Lab toolbar density, a freely-navigable Clean workflow strip, a full
+continuous walkthrough, and a complete final-gate rerun. Full details,
+exact test names, and the itemized still-open visual list are in
+`acceptance-matrix.md`'s fourth-pass section and
+`reference-discrepancy-audit.md`'s third-pass section - this section is a
+summary, not a duplicate.
+
+**Two real bugs found and fixed, both through direct inspection rather
+than assumption:**
+1. The Axis-starts-at control was permanently stuck showing "Custom…" on
+   every freshly-suggested chart, before any user touched it - a
+   `=== undefined` check that never matched pydantic's `null` serialization
+   of an unset `Optional` field. Fixed with `== null`.
+2. A saved chart's `axis_start`/`currency` silently reverted to bare
+   defaults once viewed inside a Report - `reports-workspace.tsx` never
+   forwarded them to `ChartCanvas`/`FacetCharts` the way
+   `visualize-workspace.tsx` does. Found via the full walkthrough (not a
+   targeted test), fixed, and the regression test was verified to actually
+   fail without the fix before being confirmed to pass with it.
+
+**Fresh, final gate counts on this exact tree** (commit `4390375`, all
+rerun in this pass, not inherited): lint, typecheck, build:web, a11y
+baseline, Ruff, mypy, dependency boundaries, secret scan, and
+generated-contract check all clean; web unit tests **114 passed** (0
+failed, +13 since the third pass: 8 Visualize + 1 Reports persistence + 4
+behavioral tests already counted in the prior Clean/SQL-Lab density
+commit); full pytest, isolated SQLite, **1,368 passed, 7 skipped, 43
+warnings**; desktop/mobile visual suite **14 passed, 0 failed** (two
+toolbar-density baselines intentionally updated after manual pixel
+inspection confirmed they reflect the real, intended toolbar change, not
+a regression); the entire live browser suite against isolated SQLite **23
+passed, 5 skipped, 0 failed**; the entire live browser suite against
+disposable MySQL 8.4.9 **23 passed, 5 skipped, 0 failed**; the opt-in
+server-side cancellation proof **passed** (stopped at row 5,000 of
+20,000); a genuine two-OS-process restart proof **passed**.
+
+Two non-deterministic failures surfaced during MySQL runs and were
+investigated to ground truth rather than retried blindly or dismissed:
+accumulated same-named-recipe state from this session's own repeated test
+invocations against an un-reset MySQL database (fixed by resetting it, not
+a product bug), and the pre-existing, already-documented shared-process
+"latest dataset" race in the live-suite architecture (reproduced once,
+confirmed passing in isolation, unrelated to this pass's changes).
+
+**Visual acceptance remains open** - substantially closer than the prior
+pass (the four Visualize gaps are real functionality now, not absent
+controls; SQL Lab's density closely matches the reference; Clean has the
+workflow strip), but six specific, named composition/typography gaps
+remain for the owner's judgment, listed in full in
+`reference-discrepancy-audit.md`. This document does not accept them on
+the owner's behalf.
+
+**Landing**: see the final report for the exact landed SHA, CI link, and
+tag status recorded at the end of this session.
+
+## FINAL status — 2026-10-09, third pass
 
 Landed `644a09a` (the second-pass commit below) and then independently
 smoke-tested it with a real Chromium browser walkthrough against that exact
