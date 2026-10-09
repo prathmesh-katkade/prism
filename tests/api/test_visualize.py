@@ -236,3 +236,105 @@ def test_small_multiples_share_a_saved_spec_and_mark_rows_respect_panel_filter()
     assert saved.json()["result"]["facets"] == facets
     unsupported = client.post(f"/api/v1/visualize/datasets/{dataset_id}/render", json={**spec, "mark": "scatter"})
     assert unsupported.status_code == 422
+
+
+def test_sort_by_controls_bar_order_with_a_deterministic_label_tiebreak() -> None:
+    client = TestClient(create_app())
+    csv = b"region,revenue\nNorth,30\nSouth,30\nEast,10\nWest,20\n"
+    dataset_id = client.post("/api/v1/overview/datasets", files={"file": ("sort.csv", csv, "text/csv")}).json()["dataset_id"]
+    base = {"mark": "bar", "intent": "comparison", "dimension": "region", "measure": "revenue", "aggregation": "sum"}
+
+    default = client.post(f"/api/v1/visualize/datasets/{dataset_id}/render", json=base).json()
+    assert [p["label"] for p in default["data"]] == ["North", "South", "West", "East"]  # value desc (30,30,20,10); North/South tie broken by label asc
+
+    value_asc = client.post(f"/api/v1/visualize/datasets/{dataset_id}/render", json={**base, "sort_by": "value_asc"}).json()
+    assert [p["label"] for p in value_asc["data"]] == ["East", "West", "North", "South"]
+
+    label_asc = client.post(f"/api/v1/visualize/datasets/{dataset_id}/render", json={**base, "sort_by": "label_asc"}).json()
+    assert [p["label"] for p in label_asc["data"]] == ["East", "North", "South", "West"]
+
+    label_desc = client.post(f"/api/v1/visualize/datasets/{dataset_id}/render", json={**base, "sort_by": "label_desc"}).json()
+    assert [p["label"] for p in label_desc["data"]] == ["West", "South", "North", "East"]
+
+    # Every ordering is the same set of categories at the same values - only display order changes.
+    as_map = lambda body: {p["label"]: p["value"] for p in body["data"]}  # noqa: E731
+    assert as_map(default) == as_map(value_asc) == as_map(label_asc) == as_map(label_desc)
+
+
+def test_sort_by_does_not_change_which_categories_truncation_keeps() -> None:
+    client = TestClient(create_app())
+    dataset_id = _dataset(client)
+    base = {"mark": "bar", "intent": "comparison", "dimension": "segment", "measure": "revenue", "aggregation": "sum", "max_categories": 5}
+    default = client.post(f"/api/v1/visualize/datasets/{dataset_id}/render", json=base).json()
+    label_asc = client.post(f"/api/v1/visualize/datasets/{dataset_id}/render", json={**base, "sort_by": "label_asc"}).json()
+    assert {p["label"] for p in default["data"]} == {p["label"] for p in label_asc["data"]}
+    assert [p["label"] for p in label_asc["data"]] == sorted(p["label"] for p in label_asc["data"])
+
+
+def test_sort_by_also_orders_box_plot_groups_without_changing_which_are_kept() -> None:
+    client = TestClient(create_app())
+    csv = b"region,revenue\n" + b"".join(
+        f"{region},{value}\n".encode()
+        for region, value in [("North", 10), ("North", 20), ("South", 5), ("South", 50), ("East", 15), ("East", 25)]
+    )
+    dataset_id = client.post("/api/v1/overview/datasets", files={"file": ("box.csv", csv, "text/csv")}).json()["dataset_id"]
+    base = {"mark": "box", "intent": "distribution", "dimension": "region", "measure": "revenue", "aggregation": "none"}
+    label_asc = client.post(f"/api/v1/visualize/datasets/{dataset_id}/render", json={**base, "sort_by": "label_asc"}).json()
+    assert [p["label"] for p in label_asc["data"]] == ["East", "North", "South"]
+    default = client.post(f"/api/v1/visualize/datasets/{dataset_id}/render", json=base).json()
+    assert {p["label"] for p in default["data"]} == {p["label"] for p in label_asc["data"]}
+
+
+def test_drilldown_still_maps_to_the_correct_category_after_sort_by_reorders_display() -> None:
+    client = TestClient(create_app())
+    csv = b"region,revenue\nNorth,30\nSouth,30\nEast,10\nWest,20\n"
+    dataset_id = client.post("/api/v1/overview/datasets", files={"file": ("sort2.csv", csv, "text/csv")}).json()["dataset_id"]
+    spec = {"mark": "bar", "intent": "comparison", "dimension": "region", "measure": "revenue", "aggregation": "sum", "sort_by": "label_asc"}
+    inspected = client.post(f"/api/v1/visualize/datasets/{dataset_id}/drilldown", json={"spec": spec, "dimension_value": "East"})
+    assert inspected.status_code == 200
+    assert inspected.json()["total_matching_rows"] == 1
+    assert inspected.json()["rows"][0]["region"] == "East"
+
+
+def test_axis_start_other_than_the_truthful_baseline_adds_an_explicit_warning() -> None:
+    client = TestClient(create_app())
+    csv = b"region,revenue\nNorth,100\nSouth,200\n"
+    dataset_id = client.post("/api/v1/overview/datasets", files={"file": ("axis.csv", csv, "text/csv")}).json()["dataset_id"]
+    base = {"mark": "bar", "intent": "comparison", "dimension": "region", "measure": "revenue", "aggregation": "sum"}
+
+    truthful = client.post(f"/api/v1/visualize/datasets/{dataset_id}/render", json={**base, "axis_start": 0}).json()
+    assert not any("axis starts at" in warning.lower() for warning in truthful["warnings"])
+
+    truncating = client.post(f"/api/v1/visualize/datasets/{dataset_id}/render", json={**base, "axis_start": 50}).json()
+    assert any("axis starts at" in warning.lower() for warning in truncating["warnings"])
+
+    unset = client.post(f"/api/v1/visualize/datasets/{dataset_id}/render", json=base).json()
+    assert not any("axis starts at" in warning.lower() for warning in unset["warnings"])
+
+
+def test_currency_accepts_the_supported_set_and_rejects_anything_else() -> None:
+    client = TestClient(create_app())
+    dataset_id = _dataset(client)
+    base = {"mark": "bar", "intent": "comparison", "dimension": "segment", "measure": "revenue", "aggregation": "sum"}
+    ok = client.post(f"/api/v1/visualize/datasets/{dataset_id}/render", json={**base, "currency": "INR"})
+    assert ok.status_code == 200
+    assert ok.json()["spec"]["currency"] == "INR"
+    bad = client.post(f"/api/v1/visualize/datasets/{dataset_id}/render", json={**base, "currency": "XXX"})
+    assert bad.status_code == 422
+
+
+def test_sort_by_axis_start_and_currency_persist_through_a_saved_chart() -> None:
+    client = TestClient(create_app())
+    dataset_id = _dataset(client)
+    spec = {"mark": "bar", "intent": "comparison", "dimension": "segment", "measure": "revenue", "aggregation": "sum",
+            "sort_by": "label_asc", "axis_start": 0, "currency": "USD"}
+    saved = client.post("/api/v1/reports/charts", json={"name": "Revenue by segment", "dataset_id": dataset_id, "spec": spec})
+    assert saved.status_code == 201
+    body = saved.json()
+    assert body["spec"]["sort_by"] == "label_asc"
+    assert body["spec"]["axis_start"] == 0
+    assert body["spec"]["currency"] == "USD"
+    fetched = client.get(f"/api/v1/reports/charts/{body['chart_id']}")
+    assert fetched.status_code == 200
+    assert fetched.json()["spec"]["sort_by"] == "label_asc"
+    assert fetched.json()["spec"]["currency"] == "USD"

@@ -1,5 +1,5 @@
 import React from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { QueryStudio } from "./query-studio";
 
@@ -118,6 +118,28 @@ describe("Query Studio", () => {
     expect(screen.getByText(/1 data row\(s\) have no match in joined/)).toBeInTheDocument();
   });
 
+  it("keeps the primary toolbar to Run/Cancel/Save and reaches Format/Plan/Join checks/Find CTEs through a single disclosure", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: string | URL) => {
+      const path = String(input);
+      const body = path.endsWith("/connections") ? [connection] : path.includes("/schema") ? schema : path.endsWith("/snippets") ? [] : path.endsWith("/history") ? [] : [];
+      return new Response(JSON.stringify(body), { status: 200 });
+    }));
+    render(<QueryStudio onSelectContext={vi.fn()} />);
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Untitled query" })).toBeInTheDocument());
+
+    const toolbar = screen.getByRole("region", { name: "Query actions" });
+    const directButtons = Array.from(toolbar.querySelectorAll(":scope > button")).map((button) => button.textContent?.trim());
+    expect(directButtons).toEqual(["Run query ⌘ ↵", "Save query"]); // only the primary actions sit directly in the toolbar; the rest live under the disclosure
+    const disclosure = screen.getByLabelText("More query tools").closest("details")!;
+    expect(disclosure).not.toHaveAttribute("open");
+
+    fireEvent.click(screen.getByLabelText("More query tools"));
+    expect(within(disclosure).getByRole("button", { name: "Format" })).toBeInTheDocument();
+    expect(within(disclosure).getByRole("button", { name: "Plan" })).toBeInTheDocument();
+    expect(within(disclosure).getByRole("button", { name: "Join checks" })).toBeInTheDocument();
+    expect(within(disclosure).getByRole("button", { name: "Find CTEs" })).toBeInTheDocument();
+  });
+
   it("finds a query's CTEs and materializes one into the editor for standalone inspection", async () => {
     const materialized = "WITH recent AS (SELECT * FROM data WHERE revenue > 10) SELECT * FROM recent";
     const fetchMock = vi.fn(async (input: string | URL) => {
@@ -135,6 +157,7 @@ describe("Query Studio", () => {
     render(<QueryStudio onSelectContext={vi.fn()} />);
 
     await waitFor(() => expect(screen.getByRole("heading", { name: "Untitled query" })).toBeInTheDocument());
+    fireEvent.click(screen.getByLabelText("More query tools")); // secondary tools live under this disclosure, not the primary toolbar row
     fireEvent.click(screen.getByRole("button", { name: "Find CTEs" }));
 
     await waitFor(() => expect(screen.getByRole("button", { name: "Inspect recent" })).toBeInTheDocument());

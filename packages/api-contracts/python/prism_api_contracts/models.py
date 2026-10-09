@@ -929,6 +929,27 @@ class VizAggregation(str, Enum):
     NONE = "none"
 
 
+class VizSortBy(str, Enum):
+    """Explicit, persisted sort order for a chart's categories.
+
+    ``None`` on the spec preserves each mark's existing default (value-descending
+    for bar/horizontal_bar/box, chronological index order for line) rather than
+    silently re-sorting every previously-saved chart the first time this field
+    shipped.
+    """
+
+    VALUE_DESC = "value_desc"
+    VALUE_ASC = "value_asc"
+    LABEL_ASC = "label_asc"
+    LABEL_DESC = "label_desc"
+
+
+# A fixed, small allow-list, not a free-form currency code: this is a display
+# hint only (symbol/placement), never a value conversion, so there is no sense
+# in which an unsupported code could be "wrong" vs. simply unimplemented.
+VIZ_CURRENCIES = ("USD", "EUR", "GBP", "INR", "JPY")
+
+
 class VisualizationSpec(ContractModel):
     mark: VizMark
     intent: VizIntent
@@ -944,6 +965,15 @@ class VisualizationSpec(ContractModel):
     reference_line: Optional[float] = None
     annotation: Optional[str] = Field(default=None, max_length=500)
     facet: Optional[str] = None
+    sort_by: Optional[VizSortBy] = None
+    axis_start: Optional[float] = None
+    currency: Optional[str] = Field(default=None, max_length=8)
+
+    @model_validator(mode="after")
+    def _validate_currency(self) -> "VisualizationSpec":
+        if self.currency is not None and self.currency not in VIZ_CURRENCIES:
+            raise ValueError(f"currency must be one of {VIZ_CURRENCIES} or omitted; got {self.currency!r}.")
+        return self
 
 
 class VisualizationSuggestion(ContractModel):

@@ -716,6 +716,19 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
     </nav>
     <section className="clean-preview" aria-label="Data and transformation preview" tabIndex={0}>
       <header><span className="eyebrow">Source: {clean.dataset.source_name}</span><h1>{preview?.operation === "category_mapping" ? "Review category mapping" : "Clean dataset"}</h1><p>{clean.dataset.row_count.toLocaleString()} rows · {clean.dataset.column_count} columns · revision {clean.dataset.revision}</p></header>
+      {/* Unlike a numbered, gated wizard, every stage here is freely reachable at
+          any time and never claims a later workspace is "done" - there is no
+          dataset-wide notion of Clean/SQL/Visualize/Report completion to report
+          honestly, only this revision's own applied-or-not state shown elsewhere. */}
+      <nav className="clean-workflow-strip" aria-label="Workflow">
+        <span className="is-current">Clean</span>
+        <span aria-hidden="true">→</span>
+        <button type="button" onClick={() => onOpenWorkflow("sql-lab")}>SQL Lab</button>
+        <span aria-hidden="true">→</span>
+        <button type="button" onClick={() => onOpenWorkflow("visualize")}>Visualize</button>
+        <span aria-hidden="true">→</span>
+        <button type="button" onClick={() => onOpenWorkflow("reports")}>Reports</button>
+      </nav>
       {preview ? <>
         <div className="clean-review-tabs" role="tablist" aria-label="Review transformation"><button role="tab" aria-selected={reviewView === "before"} onClick={() => setReviewView("before")}>Before</button><button role="tab" aria-selected={reviewView === "changes"} onClick={() => setReviewView("changes")}>Changes</button><button role="tab" aria-selected={reviewView === "after"} onClick={() => setReviewView("after")}>After</button></div>
         {reviewView === "before" ? <><p className="quiet-note">Source revision {preview.source_revision ?? clean.dataset.revision} · fingerprint {(preview.source_fingerprint ?? clean.dataset.source_fingerprint).slice(0, 12)}… · first {preview.before_sample.length} row(s)</p><SampleTable rows={preview.before_sample} /></> : null}

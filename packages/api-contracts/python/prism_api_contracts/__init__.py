@@ -305,6 +305,7 @@ from .models import (
     VizAggregation,
     VizIntent,
     VizMark,
+    VizSortBy,
     WorkspaceProposalRequest,
     WorkspaceProposalResponse,
 )
@@ -360,7 +361,7 @@ __all__ = [
     "PatternReviewDecisionKind", "PatternReviewDecisionRequest", "PatternReviewDecision",
     "AtlasVisualizeAction", "AtlasVisualizeRequest", "AtlasVisualizeResponse", "VisualizationDataResponse",
     "ChartDrillDownRequest", "ChartDrillDownResponse",
-    "VisualizationDatum", "VisualizationFacet", "VisualizationSpec", "VisualizationSuggestion", "VizAggregation", "VizIntent", "VizMark", "BoxStats", "WorkspaceProposalRequest", "WorkspaceProposalResponse",
+    "VisualizationDatum", "VisualizationFacet", "VisualizationSpec", "VisualizationSuggestion", "VizAggregation", "VizIntent", "VizMark", "VizSortBy", "BoxStats", "WorkspaceProposalRequest", "WorkspaceProposalResponse",
     "ProviderReadiness", "ReadinessResponse",
     "AtlasStatsAction", "AtlasStatsRequest", "AtlasStatsResponse", "StatNormalityCheck",
     "StatSuggestionResponse", "StatTestKind", "StatTestRequest", "StatTestResult",

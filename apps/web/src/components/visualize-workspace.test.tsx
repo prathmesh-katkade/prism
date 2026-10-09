@@ -1,6 +1,7 @@
 import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { VisualizationSpec } from "@prism/api-contracts";
 import { ChartCanvas, VisualizeWorkspace } from "./visualize-workspace";
 
 const dataset = { dataset_id: "ds_1", revision: 0, source_name: "sales.csv", source_fingerprint: "a".repeat(64), row_count: 6, column_count: 2 };
@@ -79,6 +80,86 @@ describe("Visualize workspace", () => {
     expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
     expect(screen.queryByText("Choosing a chart for this data")).not.toBeInTheDocument();
   });
+
+  it("lets Sort by, Axis starts at, and Currency be set and re-renders the chart with the updated spec", async () => {
+    const renderCalls: VisualizationSpec[] = [];
+    const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path.includes("/profile")) return json(profile);
+      if (path.includes("/suggest")) return json(suggestion);
+      if (path.endsWith("/reports/charts")) return json([]);
+      if (path.includes("/render")) {
+        const spec = JSON.parse(String(init?.body)) as VisualizationSpec;
+        renderCalls.push(spec);
+        return json({ ...rendered, spec });
+      }
+      return json({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<VisualizeWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
+    await waitFor(() => expect(screen.getByRole("img", { name: /Bar chart with 2 categories/ })).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText("Sort by"), { target: { value: "label_asc" } });
+    await waitFor(() => expect(renderCalls.at(-1)?.sort_by).toBe("label_asc"));
+
+    fireEvent.change(screen.getByLabelText("Axis starts at"), { target: { value: "0" } });
+    await waitFor(() => expect(renderCalls.at(-1)?.axis_start).toBe(0));
+
+    fireEvent.change(screen.getByLabelText("Currency"), { target: { value: "INR" } });
+    await waitFor(() => expect(renderCalls.at(-1)?.currency).toBe("INR"));
+  });
+
+  it("adds a filter through the inline Add filter form above the chart and removes it via its chip, with no separate conflicting filter UI", async () => {
+    const renderCalls: VisualizationSpec[] = [];
+    const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path.includes("/profile")) return json(profile);
+      if (path.includes("/suggest")) return json(suggestion);
+      if (path.endsWith("/reports/charts")) return json([]);
+      if (path.includes("/render")) {
+        const spec = JSON.parse(String(init?.body)) as VisualizationSpec;
+        renderCalls.push(spec);
+        return json({ ...rendered, spec });
+      }
+      return json({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<VisualizeWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
+    await waitFor(() => expect(screen.getByRole("img", { name: /Bar chart with 2 categories/ })).toBeInTheDocument());
+
+    expect(screen.queryByLabelText("Filter field")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "+ Add filter" }));
+    fireEvent.change(screen.getByLabelText("Filter field"), { target: { value: "segment" } });
+    fireEvent.change(screen.getByLabelText("Filter value"), { target: { value: "a" } });
+    fireEvent.click(screen.getByRole("button", { name: "Apply filter" }));
+    await waitFor(() => expect(renderCalls.at(-1)?.filters).toMatchObject({ segment: "a" }));
+    expect(screen.getByRole("button", { name: "Remove filter segment equals a" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove filter segment equals a" }));
+    await waitFor(() => expect(renderCalls.at(-1)?.filters).toEqual({}));
+  });
+
+  it("lists real saved views for this dataset and loads one back into the workspace on click", async () => {
+    const savedChart = { chart_id: "chart_1", name: "Revenue by segment", dataset_id: "ds_1", dataset_revision: 0, source_fingerprint: dataset.source_fingerprint, spec: { ...suggestion.spec, sort_by: "label_asc" as const }, rationale: "saved rationale", created_at: "2026-08-28T00:00:00Z" };
+    const otherDatasetChart = { ...savedChart, chart_id: "chart_2", dataset_id: "ds_other", name: "Not this dataset" };
+    const fetchMock = vi.fn(async (input: string | URL) => {
+      const path = String(input);
+      if (path.includes("/profile")) return json(profile);
+      if (path.includes("/suggest")) return json(suggestion);
+      if (path.endsWith("/reports/charts")) return json([savedChart, otherDatasetChart]);
+      if (path.includes("/render")) return json(rendered);
+      return json({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<VisualizeWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
+    await waitFor(() => expect(screen.getByRole("img", { name: /Bar chart with 2 categories/ })).toBeInTheDocument());
+
+    await waitFor(() => expect(screen.getByText("Revenue by segment")).toBeInTheDocument());
+    expect(screen.queryByText("Not this dataset")).not.toBeInTheDocument(); // filtered to this dataset only
+
+    fireEvent.click(screen.getByText("Revenue by segment"));
+    await waitFor(() => expect(screen.getByLabelText("Sort by")).toHaveValue("label_asc"));
+  });
 });
 
 function json(body: unknown, status = 200): Response {
@@ -110,6 +191,28 @@ describe("ChartCanvas", () => {
     expect(container.querySelector("rect")).not.toBeNull(); // the quartile box
     expect(container.querySelectorAll("line").length).toBeGreaterThanOrEqual(3); // two whiskers + median line
     expect(container.querySelector("circle.viz-box-outlier")).not.toBeNull();
+  });
+
+  it("formats horizontal bar value labels as currency when a currency is set, without changing the underlying values", () => {
+    const data = [{ label: "North", value: 24000 }, { label: "South", value: 16000 }];
+    const { container } = render(<ChartCanvas mark="horizontal_bar" data={data} currency="INR" />);
+    const text = container.textContent ?? "";
+    expect(text).toMatch(/₹/); // currency symbol shown
+    expect(text).not.toMatch(/24000\.00|24,000\.00/); // not raw float formatting
+  });
+
+  it("anchors horizontal bars at an explicit axis start and clamps a value below it instead of going negative or vanishing", () => {
+    const data = [{ label: "Above", value: 240 }, { label: "Below", value: 10 }];
+    const { container } = render(<ChartCanvas mark="horizontal_bar" data={data} axisStart={100} />);
+    const rects = Array.from(container.querySelectorAll("rect"));
+    expect(rects).toHaveLength(2);
+    const widths = rects.map((rect) => Number(rect.getAttribute("width")));
+    const xs = rects.map((rect) => Number(rect.getAttribute("x")));
+    // "Below" (10) sits under the axis start (100): clamped to a visible sliver at
+    // the plot's left edge, never negative width and never missing entirely.
+    expect(widths[1]).toBeGreaterThan(0);
+    expect(widths[1]).toBeLessThan(widths[0]!); // still visibly shorter than the bar actually above the start
+    expect(xs[0]).toBe(xs[1]); // both anchor at the same left edge (the axis start), not an implied zero
   });
 
   it("renders a line chart left-to-right in the given data order without resorting by value", () => {

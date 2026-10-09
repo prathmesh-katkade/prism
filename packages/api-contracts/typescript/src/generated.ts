@@ -2507,6 +2507,9 @@ export interface VisualizationSpec {
   reference_line?: number;
   annotation?: string;
   facet?: string;
+  sort_by?: VizSortBy;
+  axis_start?: number;
+  currency?: string;
 }
 
 export interface VisualizationSuggestion {
@@ -2520,6 +2523,8 @@ export type VizAggregation = "count" | "sum" | "mean" | "median" | "none";
 export type VizIntent = "comparison" | "distribution" | "relationship" | "composition" | "trend" | "ranking";
 
 export type VizMark = "bar" | "horizontal_bar" | "line" | "scatter" | "histogram" | "box";
+
+export type VizSortBy = "value_desc" | "value_asc" | "label_asc" | "label_desc";
 
 export interface WorkspaceProposalRequest {
   kind: "clean" | "chart" | "sql";

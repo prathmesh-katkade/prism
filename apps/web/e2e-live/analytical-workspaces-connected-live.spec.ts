@@ -77,6 +77,7 @@ test("real Clean to SQL to Visualize to Report flow keeps source versions explic
   await capture(page, "visualize-chart");
   await page.getByLabel("Chart inspector").getByLabel("Mark").selectOption("bar");
   await page.getByLabel("Data fields").getByRole("button", { name: /customer_id/ }).click();
+  await page.getByLabel("Chart inspector").locator(".viz-advanced-settings").getByText("More chart settings").click();
   await page.getByLabel("Chart inspector").getByLabel("Small multiples by").selectOption("segment");
   await expect(page.getByLabel(/Small multiples by segment/).getByRole("img")).toHaveCount(2);
   await page.getByLabel(/Small multiples by segment/).getByRole("button", { name: /Inspect c2/ }).click();

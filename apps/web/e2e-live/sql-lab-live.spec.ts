@@ -40,6 +40,7 @@ test("SQL Lab completes a real browser to FastAPI analytical flow", async ({ pag
     await expect(page).toHaveScreenshot("sql-lab-live-results.png", { animations: "disabled", fullPage: true, maxDiffPixelRatio: 0.01 });
   }
 
+  await page.getByLabel("More query tools").click();
   await page.getByRole("button", { name: "Plan", exact: true }).click();
   await expect(page.getByRole("tab", { name: "plan" })).toHaveAttribute("aria-selected", "true");
   await page.getByRole("tab", { name: "results" }).click();

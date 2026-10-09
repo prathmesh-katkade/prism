@@ -33,6 +33,7 @@ from prism_api_contracts import (
     VizAggregation,
     VizIntent,
     VizMark,
+    VizSortBy,
 )
 from prism_overview_analytics import ANALYTICS_SERVICE_VERSION, build_overview
 
@@ -170,6 +171,12 @@ def _aggregate(frame: pd.DataFrame, spec: VisualizationSpec) -> tuple[list[Visua
         if truncated:
             warnings.append(f"{len(boxes) - spec.max_categories} additional {dimension!r} groups are not shown (top {spec.max_categories} by median); this many box plots side by side would be unreadable.")
             boxes = boxes[: spec.max_categories]
+        # Truncation above always keeps the top-by-median groups; sort_by only
+        # changes how the kept groups are displayed, not which ones made the cut.
+        medians = pd.Series({label: median for label, median, _ in boxes})
+        order = list(_sorted_series(medians, spec.sort_by).index)
+        by_label = {label: (label, median, box) for label, median, box in boxes}
+        boxes = [by_label[label] for label in order]
         return [VisualizationDatum(label=label, value=median, box=box) for label, median, box in boxes], truncated, warnings
     grouped = frame.groupby(dimension, dropna=True)
     if spec.aggregation is VizAggregation.NONE and spec.measure is not None:
@@ -190,14 +197,49 @@ def _aggregate(frame: pd.DataFrame, spec: VisualizationSpec) -> tuple[list[Visua
             warnings.append(f"{len(series) - spec.max_categories} additional {dimension!r} points are not shown (first {spec.max_categories} in sequence); narrow the date range instead of viewing a truncated trend.")
             series = series.iloc[: spec.max_categories]
     else:
-        series = series.sort_values(ascending=False)
+        # Truncation always keeps the top-by-value categories (by this same
+        # descending sort); sort_by below only changes display order among the
+        # categories already kept, so switching it never changes which ones made
+        # the cut.
+        series = series.sort_values(ascending=False, kind="stable")
         truncated = len(series) > spec.max_categories
         if truncated:
             warnings.append(f"{len(series) - spec.max_categories} additional {dimension!r} categories are not shown (top {spec.max_categories} by value); a bar chart with this many categories would be unreadable, not just long.")
             series = series.iloc[: spec.max_categories]
         if len(series) > 12 and spec.mark in {VizMark.BAR, VizMark.HORIZONTAL_BAR}:
             warnings.append("More than 12 categories are shown; consider a Pareto/ranking view or filtering to the segment you care about.")
+        series = _sorted_series(series, spec.sort_by)
     return [VisualizationDatum(label=str(index), value=float(value)) for index, value in series.items()], truncated, warnings
+
+
+def _sorted_series(series: pd.Series, sort_by: VizSortBy | None, default: VizSortBy = VizSortBy.VALUE_DESC) -> pd.Series:
+    """Sort an aggregated (label -> value) series deterministically.
+
+    ``sort_by=None`` falls back to ``default`` so a spec saved before this field
+    existed keeps its original order rather than silently re-sorting. Every branch
+    first sorts by label ascending (stable), so equal values always break ties in
+    the same deterministic label order regardless of row-arrival order.
+    """
+    effective = sort_by or default
+    by_label = series.sort_index(ascending=True, kind="stable")
+    if effective is VizSortBy.LABEL_ASC:
+        return by_label
+    if effective is VizSortBy.LABEL_DESC:
+        return series.sort_index(ascending=False, kind="stable")
+    if effective is VizSortBy.VALUE_ASC:
+        return by_label.sort_values(ascending=True, kind="stable")
+    return by_label.sort_values(ascending=False, kind="stable")
+
+
+def _axis_start_warning(spec: VisualizationSpec, data: list[VisualizationDatum]) -> list[str]:
+    """A non-default axis start truncates bar length relative to true value - say so explicitly
+    rather than drawing a control that silently changes the chart's honesty."""
+    if spec.axis_start is None or spec.mark not in {VizMark.BAR, VizMark.HORIZONTAL_BAR} or not data:
+        return []
+    true_min = min(0.0, *(point.value for point in data))
+    if spec.axis_start == true_min:
+        return []
+    return [f"The axis starts at {spec.axis_start:,.2f}, not the truthful {true_min:,.2f}; bar lengths are not proportional to their values at this scale."]
 
 
 def _facets(frame: pd.DataFrame, spec: VisualizationSpec) -> tuple[list[VisualizationFacet], list[str]]:
@@ -226,6 +268,7 @@ def render(dataset_id: str, spec: VisualizationSpec) -> VisualizationDataRespons
     data, truncated, warnings = _aggregate(stored.frame, spec)
     facets, facet_warnings = _facets(stored.frame, spec)
     warnings.extend(facet_warnings)
+    warnings.extend(_axis_start_warning(spec, data))
     provenance = _provenance(stored)
     register_visualization(stored, spec, truncated, warnings)
     return VisualizationDataResponse(spec=spec, data=data, truncated=truncated, warnings=warnings, provenance=provenance, facets=facets)
