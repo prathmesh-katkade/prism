@@ -91,7 +91,7 @@ describe("Clean workspace", () => {
     render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
 
     await waitFor(() => expect(screen.getByText(/Rows 1–5 of 5/)).toBeInTheDocument());
-    fireEvent.click(screen.getByRole("button", { name: "+ New manual operation" }));
+    fireEvent.click(screen.getByRole("button", { name: "+ Add step" }));
 
     fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "drop_column" } });
     expect(screen.getByRole("button", { name: "Preview" })).toBeDisabled(); // no column chosen yet — a concrete, visible reason, not a silent no-op
@@ -129,7 +129,7 @@ describe("Clean workspace", () => {
     fireEvent.click(screen.getByRole("button", { name: /invoice_id[\s\S]*identifier structure/ }));
     await waitFor(() => expect(screen.getByText("PATTERN REVIEW")).toBeInTheDocument());
 
-    fireEvent.click(screen.getByRole("button", { name: "+ New manual operation" }));
+    fireEvent.click(screen.getByRole("button", { name: "+ Add step" }));
     expect(screen.getByText("MANUAL OPERATION")).toBeInTheDocument();
     expect(screen.queryByText("PATTERN REVIEW")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Operation")).toBeInTheDocument();
@@ -163,7 +163,7 @@ describe("Clean workspace", () => {
     render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
 
     await waitFor(() => expect(screen.getByText("None saved yet")).toBeInTheDocument());
-    fireEvent.click(screen.getByRole("button", { name: "+ New manual operation" }));
+    fireEvent.click(screen.getByRole("button", { name: "+ Add step" }));
     fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "drop_duplicates" } });
 
     fireEvent.click(screen.getByRole("button", { name: "Save as recipe" }));
@@ -225,7 +225,7 @@ describe("Clean workspace", () => {
     render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
 
     await waitFor(() => expect(screen.getByText(/Rows 1–5 of 5/)).toBeInTheDocument());
-    fireEvent.click(screen.getByRole("button", { name: "+ New manual operation" }));
+    fireEvent.click(screen.getByRole("button", { name: "+ Add step" }));
     fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "category_mapping" } });
     fireEvent.change(screen.getByLabelText("Column"), { target: { value: "region" } });
 
@@ -269,7 +269,7 @@ describe("Clean workspace", () => {
     render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
 
     await waitFor(() => expect(screen.getByText(/Rows 1–5 of 5/)).toBeInTheDocument());
-    fireEvent.click(screen.getByRole("button", { name: "+ New manual operation" }));
+    fireEvent.click(screen.getByRole("button", { name: "+ Add step" }));
     fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "deduplicate_survivorship" } });
 
     expect(screen.getByRole("button", { name: "Preview" })).toBeDisabled();

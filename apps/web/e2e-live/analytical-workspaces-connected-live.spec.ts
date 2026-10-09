@@ -46,7 +46,7 @@ test("real Clean to SQL to Visualize to Report flow keeps source versions explic
   await expect(page.getByRole("tab", { name: /Affected rows/ })).toBeVisible();
   await capture(page, "clean-review");
   await page.getByRole("button", { name: "Discard preview" }).click();
-  await page.getByRole("button", { name: "+ New manual operation" }).click();
+  await page.getByRole("button", { name: "+ Add step" }).click();
   await page.getByLabel("Operation", { exact: true }).selectOption("drop_duplicates");
   await page.getByRole("button", { name: "Add step to draft" }).click();
   await expect(page.getByLabel("Recipe draft editor")).toContainText("01");

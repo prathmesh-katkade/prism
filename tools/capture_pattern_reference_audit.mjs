@@ -50,7 +50,7 @@ try {
       // fabricated "Applied" status or an invented recipe entry) - this is
       // what makes the numbered-step hierarchy in the capture below real
       // rather than decorative. Step 1: trim whitespace, added to the draft.
-      await page.getByRole("button", { name: "+ New manual operation" }).click();
+      await page.getByRole("button", { name: "+ Add step" }).click();
       await page.getByLabel("Operation", { exact: true }).selectOption("trim_whitespace");
       await page.getByLabel("Column", { exact: true }).fill("region");
       await page.locator(".clean-manual-form").getByRole("button", { name: "Preview", exact: true }).click();
@@ -59,7 +59,7 @@ try {
       await page.locator(".clean-recipe-draft").filter({ hasText: "DRAFT RECIPE" }).waitFor();
       // Step 2: the category-mapping review this file already exercised -
       // built the same real way and added as the draft's second step.
-      await page.getByRole("button", { name: "+ New manual operation" }).click();
+      await page.getByRole("button", { name: "+ Add step" }).click();
       await page.getByLabel("Operation", { exact: true }).selectOption("category_mapping");
       await page.getByLabel("Column", { exact: true }).fill("region");
       await page.locator(".clean-value-list").waitFor();
@@ -77,16 +77,30 @@ try {
       await page.getByText(/returned \/ .* rows/).waitFor();
     }
     if (name === "visualize") {
+      // Each select's onChange closes over the spec state at render time. Firing
+      // three selectOption() calls back to back, with no yield for React to
+      // re-render and reattach a fresh handler between them, can let a later
+      // change event read a stale pre-update spec and silently revert an
+      // earlier one (observed: Mark reverting to the original suggestion after
+      // Category/Aggregation fired immediately after it). A real user clicking
+      // three separate dropdowns never fires this fast; waiting a tick between
+      // each call here keeps the capture tool itself robust without touching
+      // the product's own state handling.
       await page.getByLabel("Chart inspector").getByLabel("Mark").selectOption("horizontal_bar");
+      await page.waitForTimeout(250);
       await page.getByLabel("Chart inspector").getByLabel("Category").selectOption("region");
+      await page.waitForTimeout(250);
       await page.getByLabel("Chart inspector").getByLabel("Aggregation").selectOption("sum");
+      await page.waitForTimeout(250);
       try { await page.getByRole("img", { name: /Horizontal bar chart/ }).waitFor({ timeout: 5000 }); }
       catch (error) { console.error(await page.locator(".viz-canvas").innerText()); await page.screenshot({ path: path.join(output, "visualize-debug.png") }); throw error; }
       // Exercise the reference's own Sort by / Currency controls so the
       // capture below shows real, interacted-with state, not just the
       // first-render default.
       await page.getByLabel("Chart inspector").getByLabel("Sort by").selectOption("value_desc");
+      await page.waitForTimeout(250);
       await page.getByLabel("Chart inspector").getByLabel("Currency").selectOption("INR");
+      await page.waitForTimeout(250);
       await page.getByRole("button", { name: /Inspect Bengaluru/ }).click();
       await page.getByText(/contributing row\(s\)/).waitFor();
     }

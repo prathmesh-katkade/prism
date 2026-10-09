@@ -31,23 +31,23 @@
 .clean-workflow-strip button { padding:5px 10px;border:1px solid var(--line-soft);border-radius:999px;background:transparent;color:var(--muted);cursor:pointer; }
 .clean-workflow-strip button:hover { color:var(--text);border-color:var(--line); }
 .clean-workflow-strip .is-current { padding:5px 10px;border:1px solid var(--accent);border-radius:999px;background:var(--accent-soft);color:var(--text);font-weight:650; }
-.clean-recipe-draft { margin:14px 0;padding:10px;border:1px solid var(--line);background:var(--surface-raised); }
+.clean-recipe-draft { margin:14px 0;padding:14px;border:1px solid var(--line);background:var(--surface-raised); }
 .clean-recipe-draft ol { list-style:none;padding:0;margin:8px 0;display:grid;gap:1px;background:var(--line); }
-.clean-recipe-draft li { display:grid;grid-template-columns:24px minmax(0,1fr);gap:6px;padding:8px;background:var(--surface); }
-.clean-step-number { display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:var(--accent-soft);color:var(--accent);font:650 11px var(--mono);align-self:start;margin-top:1px; }
+.clean-recipe-draft li { display:grid;grid-template-columns:26px minmax(0,1fr);gap:10px;padding:14px 10px;background:var(--surface);align-items:start; }
+.clean-step-number { display:inline-block;color:var(--faint);font:650 13px var(--mono);align-self:start;margin-top:2px; }
 .clean-recipe-draft strong,.clean-recipe-draft small { display:block;overflow-wrap:anywhere; }
-.clean-recipe-draft strong { font-size:12px; }.clean-recipe-draft small { color:var(--faint);font:10px var(--mono); }
-.clean-step-status { display:inline-flex;align-items:center;border-radius:999px;padding:1px 7px;margin-left:5px;font:9px var(--mono);letter-spacing:.04em;text-transform:uppercase;background:var(--surface-muted);color:var(--muted); }
-.clean-step-status.is-applied,.clean-step-status.is-reviewed { color:var(--good);background:color-mix(in srgb,var(--good) 14%,transparent); }
-.clean-step-status.is-draft { color:var(--muted);background:var(--surface-muted); }
+.clean-recipe-draft strong { font-size:15px;font-weight:600;display:flex;align-items:center;justify-content:space-between;gap:8px; }.clean-recipe-draft small { color:var(--faint);font:11px var(--mono); }
+.clean-step-status { display:inline-flex;align-items:center;border-radius:4px;padding:4px 10px;font:650 10px var(--mono);letter-spacing:.04em;text-transform:uppercase;background:var(--surface-muted);color:var(--muted);white-space:nowrap; }
+.clean-step-status.is-applied,.clean-step-status.is-reviewed { color:#0d2015;background:var(--good); }
+.clean-step-status.is-draft { color:var(--text);background:var(--surface-muted);border:1px solid var(--line); }
 .clean-step-status.is-disabled { color:var(--faint);background:var(--surface-muted); }
 .clean-step-actions { grid-column:1 / -1;display:flex;flex-wrap:wrap;gap:3px; }
 .clean-step-actions button,.clean-recipe-review button { border:1px solid var(--line);background:transparent;color:var(--text);padding:4px 6px;cursor:pointer; }
 .clean-step-actions button:disabled { opacity:.45;cursor:default; }
 .clean-recipe-review { display:grid;gap:5px;padding:8px 0; }
-.clean-review-tabs { display:flex;gap:0;overflow:auto;border-bottom:1px solid var(--line);margin:14px 0 10px; }
-.clean-review-tabs button { flex:none;padding:8px 12px;border:0;border-bottom:2px solid transparent;background:transparent;color:var(--muted);cursor:pointer;font-size:12px; }
-.clean-review-tabs button[aria-selected="true"] { border-bottom-color:var(--accent);color:var(--text);background:var(--accent-soft); }
+.clean-review-tabs { display:flex;gap:7px;overflow:auto;margin:16px 0 12px; }
+.clean-review-tabs button { flex:none;padding:9px 16px;border:1px solid var(--line);border-radius:6px;background:transparent;color:var(--muted);cursor:pointer;font:600 13px var(--sans); }
+.clean-review-tabs button[aria-selected="true"] { border-color:var(--accent);background:var(--accent);color:#1c1a14;font-weight:700; }
 .clean-validation-review { padding:8px 12px;background:var(--surface);border:1px solid var(--line-soft); }
 .clean-validation-review p { margin:5px 0;color:var(--muted); }
 @media (max-width:760px) { .shell-body.has-local-inspector { display:grid;grid-template-columns:54px minmax(0,1fr); }.shell-body.has-local-inspector .resize-handle-rail { display:none; }.reports-workspace { display:block; }.reports-list { border-right:0;border-bottom:1px solid var(--line); }.reports-list ol { display:flex;overflow:auto;gap:6px; }.reports-list li { min-width:150px; }.reports-canvas { padding:16px 12px; }.report-add { align-items:stretch;flex-direction:column; } }
@@ -146,6 +146,9 @@
 .clean-issues .finding-list button { min-width:0;text-align:left; }
 .clean-inspector .inspector-actions button:first-child:not(.secondary),.viz-inspector .inspector-actions button:not(.secondary):first-of-type { background:var(--accent-soft);border:1px solid var(--accent);padding:10px; }
 .clean-recipe-list { display:grid;gap:1px;margin:4px 0 14px;border:1px solid var(--line);background:var(--line); }.clean-recipe-list li { display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 10px;background:var(--surface); }.clean-recipe-list strong { display:block;font-size:12px; }.clean-recipe-list small { color:var(--faint);font:10px var(--mono); }.clean-recipe-list button { padding:6px 9px;border:1px solid var(--line);border-radius:4px;background:transparent;color:var(--text);cursor:pointer;white-space:nowrap; }.clean-recipe-list button:disabled { opacity:.5;cursor:not-allowed; }
+.clean-recipe-actions { margin:4px 0 20px; }
+.clean-recipe-actions button { width:100%;padding:11px;border:1px solid var(--line);border-radius:5px;background:transparent;color:var(--text);font:600 13px var(--sans);cursor:pointer; }
+.clean-recipe-actions button:hover,.clean-recipe-actions button.is-selected { border-color:var(--accent);color:var(--accent); }
 .clean-inline-toggle { display:flex !important;flex-direction:row !important;align-items:center;gap:7px;text-transform:none !important;color:var(--text) !important;font:12px var(--mono) !important;margin-bottom:8px !important; }.clean-inline-toggle input { width:auto !important; }
 .clean-value-list { list-style:none;margin:6px 0;padding:0;max-height:220px;overflow:auto;border:1px solid var(--line);background:var(--surface); }.clean-value-list li { border-bottom:1px solid var(--line-soft); }.clean-value-list li:last-child { border-bottom:0; }.clean-value-list label { display:flex !important;flex-direction:row !important;align-items:center;gap:7px;padding:7px 9px;text-transform:none !important;color:var(--text) !important;font:12px var(--mono) !important;margin:0 !important;cursor:pointer; }.clean-value-list input { width:auto !important; }.clean-value-list small { margin-left:auto;color:var(--faint);white-space:nowrap; }
 .clean-mapping-summary { list-style:none;margin:8px 0;padding:0;display:grid;gap:4px; }.clean-mapping-summary li { display:flex;align-items:center;gap:6px;padding:5px 8px;background:var(--surface-raised);font:11px var(--mono);color:var(--muted); }.clean-mapping-summary code { color:var(--text); }.clean-mapping-summary button { margin-left:auto;padding:1px 7px;border:1px solid var(--line);border-radius:3px;background:transparent;color:var(--faint);cursor:pointer;line-height:1.5; }
@@ -438,8 +441,8 @@
 .shell-body.has-local-inspector .workspace-content > .query-studio,
 .shell-body.has-local-inspector .workspace-content > .reports-workspace { max-width:none;margin:0;min-height:calc(100vh - 91px); }
 .shell-body.has-local-inspector h1,.shell-body.has-local-inspector h2 { font-family:var(--sans);font-weight:650;letter-spacing:-.02em;line-height:1.25; }
-.shell-body.has-local-inspector h1 { font-size:24px; }
-.shell-body.has-local-inspector h2 { font-size:17px; }
+.shell-body.has-local-inspector h1 { font-size:30px; }
+.shell-body.has-local-inspector h2 { font-size:18px; }
 .shell-body.has-local-inspector .eyebrow { font-family:var(--sans);font-size:11px;letter-spacing:.08em; }
 .shell-body.has-local-inspector button,.shell-body.has-local-inspector input,.shell-body.has-local-inspector select,.shell-body.has-local-inspector textarea { font-family:var(--sans); }
 .shell-body.has-local-inspector input,.shell-body.has-local-inspector select,.shell-body.has-local-inspector textarea { border-radius:4px; }
@@ -448,7 +451,7 @@
 .shell-body.has-local-inspector .clean-issues,.shell-body.has-local-inspector .viz-fields { padding:16px 18px;background:var(--surface);min-width:0; }
 .shell-body.has-local-inspector .clean-preview,.shell-body.has-local-inspector .viz-canvas { padding:16px;min-width:0; }
 .shell-body.has-local-inspector .clean-inspector,.shell-body.has-local-inspector .viz-inspector { padding:16px;background:var(--surface);min-width:0; }
-.shell-body.has-local-inspector .clean-preview header h1,.shell-body.has-local-inspector .viz-canvas header h1 { font:650 22px/1.2 var(--sans);letter-spacing:-.02em; }
+.shell-body.has-local-inspector .clean-preview header h1,.shell-body.has-local-inspector .viz-canvas header h1 { font:650 27px/1.2 var(--sans);letter-spacing:-.02em; }
 .shell-body.has-local-inspector .clean-review-tabs button { min-height:38px;font-size:13px; }
 .clean-inspection-grid { width:100%;border-collapse:collapse; }
 .clean-inspection-grid th,.clean-inspection-grid td { padding:8px 10px;min-width:90px;border:1px solid var(--line-soft);font-size:12px;vertical-align:top; }
@@ -456,16 +459,20 @@
 .clean-inspection-grid td.is-changed { background:color-mix(in srgb,var(--good) 6%,var(--canvas)); }
 .clean-cell-before,.clean-cell-after { display:block;overflow-wrap:anywhere; }
 .clean-cell-before { color:var(--muted); }.clean-cell-after { margin-top:3px;color:var(--good);font-weight:600; }
-.clean-impact-summary { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));margin:8px 0 12px;padding:13px 0;border:1px solid var(--line);border-radius:5px;background:var(--surface); }
-.clean-impact-summary > div { display:grid;gap:4px;justify-items:center;border-right:1px solid var(--line);text-align:center; }
-.clean-impact-summary > div:last-child { border-right:0; }.clean-impact-summary strong { color:var(--accent);font-size:18px; }.clean-impact-summary span { color:var(--muted);font-size:12px; }
-.clean-mapping-review { border:1px solid var(--line);border-radius:5px; }.clean-mapping-review table { width:100%;border-collapse:collapse; }.clean-mapping-review th,.clean-mapping-review td { padding:8px 11px;border-bottom:1px solid var(--line-soft);text-align:left;font-size:12px; }
-.clean-mapping-review th { background:var(--surface-raised);color:var(--muted); }.clean-mapping-review .quiet-note { margin:8px 10px;font-size:11px; }
-.clean-apply-bar { position:fixed;bottom:0;left:calc(135px + 25vw);right:315px;z-index:8;display:flex;align-items:center;justify-content:flex-end;gap:10px;margin:0;padding:12px 16px;background:var(--surface);border-top:1px solid var(--line);box-shadow:0 -4px 12px #0002; }
-.shell-body.has-local-inspector .clean-preview:has(.clean-apply-bar) { padding-bottom:80px; }
-.clean-apply-bar span { margin-right:auto;color:var(--muted);font-size:12px; }.clean-apply-bar button { min-height:40px;padding:8px 15px;border:1px solid var(--accent);border-radius:4px;background:var(--accent);color:#1c1a14;font-weight:650;cursor:pointer;white-space:nowrap; }.clean-apply-bar button.secondary { background:transparent;border-color:var(--line);color:var(--text); }
-@media (max-width:1100px) { .clean-apply-bar { left:180px;right:0; } }
-@media (max-width:760px) { .clean-apply-bar { left:54px;right:0;flex-wrap:wrap; }.clean-apply-bar span { width:100%; }.clean-impact-summary strong { font-size:15px; } }
+.clean-impact-summary { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));margin:12px 0 16px;padding:18px 0;border:1px solid var(--line);border-radius:6px;background:var(--surface); }
+.clean-impact-summary > div { display:grid;gap:6px;justify-items:center;border-right:1px solid var(--line);text-align:center; }
+.clean-impact-summary > div:last-child { border-right:0; }.clean-impact-summary strong { color:var(--focus);font:650 26px var(--sans); }.clean-impact-summary span { color:var(--muted);font-size:12px; }
+.clean-mapping-review { border:1px solid var(--line);border-radius:6px; }.clean-mapping-review table { width:100%;border-collapse:collapse; }.clean-mapping-review th,.clean-mapping-review td { padding:13px 14px;border-bottom:1px solid var(--line-soft);text-align:left;font-size:13px; }
+.clean-mapping-review th { background:var(--surface-raised);color:var(--muted);font:600 11px var(--mono);text-transform:uppercase;letter-spacing:.04em; }.clean-mapping-review td:nth-child(2) { color:var(--text);padding:9px 14px; }.clean-mapping-review .quiet-note { margin:8px 10px;font-size:11px; }
+/* Spans from right after the global nav rail to right before the right-hand
+   step inspector, matching the approved reference: the owner's review showed
+   this previously stopped at the left recipe pane's own edge instead of
+   continuing under it. */
+.clean-apply-bar { position:fixed;bottom:0;left:var(--rail-size,238px);right:315px;z-index:8;display:flex;align-items:center;justify-content:flex-end;gap:10px;margin:0;padding:14px 20px;background:var(--surface);border-top:1px solid var(--line);box-shadow:0 -4px 12px #0002; }
+.shell-body.has-local-inspector .clean-preview:has(.clean-apply-bar) { padding-bottom:84px; }
+.clean-apply-bar span { margin-right:auto;color:var(--muted);font-size:12px; }.clean-apply-bar button { min-height:42px;padding:9px 18px;border:1px solid var(--accent);border-radius:5px;background:var(--accent);color:#1c1a14;font:650 13px var(--sans);cursor:pointer;white-space:nowrap; }.clean-apply-bar button.secondary { background:transparent;border-color:var(--line);color:var(--text); }
+@media (max-width:1100px) { .clean-apply-bar { left:62px;right:0; } }
+@media (max-width:760px) { .clean-apply-bar { left:54px;right:0;flex-wrap:wrap; }.clean-apply-bar span { width:100%; }.clean-impact-summary strong { font-size:19px; } }
 .shell-body.has-local-inspector .viz-svg { height:min(42vh,410px); }
 .viz-horizontal-bars .viz-grid-line { stroke:var(--line);stroke-width:1; }
 .viz-horizontal-bars .viz-category-label,.viz-horizontal-bars .viz-value-label { fill:var(--text);font:12px var(--sans); }
