@@ -109,6 +109,126 @@ describe("Clean workspace", () => {
     await waitFor(() => expect(screen.getByText("4 rows · 3 columns · revision 1")).toBeInTheDocument());
   });
 
+  it("marks a preview stale the instant a parameter changes, and hides the stale Apply bar until it is recomputed", async () => {
+    const fetchMock = vi.fn(async (input: string | URL) => {
+      const path = String(input);
+      if (path.endsWith("/state")) return json({ dataset: dataset0, issues: [], history: [], health });
+      if (path.includes("/rows")) return json(rowsPage);
+      if (path.includes("/profile")) return json({ columns: [{ name: "notes", semantic_type: "text" }, { name: "region", semantic_type: "text" }] });
+      if (path.includes("/recipes")) return json([]);
+      if (path.endsWith("/preview")) return json({ operation: "drop_column", review_token: "review_manual", source_revision: 0, affected_rows: 5, affected_columns: ["notes"], before_sample: [{ notes: "x" }], after_sample: [{}], warnings: [], projected_health: health });
+      return json({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
+
+    await waitFor(() => expect(screen.getByText(/Rows 1–5 of 5/)).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "+ Add step" }));
+    fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "drop_column" } });
+    fireEvent.change(screen.getByLabelText("Column"), { target: { value: "notes" } });
+    fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Apply reviewed change" })).toBeInTheDocument());
+    expect(screen.getByText(/Preview is up to date with revision/)).toBeInTheDocument();
+
+    // Changing a parameter after a preview exists must invalidate it
+    // immediately - the apply bar (which only renders while a preview is
+    // live) must disappear rather than stay keyed to a build that no longer
+    // matches the form, and the inspector must say so plainly.
+    fireEvent.change(screen.getByLabelText("Column"), { target: { value: "region" } });
+    expect(screen.queryByRole("button", { name: "Apply reviewed change" })).not.toBeInTheDocument();
+    expect(screen.getByText("Preview is stale — recompute before applying.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Recompute preview" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Recompute preview" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Apply reviewed change" })).toBeInTheDocument());
+    expect(screen.queryByText("Preview is stale — recompute before applying.")).not.toBeInTheDocument();
+  });
+
+  it("synchronizes step selection across panes: picking a different draft step refreshes its own real preview in the centre panel", async () => {
+    const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path.endsWith("/state")) return json({ dataset: dataset0, issues: [], history: [], health });
+      if (path.includes("/rows")) return json(rowsPage);
+      if (path.includes("/profile")) return json({ columns: [{ name: "notes", semantic_type: "text" }, { name: "region", semantic_type: "text" }] });
+      if (path.includes("/recipes")) return json([]);
+      if (path.includes("/recipe-draft/preview")) return json({ source_revision: 0, source_fingerprint: dataset0.source_fingerprint, review_token: "draft_1", before_sample: [], after_sample: [], step_impacts: [5, 2], projected_health: health });
+      if (path.endsWith("/preview")) {
+        const body = JSON.parse(String(init?.body ?? "{}"));
+        return json({ operation: body.operation, review_token: `review_${body.column}`, source_revision: 0, affected_rows: body.column === "notes" ? 5 : 2, affected_columns: [body.column], before_sample: [], after_sample: [], warnings: [], projected_health: health });
+      }
+      return json({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText(/Rows 1–5 of 5/)).toBeInTheDocument());
+
+    // Two draft steps on different columns.
+    fireEvent.click(screen.getByRole("button", { name: "+ Add step" }));
+    fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "drop_column" } });
+    fireEvent.change(screen.getByLabelText("Column"), { target: { value: "notes" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add step to draft" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "+ Add step" }));
+    fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "drop_column" } });
+    fireEvent.change(screen.getByLabelText("Column"), { target: { value: "region" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add step to draft" }));
+
+    const steps = document.querySelectorAll(".clean-recipe-unified > li");
+    expect(steps).toHaveLength(2);
+
+    // Selecting step 1 (notes) must load step 1's own real preview into the
+    // centre panel (5 affected rows) - not leave it on whatever (if
+    // anything) was last shown there.
+    fireEvent.click(within(steps[0] as HTMLElement).getByRole("button", { name: /drop column/i }));
+    await waitFor(() => expect(document.querySelector(".clean-preview .clean-impact-summary")?.textContent).toContain("5"));
+
+    // Selecting step 2 (region) must replace it with step 2's own real data
+    // (2 affected rows), not leave step 1's stale numbers showing.
+    fireEvent.click(within(steps[1] as HTMLElement).getByRole("button", { name: /drop column/i }));
+    await waitFor(() => expect(document.querySelector(".clean-preview .clean-impact-summary")?.textContent).toContain("2"));
+    expect(document.querySelector(".clean-preview .clean-impact-summary")?.textContent).not.toContain("5");
+  });
+
+  it("docks a real Atlas panel with honest context chips and a working starter question, and switching to it never loses the selected step", async () => {
+    const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path.endsWith("/state")) return json({ dataset: dataset0, issues: [], history: [], health });
+      if (path.includes("/rows")) return json(rowsPage);
+      if (path.includes("/profile")) return json({ columns: [{ name: "notes", semantic_type: "text" }] });
+      if (path.includes("/recipes")) return json([]);
+      if (path.endsWith("/workspace-proposals")) {
+        const body = JSON.parse(String(init?.body ?? "{}"));
+        expect(body).toEqual({ kind: "clean", dataset_id: "ds_1", intent: "Explain the current step" });
+        return json({ provider: "ollama", explanation: "Trimming whitespace prevents duplicate-looking labels.", evidence: ["region: 'Bengaluru ' vs 'Bengaluru'"], clean_operation: { operation: "trim_whitespace", column: "notes" } });
+      }
+      return json({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText(/Rows 1–5 of 5/)).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "+ Add step" }));
+    fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "trim_whitespace" } });
+    fireEvent.change(screen.getByLabelText("Column"), { target: { value: "notes" } });
+
+    fireEvent.click(screen.getByRole("tab", { name: /Atlas/ }));
+    // Real, honest context - the dataset's own name/revision and the step
+    // actually being built, not invented counts.
+    expect(within(document.querySelector(".atlas-dock-chips")!).getByText("sales.csv")).toBeInTheDocument();
+    expect(within(document.querySelector(".atlas-dock-chips")!).getByText("Revision 0")).toBeInTheDocument();
+    expect(within(document.querySelector(".atlas-dock-chips")!).getByText("notes")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Explain the current step" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/workspace-proposals"), expect.objectContaining({ method: "POST" })));
+    await waitFor(() => expect(screen.getByText("Trimming whitespace prevents duplicate-looking labels.")).toBeInTheDocument());
+
+    // Switching back to Step settings must still show the same step being
+    // built (notes), not a reset form - the tab switch never touched the
+    // underlying selection state.
+    fireEvent.click(screen.getByRole("tab", { name: "Step settings" }));
+    expect(screen.getByLabelText("Column")).toHaveValue("notes");
+  });
+
   it("switches the inspector away from a selected pattern finding when starting a manual operation or selecting an issue, instead of leaving it stuck on the old finding", async () => {
     const finding = { finding_id: "find_1", dataset_id: "ds_1", column: "invoice_id", detector_kind: "identifier_structure", detector_version: 1, source_revision: 0, source_fingerprint: dataset0.source_fingerprint, rows_examined: 5, total_rows: 5, sampling_method: "bounded_sample", verified: false, families: [{ family_signature: "sig1", label: "3 letters, '-', 6 digits", matching_count: 3, example_values: ["INV-000123"] }], missing_count: 0, exception_count: 2, created_at: "2026-08-28T00:00:00Z" };
     const fetchMock = vi.fn(async (input: string | URL) => {
@@ -333,10 +453,12 @@ describe("Clean workspace", () => {
     const sentBody = JSON.parse(String((previewCall![1] as RequestInit).body));
     expect(sentBody.category_mapping).toEqual({ Bangalore: "Bengaluru", BENGALURU: "Bengaluru" });
 
-    // Once a preview exists, the detailed value-chip editor collapses - it no
-    // longer pushes impact/review off screen - and impact/review now sit
-    // between the (collapsed) editor and the step-commit action, not after it.
-    await waitFor(() => expect((document.querySelector(".clean-mapping-editor") as HTMLDetailsElement).open).toBe(false));
+    // Once a preview exists, the centre panel switches from the value-chip
+    // editor to the inline-editable review table (mapping editing stays in
+    // the centre either way) - it no longer pushes impact/review off screen
+    // in the right panel, and impact/review now sit before the step-commit
+    // action, not after it.
+    await waitFor(() => expect(document.querySelector(".clean-centre-editor")).not.toBeInTheDocument());
     const impactEl = screen.getByText("Impact");
     const reviewEl = screen.getByText("Review required");
     const addStepButton = screen.getByRole("button", { name: "Add step to draft" });
@@ -370,7 +492,7 @@ describe("Clean workspace", () => {
     expect(screen.getByRole("button", { name: "Preview" })).toBeDisabled();
     expect(screen.getByText("Choose at least one column to group duplicates by.")).toBeInTheDocument();
 
-    const survivorshipColumnList = document.querySelector(".clean-mapping-editor")!;
+    const survivorshipColumnList = document.querySelector(".clean-centre-editor")!;
     fireEvent.click(Array.from(survivorshipColumnList.querySelectorAll("label")).find((label) => label.textContent?.includes("customer_id"))!.querySelector("input")!);
     fireEvent.change(screen.getByLabelText("Survivorship rule"), { target: { value: "max_by_column" } });
     expect(screen.getByText("Choose a column to keep the highest value from.")).toBeInTheDocument();

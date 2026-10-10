@@ -4,7 +4,8 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import type { AtlasCleanResponse, CleanIssue, CleanOperation, CleanPreviewResponse, CleanRecipe, CleanRecipeDraftPreviewResponse, CleanRecipePreviewResponse, CleanRecipeStep, CleanRowInspection, CleanStateResponse, CleanTransformationRequest, ColumnValueCount, ColumnValueCountsResponse, DatasetRowsResponse, FillStrategy, OverviewProfileResponse, PatternExceptionPage, PatternFamily, PatternFinding, PatternReviewDecision, PatternReviewDecisionKind, PatternVerifyJobStatus, ValidationRule, ValidationRuleKind, ValidationRunResult } from "@prism/api-contracts";
 import { apiUrl } from "../config/api";
 import type { InspectorObjectState } from "../state/shell-model";
-import { WorkspaceProposalPanel } from "./workspace-proposal-panel";
+import { AtlasCharacter, type AtlasPose } from "./atlas-character";
+import { AtlasDockPanel } from "./atlas-dock-panel";
 
 type CleanUiState = "empty" | "loading" | "ready" | "error";
 const ROWS_PER_PAGE = 30;
@@ -38,6 +39,7 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
   const [rows, setRows] = useState<DatasetRowsResponse | null>(null);
   const [selectedIssue, setSelectedIssue] = useState<CleanIssue | null>(null);
   const [manualMode, setManualMode] = useState(false);
+  const [inspectorTab, setInspectorTab] = useState<"settings" | "atlas">("settings");
   const [pendingRequest, setPendingRequest] = useState<CleanTransformationRequest | null>(null);
   const [preview, setPreview] = useState<CleanPreviewResponse | null>(null);
   const [reviewView, setReviewView] = useState<"before" | "changes" | "after">("changes");
@@ -67,6 +69,11 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
   const [survivorshipColumns, setSurvivorshipColumns] = useState<ReadonlySet<string>>(new Set());
   const [survivorshipRule, setSurvivorshipRule] = useState<"first" | "last" | "most_complete" | "max_by_column">("first");
   const [survivorshipTiebreak, setSurvivorshipTiebreak] = useState("");
+  // True once a preview existed and a parameter change has since invalidated
+  // it, until a fresh preview is computed - distinct from "never previewed
+  // yet", so the inspector can say "stale, recompute" rather than silently
+  // falling back to the pre-preview "Preview this operation" copy.
+  const [manualPreviewStale, setManualPreviewStale] = useState(false);
 
   const [recipes, setRecipes] = useState<CleanRecipe[]>([]);
   const [recipeName, setRecipeName] = useState("");
@@ -238,13 +245,22 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
     // would silently overwrite that step instead of adding a new one - the
     // same stale-index gap that let an unsaved, never-added step claim a
     // real position number ("STEP 3") in the first place.
-    setEditingStepIndex(null);
+    setEditingStepIndex(null); setManualPreviewStale(false);
     onSelectContext({ objectId: "manual-operation", label: "Manual operation", type: "finding", state: "ready", actions: [], metadata: ["Not yet previewed"] });
+  }
+
+  /** Any parameter edit after a preview exists makes that preview describe a
+   * build that no longer exists - clear it (and the request it was computed
+   * for) rather than leave stale impact/review numbers next to a changed
+   * form, and remember that it WAS previewed so the inspector can say
+   * "stale, recompute" instead of the generic pre-preview copy. */
+  function invalidateManualPreview() {
+    if (preview) { setPreview(null); setPendingRequest(null); setManualPreviewStale(true); }
   }
 
   async function previewOperation(request: CleanTransformationRequest) {
     if (!datasetId) return;
-    setPendingRequest(request); setPreview(null); setRecipePreview(null); setError(null);
+    setPendingRequest(request); setPreview(null); setRecipePreview(null); setError(null); setManualPreviewStale(false);
     setReviewView("changes"); setReviewRowsView("affected");
     try {
       const response = await fetch(apiUrl(`/api/v1/clean/datasets/${datasetId}/preview`), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(request) });
@@ -284,6 +300,7 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
 
   function assignCategoryMapping() {
     if (!categoryTarget.trim() || categorySelected.size === 0) return;
+    invalidateManualPreview();
     setCategoryMapping((current) => {
       const next = { ...current };
       for (const value of categorySelected) next[value] = categoryTarget.trim();
@@ -293,6 +310,7 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
   }
 
   function removeCategoryMapping(sourceValue: string) {
+    invalidateManualPreview();
     setCategoryMapping((current) => { const next = { ...current }; delete next[sourceValue]; return next; });
   }
 
@@ -312,6 +330,7 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
   }
 
   function toggleSurvivorshipColumn(column: string) {
+    invalidateManualPreview();
     setSurvivorshipColumns((current) => { const next = new Set(current); if (next.has(column)) next.delete(column); else next.add(column); return next; });
   }
 
@@ -359,6 +378,10 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
     setSurvivorshipColumns(new Set(request.group_by_columns ?? []));
     setSurvivorshipRule(request.survivorship_rule ?? "first");
     setSurvivorshipTiebreak(request.survivorship_tiebreak_column ?? "");
+    // Selecting a step in the recipe list must show that step's own real
+    // preview in the centre panel immediately, not whatever preview (if
+    // any) a previously selected step left behind there.
+    void previewOperation(request);
   }
 
   function updateDraftStep(request: CleanTransformationRequest) {
@@ -658,6 +681,10 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
   // saved, and showing "STEP 3" for an unsaved, uncommitted step claimed a
   // position that didn't exist in the recipe list above it.
   const manualStepNumber = editingStepIndex !== null ? clean.history.length + editingStepIndex + 1 : null;
+  // The small launcher icon reflects whether there's real step context for
+  // Atlas to work from right now - it never claims "working" unless the
+  // dock panel itself is actually mid-request (that pose lives there).
+  const atlasPose: AtlasPose = manualMode || selectedIssue || selectedFinding ? "idle" : "waiting";
 
   return <article className="clean-workspace three-pane">
     <header className="clean-dataset-header">
@@ -866,7 +893,20 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
           {exceptionPage ? (exceptionPage.rows ?? []).map((row) => <tr key={row.source_row}><td><code>{row.source_row}</code></td><td><code>{row.value}</code></td></tr>) : (selectedFinding.exception_examples ?? []).map((value, index) => <tr key={index}><td><code>{(selectedFinding.exception_source_rows ?? [])[index] ?? "—"}</code></td><td><code>{value}</code></td></tr>)}
         </tbody></table></div><div className="clean-table-toolbar"><button type="button" className="secondary" disabled={exceptionsLoading || !exceptionPage || exceptionPage.offset === 0} onClick={() => void loadExceptionPage(Math.max(0, (exceptionPage?.offset ?? 0) - 10))}>Previous exceptions</button><button type="button" className="secondary" disabled={exceptionsLoading || (exceptionPage ? exceptionPage.offset + (exceptionPage.rows ?? []).length >= exceptionPage.total : (selectedFinding.exception_examples ?? []).length >= selectedFinding.exception_count)} onClick={() => void loadExceptionPage(exceptionPage ? exceptionPage.offset + (exceptionPage.rows ?? []).length : (selectedFinding.exception_examples ?? []).length)}>{exceptionsLoading ? "Loading…" : "Next exceptions"}</button></div></> : <p className="quiet-note">No exceptions in the examined rows.</p>}
         <p className="quiet-note">Source revision {selectedFinding.source_revision} · fingerprint {selectedFinding.source_fingerprint.slice(0, 12)}…</p>
-      </> : <>
+      </> : manualMode && manualOperation === "category_mapping" ? <div className="clean-centre-editor">
+        <div className="section-title"><div><span className="eyebrow">MAPPING EDITOR</span><h2>Map source values to targets</h2></div></div>
+        {columnValues ? <>
+          <p className="quiet-note">{columnValues.total_distinct.toLocaleString()} distinct value(s) in {manualColumn || "the selected column"}{columnValues.truncated ? ` (showing the top ${columnValues.values.length})` : ""}. Select source values, name what they should become, then assign. Operation-wide settings (case sensitivity, unmatched values) are on the right.</p>
+          <ul className="clean-value-chips">{columnValues.values.map((item: ColumnValueCount) => <li key={item.value}><label className={categorySelected.has(item.value) ? "is-selected" : categoryMapping[item.value] ? "is-mapped" : ""}><input type="checkbox" checked={categorySelected.has(item.value)} onChange={() => toggleCategorySelected(item.value)} /> <span>{item.value}</span> <small>{item.count.toLocaleString()}</small></label></li>)}</ul>
+          <label>Map selected to<input aria-label="Map selected values to" value={categoryTarget} onChange={(event) => setCategoryTarget(event.target.value)} placeholder="e.g. Bengaluru" /></label>
+          <button type="button" className="secondary" disabled={categorySelected.size === 0 || !categoryTarget.trim()} onClick={assignCategoryMapping}>Assign mapping</button>
+          {Object.keys(categoryMapping).length ? <ul className="clean-mapping-summary">{Object.entries(categoryMapping).map(([source, target]) => <li key={source}><code>{source}</code> → <code>{target}</code><button type="button" className="secondary" aria-label={`Remove mapping for ${source}`} onClick={() => removeCategoryMapping(source)}>×</button></li>)}</ul> : <p className="quiet-note">No values mapped yet.</p>}
+        </> : <p className="quiet-note">{manualColumn ? "Loading distinct values…" : "Choose a column on the right to see its distinct values here."}</p>}
+      </div> : manualMode && manualOperation === "deduplicate_survivorship" ? <div className="clean-centre-editor">
+        <div className="section-title"><div><span className="eyebrow">GROUPING COLUMNS</span><h2>Choose columns that define a duplicate</h2></div></div>
+        <p className="quiet-note">Group rows that share the same value in every selected column; keep one row per group, chosen by the survivorship rule on the right.</p>
+        <ul className="clean-value-list">{(profile?.columns ?? []).map((column) => <li key={column.name}><label><input type="checkbox" checked={survivorshipColumns.has(column.name)} onChange={() => toggleSurvivorshipColumn(column.name)} /> <span>{column.name}</span> <small>{column.semantic_type}</small></label></li>)}</ul>
+      </div> : <>
         <p className="quiet-note">{selectedIssue ? "Select an issue to preview a proposed fix before applying it." : manualMode ? "Fill in the operation on the left and select Preview — nothing is changed until you apply." : "This is the dataset as it stands at the current revision. Select an issue or start a manual operation to preview a fix."} Nothing is changed until you apply.</p>
         <div className="clean-table-toolbar">
           <span className="quiet-note">{rows ? `Rows ${rows.offset + 1}–${Math.min(rows.offset + rows.limit, rows.total_rows)} of ${rows.total_rows.toLocaleString()}` : "Loading rows…"}</span>
@@ -878,6 +918,18 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
       {preview && pendingRequest ? <div className="clean-apply-bar"><span>Nothing changes until Apply. Review source revision {preview.source_revision ?? clean.dataset.revision} and the rows above.</span><button disabled={applying || !preview.review_token} onClick={() => void apply()}>{applying ? "Applying…" : "Apply reviewed change"}</button><button className="secondary" onClick={() => { setPreview(null); setPendingRequest(null); }}>Discard preview</button></div> : null}
     </section>
     <aside className="inspector clean-inspector" aria-label="Selected issue and transformation inspector">
+      <div className="clean-inspector-tabs" role="tablist" aria-label="Inspector view">
+        <button type="button" role="tab" aria-selected={inspectorTab === "atlas"} className={inspectorTab === "atlas" ? "is-selected" : ""} onClick={() => setInspectorTab("atlas")}><AtlasCharacter pose={atlasPose} size="small" />Atlas</button>
+        <button type="button" role="tab" aria-selected={inspectorTab === "settings"} className={inspectorTab === "settings" ? "is-selected" : ""} onClick={() => setInspectorTab("settings")}>Step settings</button>
+      </div>
+      {inspectorTab === "atlas" ? <AtlasDockPanel
+        datasetId={datasetId}
+        datasetName={clean.dataset.source_name}
+        revision={clean.dataset.revision}
+        focusLabel={manualMode ? (manualSpec?.label ?? manualOperation.replaceAll("_", " ")) : selectedIssue ? (selectedIssue.column ?? "Dataset issue") : selectedFinding ? selectedFinding.column : "No step selected"}
+        column={manualMode ? manualColumn || null : selectedIssue?.column ?? selectedFinding?.column ?? null}
+        onReview={(proposal) => { if (proposal.clean_operation) { setManualMode(true); setInspectorTab("settings"); void previewOperation(proposal.clean_operation); } }}
+      /> : <>
       {recipePreview ? <>
         <div className="inspector-heading"><div><span className="eyebrow">REVIEWED RECIPE</span><h2>Ready for your decision</h2></div></div>
         <p>Version {recipePreview.recipe_version} was reviewed against source revision {recipePreview.source_revision}. Apply the reviewed recipe in the recipe list, or discard its preview there. No data has changed.</p>
@@ -920,55 +972,38 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
       </> : manualMode ? <>
         <div className="inspector-heading"><div><span className="eyebrow">{manualStepNumber ? `STEP ${manualStepNumber}` : "NEW STEP · UNSAVED"}</span><h2>{manualSpec?.label ?? manualOperation.replaceAll("_", " ")}</h2></div></div>
         <div className="clean-manual-form">
-        <label>Operation<select aria-label="Operation" value={manualOperation} onChange={(event) => setManualOperation(event.target.value as CleanOperation)}>{OPERATIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
+        <label>Operation<select aria-label="Operation" value={manualOperation} onChange={(event) => { invalidateManualPreview(); setManualOperation(event.target.value as CleanOperation); }}>{OPERATIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
         {manualSpec?.help ? <p className="clean-field-help">{manualSpec.help}</p> : null}
         {manualSpec?.needsColumn ? <label>Column{(() => { const type = profile?.columns?.find((c) => c.name === manualColumn)?.semantic_type; return type ? ` · ${manualColumn} (${type})` : ""; })()}
-          <input aria-label="Column" list="clean-column-options" value={manualColumn} onChange={(event) => setManualColumn(event.target.value)} placeholder="Search columns…" />
+          <input aria-label="Column" list="clean-column-options" value={manualColumn} onChange={(event) => { invalidateManualPreview(); setManualColumn(event.target.value); }} placeholder="Search columns…" />
           <datalist id="clean-column-options">{(profile?.columns ?? []).map((column) => <option key={column.name} value={column.name} />)}</datalist>
         </label> : null}
-        {manualOperation === "rename_column" ? <label>New name<input aria-label="New column name" value={manualNewName} onChange={(event) => setManualNewName(event.target.value)} /></label> : null}
+        {manualOperation === "rename_column" ? <label>New name<input aria-label="New column name" value={manualNewName} onChange={(event) => { invalidateManualPreview(); setManualNewName(event.target.value); }} /></label> : null}
         {manualOperation === "convert_type" ? <>
-          <label>Target type<select aria-label="Target type" value={manualTargetType} onChange={(event) => setManualTargetType(event.target.value as typeof manualTargetType)}><option value="numeric">numeric</option><option value="text">text</option><option value="datetime">datetime</option><option value="boolean">boolean</option></select></label>
-          {manualTargetType === "datetime" ? <label>Date format (optional)<input aria-label="Date format" value={manualDateFormat} onChange={(event) => setManualDateFormat(event.target.value)} placeholder="e.g. %d/%m/%Y — leave blank to auto-detect" /></label> : null}
-          {manualTargetType === "numeric" ? <label>Number locale<select aria-label="Number locale" value={manualNumberLocale} onChange={(event) => setManualNumberLocale(event.target.value as typeof manualNumberLocale)}><option value="standard">standard (1,234.56)</option><option value="european">european (1.234,56)</option></select></label> : null}
+          <label>Target type<select aria-label="Target type" value={manualTargetType} onChange={(event) => { invalidateManualPreview(); setManualTargetType(event.target.value as typeof manualTargetType); }}><option value="numeric">numeric</option><option value="text">text</option><option value="datetime">datetime</option><option value="boolean">boolean</option></select></label>
+          {manualTargetType === "datetime" ? <label>Date format (optional)<input aria-label="Date format" value={manualDateFormat} onChange={(event) => { invalidateManualPreview(); setManualDateFormat(event.target.value); }} placeholder="e.g. %d/%m/%Y — leave blank to auto-detect" /></label> : null}
+          {manualTargetType === "numeric" ? <label>Number locale<select aria-label="Number locale" value={manualNumberLocale} onChange={(event) => { invalidateManualPreview(); setManualNumberLocale(event.target.value as typeof manualNumberLocale); }}><option value="standard">standard (1,234.56)</option><option value="european">european (1.234,56)</option></select></label> : null}
         </> : null}
         {manualOperation === "fill_missing" ? <>
-          <label>Fill strategy<select aria-label="Fill strategy" value={manualFillStrategy} onChange={(event) => setManualFillStrategy(event.target.value as FillStrategy)}><option value="mean">mean</option><option value="median">median</option><option value="mode">mode</option><option value="constant">constant</option><option value="forward_fill">forward fill</option></select></label>
-          {manualFillStrategy === "constant" ? <label>Constant value<input aria-label="Constant fill value" value={manualFillValue} onChange={(event) => setManualFillValue(event.target.value)} /></label> : null}
+          <label>Fill strategy<select aria-label="Fill strategy" value={manualFillStrategy} onChange={(event) => { invalidateManualPreview(); setManualFillStrategy(event.target.value as FillStrategy); }}><option value="mean">mean</option><option value="median">median</option><option value="mode">mode</option><option value="constant">constant</option><option value="forward_fill">forward fill</option></select></label>
+          {manualFillStrategy === "constant" ? <label>Constant value<input aria-label="Constant fill value" value={manualFillValue} onChange={(event) => { invalidateManualPreview(); setManualFillValue(event.target.value); }} /></label> : null}
         </> : null}
-        {manualOperation === "normalize_case" ? <label>Case<select aria-label="Case" value={manualCase} onChange={(event) => setManualCase(event.target.value as typeof manualCase)}><option value="lower">lower</option><option value="upper">upper</option><option value="title">title</option></select></label> : null}
+        {manualOperation === "normalize_case" ? <label>Case<select aria-label="Case" value={manualCase} onChange={(event) => { invalidateManualPreview(); setManualCase(event.target.value as typeof manualCase); }}><option value="lower">lower</option><option value="upper">upper</option><option value="title">title</option></select></label> : null}
         {manualOperation === "category_mapping" ? <div className="clean-parameters">
           <span className="eyebrow">Parameters</span>
-          <label className="clean-switch-row"><span>Case sensitive</span><input type="checkbox" role="switch" aria-checked={categoryCaseSensitive} checked={categoryCaseSensitive} onChange={(event) => setCategoryCaseSensitive(event.target.checked)} /></label>
-          <label className="clean-switch-row"><span>Preserve unmatched values</span><input type="checkbox" role="switch" aria-checked={categoryPreserveUnmatched} checked={categoryPreserveUnmatched} onChange={(event) => setCategoryPreserveUnmatched(event.target.checked)} /></label>
+          <label className="clean-switch-row"><span>Case sensitive</span><input type="checkbox" role="switch" aria-checked={categoryCaseSensitive} checked={categoryCaseSensitive} onChange={(event) => { invalidateManualPreview(); setCategoryCaseSensitive(event.target.checked); }} /></label>
+          <label className="clean-switch-row"><span>Preserve unmatched values</span><input type="checkbox" role="switch" aria-checked={categoryPreserveUnmatched} checked={categoryPreserveUnmatched} onChange={(event) => { invalidateManualPreview(); setCategoryPreserveUnmatched(event.target.checked); }} /></label>
+          {Object.keys(categoryMapping).length ? <p className="clean-field-help">{Object.keys(categoryMapping).length} source value{Object.keys(categoryMapping).length === 1 ? "" : "s"} mapped. Edit the mapping in the centre panel.</p> : <p className="clean-field-help">Select and map source values in the centre panel.</p>}
         </div> : null}
         {manualOperation === "deduplicate_survivorship" ? <>
-          <label>Survivorship rule<select aria-label="Survivorship rule" value={survivorshipRule} onChange={(event) => setSurvivorshipRule(event.target.value as typeof survivorshipRule)}>{SURVIVORSHIP_RULES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
-          {survivorshipRule === "max_by_column" ? <label>Highest-value column<input aria-label="Tiebreak column" list="clean-column-options" value={survivorshipTiebreak} onChange={(event) => setSurvivorshipTiebreak(event.target.value)} placeholder="Search columns…" /></label> : null}
+          <label>Survivorship rule<select aria-label="Survivorship rule" value={survivorshipRule} onChange={(event) => { invalidateManualPreview(); setSurvivorshipRule(event.target.value as typeof survivorshipRule); }}>{SURVIVORSHIP_RULES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
+          {survivorshipRule === "max_by_column" ? <label>Highest-value column<input aria-label="Tiebreak column" list="clean-column-options" value={survivorshipTiebreak} onChange={(event) => { invalidateManualPreview(); setSurvivorshipTiebreak(event.target.value); }} placeholder="Search columns…" /></label> : null}
+          <p className="clean-field-help">{survivorshipColumns.size ? `${survivorshipColumns.size} grouping column${survivorshipColumns.size === 1 ? "" : "s"} selected.` : "Choose grouping columns in the centre panel."} Edit in the centre panel.</p>
         </> : null}
-        <button disabled={!manualBuild.request} title={manualBuild.reason ?? undefined} onClick={() => manualBuild.request && void previewOperation(manualBuild.request)}>Preview</button>
+        <button disabled={!manualBuild.request} title={manualBuild.reason ?? undefined} onClick={() => manualBuild.request && void previewOperation(manualBuild.request)}>{preview || manualPreviewStale ? "Recompute preview" : "Preview"}</button>
+        {preview ? <p className="quiet-note is-good">Preview is up to date with revision {clean.dataset.revision}.</p> : manualPreviewStale ? <p className="quiet-note is-amber">Preview is stale — recompute before applying.</p> : null}
         {manualBuild.reason ? <p className="quiet-note">{manualBuild.reason}</p> : null}
       </div>
-
-      {/* Detailed value-level editing lives in its own disclosure, open while
-          building and collapsing once a preview exists for it - the inspector
-          is a contextual summary with editing available, not a permanently
-          unrolled form that pushes impact/review off screen. */}
-      {manualOperation === "category_mapping" ? <details className="clean-mapping-editor" open={!preview}>
-        <summary>Edit source → target values{Object.keys(categoryMapping).length ? ` (${Object.keys(categoryMapping).length} mapped)` : ""}</summary>
-        {columnValues ? <>
-          <p className="quiet-note">{columnValues.total_distinct.toLocaleString()} distinct value(s){columnValues.truncated ? ` (showing the top ${columnValues.values.length})` : ""}. Select source values, name what they should become, then assign.</p>
-          <ul className="clean-value-chips">{columnValues.values.map((item: ColumnValueCount) => <li key={item.value}><label className={categorySelected.has(item.value) ? "is-selected" : categoryMapping[item.value] ? "is-mapped" : ""}><input type="checkbox" checked={categorySelected.has(item.value)} onChange={() => toggleCategorySelected(item.value)} /> <span>{item.value}</span> <small>{item.count.toLocaleString()}</small></label></li>)}</ul>
-          <label>Map selected to<input aria-label="Map selected values to" value={categoryTarget} onChange={(event) => setCategoryTarget(event.target.value)} placeholder="e.g. Bengaluru" /></label>
-          <button type="button" className="secondary" disabled={categorySelected.size === 0 || !categoryTarget.trim()} onClick={assignCategoryMapping}>Assign mapping</button>
-          {Object.keys(categoryMapping).length ? <ul className="clean-mapping-summary">{Object.entries(categoryMapping).map(([source, target]) => <li key={source}><code>{source}</code> → <code>{target}</code><button type="button" className="secondary" aria-label={`Remove mapping for ${source}`} onClick={() => removeCategoryMapping(source)}>×</button></li>)}</ul> : null}
-        </> : <p className="quiet-note">Loading distinct values…</p>}
-      </details> : null}
-      {manualOperation === "deduplicate_survivorship" ? <details className="clean-mapping-editor" open={!preview}>
-        <summary>Choose grouping columns{survivorshipColumns.size ? ` (${survivorshipColumns.size} selected)` : ""}</summary>
-        <p className="quiet-note">Group rows that share the same value in every selected column; keep one row per group.</p>
-        <ul className="clean-value-list">{(profile?.columns ?? []).map((column) => <li key={column.name}><label><input type="checkbox" checked={survivorshipColumns.has(column.name)} onChange={() => toggleSurvivorshipColumn(column.name)} /> <span>{column.name}</span> <small>{column.semantic_type}</small></label></li>)}</ul>
-      </details> : null}
 
       {preview && pendingRequest ? (() => {
         const affected = preview.changed_rows_total ?? preview.affected_rows;
@@ -992,7 +1027,6 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
       </div>
       </> : <p className="quiet-note">Select an issue from the navigator, or start a manual operation, to inspect it and preview a fix.</p>}
       {error ? <p className="query-error" role="alert">{error}</p> : null}
-      <WorkspaceProposalPanel kind="clean" datasetId={datasetId} onReview={(proposal) => { if (proposal.clean_operation) { setManualMode(true); void previewOperation(proposal.clean_operation); } }} />
       {(() => {
         const previewPending = Boolean(preview && pendingRequest);
         const blockedReason = previewPending ? "Apply or discard this preview first." : null;
@@ -1007,6 +1041,7 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
         <p className="quiet-note">No report linked.</p>
         <button type="button" className="secondary" onClick={() => onOpenWorkflow("reports")}>Open Reports</button>
       </div>
+      </>}
     </aside>
   </article>;
 }
