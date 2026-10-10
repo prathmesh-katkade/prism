@@ -36,7 +36,7 @@ describe("Clean workspace", () => {
 
     render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
 
-    await waitFor(() => expect(screen.getByText("1 found")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole("button", { name: /Dataset[\s\S]*exact duplicates/ })).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /Dataset[\s\S]*exact duplicates/ }));
 
     await waitFor(() => expect(screen.getByText(/affects/)).toBeInTheDocument());
@@ -46,7 +46,7 @@ describe("Clean workspace", () => {
     fireEvent.click(screen.getByRole("button", { name: /Apply reviewed change|Applying/ }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/apply"), expect.objectContaining({ method: "POST" })));
     expect(fetchMock.mock.calls.filter(([input]) => String(input).endsWith("/apply"))).toHaveLength(1);
-    await waitFor(() => expect(screen.getByText(/revision 1/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("4 rows · 3 columns · revision 1")).toBeInTheDocument());
   });
 
   it("shows the error state with a retry control, never an indefinite loading spinner, when the initial load fails", async () => {
@@ -106,7 +106,7 @@ describe("Clean workspace", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Apply reviewed change" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/apply"), expect.objectContaining({ method: "POST" })));
-    await waitFor(() => expect(screen.getByText(/revision 1/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("4 rows · 3 columns · revision 1")).toBeInTheDocument());
   });
 
   it("switches the inspector away from a selected pattern finding when starting a manual operation or selecting an issue, instead of leaving it stuck on the old finding", async () => {
@@ -162,7 +162,7 @@ describe("Clean workspace", () => {
     vi.stubGlobal("fetch", fetchMock);
     render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
 
-    await waitFor(() => expect(screen.getByText("None saved yet")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/Saved recipes/)).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "+ Add step" }));
     fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "drop_duplicates" } });
 
@@ -301,7 +301,7 @@ describe("Clean workspace", () => {
     vi.stubGlobal("fetch", fetchMock);
     render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
 
-    await waitFor(() => expect(screen.getByText("No rules saved")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("No validation rules yet.")).toBeInTheDocument());
     fireEvent.click(screen.getByText("Add validation rule"));
     fireEvent.change(screen.getByLabelText("Validation rule name"), { target: { value: "Unique customers" } });
     fireEvent.change(screen.getByLabelText("Validation rule column"), { target: { value: "customer_id" } });
@@ -328,7 +328,7 @@ describe("Clean workspace", () => {
     vi.stubGlobal("fetch", fetchMock);
     render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
 
-    await waitFor(() => expect(screen.getByText("No rules saved")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("No validation rules yet.")).toBeInTheDocument());
     fireEvent.click(screen.getByText("Add validation rule"));
     fireEvent.click(screen.getByRole("button", { name: "Save rule" }));
     await waitFor(() => expect(screen.getByText("Name the rule before saving it.")).toBeInTheDocument());

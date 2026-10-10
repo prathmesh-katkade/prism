@@ -289,6 +289,17 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
     setCategoryMapping((current) => { const next = { ...current }; delete next[sourceValue]; return next; });
   }
 
+  /** Editing a proposed value directly in the review table — not just the
+   * inspector's bulk assign — must actually recompute the preview, never
+   * just redraw a locally-held guess next to stale review data. */
+  function updateMappingTarget(source: string, target: string) {
+    if (!pendingRequest || pendingRequest.operation !== "category_mapping") return;
+    const nextMapping: Record<string, string> = { ...(pendingRequest.category_mapping ?? {}) };
+    if (target.trim()) nextMapping[source] = target.trim(); else delete nextMapping[source];
+    setCategoryMapping(nextMapping);
+    void previewOperation({ ...pendingRequest, category_mapping: nextMapping });
+  }
+
   function toggleCategorySelected(value: string) {
     setCategorySelected((current) => { const next = new Set(current); if (next.has(value)) next.delete(value); else next.add(value); return next; });
   }
@@ -630,24 +641,52 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
   const manualSpec = OPERATIONS.find((item) => item.value === manualOperation);
 
   return <article className="clean-workspace three-pane">
+    <header className="clean-dataset-header">
+      <div><span className="eyebrow">Source: {clean.dataset.source_name}</span><h1>{preview?.operation === "category_mapping" ? "Review category mapping" : "Clean dataset"}</h1><p>{clean.dataset.row_count.toLocaleString()} rows · {clean.dataset.column_count} columns · revision {clean.dataset.revision}</p></div>
+      {/* Unlike a numbered, gated wizard, every stage here is freely reachable at
+          any time and never claims a later workspace is "done" - there is no
+          dataset-wide notion of Clean/SQL/Visualize/Report completion to report
+          honestly, only this revision's own applied-or-not state shown elsewhere. */}
+      <nav className="clean-workflow-strip" aria-label="Workflow">
+        <span className="is-current">Clean</span>
+        <span aria-hidden="true">→</span>
+        <button type="button" onClick={() => onOpenWorkflow("sql-lab")}>SQL Lab</button>
+        <span aria-hidden="true">→</span>
+        <button type="button" onClick={() => onOpenWorkflow("visualize")}>Visualize</button>
+        <span aria-hidden="true">→</span>
+        <button type="button" onClick={() => onOpenWorkflow("reports")}>Reports</button>
+      </nav>
+    </header>
     <nav className="clean-issues" aria-label="Data quality issue navigator and manual operation editor" tabIndex={0}>
-      {recipePreview ? <section className="clean-recipe-draft" aria-label="Reviewed recipe steps">
-        <span className="eyebrow">RECIPE · PREVIEW</span>
-        <ol>{recipes.find((recipe) => recipe.recipe_id === recipePreview.recipe_id)?.steps.map((step, index) => <li key={step.step_id}>
-          <span className="clean-step-number">{String(index + 1).padStart(2, "0")}</span>
-          <div><strong>{step.request.operation.replaceAll("_", " ")}<span className={`clean-step-status ${step.enabled ? "is-reviewed" : "is-disabled"}`}>{step.enabled ? "preview" : "disabled"}</span></strong><small>{recipePreview.step_impacts[index] ?? 0} affected</small></div>
-        </li>)}</ol>
-      </section> : null}
+      <div className="section-title"><div><span className="eyebrow">TRANSFORMATION RECIPE</span><h2>{clean.history.length || draftSteps.length || recipePreview || (preview && pendingRequest) ? `${clean.history.length + (recipePreview ? (recipes.find((recipe) => recipe.recipe_id === recipePreview.recipe_id)?.steps.length ?? 0) : draftSteps.length ? draftSteps.length : (preview && pendingRequest) ? 1 : 0)} step(s)` : "Empty"}</h2></div></div>
+      <ol className="clean-recipe-unified" aria-label="Unified transformation recipe">
+        {clean.history.map((item, index) => <li key={item.transformation_id} className="is-applied">
+          <i aria-hidden="true" /><span className="clean-step-number">{String(index + 1).padStart(2, "0")}</span>
+          <div className="clean-step-body"><strong>{item.operation.replaceAll("_", " ")}<span className="clean-step-status is-applied">Applied</span></strong><small>{item.column ?? "dataset"} · revision {item.resulting_revision}</small></div>
+        </li>)}
+        {recipePreview ? recipes.find((recipe) => recipe.recipe_id === recipePreview.recipe_id)?.steps.map((step, index) => <li key={step.step_id} className={step.enabled ? "is-preview" : ""}>
+          <i aria-hidden="true" /><span className="clean-step-number">{String(clean.history.length + index + 1).padStart(2, "0")}</span>
+          <div className="clean-step-body"><strong>{step.request.operation.replaceAll("_", " ")}<span className={`clean-step-status ${step.enabled ? "is-reviewed" : "is-disabled"}`}>{step.enabled ? "Preview" : "Disabled"}</span></strong><small>{step.request.column ?? "dataset"} · {recipePreview.step_impacts[index] ?? 0} affected</small></div>
+        </li>) : draftSteps.length ? draftSteps.map((step, index) => <li key={step.step_id} className={step.enabled ? "is-draft" : ""}>
+          <i aria-hidden="true" /><span className="clean-step-number">{String(clean.history.length + index + 1).padStart(2, "0")}</span>
+          <div className="clean-step-body">
+            <strong>{step.request.operation.replaceAll("_", " ")}<span className={`clean-step-status ${step.enabled ? "is-draft" : "is-disabled"}`}>{step.enabled ? "Draft" : "Disabled"}</span></strong>
+            <small>{step.request.column ?? "dataset"}{draftPreview ? ` · ${draftPreview.step_impacts[index] ?? 0} affected` : ""}</small>
+            <div className="clean-step-actions"><button aria-label={`Move step ${index + 1} up`} disabled={index === 0} onClick={() => setDraftSteps((current) => { const next = [...current]; [next[index - 1], next[index]] = [next[index]!, next[index - 1]!]; return next; })}>↑</button><button aria-label={`Move step ${index + 1} down`} disabled={index === draftSteps.length - 1} onClick={() => setDraftSteps((current) => { const next = [...current]; [next[index], next[index + 1]] = [next[index + 1]!, next[index]!]; return next; })}>↓</button><button aria-label={`Edit step ${index + 1}`} onClick={() => loadDraftStep(index)}>Edit</button><button aria-label={`${step.enabled ? "Disable" : "Enable"} step ${index + 1}`} onClick={() => setDraftSteps((current) => current.map((item, at) => at === index ? { ...item, enabled: !item.enabled } : item))}>{step.enabled ? "Disable" : "Enable"}</button><button aria-label={`Remove step ${index + 1}`} onClick={() => setDraftSteps((current) => current.filter((_, at) => at !== index))}>Remove</button></div>
+          </div>
+        </li>) : (preview && pendingRequest) ? <li className="is-preview">
+          <i aria-hidden="true" /><span className="clean-step-number">{String(clean.history.length + 1).padStart(2, "0")}</span>
+          <div className="clean-step-body"><strong>{OPERATIONS.find((item) => item.value === pendingRequest.operation)?.label ?? pendingRequest.operation.replaceAll("_", " ")}<span className="clean-step-status is-reviewed">Preview</span></strong><small>{(preview.changed_rows_total ?? preview.affected_rows).toLocaleString()} affected · unsaved step</small></div>
+        </li> : null}
+      </ol>
+      {!clean.history.length && !draftSteps.length && !recipePreview && !(preview && pendingRequest) ? <p className="quiet-note">No steps yet. Select an issue, or start a manual operation below, to build this dataset's recipe.</p> : null}
+      {draftError ? <p role="alert" className="query-error">{draftError}</p> : draftSteps.length && draftPreview ? <p className="quiet-note">Downstream preview recomputed from revision {draftPreview.source_revision}. Projected health {draftPreview.projected_health.total}/100.</p> : null}
 
-      {draftSteps.length ? <section className="clean-recipe-draft" aria-label="Recipe draft editor"><span className="eyebrow">DRAFT RECIPE · {draftSteps.length} STEP(S)</span>
-        <ol>{draftSteps.map((step, index) => <li key={step.step_id}><span className="clean-step-number">{String(index + 1).padStart(2, "0")}</span><div><strong>{step.request.operation.replaceAll("_", " ")}<span className={`clean-step-status ${step.enabled ? "is-draft" : "is-disabled"}`}>{step.enabled ? "draft" : "disabled"}</span></strong><small>{step.request.column ?? "dataset"}{draftPreview ? ` · ${draftPreview.step_impacts[index] ?? 0} affected` : ""}</small></div><div className="clean-step-actions"><button aria-label={`Move step ${index + 1} up`} disabled={index === 0} onClick={() => setDraftSteps((current) => { const next = [...current]; [next[index - 1], next[index]] = [next[index]!, next[index - 1]!]; return next; })}>↑</button><button aria-label={`Move step ${index + 1} down`} disabled={index === draftSteps.length - 1} onClick={() => setDraftSteps((current) => { const next = [...current]; [next[index], next[index + 1]] = [next[index + 1]!, next[index]!]; return next; })}>↓</button><button aria-label={`Edit step ${index + 1}`} onClick={() => loadDraftStep(index)}>Edit</button><button aria-label={`${step.enabled ? "Disable" : "Enable"} step ${index + 1}`} onClick={() => setDraftSteps((current) => current.map((item, at) => at === index ? { ...item, enabled: !item.enabled } : item))}>{step.enabled ? "Disable" : "Enable"}</button><button aria-label={`Remove step ${index + 1}`} onClick={() => setDraftSteps((current) => current.filter((_, at) => at !== index))}>Remove</button></div></li>)}</ol>
-        {draftError ? <p role="alert" className="query-error">{draftError}</p> : draftPreview ? <p className="quiet-note">Downstream preview recomputed from revision {draftPreview.source_revision}. Projected health {draftPreview.projected_health.total}/100.</p> : <p className="quiet-note">Recomputing downstream preview…</p>}
-      </section> : null}
+      <div className="clean-recipe-actions"><button className={manualMode ? "is-selected" : "secondary"} onClick={startManualOperation}>+ Add step</button></div>
 
-      {preview && pendingRequest && !draftSteps.length ? <section className="clean-recipe-draft" aria-label="Current reviewed operation"><span className="eyebrow">TRANSFORMATION RECIPE · CURRENT REVIEW</span><ol><li><span className="clean-step-number">01</span><div><strong>{OPERATIONS.find((item) => item.value === pendingRequest.operation)?.label ?? pendingRequest.operation.replaceAll("_", " ")} <span className="clean-step-status is-reviewed">Preview</span></strong><small>{(preview.changed_rows_total ?? preview.affected_rows).toLocaleString()} affected · unsaved step</small></div></li></ol><p className="quiet-note">This step remains a preview until Apply. Save a recipe to reuse its reviewed parameters.</p></section> : null}
-
-      <div className="section-title"><div><span className="eyebrow">RECIPES</span><h2>{recipes.length ? `${recipes.length} saved` : "None saved yet"}</h2></div></div>
-      {recipes.length ? <ul className="clean-recipe-list">{recipes.map((recipe) => {
+      <details className="clean-disclosure" open={recipes.length > 0}>
+        <summary>Saved recipes <span className="health-pill">{recipes.length}</span></summary>
+        {recipes.length ? <ul className="clean-recipe-list">{recipes.map((recipe) => {
         const enabledCount = recipe.steps.filter((step) => step.enabled).length;
         return <li key={recipe.recipe_id}>
           <div><strong>{recipe.name}</strong><small>v{recipe.version} · {enabledCount}/{recipe.steps.length} step(s) enabled</small><ol className="clean-saved-steps" aria-label={`${recipe.name} steps`}>{recipe.steps.map((step, index) => <li key={step.step_id}><span className="clean-step-number">{String(index + 1).padStart(2, "0")}</span><span>{OPERATIONS.find((item) => item.value === step.request.operation)?.label ?? step.request.operation.replaceAll("_", " ")}<small>{step.request.column ?? "dataset"}{recipePreview?.recipe_id === recipe.recipe_id ? ` · ${recipePreview.step_impacts[index] ?? 0} affected` : ""}</small></span><span className={`clean-step-status ${step.enabled ? "is-draft" : "is-disabled"}`}>{step.enabled ? recipePreview?.recipe_id === recipe.recipe_id ? "Preview" : "Saved" : "Disabled"}</span></li>)}</ol></div>
@@ -656,14 +695,16 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
           {recipePreview?.recipe_id === recipe.recipe_id ? <div className="clean-recipe-review"><small>Reviewed revision {recipePreview.source_revision} · {recipePreview.step_impacts.join(" / ")} affected row(s) by step</small><button disabled={applyingRecipeId === recipe.recipe_id} onClick={() => void applyRecipe(recipe)}>{applyingRecipeId === recipe.recipe_id ? "Applying…" : "Apply reviewed recipe"}</button><button className="secondary" onClick={() => setRecipePreview(null)}>Discard</button></div> : null}
         </li>;
       })}</ul> : <p className="quiet-note">Build an operation in the inspector and save it as a recipe to reuse it later, or on another dataset with the same schema.</p>}
-      {recipeError ? <p className="query-error" role="alert">{recipeError}</p> : null}
-      <div className="clean-recipe-actions"><button className={manualMode ? "is-selected" : "secondary"} onClick={startManualOperation}>+ Add step</button></div>
+        {recipeError ? <p className="query-error" role="alert">{recipeError}</p> : null}
+      </details>
 
-      <div className="section-title"><div><span className="eyebrow">ISSUES</span><h2>{clean.issues.length ? `${clean.issues.length} found` : "No issues detected"}</h2></div><span className={`health-pill ${clean.health.total >= 80 ? "good" : clean.health.total >= 60 ? "warn" : "risk"}`}>{clean.health.total}/100</span></div>
+      <details className="clean-disclosure">
+        <summary>Issues <span className={`health-pill ${clean.health.total >= 80 ? "good" : clean.health.total >= 60 ? "warn" : "risk"}`}>{clean.issues.length ? clean.issues.length : clean.health.total + "/100"}</span></summary>
       <div className="finding-list">{clean.issues.map((issue) => <button key={issue.issue_id} className={!manualMode && issue.issue_id === selectedIssue?.issue_id ? "is-selected" : ""} onClick={() => void selectIssue(issue)}><span className={`finding-dot ${issue.severity === "high" ? "issue" : issue.severity === "medium" ? "warning" : "good"}`} /><strong>{issue.column ?? "Dataset"}</strong><small>{issue.description}</small></button>)}</div>
+      </details>
 
-
-      <div className="section-title"><div><span className="eyebrow">VALIDATION</span><h2>{validationRules.length ? `${validationRules.length} rule(s)` : "No rules saved"}</h2></div></div>
+      <details className="clean-disclosure">
+        <summary>Validation <span className="health-pill">{validationRules.length ? `${validationRules.length} rule(s)` : "none"}</span></summary>
       {validationRules.length ? <ul className="clean-recipe-list">{validationRules.map((rule) => {
         const result = validationResults[rule.rule_id];
         return <li key={rule.rule_id} className="clean-validation-row">
@@ -688,8 +729,10 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
         <button type="button" className="secondary" onClick={() => void createValidationRule()}>Save rule</button>
         {validationError ? <p className="quiet-note">{validationError}</p> : null}
       </div></details>
+      </details>
 
-      <div className="section-title"><div><span className="eyebrow">PATTERNS</span><h2>{patternsLoading ? "Scanning…" : patternFindings.length ? `${patternFindings.length} finding(s)` : "No findings yet"}</h2></div></div>
+      <details className="clean-disclosure">
+        <summary>Patterns <span className="health-pill">{patternsLoading ? "…" : patternFindings.length || "none"}</span></summary>
       <div className="clean-manual-form clean-pattern-controls">
         <label>Group by (optional)<select aria-label="Group pattern discovery by column" value={groupByColumn} onChange={(event) => { setGroupByColumn(event.target.value); setGroupValue(""); }}>
           <option value="">No grouping</option>
@@ -705,38 +748,36 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
         <strong>{finding.column}{finding.group_value ? ` · ${finding.group_value}` : ""}</strong>
         <small>{finding.detector_kind.replaceAll("_", " ")} · {(finding.families ?? []).length ? `${(finding.families ?? []).length} famil${(finding.families ?? []).length === 1 ? "y" : "ies"}, top ${(finding.families ?? [])[0]!.matching_count} of ${finding.rows_examined}` : `${finding.exception_count} exception(s)`}{finding.verified ? " · verified" : ""}</small>
       </button>)}</div> : !patternsLoading ? <p className="quiet-note">No format-family evidence surfaced in a bounded sample. Try the column explorer above for a deliberate look, or choose a grouping column.</p> : null}
+      </details>
 
-      <div className="section-title"><span className="eyebrow">HISTORY</span></div>
+      <details className="clean-disclosure">
+        <summary>History <span className="health-pill">{clean.history.length + 1}</span></summary>
       <ol className="clean-history">
         <li><button className={clean.dataset.revision === 0 ? "is-selected" : ""} onClick={() => void undoTo(0)}>Revision 0 · original</button></li>
         {clean.history.map((item) => <li key={item.transformation_id}><button className={clean.dataset.revision === item.resulting_revision ? "is-selected" : ""} onClick={() => void undoTo(item.resulting_revision)}>Revision {item.resulting_revision} · {item.operation.replaceAll("_", " ")}{item.column ? ` · ${item.column}` : ""}</button></li>)}
       </ol>
+      </details>
     </nav>
     <section className="clean-preview" aria-label="Data and transformation preview" tabIndex={0}>
-      <header><span className="eyebrow">Source: {clean.dataset.source_name}</span><h1>{preview?.operation === "category_mapping" ? "Review category mapping" : "Clean dataset"}</h1><p>{clean.dataset.row_count.toLocaleString()} rows · {clean.dataset.column_count} columns · revision {clean.dataset.revision}</p></header>
-      {/* Unlike a numbered, gated wizard, every stage here is freely reachable at
-          any time and never claims a later workspace is "done" - there is no
-          dataset-wide notion of Clean/SQL/Visualize/Report completion to report
-          honestly, only this revision's own applied-or-not state shown elsewhere. */}
-      <nav className="clean-workflow-strip" aria-label="Workflow">
-        <span className="is-current">Clean</span>
-        <span aria-hidden="true">→</span>
-        <button type="button" onClick={() => onOpenWorkflow("sql-lab")}>SQL Lab</button>
-        <span aria-hidden="true">→</span>
-        <button type="button" onClick={() => onOpenWorkflow("visualize")}>Visualize</button>
-        <span aria-hidden="true">→</span>
-        <button type="button" onClick={() => onOpenWorkflow("reports")}>Reports</button>
-      </nav>
       {preview ? <>
         <div className="clean-review-tabs" role="tablist" aria-label="Review transformation"><button role="tab" aria-selected={reviewView === "before"} onClick={() => setReviewView("before")}>Before</button><button role="tab" aria-selected={reviewView === "changes"} onClick={() => setReviewView("changes")}>Changes</button><button role="tab" aria-selected={reviewView === "after"} onClick={() => setReviewView("after")}>After</button></div>
         {reviewView === "before" ? <><p className="quiet-note">Source revision {preview.source_revision ?? clean.dataset.revision} · fingerprint {(preview.source_fingerprint ?? clean.dataset.source_fingerprint).slice(0, 12)}… · first {preview.before_sample.length} row(s)</p><SampleTable rows={preview.before_sample} /></> : null}
         {reviewView === "after" ? <><p className="quiet-note">Projected result only. Nothing has been applied. First {preview.after_sample.length} row(s).</p><SampleTable rows={preview.after_sample} /></> : null}
         {reviewView === "changes" ? <>
-          <p className="clean-preview-summary">{preview.operation.replaceAll("_", " ")} affects <strong>{(preview.changed_rows_total ?? preview.affected_rows).toLocaleString()}</strong> source row(s){(preview.affected_columns ?? []).length ? ` in ${(preview.affected_columns ?? []).join(", ")}` : ""}. Projected health: <strong>{preview.projected_health.total}/100</strong> (currently {clean.health.total}/100).</p>
+          <p className="clean-preview-summary">{preview.operation.replaceAll("_", " ")} affects <strong>{(preview.changed_rows_total ?? preview.affected_rows).toLocaleString()}</strong> row(s){(preview.affected_columns ?? []).length ? ` in ${(preview.affected_columns ?? []).join(", ")}` : ""}. Projected health <strong>{preview.projected_health.total}/100</strong> (currently {clean.health.total}/100).</p>
           <div className="clean-impact-summary"><div><strong>{(preview.changed_rows_total ?? preview.affected_rows).toLocaleString()}</strong><span>affected rows</span></div><div><strong>{Object.keys(pendingRequest?.category_mapping ?? {}).length.toLocaleString()}</strong><span>mapped labels</span></div><div><strong>{(preview.exception_rows_total ?? 0).toLocaleString()}</strong><span>exceptions</span></div></div>
-          {preview.operation === "category_mapping" && pendingRequest?.category_mapping ? <div className="data-table-wrap clean-mapping-review" tabIndex={0}><table><thead><tr><th>Source value</th><th>Reviewed value</th><th>Rows</th><th>Status</th></tr></thead><tbody>{Object.entries(pendingRequest.category_mapping).map(([source, target]) => { const count = columnValues?.values.find((item) => item.value === source)?.count; return <tr key={source}><td>{source}</td><td>{target}</td><td>{count === undefined ? "Not counted" : count.toLocaleString()}</td><td><span className="health-pill good">Will change</span></td></tr>; })}</tbody></table><p className="quiet-note">Only listed source values are mapped. Unresolved values remain unchanged; inspect Exceptions before applying.</p></div> : null}
+          {preview.operation === "category_mapping" && pendingRequest ? <div className="data-table-wrap clean-mapping-review" tabIndex={0}><table><thead><tr><th>Source value</th><th>Proposed value</th><th>Rows</th><th>Status</th></tr></thead><tbody>{(columnValues?.values ?? Object.keys(pendingRequest.category_mapping ?? {}).map((value) => ({ value, count: undefined as unknown as number }))).map((item) => {
+            const target = pendingRequest.category_mapping?.[item.value] ?? "";
+            const mapped = Boolean(target);
+            return <tr key={item.value}>
+              <td>{item.value}</td>
+              <td><input key={`${item.value}:${target}`} className="clean-mapping-target-input" list="clean-mapping-target-options" aria-label={`Proposed value for ${item.value}`} defaultValue={target} placeholder="Needs a value…" onBlur={(event) => { if (event.target.value !== target) updateMappingTarget(item.value, event.target.value); }} /></td>
+              <td>{item.count === undefined ? "—" : item.count.toLocaleString()}</td>
+              <td>{mapped ? <span className="health-pill good">Will change</span> : <span className="health-pill warn">Needs decision</span>}</td>
+            </tr>;
+          })}</tbody></table><datalist id="clean-mapping-target-options">{Array.from(new Set(Object.values(pendingRequest.category_mapping ?? {}))).map((value) => <option key={value} value={value} />)}</datalist></div> : null}
           {(preview.warnings ?? []).length ? <ul className="clean-warnings">{(preview.warnings ?? []).map((warning) => <li key={warning}>{warning}</li>)}</ul> : null}
-          <div className="clean-review-tabs" role="tablist" aria-label="Inspect review results"><button role="tab" aria-selected={reviewRowsView === "affected"} onClick={() => setReviewRowsView("affected")}>Affected rows ({(preview.changed_rows_total ?? preview.affected_rows).toLocaleString()})</button><button role="tab" aria-selected={reviewRowsView === "exceptions"} onClick={() => setReviewRowsView("exceptions")}>Exceptions ({(preview.exception_rows_total ?? 0).toLocaleString()})</button><button role="tab" aria-selected={reviewRowsView === "validation"} onClick={() => setReviewRowsView("validation")}>Validation</button></div>
+          <div className="clean-review-tabs is-underline" role="tablist" aria-label="Inspect review results"><button role="tab" aria-selected={reviewRowsView === "affected"} onClick={() => setReviewRowsView("affected")}>Affected rows ({(preview.changed_rows_total ?? preview.affected_rows).toLocaleString()})</button><button role="tab" aria-selected={reviewRowsView === "exceptions"} onClick={() => setReviewRowsView("exceptions")}>Exceptions ({(preview.exception_rows_total ?? 0).toLocaleString()})</button><button role="tab" aria-selected={reviewRowsView === "validation"} onClick={() => setReviewRowsView("validation")}>Validation</button></div>
           {reviewRowsView === "affected" ? <InspectionTable rows={preview.changed_rows ?? []} total={preview.changed_rows_total ?? preview.affected_rows} /> : null}
           {reviewRowsView === "exceptions" ? <><p className="quiet-note">{(preview.unresolved_values ?? []).length} distinct unresolved value(s). These rows stay unchanged unless the selected operation explicitly makes them missing.</p><InspectionTable rows={preview.exception_rows ?? []} total={preview.exception_rows_total ?? 0} /></> : null}
           {reviewRowsView === "validation" ? <div className="clean-validation-review">{validationRules.length ? validationRules.map((rule) => {
@@ -854,7 +895,7 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
           <label className="clean-inline-toggle"><input type="checkbox" checked={categoryPreserveUnmatched} onChange={(event) => setCategoryPreserveUnmatched(event.target.checked)} /> Preserve unmatched values</label>
           {columnValues ? <>
             <p className="quiet-note">{columnValues.total_distinct.toLocaleString()} distinct value(s){columnValues.truncated ? ` (showing the top ${columnValues.values.length})` : ""}. Select source values, name what they should become, then assign.</p>
-            <ul className="clean-value-list">{columnValues.values.map((item: ColumnValueCount) => <li key={item.value}><label><input type="checkbox" checked={categorySelected.has(item.value)} onChange={() => toggleCategorySelected(item.value)} /> <span>{item.value}</span> <small>{item.count.toLocaleString()} row(s){categoryMapping[item.value] ? ` → ${categoryMapping[item.value]}` : ""}</small></label></li>)}</ul>
+            <ul className="clean-value-chips">{columnValues.values.map((item: ColumnValueCount) => <li key={item.value}><label className={categorySelected.has(item.value) ? "is-selected" : categoryMapping[item.value] ? "is-mapped" : ""}><input type="checkbox" checked={categorySelected.has(item.value)} onChange={() => toggleCategorySelected(item.value)} /> <span>{item.value}</span> <small>{item.count.toLocaleString()}</small></label></li>)}</ul>
             <label>Map selected to<input aria-label="Map selected values to" value={categoryTarget} onChange={(event) => setCategoryTarget(event.target.value)} placeholder="e.g. Bengaluru" /></label>
             <button type="button" className="secondary" disabled={categorySelected.size === 0 || !categoryTarget.trim()} onClick={assignCategoryMapping}>Assign mapping</button>
             {Object.keys(categoryMapping).length ? <ul className="clean-mapping-summary">{Object.entries(categoryMapping).map(([source, target]) => <li key={source}><code>{source}</code> → <code>{target}</code><button type="button" className="secondary" aria-label={`Remove mapping for ${source}`} onClick={() => removeCategoryMapping(source)}>×</button></li>)}</ul> : null}
