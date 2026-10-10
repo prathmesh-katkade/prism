@@ -1,5 +1,5 @@
 ﻿import React from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { CleanWorkspace } from "./clean-workspace";
 
@@ -130,7 +130,7 @@ describe("Clean workspace", () => {
     await waitFor(() => expect(screen.getByText("PATTERN REVIEW")).toBeInTheDocument());
 
     fireEvent.click(screen.getByRole("button", { name: "+ Add step" }));
-    expect(screen.getByText("MANUAL OPERATION")).toBeInTheDocument();
+    expect(screen.getByText("STEP 1")).toBeInTheDocument();
     expect(screen.queryByText("PATTERN REVIEW")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Operation")).toBeInTheDocument();
 
@@ -186,6 +186,60 @@ describe("Clean workspace", () => {
     await waitFor(() => expect(screen.getByText(/revision 1/)).toBeInTheDocument());
   });
 
+  it("selects a draft recipe step for editing, reflects it in the inspector and the row, and reorders/disables/removes through the overflow menu", async () => {
+    const fetchMock = vi.fn(async (input: string | URL) => {
+      const path = String(input);
+      if (path.endsWith("/state")) return json({ dataset: dataset0, issues: [], history: [], health });
+      if (path.includes("/rows")) return json(rowsPage);
+      if (path.includes("/profile")) return json({ columns: [{ name: "notes", semantic_type: "text" }, { name: "region", semantic_type: "text" }] });
+      if (path.includes("/recipes")) return json([]);
+      return json({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText(/Rows 1–5 of 5/)).toBeInTheDocument());
+
+    // Build two draft steps: drop_column(notes), then trim_whitespace(region).
+    fireEvent.click(screen.getByRole("button", { name: "+ Add step" }));
+    fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "drop_column" } });
+    fireEvent.change(screen.getByLabelText("Column"), { target: { value: "notes" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add step to draft" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "+ Add step" }));
+    fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "trim_whitespace" } });
+    fireEvent.change(screen.getByLabelText("Column"), { target: { value: "region" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add step to draft" }));
+
+    const steps = document.querySelectorAll(".clean-recipe-unified > li");
+    expect(steps).toHaveLength(2);
+    expect(steps[0]).not.toHaveClass("is-selected");
+
+    // Selecting the first row must load it into the inspector (real selection, not decorative).
+    fireEvent.click(within(steps[0] as HTMLElement).getByRole("button", { name: /drop column/i }));
+    expect(steps[0]).toHaveClass("is-selected");
+    expect(screen.getByText("STEP 1")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Update step 1" })).toBeInTheDocument();
+
+    // The overflow menu exposes move/disable/remove without a permanent five-button row.
+    // jsdom doesn't run <details>'s native toggle-on-summary-click default action, so the
+    // open state is set directly here - a real browser (and the packaged desktop WebView2)
+    // does this natively; this only works around jsdom's gap in simulating it.
+    const openStepMenu = (row: Element) => { (row.querySelector(".clean-step-menu") as HTMLDetailsElement).open = true; };
+    openStepMenu(steps[0]!);
+    fireEvent.click(within(steps[0] as HTMLElement).getByRole("button", { name: /move step 1 down/i }));
+    const reordered = document.querySelectorAll(".clean-recipe-unified > li");
+    expect(within(reordered[0] as HTMLElement).getByText(/trim whitespace/i)).toBeInTheDocument();
+    expect(within(reordered[1] as HTMLElement).getByText(/drop column/i)).toBeInTheDocument();
+
+    openStepMenu(reordered[1]!);
+    fireEvent.click(within(reordered[1] as HTMLElement).getByRole("button", { name: /disable step 2/i }));
+    expect(within(reordered[1] as HTMLElement).getByText("Disabled")).toBeInTheDocument();
+
+    openStepMenu(reordered[1]!);
+    fireEvent.click(within(reordered[1] as HTMLElement).getByRole("button", { name: /remove step 2/i }));
+    expect(document.querySelectorAll(".clean-recipe-unified > li")).toHaveLength(1);
+  });
+
   it("surfaces the specific schema-mismatch reason when a recipe no longer matches the dataset, without pretending it applied", async () => {
     const recipe = { recipe_id: "recipe_2", name: "Stale recipe", version: 1, steps: [{ step_id: "s1", request: { operation: "drop_column", column: "retired_column" }, enabled: true }] };
     const fetchMock = vi.fn(async (input: string | URL) => {
@@ -239,7 +293,7 @@ describe("Clean workspace", () => {
     fireEvent.change(screen.getByLabelText("Map selected values to"), { target: { value: "Bengaluru" } });
     fireEvent.click(screen.getByRole("button", { name: "Assign mapping" }));
 
-    expect(screen.getAllByText("Bengaluru", { selector: "code" })).toHaveLength(2); // one mapping-summary row per assigned source value
+    expect(within(document.querySelector(".clean-mapping-summary")!).getAllByText("Bengaluru", { selector: "code" })).toHaveLength(2); // one mapping-summary row per assigned source value
     fireEvent.click(screen.getByRole("button", { name: "Preview" }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/preview"), expect.objectContaining({ method: "POST" })));
