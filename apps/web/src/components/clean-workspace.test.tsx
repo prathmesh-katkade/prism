@@ -130,7 +130,7 @@ describe("Clean workspace", () => {
     await waitFor(() => expect(screen.getByText("PATTERN REVIEW")).toBeInTheDocument());
 
     fireEvent.click(screen.getByRole("button", { name: "+ Add step" }));
-    expect(screen.getByText("STEP 1")).toBeInTheDocument();
+    expect(screen.getByText("NEW STEP · UNSAVED")).toBeInTheDocument();
     expect(screen.queryByText("PATTERN REVIEW")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Operation")).toBeInTheDocument();
 
@@ -184,6 +184,37 @@ describe("Clean workspace", () => {
     fireEvent.click(screen.getByRole("button", { name: "Apply reviewed recipe" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/recipes/recipe_1/apply"), expect.objectContaining({ method: "POST" })));
     await waitFor(() => expect(screen.getByText(/revision 1/)).toBeInTheDocument());
+  });
+
+  it("never labels a previewable-but-unsaved step with a position number it doesn't actually occupy in the recipe", async () => {
+    const applied = { transformation_id: "t1", operation: "trim_whitespace", column: "region", parameters: {}, affected_rows: 0, affected_columns: [], source_revision: 0, resulting_revision: 1, source_fingerprint: dataset0.source_fingerprint, resulting_fingerprint: "f".repeat(64), reversible: true, created_at: "2026-08-28T00:00:00Z" };
+    const fetchMock = vi.fn(async (input: string | URL) => {
+      const path = String(input);
+      if (path.endsWith("/state")) return json({ dataset: dataset1, issues: [], history: [applied], health });
+      if (path.includes("/rows")) return json(rowsPage);
+      if (path.includes("/profile")) return json({ columns: [{ name: "region", semantic_type: "text" }] });
+      if (path.includes("/recipes")) return json([]);
+      if (path.includes("/recipe-draft/preview")) return json({ source_revision: 1, source_fingerprint: dataset1.source_fingerprint, review_token: "draft_1", before_sample: [], after_sample: [], step_impacts: [0], projected_health: health });
+      return json({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText(/Rows 1–5 of 5/)).toBeInTheDocument());
+
+    // One real applied step already occupies position 1 in the recipe.
+    fireEvent.click(screen.getByRole("button", { name: "+ Add step" }));
+    fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "drop_duplicates" } });
+    // drop_duplicates needs no column, so this is previewable immediately -
+    // but it has never been added to the draft, so it occupies no real
+    // position yet. The owner's report was exactly this: an unsaved,
+    // previewable step labeled "STEP 3" as if the recipe already had it.
+    expect(screen.getByText("NEW STEP · UNSAVED")).toBeInTheDocument();
+    expect(screen.queryByText(/^STEP \d/)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Preview" })).not.toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Add step to draft" }));
+    // Only after it's actually added does it get a real, numbered position.
+    await waitFor(() => expect(screen.getByText("STEP 2")).toBeInTheDocument());
   });
 
   it("selects a draft recipe step for editing, reflects it in the inspector and the row, and reorders/disables/removes through the overflow menu", async () => {

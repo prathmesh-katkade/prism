@@ -232,6 +232,13 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
     if (verifying) cancelVerify();
     setSelectedFinding(null);
     setManualMode(true); setSelectedIssue(null); setAtlas(null); setPreview(null); setPendingRequest(null);
+    // A genuinely new step, not a continuation of whatever was last edited.
+    // Without this, "+ Add step" right after finishing a previous step kept
+    // the old editingStepIndex: the button still read "Update step N" and
+    // would silently overwrite that step instead of adding a new one - the
+    // same stale-index gap that let an unsaved, never-added step claim a
+    // real position number ("STEP 3") in the first place.
+    setEditingStepIndex(null);
     onSelectContext({ objectId: "manual-operation", label: "Manual operation", type: "finding", state: "ready", actions: [], metadata: ["Not yet previewed"] });
   }
 
@@ -325,6 +332,10 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
   function addDraftStep(request: CleanTransformationRequest) {
     setDraftSteps((current) => [...current, { step_id: `draft_${Date.now()}_${current.length}`, request, enabled: true }]);
     setRecipePreview(null);
+    // The step just became real (it's in draftSteps now), so the inspector
+    // should show its actual position immediately - not "unsaved" until an
+    // unrelated re-click, and never a position number before this point.
+    setEditingStepIndex(draftSteps.length);
   }
 
   function editSavedRecipe(recipe: CleanRecipe) {
@@ -640,10 +651,13 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
   const manualBuild = manualMode ? buildManualRequest() : { request: null, reason: null };
   const manualSpec = OPERATIONS.find((item) => item.value === manualOperation);
   // "New step" only while nothing has been built yet for a brand-new (not
-  // yet in the list) step - the moment it's previewable it gets the real
-  // position it would occupy, same numbering the recipe list itself uses.
-  const manualStepNumber = editingStepIndex !== null ? clean.history.length + editingStepIndex + 1
-    : manualBuild.request ? clean.history.length + draftSteps.length + 1 : null;
+  // yet in the list) step: a real position number belongs to a step that
+  // is actually in the recipe (an applied step, or a draft step being
+  // re-opened by editingStepIndex), never to one still being built in the
+  // inspector that hasn't been added yet - being previewable isn't being
+  // saved, and showing "STEP 3" for an unsaved, uncommitted step claimed a
+  // position that didn't exist in the recipe list above it.
+  const manualStepNumber = editingStepIndex !== null ? clean.history.length + editingStepIndex + 1 : null;
 
   return <article className="clean-workspace three-pane">
     <header className="clean-dataset-header">
@@ -900,7 +914,7 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
         {atlas ? <aside className="atlas-result" aria-live="polite"><span className="eyebrow">ATLAS · {atlas.action.replaceAll("_", " ")}</span><strong>{atlas.summary}</strong><small>{atlas.uncertainty}</small></aside> : null}
         {pendingRequest ? <p className="quiet-note">Review the affected rows and exceptions, then use the actions below the review.</p> : <p className="quiet-note">Atlas proposes a fix automatically when a safe deterministic one exists; otherwise this needs analyst judgment.</p>}
       </> : manualMode ? <>
-        <div className="inspector-heading"><div><span className="eyebrow">{manualStepNumber ? `STEP ${manualStepNumber}` : "NEW STEP"}</span><h2>{manualSpec?.label ?? manualOperation.replaceAll("_", " ")}</h2></div></div>
+        <div className="inspector-heading"><div><span className="eyebrow">{manualStepNumber ? `STEP ${manualStepNumber}` : "NEW STEP · UNSAVED"}</span><h2>{manualSpec?.label ?? manualOperation.replaceAll("_", " ")}</h2></div></div>
         <div className="clean-manual-form">
         <label>Operation<select aria-label="Operation" value={manualOperation} onChange={(event) => setManualOperation(event.target.value as CleanOperation)}>{OPERATIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
         {manualSpec?.help ? <p className="clean-field-help">{manualSpec.help}</p> : null}
@@ -941,7 +955,7 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
         </div> : null}
         <button disabled={!manualBuild.request} title={manualBuild.reason ?? undefined} onClick={() => manualBuild.request && void previewOperation(manualBuild.request)}>Preview</button>
         {manualBuild.reason ? <p className="quiet-note">{manualBuild.reason}</p> : null}
-        <button className="secondary" disabled={!manualBuild.request} onClick={() => manualBuild.request && (editingStepIndex === null ? addDraftStep(manualBuild.request) : updateDraftStep(manualBuild.request))}>{editingStepIndex === null ? "Add step to draft" : `Update step ${editingStepIndex + 1}`}</button>
+        <button className="secondary" disabled={!manualBuild.request} onClick={() => manualBuild.request && (editingStepIndex === null ? addDraftStep(manualBuild.request) : updateDraftStep(manualBuild.request))}>{manualStepNumber ? `Update step ${manualStepNumber}` : "Add step to draft"}</button>
         <label>Recipe name<input aria-label="Recipe name" value={recipeName} onChange={(event) => setRecipeName(event.target.value)} placeholder="e.g. Standard monthly cleanup" /></label>
         <button className="secondary" disabled={!manualBuild.request && !draftSteps.length} title={!manualBuild.request && !draftSteps.length ? (manualBuild.reason ?? undefined) : "Save the ordered steps as a reusable, versioned recipe"} onClick={() => void saveAsRecipe(manualBuild.request ?? draftSteps[0]!.request)}>{editingRecipeId ? "Save recipe changes" : "Save as recipe"}</button>
       </div>
