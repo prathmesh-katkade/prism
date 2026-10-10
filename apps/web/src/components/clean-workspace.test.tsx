@@ -166,12 +166,12 @@ describe("Clean workspace", () => {
     fireEvent.click(screen.getByRole("button", { name: "+ Add step" }));
     fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "drop_duplicates" } });
 
-    fireEvent.click(screen.getByRole("button", { name: "Save as recipe" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save recipe" }));
     await waitFor(() => expect(screen.getByText("Name the recipe before saving it.")).toBeInTheDocument()); // a visible, concrete reason, not a silent no-op
     expect(fetchMock).not.toHaveBeenCalledWith(expect.stringContaining("/recipes"), expect.objectContaining({ method: "POST" }));
 
     fireEvent.change(screen.getByLabelText("Recipe name"), { target: { value: "Drop duplicates nightly" } });
-    fireEvent.click(screen.getByRole("button", { name: "Save as recipe" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save recipe" }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/recipes"), expect.objectContaining({ method: "POST", body: JSON.stringify({ name: "Drop duplicates nightly", steps: [{ request: { operation: "drop_duplicates" }, enabled: true }] }) })));
     await waitFor(() => expect(screen.getByText("Drop duplicates nightly")).toBeInTheDocument());
@@ -333,6 +333,16 @@ describe("Clean workspace", () => {
     const sentBody = JSON.parse(String((previewCall![1] as RequestInit).body));
     expect(sentBody.category_mapping).toEqual({ Bangalore: "Bengaluru", BENGALURU: "Bengaluru" });
 
+    // Once a preview exists, the detailed value-chip editor collapses - it no
+    // longer pushes impact/review off screen - and impact/review now sit
+    // between the (collapsed) editor and the step-commit action, not after it.
+    await waitFor(() => expect((document.querySelector(".clean-mapping-editor") as HTMLDetailsElement).open).toBe(false));
+    const impactEl = screen.getByText("Impact");
+    const reviewEl = screen.getByText("Review required");
+    const addStepButton = screen.getByRole("button", { name: "Add step to draft" });
+    expect(impactEl.compareDocumentPosition(addStepButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(reviewEl.compareDocumentPosition(addStepButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
     fireEvent.click(screen.getByRole("tab", { name: "Exceptions (1)" }));
     await waitFor(() => expect(screen.getByText(/1 distinct unresolved value/)).toBeInTheDocument());
     expect(screen.getAllByText(/Mumbai/, { selector: "code" }).length).toBeGreaterThan(0); // source row and unresolved value remain inspectable
@@ -360,7 +370,7 @@ describe("Clean workspace", () => {
     expect(screen.getByRole("button", { name: "Preview" })).toBeDisabled();
     expect(screen.getByText("Choose at least one column to group duplicates by.")).toBeInTheDocument();
 
-    const survivorshipColumnList = document.querySelector(".clean-survivorship")!;
+    const survivorshipColumnList = document.querySelector(".clean-mapping-editor")!;
     fireEvent.click(Array.from(survivorshipColumnList.querySelectorAll("label")).find((label) => label.textContent?.includes("customer_id"))!.querySelector("input")!);
     fireEvent.change(screen.getByLabelText("Survivorship rule"), { target: { value: "max_by_column" } });
     expect(screen.getByText("Choose a column to keep the highest value from.")).toBeInTheDocument();
