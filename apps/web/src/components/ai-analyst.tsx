@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { AiAnalystResponse } from "@prism/api-contracts";
 import { apiUrl } from "../config/api";
+import { notifyDesktop } from "../config/notify";
 import { newestAnalyticalObjectId } from "./analytical-history";
 import type { InspectorObjectState } from "../state/shell-model";
 
@@ -32,8 +33,8 @@ export function AiAnalyst({ datasetId, resultRunId, onSqlDraft, onSelectContext 
           if (event.event === "atlas.state") setState(String(event.data.state ?? "working"));
           if (event.event === "atlas.token") { setState("responding"); setAnswer((current) => current + String(event.data.token ?? "")); }
           if (event.event === "atlas.tool_wait") setState("sql_review_required");
-          if (event.event === "atlas.complete") { const completed = event.data as unknown as AiAnalystResponse; setResponse(completed); setAnswer(completed.answer); setState("complete"); if (completed.outcome === "answered") { void newestAnalyticalObjectId(completed.context.dataset_id, "evidence").then((analyticalObjectId) => onSelectContext({ objectId: completed.request_id, ...(analyticalObjectId ? { analyticalObjectId } : {}), label: "AI Analyst evidence", type: "finding", state: "ready", actions: [], metadata: [completed.provider, "Evidence-grounded"] })); } }
-          if (event.event === "atlas.failure") { setError(String(event.data.detail ?? "AI Analyst failed.")); setState("degraded"); }
+          if (event.event === "atlas.complete") { const completed = event.data as unknown as AiAnalystResponse; setResponse(completed); setAnswer(completed.answer); setState("complete"); void notifyDesktop("Prism — AI Analyst", completed.answer.length > 140 ? `${completed.answer.slice(0, 137)}…` : completed.answer); if (completed.outcome === "answered") { void newestAnalyticalObjectId(completed.context.dataset_id, "evidence").then((analyticalObjectId) => onSelectContext({ objectId: completed.request_id, ...(analyticalObjectId ? { analyticalObjectId } : {}), label: "AI Analyst evidence", type: "finding", state: "ready", actions: [], metadata: [completed.provider, "Evidence-grounded"] })); } }
+          if (event.event === "atlas.failure") { const detail = String(event.data.detail ?? "AI Analyst failed."); setError(detail); setState("degraded"); void notifyDesktop("Prism — AI Analyst", `Analysis failed: ${detail}`); }
           if (event.event === "atlas.cancelled") setState("cancelled");
         }
       }

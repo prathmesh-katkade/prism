@@ -1,5 +1,9 @@
 # Secrets
 .env
+# Tauri updater signing keypair -- never generate/keep this inside the repo
+# (see apps/desktop-shell/README.md), but ignore it here defensively anyway.
+apps/desktop-shell/**/*.key
+apps/desktop-shell/**/*.key.pub
 
 # Python
 __pycache__/
@@ -7,9 +11,20 @@ __pycache__/
 *.egg-info/
 .venv/
 .venv311/
+.venv_api/
 node_modules/
 .next/
 .turbo/
+# apps/web's static export -- apps/desktop-shell's Tauri config points
+# frontendDist straight at this (`npm run build:desktop --workspace=@prism/web`
+# rebuilds it); never committed.
+apps/web/out/
+# apps/api's PyInstaller sidecar binary (apps/api/build_sidecar.py rebuilds
+# it, ~150-500MB) -- never committed.
+apps/desktop-shell/src-tauri/binaries/
+apps/api/build/
+apps/api/dist/
+apps/api/*.spec
 .prism/work/
 .prism/runtime/
 .prism/*.sqlite

@@ -1,5 +1,92 @@
 # Clean Pattern Review v1 — release status
 
+## STATUS — 2026-10-10, desktop inspector-hierarchy pass (read this section first; supersedes everything below)
+
+**Starting point:** commit `33728f8` (branch `prism/clean-pattern-review-v1`), which already
+included the ultrawide-layout fixes (percentage-based sizing, the 2060px centred cap, the
+brown-gap fix, footer/floating-control alignment, the STEP-numbering/`editingStepIndex` fix and
+its regression test). This pass's job was the remaining substantive gap: the right inspector
+still put detailed mapping editing, Preview/Add-step, Recipe name and Save-as-recipe *before*
+impact/review information for an inspected or previewed step.
+
+**What changed in `clean-workspace.tsx` / `prism.css` / `prism-shell.tsx`:**
+1. Reordered the manual-step inspector to: step identity → operation/column → compact parameters
+   (always visible) → Preview → a collapsible `<details class="clean-mapping-editor">` holding the
+   detailed value-chip mapping editor / survivorship column picker (open while building, closes
+   automatically once that step has a preview, verified in a real browser - not just the `open`
+   attribute in jsdom) → Impact → Review card → the step-commit action (Add step to draft/Update
+   step N). Impact/review no longer requires scrolling past recipe-saving controls.
+2. Moved Recipe name and Save/"Save recipe changes" out of the per-step inspector form entirely,
+   onto the left recipe panel next to the existing "+ Add step" button, reusing the existing
+   `recipeName`/`setRecipeName`/`saveAsRecipe`/`recipeError` state and validation unchanged.
+3. Audited count labels in the new Impact/Review block: `exception_rows_total` was labelled
+   "unresolved value(s)" (a distinct-values phrasing for a row count) - relabelled to "exception
+   row(s)" to match what the field actually counts. Rows/distinct-values/exceptions are not
+   interchangeable; `columnValues.total_distinct` (genuinely distinct) and
+   `preview.unresolved_values.length` (genuinely distinct) were left as "distinct value(s)",
+   correctly.
+4. Checked "No report linked.": no dataset/clean-state field anywhere in this component, its
+   props, or the wider frontend carries a report association for the active dataset - the static
+   text was already honest, not hardcoded over a real association. Left unchanged.
+5. **A real, previously-undiscovered regression found by direct measurement, not assumed fixed by
+   inspection:** the fixed-position Clean apply bar and the floating Atlas presence bubble were
+   aligned to the local inspector column with a `calc(50vw - constant)` formula reverse-engineered
+   from one specific ultrawide viewport. The inspector column's width is a responsive
+   `clamp(290px, 20%, 330px)`, not a constant, so that formula only holds at the exact width it was
+   derived from. At an ordinary 1600px-wide window it left a ~40px gap between the footer/Atlas and
+   the inspector's real left edge, exposing the grid's brown line colour underneath - the same
+   visual defect class as the original brown-gap bug, just at a different width. Fixed by replacing
+   the fixed formula with a `ResizeObserver`/`MutationObserver`-driven measurement in
+   `prism-shell.tsx` that sets `--local-inspector-footer-left`, `--local-inspector-footer-right`
+   and `--local-inspector-atlas-right` from the inspector's actual rendered edges on every local-
+   inspector workspace (Clean, SQL Lab, Visualize, Reports), with the old formula kept only as the
+   `var()` fallback for first paint. Verified by direct pixel measurement at both 1600px (gap
+   closed to 0px) and 3440px (unchanged, gap still 0px) - screenshots in
+   `evidence/2026-10-10-inspector-hierarchy/`.
+
+**Gates run on this tree after the above edits:** lint, typecheck, `test:web` (120 passed, 0
+failed, 18 files - includes one new test asserting the Impact/Review-before-Add-step-to-draft
+ordering and the real-browser disclosure collapse), `build:web`, `a11y:baseline`: all clean.
+Ruff: clean except one pre-existing, untouched `apps/api/desktop_entry.py` import-order finding
+predating this branch (commit `bdf299d`). mypy: blocked by a pre-existing environment issue
+unrelated to this change (`anyio` ships a `match` statement that needs Python 3.10+, while this
+repo's mypy config pins `python_version = "3.9"`) - not caused by, or fixable within, this pass.
+Full pytest on an explicit isolated SQLite file
+(`PRISM_ANALYTICAL_HISTORY_DATABASE_URL=sqlite:///.../pytest-history.sqlite`, never the production
+database): **1368 passed, 7 skipped**, 0 failed. Boundaries, secrets, generated-contract check:
+clean. Desktop/mobile visual suite (`test:visual`): **8 passed, 6 failed** - see below. Live
+browser suite on an explicit isolated SQLite file (`test:e2e:live`): **13 passed, 10 failed, 5
+skipped** - see below.
+
+**The 6 `test:visual` failures and 10 `test:e2e:live` failures are a pre-existing, dated
+regression, not something introduced by this pass.** Every failure traced back to UI text/structure
+(e.g. a `heading` named "1 found" / "No issues detected" in `clean-visualize-live.spec.ts` and
+`pattern-review-live.spec.ts`) that no longer exists anywhere in the current component source
+(confirmed by grep - zero matches), plus unrelated colour-contrast and mobile-overflow findings in
+Stats/Forecasting/ML Lab/Atlas. `git log` on the failing spec files shows none of them have been
+touched since `5f9f528` ("style(clean): Phase 1 visual reconstruction against the approved
+reference"), 14 commits before this branch's starting point - the whole-sale Palette A / layout
+reconstruction that ran between the fourth-pass checkpoint below (`4390375`, which recorded this
+exact suite at 23/23/0) and `33728f8` changed the rendered UI enough to break these specs' text
+assertions, and nothing since has reconciled them. This pass's diff (`clean-workspace.tsx`,
+`clean-workspace.test.tsx`, `prism.css`, `prism-shell.tsx`) does not touch any of the failing spec
+files or the headings/components they assert on. Rewriting this suite against the current UI is a
+real, separate body of work, named here rather than hidden; it was not attempted in this pass.
+**No disposable-MySQL live suite is wired into this repository's `npm`/`pytest` scripts** - only
+SQLite is used for durable history (`history_database_url()` in `durable_registry.py`); a prior,
+unrelated Pattern Review task left ad hoc disposable-MySQL scratch scripts under `.prism/`, but
+there is no `test:e2e:live:mysql`-equivalent command for this change to run.
+
+**Desktop verification:** rebuilt `apps/desktop-shell` in debug mode from this exact tree; the
+packaged app's inspector hierarchy, disclosure-collapse behaviour and footer/Atlas alignment were
+re-verified against the dev-server Playwright measurements above (the packaged WebView2 shares the
+same `prism.css`/`clean-workspace.tsx` bundle). See the final report for the exact executable path
+and desktop screenshots.
+
+This pass did not touch Atlas, the desktop packaging/lifecycle code, or any file outside
+`apps/web/src/components/clean-workspace.tsx`, `apps/web/src/components/clean-workspace.test.tsx`,
+`apps/web/app/prism.css` and `apps/web/src/components/prism-shell.tsx`.
+
 ## FINAL status — 2026-10-09, fourth pass (read this section first; supersedes everything below)
 
 **Scope closed this pass:** the owner's explicit GUI-reference completion

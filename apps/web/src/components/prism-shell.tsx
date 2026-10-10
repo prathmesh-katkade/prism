@@ -17,6 +17,7 @@ import { EvidenceInspector } from "./evidence-inspector";
 import { HistoryWorkspace } from "./history-workspace";
 import { AtlasInvestigation } from "./atlas-investigation";
 import { AtlasStatusBadge } from "./atlas-status-badge";
+import { AiProviderBadge } from "./ai-provider-badge";
 import { parseAtlasHistoryQuery, type AtlasHistoryQuery } from "../state/atlas-history-link";
 import { EvolutionWorkspace } from "./evolution-workspace";
 import { migrationPresentation, phaseTwoMigrations, type InspectorObjectState, type ShellStatus, type WorkspaceTab } from "../state/shell-model";
@@ -178,6 +179,56 @@ export function PrismShell() {
     setSelectedContext(null);
   }
 
+  /** The fixed-position Clean apply bar and the floating Atlas presence bubble must line up
+   * with the local inspector column's real edges. The inspector column's width is a responsive
+   * clamp() (not a constant), so a single calc(50vw - constant) formula only holds at the exact
+   * viewport width it was derived from and drifts at every other width - this measures the
+   * actual rendered edges and feeds them in as CSS custom properties, with the old formula kept
+   * as the var() fallback for the first paint before this effect has run. */
+  useEffect(() => {
+    const isLocalInspector = ["clean", "sql-lab", "visualize", "reports"].includes(activeTab.kind);
+    const root = document.documentElement;
+    if (!isLocalInspector) {
+      root.style.removeProperty("--local-inspector-footer-left");
+      root.style.removeProperty("--local-inspector-footer-right");
+      root.style.removeProperty("--local-inspector-atlas-right");
+      return;
+    }
+    let resizeObserver: ResizeObserver | null = null;
+    let observedEl: Element | null = null;
+    const measure = () => {
+      const threePane = document.querySelector(".shell-body.has-local-inspector .three-pane");
+      const inspectorEl = threePane?.lastElementChild as HTMLElement | null | undefined;
+      if (!threePane || !inspectorEl) return;
+      const left = threePane.getBoundingClientRect().left;
+      const inspectorLeft = inspectorEl.getBoundingClientRect().left;
+      const footerRight = window.innerWidth - inspectorLeft;
+      root.style.setProperty("--local-inspector-footer-left", `${left}px`);
+      root.style.setProperty("--local-inspector-footer-right", `${footerRight}px`);
+      root.style.setProperty("--local-inspector-atlas-right", `${footerRight + 22}px`);
+    };
+    const attach = () => {
+      const threePane = document.querySelector(".shell-body.has-local-inspector .three-pane");
+      if (threePane && threePane !== observedEl) {
+        if (resizeObserver && observedEl) resizeObserver.unobserve(observedEl);
+        if (!resizeObserver) resizeObserver = new ResizeObserver(measure);
+        resizeObserver.observe(threePane);
+        observedEl = threePane;
+        measure();
+      }
+    };
+    attach();
+    const mutationObserver = new MutationObserver(attach);
+    const shellBody = document.querySelector(".shell-body");
+    if (shellBody) mutationObserver.observe(shellBody, { childList: true, subtree: true });
+    window.addEventListener("resize", measure);
+    return () => {
+      mutationObserver.disconnect();
+      resizeObserver?.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [activeTab.kind]);
+
   /** Roving-tabindex arrow navigation for the tablist (WAI-ARIA tabs pattern, automatic activation).
    * Delete/Backspace closes the focused tab: the visual "×" button is a pointer-only shortcut
    * (aria-hidden, not in the tab order) so the tablist's accessible children stay exclusively
@@ -221,6 +272,7 @@ export function PrismShell() {
         <div className="project-crumb"><span className="status-dot" /> <strong>Untitled research</strong><span>Local workspace</span></div>
         <div className="top-actions">
           <AtlasStatusBadge />
+          <AiProviderBadge />
           <button className="command-trigger" ref={commandTrigger} onClick={() => setCommandOpen(true)} aria-haspopup="dialog"><Icon name="command" /> <span>Command surface</span><kbd>⌘ K</kbd></button>
           <button className="icon-button" aria-label={`Switch to ${layout.theme === "dark" ? "light" : "dark"} theme`} onClick={() => updateLayout({ theme: layout.theme === "dark" ? "light" : "dark" })}><Icon name={layout.theme === "dark" ? "sun" : "moon"} /></button>
         </div>
