@@ -666,17 +666,25 @@ describe("Clean workspace", () => {
     fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "category_mapping" } });
     fireEvent.change(screen.getByLabelText("Column"), { target: { value: "region" } });
 
-    await waitFor(() => expect(screen.getByText("Bangalore")).toBeInTheDocument());
-    expect(screen.getByText("BENGALURU")).toBeInTheDocument();
+    // The unified mapping table shows both the bulk-select chips and the
+    // per-row editable table together - scope queries to the chips for the
+    // bulk-select interaction and to the table for the row-level result.
+    const getChips = () => document.querySelector(".clean-value-chips")! as HTMLElement;
+    await waitFor(() => expect(within(getChips()).getByText("Bangalore")).toBeInTheDocument());
+    const chips = getChips();
+    expect(within(chips).getByText("BENGALURU")).toBeInTheDocument();
 
-    const bangaloreCheckbox = screen.getByText("Bangalore").closest("label")!.querySelector("input")!;
-    const bengaluruVariantCheckbox = screen.getByText("BENGALURU").closest("label")!.querySelector("input")!;
+    const bangaloreCheckbox = within(chips).getByText("Bangalore").closest("label")!.querySelector("input")!;
+    const bengaluruVariantCheckbox = within(chips).getByText("BENGALURU").closest("label")!.querySelector("input")!;
     fireEvent.click(bangaloreCheckbox);
     fireEvent.click(bengaluruVariantCheckbox);
     fireEvent.change(screen.getByLabelText("Map selected values to"), { target: { value: "Bengaluru" } });
-    fireEvent.click(screen.getByRole("button", { name: "Assign mapping" }));
+    fireEvent.click(screen.getByRole("button", { name: "Assign mapping to selected" }));
 
-    expect(within(document.querySelector(".clean-mapping-summary")!).getAllByText("Bengaluru", { selector: "code" })).toHaveLength(2); // one mapping-summary row per assigned source value
+    // Assigning in bulk updates both mapped rows in the same table a
+    // single-row edit would use - one real surface, not two.
+    expect(screen.getByLabelText("Proposed value for Bangalore")).toHaveValue("Bengaluru");
+    expect(screen.getByLabelText("Proposed value for BENGALURU")).toHaveValue("Bengaluru");
     fireEvent.click(screen.getByRole("button", { name: "Preview" }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/preview"), expect.objectContaining({ method: "POST" })));

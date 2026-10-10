@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import type { AtlasCleanResponse, CleanIssue, CleanOperation, CleanPreviewResponse, CleanRecipe, CleanRecipeDraftPreviewResponse, CleanRecipePreviewResponse, CleanRecipeStep, CleanRowInspection, CleanStateResponse, CleanTransformationRequest, ColumnValueCount, ColumnValueCountsResponse, DatasetRowsResponse, FillStrategy, OverviewProfileResponse, PatternExceptionPage, PatternFamily, PatternFinding, PatternReviewDecision, PatternReviewDecisionKind, PatternVerifyJobStatus, ValidationRule, ValidationRuleKind, ValidationRunResult } from "@prism/api-contracts";
+import type { AtlasCleanResponse, CleanIssue, CleanOperation, CleanPreviewResponse, CleanRecipe, CleanRecipeDraftPreviewResponse, CleanRecipePreviewResponse, CleanRecipeStep, CleanRowInspection, CleanStateResponse, CleanTransformationRequest, ColumnValueCountsResponse, DatasetRowsResponse, FillStrategy, OverviewProfileResponse, PatternExceptionPage, PatternFamily, PatternFinding, PatternReviewDecision, PatternReviewDecisionKind, PatternVerifyJobStatus, ValidationRule, ValidationRuleKind, ValidationRunResult } from "@prism/api-contracts";
 import { apiUrl } from "../config/api";
 import type { InspectorObjectState } from "../state/shell-model";
 import { AtlasCharacter, type AtlasPose } from "./atlas-character";
@@ -308,18 +308,16 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
 
   function assignCategoryMapping() {
     if (!categoryTarget.trim() || categorySelected.size === 0) return;
-    invalidateManualPreview();
-    setCategoryMapping((current) => {
-      const next = { ...current };
-      for (const value of categorySelected) next[value] = categoryTarget.trim();
-      return next;
-    });
+    const next = { ...categoryMapping };
+    for (const value of categorySelected) next[value] = categoryTarget.trim();
+    setCategoryMapping(next);
+    // The unified mapping table's bulk-assign is reachable both before and
+    // after a preview exists - recompute immediately in the same cases a
+    // single-row edit (setMappingTarget) already does, rather than leave a
+    // live preview showing numbers for a mapping that no longer matches.
+    if (pendingRequest && pendingRequest.operation === "category_mapping") void previewOperation({ ...pendingRequest, category_mapping: next });
+    else invalidateManualPreview();
     setCategorySelected(new Set()); setCategoryTarget("");
-  }
-
-  function removeCategoryMapping(sourceValue: string) {
-    invalidateManualPreview();
-    setCategoryMapping((current) => { const next = { ...current }; delete next[sourceValue]; return next; });
   }
 
   /** Editing a proposed value directly in the review table — not just the
@@ -331,6 +329,21 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
     if (target.trim()) nextMapping[source] = target.trim(); else delete nextMapping[source];
     setCategoryMapping(nextMapping);
     void previewOperation({ ...pendingRequest, category_mapping: nextMapping });
+  }
+
+  /** The one real entry point every row of the unified mapping table edits
+   * through, whether or not a preview exists yet: with a live preview, the
+   * edit recomputes it immediately (updateMappingTarget, unchanged); before
+   * one exists, it just updates the mapping and marks any now-mismatched
+   * preview stale, the same as every other parameter edit. */
+  function setMappingTarget(source: string, target: string) {
+    if (pendingRequest && pendingRequest.operation === "category_mapping") { updateMappingTarget(source, target); return; }
+    invalidateManualPreview();
+    setCategoryMapping((current) => {
+      const next = { ...current };
+      if (target.trim()) next[source] = target.trim(); else delete next[source];
+      return next;
+    });
   }
 
   function toggleCategorySelected(value: string) {
@@ -705,6 +718,33 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
   // dock panel itself is actually mid-request (that pose lives there).
   const atlasPose: AtlasPose = manualMode || selectedIssue || selectedFinding ? "idle" : "waiting";
 
+  /** The one mapping table, used identically before and after a preview
+   * exists - previously these were two visually different surfaces (a
+   * chip-select-and-bulk-assign list pre-preview, a separate inline-
+   * editable table post-preview). Every row edits through setMappingTarget,
+   * which already does the right thing (recompute immediately if a preview
+   * is live, just update and mark stale otherwise) regardless of which
+   * state this renders in. */
+  function renderMappingTable(values: ReadonlyArray<{ value: string; count?: number }>) {
+    return <>
+      <div className="clean-mapping-bulk">
+        <ul className="clean-value-chips">{values.map((item) => <li key={item.value}><label className={categorySelected.has(item.value) ? "is-selected" : categoryMapping[item.value] ? "is-mapped" : ""}><input type="checkbox" checked={categorySelected.has(item.value)} onChange={() => toggleCategorySelected(item.value)} /> <span>{item.value}</span>{item.count !== undefined ? <small>{item.count.toLocaleString()}</small> : null}</label></li>)}</ul>
+        <label>Map selected to<input aria-label="Map selected values to" value={categoryTarget} onChange={(event) => setCategoryTarget(event.target.value)} placeholder="e.g. Bengaluru" /></label>
+        <button type="button" className="secondary" disabled={categorySelected.size === 0 || !categoryTarget.trim()} onClick={assignCategoryMapping}>Assign mapping to selected</button>
+      </div>
+      <div className="data-table-wrap clean-mapping-review" tabIndex={0}><table><thead><tr><th>Source value</th><th>Proposed value</th><th>Rows</th><th>Status</th></tr></thead><tbody>{values.map((item) => {
+        const target = categoryMapping[item.value] ?? "";
+        const mapped = Boolean(target);
+        return <tr key={item.value}>
+          <td>{item.value}</td>
+          <td><input key={`${item.value}:${target}`} className="clean-mapping-target-input" list="clean-mapping-target-options" aria-label={`Proposed value for ${item.value}`} defaultValue={target} placeholder="Needs a value…" onBlur={(event) => { if (event.target.value !== target) setMappingTarget(item.value, event.target.value); }} /></td>
+          <td>{item.count === undefined ? "—" : item.count.toLocaleString()}</td>
+          <td>{mapped ? <span className="health-pill good">Will change</span> : <span className="health-pill warn">Needs decision</span>}</td>
+        </tr>;
+      })}</tbody></table><datalist id="clean-mapping-target-options">{Array.from(new Set(Object.values(categoryMapping))).map((value) => <option key={value} value={value} />)}</datalist></div>
+    </>;
+  }
+
   return <article className="clean-workspace three-pane">
     <header className="clean-dataset-header">
       <div><span className="eyebrow">Source: {clean.dataset.source_name}</span><h1>{preview?.operation === "category_mapping" ? "Review category mapping" : "Clean dataset"}</h1><p>{clean.dataset.row_count.toLocaleString()} rows · {clean.dataset.column_count} columns · revision {clean.dataset.revision}</p></div>
@@ -858,16 +898,7 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
         {reviewView === "changes" ? <>
           <p className="clean-preview-summary">{preview.operation.replaceAll("_", " ")} affects <strong>{(preview.changed_rows_total ?? preview.affected_rows).toLocaleString()}</strong> row(s){(preview.affected_columns ?? []).length ? ` in ${(preview.affected_columns ?? []).join(", ")}` : ""}. Projected health <strong>{preview.projected_health.total}/100</strong> (currently {clean.health.total}/100).</p>
           <div className="clean-impact-summary"><div><strong>{(preview.changed_rows_total ?? preview.affected_rows).toLocaleString()}</strong><span>affected rows</span></div><div><strong>{Object.keys(pendingRequest?.category_mapping ?? {}).length.toLocaleString()}</strong><span>mapped labels</span></div><div><strong>{(preview.exception_rows_total ?? 0).toLocaleString()}</strong><span>exceptions</span></div></div>
-          {preview.operation === "category_mapping" && pendingRequest ? <div className="data-table-wrap clean-mapping-review" tabIndex={0}><table><thead><tr><th>Source value</th><th>Proposed value</th><th>Rows</th><th>Status</th></tr></thead><tbody>{(columnValues?.values ?? Object.keys(pendingRequest.category_mapping ?? {}).map((value) => ({ value, count: undefined as unknown as number }))).map((item) => {
-            const target = pendingRequest.category_mapping?.[item.value] ?? "";
-            const mapped = Boolean(target);
-            return <tr key={item.value}>
-              <td>{item.value}</td>
-              <td><input key={`${item.value}:${target}`} className="clean-mapping-target-input" list="clean-mapping-target-options" aria-label={`Proposed value for ${item.value}`} defaultValue={target} placeholder="Needs a value…" onBlur={(event) => { if (event.target.value !== target) updateMappingTarget(item.value, event.target.value); }} /></td>
-              <td>{item.count === undefined ? "—" : item.count.toLocaleString()}</td>
-              <td>{mapped ? <span className="health-pill good">Will change</span> : <span className="health-pill warn">Needs decision</span>}</td>
-            </tr>;
-          })}</tbody></table><datalist id="clean-mapping-target-options">{Array.from(new Set(Object.values(pendingRequest.category_mapping ?? {}))).map((value) => <option key={value} value={value} />)}</datalist></div> : null}
+          {preview.operation === "category_mapping" && pendingRequest ? renderMappingTable(columnValues?.values ?? Object.keys(pendingRequest.category_mapping ?? {}).map((value) => ({ value }))) : null}
           {(preview.warnings ?? []).length ? <ul className="clean-warnings">{(preview.warnings ?? []).map((warning) => <li key={warning}>{warning}</li>)}</ul> : null}
           <div className="clean-review-tabs is-underline" role="tablist" aria-label="Inspect review results"><button role="tab" aria-selected={reviewRowsView === "affected"} onClick={() => setReviewRowsView("affected")}>Affected rows ({(preview.changed_rows_total ?? preview.affected_rows).toLocaleString()})</button><button role="tab" aria-selected={reviewRowsView === "exceptions"} onClick={() => setReviewRowsView("exceptions")}>Exceptions ({(preview.exception_rows_total ?? 0).toLocaleString()})</button><button role="tab" aria-selected={reviewRowsView === "validation"} onClick={() => setReviewRowsView("validation")}>Validation</button></div>
           {reviewRowsView === "affected" ? <InspectionTable rows={preview.changed_rows ?? []} total={preview.changed_rows_total ?? preview.affected_rows} /> : null}
@@ -915,11 +946,8 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
       </> : manualMode && manualOperation === "category_mapping" ? <div className="clean-centre-editor">
         <div className="section-title"><div><span className="eyebrow">MAPPING EDITOR</span><h2>Map source values to targets</h2></div></div>
         {columnValues ? <>
-          <p className="quiet-note">{columnValues.total_distinct.toLocaleString()} distinct value(s) in {manualColumn || "the selected column"}{columnValues.truncated ? ` (showing the top ${columnValues.values.length})` : ""}. Select source values, name what they should become, then assign. Operation-wide settings (case sensitivity, unmatched values) are on the right.</p>
-          <ul className="clean-value-chips">{columnValues.values.map((item: ColumnValueCount) => <li key={item.value}><label className={categorySelected.has(item.value) ? "is-selected" : categoryMapping[item.value] ? "is-mapped" : ""}><input type="checkbox" checked={categorySelected.has(item.value)} onChange={() => toggleCategorySelected(item.value)} /> <span>{item.value}</span> <small>{item.count.toLocaleString()}</small></label></li>)}</ul>
-          <label>Map selected to<input aria-label="Map selected values to" value={categoryTarget} onChange={(event) => setCategoryTarget(event.target.value)} placeholder="e.g. Bengaluru" /></label>
-          <button type="button" className="secondary" disabled={categorySelected.size === 0 || !categoryTarget.trim()} onClick={assignCategoryMapping}>Assign mapping</button>
-          {Object.keys(categoryMapping).length ? <ul className="clean-mapping-summary">{Object.entries(categoryMapping).map(([source, target]) => <li key={source}><code>{source}</code> → <code>{target}</code><button type="button" className="secondary" aria-label={`Remove mapping for ${source}`} onClick={() => removeCategoryMapping(source)}>×</button></li>)}</ul> : <p className="quiet-note">No values mapped yet.</p>}
+          <p className="quiet-note">{columnValues.total_distinct.toLocaleString()} distinct value(s) in {manualColumn || "the selected column"}{columnValues.truncated ? ` (showing the top ${columnValues.values.length})` : ""}. Select several and assign them all at once, or type a value directly into a row. Operation-wide settings (case sensitivity, unmatched values) are on the right.</p>
+          {renderMappingTable(columnValues.values)}
         </> : <p className="quiet-note">{manualColumn ? "Loading distinct values…" : "Choose a column on the right to see its distinct values here."}</p>}
       </div> : manualMode && manualOperation === "deduplicate_survivorship" ? <div className="clean-centre-editor">
         <div className="section-title"><div><span className="eyebrow">GROUPING COLUMNS</span><h2>Choose columns that define a duplicate</h2></div></div>

@@ -28,6 +28,12 @@ export function AtlasCharacter({ pose = "idle", size = "small", className }: { p
           reference without needing a raster asset. */}
       <rect className="atlas-card atlas-card-back" x="20" y="14" width="56" height="64" rx="12" />
       <rect className="atlas-card atlas-card-mid" x="14" y="10" width="60" height="68" rx="12" />
+      {/* Small stubby limbs, matching the reference's silhouette - present
+          behind the face card so they read as attached to it, not floating. */}
+      <rect className="atlas-limb" x="2" y="46" width="12" height="9" rx="4.5" />
+      <rect className="atlas-limb" x="82" y="46" width="12" height="9" rx="4.5" />
+      <rect className="atlas-limb" x="26" y="76" width="11" height="10" rx="5" />
+      <rect className="atlas-limb" x="59" y="76" width="11" height="10" rx="5" />
       <rect className="atlas-card atlas-card-face" x="10" y="8" width="64" height="70" rx="13" />
       <FaceFeatures pose={pose} />
     </svg>

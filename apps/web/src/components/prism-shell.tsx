@@ -197,11 +197,27 @@ export function PrismShell() {
     let resizeObserver: ResizeObserver | null = null;
     let observedEl: Element | null = null;
     const measure = () => {
-      const threePane = document.querySelector(".shell-body.has-local-inspector .three-pane");
+      const threePane = document.querySelector(".shell-body.has-local-inspector .three-pane") as HTMLElement | null;
       const inspectorEl = threePane?.lastElementChild as HTMLElement | null | undefined;
       if (!threePane || !inspectorEl) return;
-      const left = threePane.getBoundingClientRect().left;
-      const inspectorLeft = inspectorEl.getBoundingClientRect().left;
+      const threePaneRect = threePane.getBoundingClientRect();
+      const inspectorRect = inspectorEl.getBoundingClientRect();
+      // Below the narrow-layout breakpoint the three-pane collapses to a
+      // single column (its own @container query) - the inspector then
+      // spans nearly the full width instead of sitting beside the other
+      // panes, so "right offset = viewport width - inspector's left edge"
+      // stops meaning anything and previously squeezed the fixed apply bar
+      // to a near-zero width with overflowing, overlapping text. Clear the
+      // override in that case and let the plain @media (max-width:760px)
+      // rule (left:54px;right:0) size it correctly instead.
+      if (inspectorRect.width >= threePaneRect.width * 0.9) {
+        root.style.removeProperty("--local-inspector-footer-left");
+        root.style.removeProperty("--local-inspector-footer-right");
+        root.style.removeProperty("--local-inspector-atlas-right");
+        return;
+      }
+      const left = threePaneRect.left;
+      const inspectorLeft = inspectorRect.left;
       const footerRight = window.innerWidth - inspectorLeft;
       root.style.setProperty("--local-inspector-footer-left", `${left}px`);
       root.style.setProperty("--local-inspector-footer-right", `${footerRight}px`);
