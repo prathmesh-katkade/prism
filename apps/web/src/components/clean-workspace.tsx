@@ -922,14 +922,20 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
         <button type="button" role="tab" aria-selected={inspectorTab === "atlas"} className={inspectorTab === "atlas" ? "is-selected" : ""} onClick={() => setInspectorTab("atlas")}><AtlasCharacter pose={atlasPose} size="small" />Atlas</button>
         <button type="button" role="tab" aria-selected={inspectorTab === "settings"} className={inspectorTab === "settings" ? "is-selected" : ""} onClick={() => setInspectorTab("settings")}>Step settings</button>
       </div>
-      {inspectorTab === "atlas" ? <AtlasDockPanel
-        datasetId={datasetId}
-        datasetName={clean.dataset.source_name}
-        revision={clean.dataset.revision}
-        focusLabel={manualMode ? (manualSpec?.label ?? manualOperation.replaceAll("_", " ")) : selectedIssue ? (selectedIssue.column ?? "Dataset issue") : selectedFinding ? selectedFinding.column : "No step selected"}
-        column={manualMode ? manualColumn || null : selectedIssue?.column ?? selectedFinding?.column ?? null}
-        onReview={(proposal) => { if (proposal.clean_operation) { setManualMode(true); setInspectorTab("settings"); void previewOperation(proposal.clean_operation); } }}
-      /> : <>
+      {/* Both tabs stay mounted (hidden via the `hidden` attribute, not
+          conditionally rendered) so switching tabs never discards Atlas's
+          in-session conversation state or any Step-settings form state. */}
+      <div hidden={inspectorTab !== "atlas"}>
+        <AtlasDockPanel
+          datasetId={datasetId}
+          datasetName={clean.dataset.source_name}
+          revision={clean.dataset.revision}
+          focusLabel={manualMode ? (manualSpec?.label ?? manualOperation.replaceAll("_", " ")) : selectedIssue ? (selectedIssue.column ?? "Dataset issue") : selectedFinding ? selectedFinding.column : "No step selected"}
+          column={manualMode ? manualColumn || null : selectedIssue?.column ?? selectedFinding?.column ?? null}
+          onReview={(proposal) => { if (proposal.clean_operation) { setManualMode(true); setInspectorTab("settings"); void previewOperation(proposal.clean_operation); } }}
+        />
+      </div>
+      <div hidden={inspectorTab !== "settings"}>
       {recipePreview ? <>
         <div className="inspector-heading"><div><span className="eyebrow">REVIEWED RECIPE</span><h2>Ready for your decision</h2></div></div>
         <p>Version {recipePreview.recipe_version} was reviewed against source revision {recipePreview.source_revision}. Apply the reviewed recipe in the recipe list, or discard its preview there. No data has changed.</p>
@@ -1041,7 +1047,7 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
         <p className="quiet-note">No report linked.</p>
         <button type="button" className="secondary" onClick={() => onOpenWorkflow("reports")}>Open Reports</button>
       </div>
-      </>}
+      </div>
     </aside>
   </article>;
 }

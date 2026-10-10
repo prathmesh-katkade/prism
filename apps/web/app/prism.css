@@ -133,8 +133,20 @@
 .atlas-dock-chips li { padding:4px 9px;border:1px solid var(--line);border-radius:999px;background:var(--surface-raised);color:var(--muted);font:11px var(--mono); }
 .atlas-dock-starters { display:grid;gap:6px; }
 .atlas-dock-starters button { width:100%;text-align:left;padding:8px 10px;border-radius:4px; }
+.atlas-dock-turns { display:grid;gap:14px;margin:0;padding:0;list-style:none; }
+.atlas-dock-turns > li { display:grid;gap:7px;padding-top:12px;border-top:1px solid var(--line-soft); }
+.atlas-dock-turns > li:first-child { padding-top:0;border-top:0; }
+.atlas-dock-ask { margin:0;color:var(--text);font-weight:600;font-size:13px; }
+.atlas-dock-stale-note { margin:0;padding:7px 9px;border:1px solid var(--line);border-radius:4px;background:var(--surface-raised);color:var(--muted);font-size:11px;line-height:1.4; }
+.atlas-dock-turns > li.is-stale .atlas-dock-message { opacity:.6; }
 .atlas-dock-message { display:grid;gap:7px;padding:12px;border-left:2px solid var(--accent);background:var(--surface-raised); }
 .atlas-dock-message ul { margin:0;padding-left:16px;color:var(--muted);font-size:12px;line-height:1.5; }
+.atlas-dock-message button.secondary { justify-self:start; }
+.atlas-dock-message > button:not(.secondary) { justify-self:start;padding:8px 12px;border-radius:4px;border:1px solid var(--text);background:var(--text);color:var(--canvas);font-weight:650;cursor:pointer; }
+.atlas-dock-computed { display:grid;gap:3px;margin-top:2px;padding:9px;border-left:2px solid var(--good);background:var(--surface); }
+.atlas-dock-computed p { margin:0;font-size:12px;color:var(--text); }
+.atlas-dock-computed p.atlas-dock-ambiguity { margin-top:4px;color:var(--muted); }
+.atlas-dock-computed strong.is-amber { color:var(--amber); }
 .atlas-dock-input { display:grid;gap:6px; }
 .atlas-dock-input label { display:grid;gap:5px;color:var(--faint);font:10px var(--mono);letter-spacing:.06em;text-transform:uppercase; }
 .atlas-dock-input textarea { min-height:64px;resize:vertical;padding:9px;background:var(--surface-raised);border:1px solid var(--line);border-radius:4px;color:var(--text);font:13px/1.5 var(--sans); }

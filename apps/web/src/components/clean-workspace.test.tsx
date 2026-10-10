@@ -229,6 +229,109 @@ describe("Clean workspace", () => {
     expect(screen.getByLabelText("Column")).toHaveValue("notes");
   });
 
+  it("keeps a multi-turn Atlas conversation across tab switches, shows the real deterministic preview distinctly from the model's text, and marks a turn stale once the dataset revision moves past it", async () => {
+    let applied = false;
+    const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path.endsWith("/state")) return applied ? json({ dataset: dataset1, issues: [], history: [{ transformation_id: "t1", operation: "trim_whitespace", column: "notes", parameters: {}, affected_rows: 1, affected_columns: ["notes"], source_revision: 0, resulting_revision: 1, source_fingerprint: dataset0.source_fingerprint, resulting_fingerprint: "b".repeat(64), reversible: true, created_at: "2026-08-28T00:00:00Z" }], health }) : json({ dataset: dataset0, issues: [], history: [], health });
+      if (path.includes("/rows")) return json(rowsPage);
+      if (path.includes("/profile")) return json({ columns: [{ name: "notes", semantic_type: "text" }] });
+      if (path.includes("/recipes")) return json([]);
+      if (path.endsWith("/preview")) return json({ operation: "trim_whitespace", review_token: "review_manual", source_revision: 0, affected_rows: 1, affected_columns: ["notes"], before_sample: [], after_sample: [], warnings: [], projected_health: health });
+      if (path.endsWith("/apply")) { applied = true; return json({ dataset: dataset1, transformation: { transformation_id: "t1", operation: "trim_whitespace", column: "notes", parameters: {}, affected_rows: 1, affected_columns: ["notes"], source_revision: 0, resulting_revision: 1, source_fingerprint: dataset0.source_fingerprint, resulting_fingerprint: "b".repeat(64), reversible: true, created_at: "2026-08-28T00:00:00Z" }, issues: [], health }, 201); }
+      if (path.endsWith("/workspace-proposals")) {
+        const body = JSON.parse(String(init?.body ?? "{}"));
+        if (body.intent === "first question") return json({ provider: "ollama", explanation: "First explanation.", evidence: [], clean_operation: { operation: "trim_whitespace", column: "notes" }, clean_preview: { operation: "trim_whitespace", review_token: "r1", source_revision: 0, affected_rows: 3, changed_rows_total: 3, exception_rows_total: 2, affected_columns: ["notes"], before_sample: [], after_sample: [], warnings: [], projected_health: health } });
+        return json({ provider: "ollama", explanation: "Second explanation.", evidence: [], clean_operation: { operation: "trim_whitespace", column: "notes" } });
+      }
+      return json({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText(/Rows 1–5 of 5/)).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("tab", { name: /Atlas/ }));
+    fireEvent.change(screen.getByLabelText("Ask Atlas"), { target: { value: "first question" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ask Atlas" }));
+    await waitFor(() => expect(screen.getByText("First explanation.")).toBeInTheDocument());
+
+    // The real, deterministically computed preview (from the same preview
+    // engine manual operations use) is shown distinctly from the model's
+    // own prose - never presented as if the model computed it.
+    const computed = document.querySelector(".atlas-dock-computed")! as HTMLElement;
+    expect(within(computed).getByText("PRISM computed this deterministically")).toBeInTheDocument();
+    expect(within(computed).getByText(/3/)).toBeInTheDocument();
+    expect(within(computed).getByText(/2/)).toBeInTheDocument(); // the 2 exceptions needing a decision
+
+    // A second question in the same session is a new turn, not a replacement.
+    fireEvent.change(screen.getByLabelText("Ask Atlas"), { target: { value: "second question" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ask Atlas" }));
+    await waitFor(() => expect(screen.getByText("Second explanation.")).toBeInTheDocument());
+    expect(screen.getByText("First explanation.")).toBeInTheDocument(); // still there, not discarded
+
+    // Switching tabs away and back must not drop the conversation - the
+    // dock stays mounted (hidden, not unmounted) specifically for this.
+    fireEvent.click(screen.getByRole("tab", { name: "Step settings" }));
+    fireEvent.click(screen.getByRole("tab", { name: /Atlas/ }));
+    expect(screen.getByText("First explanation.")).toBeInTheDocument();
+    expect(screen.getByText("Second explanation.")).toBeInTheDocument();
+
+    // Applying a step elsewhere moves the dataset to revision 1. Both turns
+    // were asked against revision 0 - they must now read as stale rather
+    // than silently looking current.
+    fireEvent.click(screen.getByRole("tab", { name: "Step settings" }));
+    fireEvent.click(screen.getByRole("button", { name: "+ Add step" }));
+    fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "trim_whitespace" } });
+    fireEvent.change(screen.getByLabelText("Column"), { target: { value: "notes" } });
+    fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Apply reviewed change" })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Apply reviewed change" }));
+    await waitFor(() => expect(screen.getByText("4 rows · 3 columns · revision 1")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("tab", { name: /Atlas/ }));
+    const staleNotes = document.querySelectorAll(".atlas-dock-stale-note");
+    expect(staleNotes.length).toBe(2);
+    expect(staleNotes[0]!.textContent).toMatch(/revision 0.*now at revision 1/);
+  });
+
+  it("lets an in-flight Atlas request be genuinely cancelled, not just visually hidden", async () => {
+    const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path.endsWith("/state")) return json({ dataset: dataset0, issues: [], history: [], health });
+      if (path.includes("/rows")) return json(rowsPage);
+      if (path.includes("/profile")) return json({ columns: [] });
+      if (path.includes("/recipes")) return json([]);
+      if (path.endsWith("/workspace-proposals")) {
+        // Never resolves on its own - mirrors what a real fetch does: it
+        // settles only if the server responds, or if its own AbortSignal
+        // fires. Rejecting here specifically when the signal aborts is what
+        // makes this test prove the component's AbortController actually
+        // tore down the request, not just hid its UI.
+        return new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")));
+        });
+      }
+      return json({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText(/Rows 1–5 of 5/)).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("tab", { name: /Atlas/ }));
+    fireEvent.change(screen.getByLabelText("Ask Atlas"), { target: { value: "a slow question" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ask Atlas" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.getByText("Cancelled.")).toBeInTheDocument());
+
+    // The request's own AbortSignal actually fired - this is real
+    // cancellation of the in-flight fetch, not just hiding a spinner while
+    // the request silently completes in the background.
+    const [, init] = fetchMock.mock.calls.find(([url]) => String(url).includes("/workspace-proposals"))!;
+    expect((init as RequestInit).signal?.aborted).toBe(true);
+  });
+
   it("switches the inspector away from a selected pattern finding when starting a manual operation or selecting an issue, instead of leaving it stuck on the old finding", async () => {
     const finding = { finding_id: "find_1", dataset_id: "ds_1", column: "invoice_id", detector_kind: "identifier_structure", detector_version: 1, source_revision: 0, source_fingerprint: dataset0.source_fingerprint, rows_examined: 5, total_rows: 5, sampling_method: "bounded_sample", verified: false, families: [{ family_signature: "sig1", label: "3 letters, '-', 6 digits", matching_count: 3, example_values: ["INV-000123"] }], missing_count: 0, exception_count: 2, created_at: "2026-08-28T00:00:00Z" };
     const fetchMock = vi.fn(async (input: string | URL) => {
