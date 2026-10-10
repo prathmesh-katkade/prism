@@ -982,10 +982,23 @@ class VisualizationSuggestion(ContractModel):
     alternatives: list[VizMark] = Field(default_factory=list)
 
 
+class WorkspaceProposalHistoryEntry(ContractModel):
+    """One prior turn of the same bounded conversation, sent back so a
+    follow-up question has real context - never stored or replayed beyond
+    what the caller itself sends for this one request."""
+
+    intent: str = Field(min_length=1, max_length=500)
+    explanation: str = Field(min_length=1, max_length=500)
+
+
 class WorkspaceProposalRequest(ContractModel):
     kind: Literal["clean", "chart", "sql"]
     dataset_id: str = Field(min_length=1)
     intent: str = Field(min_length=3, max_length=500)
+    expected_revision: Optional[int] = Field(default=None, ge=0)
+    selected_operation: Optional[str] = Field(default=None, max_length=80)
+    selected_column: Optional[str] = Field(default=None, max_length=200)
+    history: list[WorkspaceProposalHistoryEntry] = Field(default_factory=list, max_length=5)
 
 
 class WorkspaceProposalResponse(ContractModel):

@@ -2526,10 +2526,19 @@ export type VizMark = "bar" | "horizontal_bar" | "line" | "scatter" | "histogram
 
 export type VizSortBy = "value_desc" | "value_asc" | "label_asc" | "label_desc";
 
+export interface WorkspaceProposalHistoryEntry {
+  intent: string;
+  explanation: string;
+}
+
 export interface WorkspaceProposalRequest {
   kind: "clean" | "chart" | "sql";
   dataset_id: string;
   intent: string;
+  expected_revision?: number;
+  selected_operation?: string;
+  selected_column?: string;
+  history?: WorkspaceProposalHistoryEntry[];
 }
 
 export interface WorkspaceProposalResponse {

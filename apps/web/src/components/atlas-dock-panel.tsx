@@ -13,15 +13,20 @@
  * unmounted) while the Atlas/Step-settings tab is inactive specifically so
  * switching tabs never discards it - see clean-workspace.tsx.
  *
- * What this intentionally does NOT do, investigated rather than assumed:
- * persist this conversation across a reload/restart. The only durable
- * store available (`AnalyticalObject` / `ObjectKind.CLEANING_PLAN`) is
- * already used for *applied* Clean transformations; writing unapplied
- * proposals into the same bucket would corrupt what downstream lineage/
- * evidence consumers already assume CLEANING_PLAN means, and adding a new
+ * Persistence: each dataset's conversation is mirrored to this browser's
+ * localStorage (`atlas-dock:<dataset_id>`), so it survives a page reload
+ * or an app restart - real resumable state, not just in-memory. This is a
+ * deliberately smaller, safer choice than backend persistence, investigated
+ * rather than assumed: the only backend durable store available
+ * (`AnalyticalObject` / `ObjectKind.CLEANING_PLAN`) already means "applied
+ * transformation" to every existing lineage consumer, and adding a new
  * ObjectKind is a shared-schema change (rippling through the generated
- * TypeScript contract and every consumer) too large for this pass. Named
- * here, not silently skipped - see docs/clean-atlas-v1/phase-3 status.
+ * TypeScript contract and every consumer) too large for this pass - see
+ * docs/clean-atlas-v1/phase-3 status for the full account. localStorage is
+ * per-browser-profile, not cross-device - named honestly, not hidden. A
+ * turn that was still "pending" when the page closed cannot have survived
+ * (its in-flight request is gone with the old page); it's restored as
+ * "interrupted" rather than silently re-shown as if still loading.
  */
 import { useEffect, useRef, useState } from "react";
 import type { WorkspaceProposalResponse } from "@prism/api-contracts";
@@ -29,37 +34,71 @@ import { apiUrl } from "../config/api";
 import { AtlasCharacter, type AtlasPose } from "./atlas-character";
 
 const STARTER_QUESTIONS = ["What should I review first?", "Explain the current step", "Suggest a cleanup for this column"];
+const HISTORY_LIMIT = 3;
+const STORED_TURNS_LIMIT = 20;
 
 type Turn = {
   id: string;
   intent: string;
   revision: number;
-  status: "pending" | "done" | "error" | "cancelled";
+  status: "pending" | "done" | "error" | "cancelled" | "interrupted";
   response?: WorkspaceProposalResponse;
   error?: string;
 };
 
+function storageKey(datasetId: string): string { return `atlas-dock:${datasetId}`; }
+
+function loadStoredTurns(datasetId: string): Turn[] {
+  try {
+    const raw = window.localStorage.getItem(storageKey(datasetId));
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as Turn[];
+    if (!Array.isArray(parsed)) return [];
+    // A pending request's connection is gone with the page that made it -
+    // restore it as interrupted, never as still (falsely) in progress.
+    return parsed.map((turn) => turn.status === "pending" ? { ...turn, status: "interrupted" as const } : turn);
+  } catch { return []; }
+}
+
+function saveStoredTurns(datasetId: string, turns: Turn[]): void {
+  try { window.localStorage.setItem(storageKey(datasetId), JSON.stringify(turns.slice(-STORED_TURNS_LIMIT))); } catch { /* storage unavailable or full - the in-memory conversation still works this session */ }
+}
+
 export function AtlasDockPanel({
-  datasetId, datasetName, revision, focusLabel, column, onReview,
+  datasetId, datasetName, revision, focusLabel, operation, column, onReview,
 }: {
   datasetId: string | undefined;
   datasetName: string;
   revision: number;
   focusLabel: string;
+  operation: string | null;
   column: string | null;
   onReview(proposal: WorkspaceProposalResponse): void;
 }) {
   const [intent, setIntent] = useState("");
-  const [turns, setTurns] = useState<Turn[]>([]);
+  const [turns, setTurns] = useState<Turn[]>(() => (typeof window !== "undefined" && datasetId ? loadStoredTurns(datasetId) : []));
   const abortRef = useRef<AbortController | null>(null);
   const pending = turns.find((turn) => turn.status === "pending");
 
-  // A conversation is about one dataset. Loading a different dataset starts
-  // a new one rather than showing the previous dataset's asks against it.
+  // A conversation is about one dataset. Loading a different dataset
+  // restores *that* dataset's own stored conversation (if any), rather
+  // than either keeping the previous dataset's turns or discarding real,
+  // persisted history just because the component didn't happen to mount
+  // fresh on it.
   const datasetRef = useRef(datasetId);
   useEffect(() => {
-    if (datasetRef.current !== datasetId) { datasetRef.current = datasetId; setTurns([]); abortRef.current?.abort(); }
+    if (datasetRef.current !== datasetId) {
+      datasetRef.current = datasetId;
+      setTurns(datasetId ? loadStoredTurns(datasetId) : []);
+      abortRef.current?.abort();
+    }
   }, [datasetId]);
+
+  // Mirror every change to this dataset's own storage slot - the actual
+  // persistence; the effect above only ever reads it.
+  useEffect(() => {
+    if (datasetId) saveStoredTurns(datasetId, turns);
+  }, [datasetId, turns]);
 
   const dockPose: AtlasPose = pending ? "working" : turns.length ? "presenting" : intent.trim() ? "idle" : "waiting";
 
@@ -67,6 +106,13 @@ export function AtlasDockPanel({
     if (!datasetId || text.trim().length < 3 || pending) return;
     const id = `turn_${Date.now()}_${turns.length}`;
     const askedAtRevision = revision;
+    // A bounded slice of this same conversation's own prior turns - real
+    // context for a follow-up question, never a transcript sent anywhere
+    // else or retained past this one request.
+    const history = turns
+      .filter((turn) => turn.status === "done" && turn.response)
+      .slice(-HISTORY_LIMIT)
+      .map((turn) => ({ intent: turn.intent, explanation: turn.response!.explanation }));
     setTurns((current) => [...current, { id, intent: text.trim(), revision: askedAtRevision, status: "pending" }]);
     setIntent("");
     const controller = new AbortController();
@@ -74,7 +120,13 @@ export function AtlasDockPanel({
     try {
       const response = await fetch(apiUrl("/api/v1/workspace-proposals"), {
         method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ kind: "clean", dataset_id: datasetId, intent: text.trim() }),
+        body: JSON.stringify({
+          kind: "clean", dataset_id: datasetId, intent: text.trim(),
+          expected_revision: askedAtRevision,
+          ...(operation ? { selected_operation: operation } : {}),
+          ...(column ? { selected_column: column } : {}),
+          ...(history.length ? { history } : {}),
+        }),
         signal: controller.signal,
       });
       if (!response.ok) throw new Error((await response.json() as { detail?: string }).detail ?? "Proposal request failed.");
@@ -118,6 +170,7 @@ export function AtlasDockPanel({
           {stale ? <p className="atlas-dock-stale-note">This was asked about revision {turn.revision}; the dataset is now at revision {revision}. No longer current - ask again if still relevant.</p> : null}
           {turn.status === "pending" ? <div className="atlas-dock-message"><strong>Checking local model…</strong><button type="button" className="secondary" onClick={cancel}>Cancel</button></div> : null}
           {turn.status === "cancelled" ? <p className="quiet-note">Cancelled.</p> : null}
+          {turn.status === "interrupted" ? <p className="quiet-note">This was still waiting on a reply when the app last closed - that request is gone. Ask again if still relevant.</p> : null}
           {turn.status === "error" ? <p className="query-error" role="alert">{turn.error}</p> : null}
           {turn.status === "done" && turn.response ? <div className="atlas-dock-message">
             <strong>{turn.response.provider === "ollama" ? "Atlas proposed (local model)" : "Local model unavailable"}</strong>
@@ -130,7 +183,10 @@ export function AtlasDockPanel({
               return <div className="atlas-dock-computed">
                 <span className="eyebrow">PRISM computed this deterministically</span>
                 <p><strong>{affected.toLocaleString()}</strong> row{affected === 1 ? "" : "s"} would change.</p>
-                {exceptions > 0 ? <p className="atlas-dock-ambiguity"><strong className="is-amber">{exceptions.toLocaleString()}</strong> value{exceptions === 1 ? "" : "s"} didn't match anything in this proposal — review {exceptions === 1 ? "it" : "them"} before applying, or leave {exceptions === 1 ? "it" : "them"} unchanged.</p> : null}
+                {exceptions > 0 ? <div className="atlas-dock-ambiguity">
+                  <p><strong className="is-amber">{exceptions.toLocaleString()}</strong> value{exceptions === 1 ? "" : "s"} didn't match anything in this proposal — review {exceptions === 1 ? "it" : "them"} before applying, or leave {exceptions === 1 ? "it" : "them"} unchanged.</p>
+                  <button type="button" className="secondary" disabled={Boolean(pending)} onClick={() => void ask(`How should I handle the ${exceptions} value${exceptions === 1 ? "" : "s"} that didn't match in the last proposal?`)}>Ask Atlas how to handle {exceptions === 1 ? "it" : "them"}</button>
+                </div> : null}
               </div>;
             })() : null}
             {!stale && turn.response.provider === "ollama" && turn.response.clean_operation ? <button type="button" onClick={() => onReview(turn.response!)}>Review in Step settings</button> : null}

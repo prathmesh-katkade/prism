@@ -62,6 +62,63 @@ def test_model_sql_mutation_and_invalid_chart_fail_closed(monkeypatch: MonkeyPat
     assert chart["chart_spec"] is None
 
 
+def test_expected_revision_mismatch_is_rejected_outright(monkeypatch: MonkeyPatch) -> None:
+    """A conversation bound to a revision that the dataset has since moved
+    past must be refused, not silently answered against evidence that may
+    no longer describe the current data - mirrors Clean's own stale-
+    revision rejection at apply time, applied to the ask itself."""
+    monkeypatch.setenv("PRISM_AI_PROVIDER", "ollama")
+    client = TestClient(create_app())
+    dataset_id = _source(client)
+    result = client.post("/api/v1/workspace-proposals", json={
+        "kind": "clean", "dataset_id": dataset_id, "intent": "Normalize North", "expected_revision": 5,
+    })
+    assert result.status_code == 409
+    assert "revision" in result.json()["detail"].lower()
+
+
+def test_expected_revision_matching_current_is_accepted(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setenv("PRISM_AI_PROVIDER", "ollama")
+    monkeypatch.setattr(httpx, "post", lambda *_args, **_kwargs: _model_response({
+        "explanation": "Unify this label.",
+        "clean_operation": {"operation": "category_mapping", "column": "segment", "category_mapping": {"North": "N"}},
+    }))
+    client = TestClient(create_app())
+    dataset_id = _source(client)
+    result = client.post("/api/v1/workspace-proposals", json={
+        "kind": "clean", "dataset_id": dataset_id, "intent": "Normalize North", "expected_revision": 0,
+    })
+    assert result.status_code == 200
+    assert result.json()["provider"] == "ollama"
+
+
+def test_selected_operation_column_and_history_reach_the_model_prompt(monkeypatch: MonkeyPatch) -> None:
+    """The analyst's current focus and this same conversation's own prior
+    turns are real context for a follow-up - verify they actually reach the
+    prompt sent to the model, not just that the request accepts them."""
+    monkeypatch.setenv("PRISM_AI_PROVIDER", "ollama")
+    captured: dict[str, object] = {}
+
+    def capture(_url: str, json: dict[str, object], **_kwargs: object) -> httpx.Response:
+        captured.update(json)
+        return _model_response({"explanation": "Follow-up answer.", "clean_operation": {"operation": "drop_duplicates"}})
+
+    monkeypatch.setattr(httpx, "post", capture)
+    client = TestClient(create_app())
+    dataset_id = _source(client)
+    result = client.post("/api/v1/workspace-proposals", json={
+        "kind": "clean", "dataset_id": dataset_id, "intent": "What about the rest?",
+        "selected_operation": "category_mapping", "selected_column": "segment",
+        "history": [{"intent": "Normalize North", "explanation": "Unify this label."}],
+    })
+    assert result.status_code == 200
+    prompt = str(captured["prompt"])
+    assert "category_mapping" in prompt
+    assert "segment" in prompt
+    assert "Normalize North" in prompt
+    assert "Unify this label." in prompt
+
+
 def test_model_timeout_retains_manual_path(monkeypatch: MonkeyPatch) -> None:
     monkeypatch.setenv("PRISM_AI_PROVIDER", "ollama")
 

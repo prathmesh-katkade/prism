@@ -10,7 +10,7 @@ const health = { completeness: 30, consistency: 25, uniqueness: 12, validity: 15
 const provenance = { source_fingerprint: dataset0.source_fingerprint, dataset_revision: 0, parameters: {}, service_version: "x", computed_at: "2026-08-28T00:00:00Z" };
 const rowsPage = { dataset: dataset0, offset: 0, limit: 30, total_rows: dataset0.row_count, rows: [{ segment: "a" }, { segment: "b" }], provenance };
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => { vi.restoreAllMocks(); window.localStorage.clear(); });
 
 describe("Clean workspace", () => {
   it("prompts to load a dataset first when none is active", () => {
@@ -189,6 +189,47 @@ describe("Clean workspace", () => {
     expect(document.querySelector(".clean-preview .clean-impact-summary")?.textContent).not.toContain("5");
   });
 
+  it("survives a real restart: a finished Atlas turn reappears after remounting, and one still pending when the app closed comes back marked interrupted, not falsely still loading", async () => {
+    let resolveSecond: ((value: Response) => void) | null = null;
+    const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path.endsWith("/state")) return json({ dataset: dataset0, issues: [], history: [], health });
+      if (path.includes("/rows")) return json(rowsPage);
+      if (path.includes("/profile")) return json({ columns: [] });
+      if (path.includes("/recipes")) return json([]);
+      if (path.endsWith("/workspace-proposals")) {
+        const body = JSON.parse(String(init?.body ?? "{}"));
+        if (body.intent === "first question") return json({ provider: "ollama", explanation: "First answer, persisted.", evidence: [], clean_operation: { operation: "drop_duplicates" } });
+        return new Promise<Response>((resolve) => { resolveSecond = resolve; });
+      }
+      return json({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const first = render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText(/Rows 1–5 of 5/)).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("tab", { name: /Atlas/ }));
+    fireEvent.change(screen.getByLabelText("Ask Atlas"), { target: { value: "first question" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ask Atlas" }));
+    await waitFor(() => expect(screen.getByText("First answer, persisted.")).toBeInTheDocument());
+
+    // A second question is asked but never gets a reply before "the app
+    // closes" (the component unmounts while it's still pending).
+    fireEvent.change(screen.getByLabelText("Ask Atlas"), { target: { value: "second question, interrupted" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ask Atlas" }));
+    await waitFor(() => expect(resolveSecond).not.toBeNull());
+    first.unmount();
+
+    // A fresh mount - the real stand-in for an app restart, since this
+    // conversation is persisted to this browser's own localStorage, not
+    // component state that dies with the old page.
+    render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText(/Rows 1–5 of 5/)).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("tab", { name: /Atlas/ }));
+    expect(screen.getByText("First answer, persisted.")).toBeInTheDocument();
+    expect(screen.getByText("second question, interrupted")).toBeInTheDocument();
+    expect(screen.getByText(/still waiting on a reply when the app last closed/)).toBeInTheDocument();
+  });
+
   it("docks a real Atlas panel with honest context chips and a working starter question, and switching to it never loses the selected step", async () => {
     const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
       const path = String(input);
@@ -198,7 +239,11 @@ describe("Clean workspace", () => {
       if (path.includes("/recipes")) return json([]);
       if (path.endsWith("/workspace-proposals")) {
         const body = JSON.parse(String(init?.body ?? "{}"));
-        expect(body).toEqual({ kind: "clean", dataset_id: "ds_1", intent: "Explain the current step" });
+        // The step currently being built (trim_whitespace on notes) and the
+        // dataset's own current revision are real context Atlas needs to
+        // answer about the right thing, and to be rejected if it's since
+        // gone stale - not omitted from the request.
+        expect(body).toEqual({ kind: "clean", dataset_id: "ds_1", intent: "Explain the current step", expected_revision: 0, selected_operation: "trim_whitespace", selected_column: "notes" });
         return json({ provider: "ollama", explanation: "Trimming whitespace prevents duplicate-looking labels.", evidence: ["region: 'Bengaluru ' vs 'Bengaluru'"], clean_operation: { operation: "trim_whitespace", column: "notes" } });
       }
       return json({});
@@ -227,6 +272,90 @@ describe("Clean workspace", () => {
     // underlying selection state.
     fireEvent.click(screen.getByRole("tab", { name: "Step settings" }));
     expect(screen.getByLabelText("Column")).toHaveValue("notes");
+  });
+
+  it("ignores a late-arriving preview response from an earlier request once a newer one has been issued", async () => {
+    const resolvers: Record<string, (value: Response) => void> = {};
+    const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path.endsWith("/state")) return json({ dataset: dataset0, issues: [], history: [], health });
+      if (path.includes("/rows")) return json(rowsPage);
+      if (path.includes("/profile")) return json({ columns: [{ name: "notes", semantic_type: "text" }, { name: "region", semantic_type: "text" }] });
+      if (path.includes("/recipes")) return json([]);
+      if (path.endsWith("/preview")) {
+        const body = JSON.parse(String(init?.body ?? "{}"));
+        // Each column's response only settles when the test explicitly
+        // releases it below - this is what lets the test force the earlier
+        // request (notes) to resolve *after* the later one (region).
+        return new Promise<Response>((resolve) => { resolvers[body.column] = resolve; });
+      }
+      return json({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText(/Rows 1–5 of 5/)).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "+ Add step" }));
+    fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "trim_whitespace" } });
+    fireEvent.change(screen.getByLabelText("Column"), { target: { value: "notes" } });
+    fireEvent.click(screen.getByRole("button", { name: "Preview" })); // request 1: notes
+    await waitFor(() => expect(resolvers.notes).toBeDefined());
+
+    fireEvent.change(screen.getByLabelText("Column"), { target: { value: "region" } });
+    // Still reads "Preview", not "Recompute preview" - the first request
+    // never resolved, so there was never a completed preview to go stale.
+    fireEvent.click(screen.getByRole("button", { name: "Preview" })); // request 2: region
+    await waitFor(() => expect(resolvers.region).toBeDefined());
+
+    // The newer request (region) resolves first.
+    resolvers.region!(await json({ operation: "trim_whitespace", review_token: "r_region", source_revision: 0, affected_rows: 9, affected_columns: ["region"], before_sample: [], after_sample: [], warnings: [], projected_health: health }));
+    await waitFor(() => expect(document.querySelector(".clean-impact-summary")?.textContent).toContain("9"));
+
+    // The older request (notes) resolves late, after the newer one already
+    // rendered - it must be ignored, not overwrite the current (region)
+    // preview with stale (notes) data.
+    resolvers.notes!(await json({ operation: "trim_whitespace", review_token: "r_notes", source_revision: 0, affected_rows: 1, affected_columns: ["notes"], before_sample: [], after_sample: [], warnings: [], projected_health: health }));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(document.querySelector(".clean-impact-summary")?.textContent).toContain("9");
+    expect(document.querySelector(".clean-impact-summary")?.textContent).not.toContain("1");
+  });
+
+  it("loads the form fields a proposal describes, not just its preview, when handed off to Step settings", async () => {
+    const fetchMock = vi.fn(async (input: string | URL) => {
+      const path = String(input);
+      if (path.endsWith("/state")) return json({ dataset: dataset0, issues: [], history: [], health });
+      if (path.includes("/rows")) return json(rowsPage);
+      if (path.includes("/profile")) return json({ columns: [{ name: "notes", semantic_type: "text" }, { name: "region", semantic_type: "text" }] });
+      if (path.includes("/recipes")) return json([]);
+      if (path.endsWith("/workspace-proposals")) {
+        return json({ provider: "ollama", explanation: "Standardising region spellings groups near-duplicates.", evidence: [], clean_operation: { operation: "category_mapping", column: "region", category_mapping: { Bangalore: "Bengaluru" } } });
+      }
+      if (path.endsWith("/preview")) return json({ operation: "category_mapping", review_token: "r1", source_revision: 0, affected_rows: 1, changed_rows_total: 1, exception_rows_total: 0, affected_columns: ["region"], before_sample: [], after_sample: [], warnings: [], projected_health: health });
+      return json({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText(/Rows 1–5 of 5/)).toBeInTheDocument());
+
+    // Start building a *different* operation on a *different* column first,
+    // so the bug this guards against (preview matching the proposal while
+    // the editable fields silently kept showing the old build) would be
+    // visible if it regressed.
+    fireEvent.click(screen.getByRole("button", { name: "+ Add step" }));
+    fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "trim_whitespace" } });
+    fireEvent.change(screen.getByLabelText("Column"), { target: { value: "notes" } });
+
+    fireEvent.click(screen.getByRole("tab", { name: /Atlas/ }));
+    fireEvent.change(screen.getByLabelText("Ask Atlas"), { target: { value: "What about region spellings?" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ask Atlas" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Review in Step settings" })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Review in Step settings" }));
+
+    // Step settings must now show the proposal's own operation and column -
+    // category_mapping on region - not the trim_whitespace/notes build that
+    // was there before asking Atlas.
+    await waitFor(() => expect(screen.getByLabelText("Operation")).toHaveValue("category_mapping"));
+    expect(screen.getByLabelText("Column")).toHaveValue("region");
   });
 
   it("keeps a multi-turn Atlas conversation across tab switches, shows the real deterministic preview distinctly from the model's text, and marks a turn stale once the dataset revision moves past it", async () => {

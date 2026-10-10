@@ -48,6 +48,7 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
   const [error, setError] = useState<string | null>(null);
   const [applying, setApplying] = useState(false);
   const applyInFlight = useRef(false);
+  const previewRequestId = useRef(0);
 
   const [manualOperation, setManualOperation] = useState<CleanOperation>("drop_duplicates");
   const [manualColumn, setManualColumn] = useState("");
@@ -260,13 +261,20 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
 
   async function previewOperation(request: CleanTransformationRequest) {
     if (!datasetId) return;
+    // A later call (a newer step selected, a parameter changed again, a
+    // fresh Atlas proposal handed off) must win even if an earlier call's
+    // response arrives after it - guard the same way loadExceptionPage
+    // already does, rather than let whichever response lands last silently
+    // overwrite newer, correct preview data with a stale one.
+    const requestId = ++previewRequestId.current;
     setPendingRequest(request); setPreview(null); setRecipePreview(null); setError(null); setManualPreviewStale(false);
     setReviewView("changes"); setReviewRowsView("affected");
     try {
       const response = await fetch(apiUrl(`/api/v1/clean/datasets/${datasetId}/preview`), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(request) });
+      if (requestId !== previewRequestId.current) return;
       if (!response.ok) throw new Error((await response.json() as { detail?: string }).detail ?? "Preview failed.");
       setPreview(await response.json() as CleanPreviewResponse);
-    } catch (reason) { setError(reason instanceof Error ? reason.message : "Preview failed."); }
+    } catch (reason) { if (requestId === previewRequestId.current) setError(reason instanceof Error ? reason.message : "Preview failed."); }
   }
 
   function buildManualRequest(): { request: CleanTransformationRequest | null; reason: string | null } {
@@ -364,10 +372,14 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
     setRecipePreview(null); setEditingStepIndex(null); setRecipeError(null);
   }
 
-  function loadDraftStep(index: number) {
-    const request = draftSteps[index]?.request;
-    if (!request) return;
-    setEditingStepIndex(index); setManualMode(true); setSelectedIssue(null);
+  /** Every field the manual-operation form can show, set from one real
+   * request - the single place that keeps the editable form in sync with
+   * whatever produced the request (a draft step being reselected, or an
+   * Atlas proposal being handed off). A preview computed from `request`
+   * without also calling this leaves the form showing stale values that
+   * silently stop matching the preview the moment anyone touches Preview
+   * or Add step again. */
+  function loadRequestIntoForm(request: CleanTransformationRequest) {
     setManualOperation(request.operation); setManualColumn(request.column ?? "");
     setManualNewName(request.new_name ?? ""); setManualTargetType(request.target_type ?? "numeric");
     setManualDateFormat(request.date_format ?? ""); setManualNumberLocale(request.number_locale ?? "standard");
@@ -378,6 +390,13 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
     setSurvivorshipColumns(new Set(request.group_by_columns ?? []));
     setSurvivorshipRule(request.survivorship_rule ?? "first");
     setSurvivorshipTiebreak(request.survivorship_tiebreak_column ?? "");
+  }
+
+  function loadDraftStep(index: number) {
+    const request = draftSteps[index]?.request;
+    if (!request) return;
+    setEditingStepIndex(index); setManualMode(true); setSelectedIssue(null);
+    loadRequestIntoForm(request);
     // Selecting a step in the recipe list must show that step's own real
     // preview in the centre panel immediately, not whatever preview (if
     // any) a previously selected step left behind there.
@@ -931,8 +950,18 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
           datasetName={clean.dataset.source_name}
           revision={clean.dataset.revision}
           focusLabel={manualMode ? (manualSpec?.label ?? manualOperation.replaceAll("_", " ")) : selectedIssue ? (selectedIssue.column ?? "Dataset issue") : selectedFinding ? selectedFinding.column : "No step selected"}
+          operation={manualMode ? manualOperation : null}
           column={manualMode ? manualColumn || null : selectedIssue?.column ?? selectedFinding?.column ?? null}
-          onReview={(proposal) => { if (proposal.clean_operation) { setManualMode(true); setInspectorTab("settings"); void previewOperation(proposal.clean_operation); } }}
+          onReview={(proposal) => {
+            if (!proposal.clean_operation) return;
+            setManualMode(true); setSelectedIssue(null); setEditingStepIndex(null); setInspectorTab("settings");
+            // Loads the form fields AND the preview from the same request,
+            // so Step settings shows exactly what Atlas proposed, not
+            // whatever the form last held - fixing a real gap where the
+            // preview matched the proposal but the editable fields didn't.
+            loadRequestIntoForm(proposal.clean_operation);
+            void previewOperation(proposal.clean_operation);
+          }}
         />
       </div>
       <div hidden={inspectorTab !== "settings"}>
