@@ -176,15 +176,16 @@
    be the precise fix and is left as later polish, not attempted in this pass. */
 @media (max-width:1650px) { .three-pane { grid-template-columns:200px minmax(0,1fr) 260px; } }
 @media (max-width:1350px) { .three-pane { grid-template-columns:1fr;min-height:0; }.clean-issues,.viz-fields,.clean-inspector,.viz-inspector { border-inline:0;border-top:1px solid var(--line); }.clean-diff { grid-template-columns:1fr; } }
-.clean-manual-form { display:grid;gap:4px;margin-bottom:16px;padding:12px;border:1px solid var(--line);background:var(--surface-raised); }.clean-manual-form label { display:grid;gap:5px;margin-bottom:8px;color:var(--faint);font:10px var(--mono);letter-spacing:.06em;text-transform:uppercase; }.clean-manual-form select,.clean-manual-form input { padding:7px;background:var(--surface);border:1px solid var(--line);border-radius:3px;color:var(--text);font:12px var(--mono);width:100%; }.clean-manual-form button { margin-top:2px;padding:8px 10px;border-radius:4px;border:1px solid var(--text);background:var(--text);color:var(--canvas);font-weight:650;cursor:pointer; }.clean-manual-form button.secondary { margin-top:6px; }.clean-manual-form button:disabled { opacity:.5;cursor:not-allowed; }.clean-manual-form > p.quiet-note { padding:0;margin:2px 0 8px;color:var(--accent);font-size:11px; }
-.clean-table-toolbar { display:flex;align-items:center;gap:10px;margin-bottom:10px; }.clean-table-toolbar button { padding:6px 9px;border:1px solid var(--line);border-radius:4px;background:transparent;color:var(--text);cursor:pointer; }.clean-table-toolbar button:disabled { opacity:.4;cursor:not-allowed; }
+.clean-manual-form { display:grid;gap:4px;margin-bottom:16px;padding:12px;border:1px solid var(--line);background:var(--surface-raised); }.clean-manual-form label { display:grid;gap:5px;margin-bottom:8px;color:var(--faint);font:10px var(--mono);letter-spacing:.06em;text-transform:uppercase; }.clean-manual-form select,.clean-manual-form input { padding:7px;background:var(--surface);border:1px solid var(--line);border-radius:3px;color:var(--text);font:12px var(--mono);width:100%; }.clean-manual-form button { margin-top:2px;padding:8px 10px;border-radius:4px;border:1px solid var(--text);background:var(--text);color:var(--canvas);font-weight:650;cursor:pointer; }.clean-manual-form button.secondary { margin-top:6px; }.clean-manual-form button:disabled { opacity:.6;color:var(--disabled-text);cursor:not-allowed; }.clean-manual-form > p.quiet-note { padding:0;margin:2px 0 8px;color:var(--accent);font-size:11px; }
+.clean-table-toolbar { display:flex;align-items:center;gap:10px;margin-bottom:10px; }.clean-table-toolbar button { padding:6px 9px;border:1px solid var(--line);border-radius:4px;background:transparent;color:var(--text);cursor:pointer; }.clean-table-toolbar button:disabled { opacity:.6;color:var(--disabled-text);cursor:not-allowed; }
 .clean-issues .finding-list { grid-template-columns:minmax(0,1fr);margin:12px 0; }
 .clean-issues .finding-list button { min-width:0;text-align:left; }
 .clean-inspector .inspector-actions button:first-child:not(.secondary),.viz-inspector .inspector-actions button:not(.secondary):first-of-type { background:var(--accent-soft);border:1px solid var(--accent);padding:10px; }
-.clean-recipe-list { display:grid;gap:1px;margin:4px 0 14px;border:1px solid var(--line);background:var(--line); }.clean-recipe-list li { display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 10px;background:var(--surface); }.clean-recipe-list strong { display:block;font-size:12px; }.clean-recipe-list small { color:var(--faint);font:10px var(--mono); }.clean-recipe-list button { padding:6px 9px;border:1px solid var(--line);border-radius:4px;background:transparent;color:var(--text);cursor:pointer;white-space:nowrap; }.clean-recipe-list button:disabled { opacity:.5;cursor:not-allowed; }
+.clean-recipe-list { display:grid;gap:1px;margin:4px 0 14px;border:1px solid var(--line);background:var(--line); }.clean-recipe-list li { display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 10px;background:var(--surface); }.clean-recipe-list strong { display:block;font-size:12px; }.clean-recipe-list small { color:var(--faint);font:10px var(--mono); }.clean-recipe-list button { padding:6px 9px;border:1px solid var(--line);border-radius:4px;background:transparent;color:var(--text);cursor:pointer;white-space:nowrap; }.clean-recipe-list button:disabled { opacity:.6;color:var(--disabled-text);cursor:not-allowed; }
 .clean-recipe-actions { margin:4px 0 20px; }
 .clean-recipe-actions button { width:100%;padding:11px;border:1px solid var(--line);border-radius:5px;background:transparent;color:var(--text);font:600 13px var(--sans);cursor:pointer; }
 .clean-recipe-actions button:hover,.clean-recipe-actions button.is-selected { border-color:var(--accent);color:var(--accent); }
+.clean-recipe-actions button:active { background:var(--accent-soft); }
 .clean-inline-toggle { display:flex !important;flex-direction:row !important;align-items:center;gap:7px;text-transform:none !important;color:var(--text) !important;font:12px var(--mono) !important;margin-bottom:8px !important; }.clean-inline-toggle input { width:auto !important; }
 .clean-value-list { list-style:none;margin:6px 0;padding:0;max-height:220px;overflow:auto;border:1px solid var(--line);background:var(--surface); }.clean-value-list li { border-bottom:1px solid var(--line-soft); }.clean-value-list li:last-child { border-bottom:0; }.clean-value-list label { display:flex !important;flex-direction:row !important;align-items:center;gap:7px;padding:7px 9px;text-transform:none !important;color:var(--text) !important;font:12px var(--mono) !important;margin:0 !important;cursor:pointer; }.clean-value-list input { width:auto !important; }.clean-value-list small { margin-left:auto;color:var(--faint);white-space:nowrap; }
 .clean-mapping-summary { list-style:none;margin:8px 0;padding:0;display:grid;gap:4px; }.clean-mapping-summary li { display:flex;align-items:center;gap:6px;padding:5px 8px;background:var(--surface-raised);font:11px var(--mono);color:var(--muted); }.clean-mapping-summary code { color:var(--text); }.clean-mapping-summary button { margin-left:auto;padding:1px 7px;border:1px solid var(--line);border-radius:3px;background:transparent;color:var(--faint);cursor:pointer;line-height:1.5; }
@@ -470,7 +471,7 @@
 .shell-body.has-local-inspector .workspace-tabs { height:43px;padding-left:0; }
 .shell-body.has-local-inspector .tab { min-width:105px;justify-content:center;border-top:0;border-bottom:2px solid transparent; }
 .shell-body.has-local-inspector .tab.is-active { border-bottom-color:var(--accent); }
-.shell-body.has-local-inspector .workspace-content { padding:0;overflow:auto; }
+.shell-body.has-local-inspector .workspace-content { padding:0;overflow:auto;container-type:inline-size;container-name:prism-workspace; }
 .shell-body.has-local-inspector .workspace-content > .clean-workspace,
 .shell-body.has-local-inspector .workspace-content > .visualize-workspace,
 .shell-body.has-local-inspector .workspace-content > .query-studio,
@@ -505,7 +506,14 @@
    continuing under it. */
 .clean-apply-bar { position:fixed;bottom:0;left:var(--rail-size,238px);right:315px;z-index:8;display:flex;align-items:center;justify-content:flex-end;gap:10px;margin:0;padding:14px 20px;background:var(--surface);border-top:1px solid var(--line);box-shadow:0 -4px 12px #0002; }
 .shell-body.has-local-inspector .clean-preview:has(.clean-apply-bar) { padding-bottom:84px; }
-.clean-apply-bar span { margin-right:auto;color:var(--muted);font-size:12px; }.clean-apply-bar button { min-height:42px;padding:9px 18px;border:1px solid var(--accent);border-radius:5px;background:var(--accent);color:#1c1a14;font:650 13px var(--sans);cursor:pointer;white-space:nowrap; }.clean-apply-bar button.secondary { background:transparent;border-color:var(--line);color:var(--text); }
+.clean-apply-bar span { margin-right:auto;color:var(--muted);font-size:12px; }
+.clean-apply-bar button { min-height:42px;padding:9px 18px;border:1px solid var(--accent);border-radius:5px;background:linear-gradient(180deg,var(--accent-hover),var(--accent));color:#1C1A16;font:650 13px var(--sans);cursor:pointer;white-space:nowrap;box-shadow:inset 0 1px 0 rgba(255,255,255,.22); }
+.clean-apply-bar button:hover:not(:disabled) { background:linear-gradient(180deg,var(--accent-hover),var(--accent-hover)); }
+.clean-apply-bar button:active:not(:disabled) { background:var(--accent-pressed);box-shadow:inset 0 1px 3px rgba(0,0,0,.3); }
+.clean-apply-bar button:disabled { background:var(--surface-muted);border-color:var(--line);color:var(--disabled-text);box-shadow:none;cursor:not-allowed; }
+.clean-apply-bar button.secondary { background:transparent;border-color:var(--line);color:var(--text);box-shadow:none; }
+.clean-apply-bar button.secondary:hover { background:var(--surface-raised);border-color:var(--muted); }
+.clean-apply-bar button.secondary:active { background:var(--surface-muted); }
 @media (max-width:1100px) { .clean-apply-bar { left:62px;right:0; } }
 @media (max-width:760px) { .clean-apply-bar { left:54px;right:0;flex-wrap:wrap; }.clean-apply-bar span { width:100%; }.clean-impact-summary strong { font-size:19px; } }
 .shell-body.has-local-inspector .viz-svg { height:min(42vh,410px); }
@@ -599,30 +607,59 @@
 .clean-workspace.three-pane > .clean-issues { grid-row:2; }
 .clean-workspace.three-pane > .clean-preview { grid-row:2; }
 .clean-workspace.three-pane > .clean-inspector { grid-row:1 / 3; align-self:start;position:sticky;top:12px;max-height:calc(100vh - 150px);overflow-y:auto; }
-@media (max-width:1350px) {
-  .clean-workspace.three-pane { grid-template-rows:none; }
-  .clean-workspace.three-pane > .clean-dataset-header,.clean-workspace.three-pane > .clean-issues,.clean-workspace.three-pane > .clean-preview,.clean-workspace.three-pane > .clean-inspector { grid-column:1;grid-row:auto;position:static;max-height:none; }
+/* A viewport media query here was the actual bug: at the window's own
+   1366px default, the nav rail and padding already consume ~250-300px
+   before .clean-workspace ever sees the remaining space, so the "is there
+   room for three columns" question was being asked about the wrong
+   number. A container query asks it about .workspace-content's real,
+   already-narrowed inline size instead - the one place this can be
+   answered correctly - so resizing down from the default doesn't flip to
+   single-column far earlier than the content actually requires it, and
+   the declared 1024px minimum reliably does fall back, instead of both
+   being left to coincidence with the shared viewport breakpoint. */
+@container prism-workspace (max-width:950px) {
+  .clean-workspace.three-pane { grid-template-columns:1fr;grid-template-rows:none; }
+  .clean-workspace.three-pane > .clean-dataset-header,.clean-workspace.three-pane > .clean-issues,.clean-workspace.three-pane > .clean-preview,.clean-workspace.three-pane > .clean-inspector { grid-column:1;grid-row:auto;position:static;max-height:none;border-inline:0;border-top:1px solid var(--line); }
 }
 
 .clean-dataset-header { display:flex;align-items:center;justify-content:space-between;gap:20px;padding:16px 22px;background:var(--surface);border-bottom:1px solid var(--line);border-right:1px solid var(--line); }
-.clean-dataset-header .eyebrow { margin:0 0 4px; }
-.clean-dataset-header h1 { font:400 26px/1.15 var(--serif);letter-spacing:-.02em;margin:0; }
+.clean-dataset-header > div:first-child { min-width:0; }
+.clean-dataset-header .eyebrow { margin:0 0 4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.clean-dataset-header h1 { font:650 24px/1.2 var(--sans);letter-spacing:-.01em;margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.clean-dataset-header .clean-workflow-strip { flex:none; }
 .clean-dataset-header p { margin:4px 0 0;color:var(--muted);font-size:12px; }
 .clean-dataset-header .clean-workflow-strip { margin:0;padding:0;border:0; }
 
 /* Unified recipe: one coherent numbered sequence, Applied/Preview/Draft/Disabled derived from real state */
 .clean-recipe-unified { list-style:none;margin:0 0 14px;padding:0;border:1px solid var(--line);background:var(--line);display:grid;gap:1px; }
-.clean-recipe-unified li { display:grid;grid-template-columns:4px 24px minmax(0,1fr);gap:0;background:var(--surface);align-items:stretch; }
+.clean-recipe-unified li { position:relative;display:grid;grid-template-columns:4px 24px minmax(0,1fr) auto;gap:0;background:var(--surface);align-items:stretch; }
 .clean-recipe-unified li > i { grid-row:1 / -1;background:var(--line-soft); }
 .clean-recipe-unified li.is-applied > i { background:var(--good); }
 .clean-recipe-unified li.is-preview > i { background:var(--blue); }
 .clean-recipe-unified li.is-draft > i { background:var(--faint); }
-.clean-recipe-unified li.is-selected { box-shadow:inset 0 0 0 1px var(--line); background:var(--surface-raised); }
-.clean-recipe-unified .clean-step-number { grid-column:2;padding:12px 0 0 10px; }
-.clean-recipe-unified .clean-step-body { grid-column:3;padding:12px 10px 12px 8px;min-width:0; }
+/* Selected recipe step: bronze fill plus a brass leading edge - the one
+   state that must read as unambiguously "this is what the inspector is
+   showing," kept visually distinct from the Applied/Preview/Draft status
+   pill next to it (selection and status are different facts). */
+.clean-recipe-unified li.is-selected { background:var(--accent-soft); }
+.clean-recipe-unified li.is-selected > i { background:var(--accent); }
+.clean-recipe-unified .clean-step-select { grid-column:2 / 4;display:grid;grid-template-columns:24px minmax(0,1fr);gap:0;border:0;background:transparent;padding:0;margin:0;text-align:left;cursor:pointer;color:inherit;font:inherit; }
+.clean-recipe-unified .clean-step-select:hover { background:color-mix(in srgb,var(--surface-raised) 70%,transparent); }
+.clean-recipe-unified .clean-step-select:focus-visible { outline:2px solid var(--focus);outline-offset:-2px; }
+.clean-recipe-unified li.is-selected .clean-step-select:hover { background:transparent; }
+.clean-recipe-unified .clean-step-number { padding:12px 0 0 10px; }
+.clean-recipe-unified .clean-step-body { padding:12px 10px 12px 8px;min-width:0; }
 .clean-recipe-unified .clean-step-body > strong { display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:13px;font-weight:600;text-transform:capitalize; }
 .clean-recipe-unified .clean-step-body > small { display:block;margin-top:2px;color:var(--faint);font:11px var(--mono); }
-.clean-recipe-unified .clean-step-actions { margin-top:6px; }
+.clean-recipe-unified .clean-step-menu { grid-column:4;position:relative;align-self:start;margin:8px 8px 0 0; }
+.clean-recipe-unified .clean-step-menu > summary { display:grid;place-items:center;width:26px;height:26px;border:1px solid transparent;border-radius:4px;color:var(--faint);cursor:pointer;list-style:none;font:650 14px var(--sans); }
+.clean-recipe-unified .clean-step-menu > summary::-webkit-details-marker { display:none; }
+.clean-recipe-unified .clean-step-menu > summary:hover,.clean-recipe-unified .clean-step-menu[open] > summary { color:var(--text);border-color:var(--line);background:var(--surface-raised); }
+.clean-recipe-unified .clean-step-menu-items { position:absolute;top:30px;right:0;z-index:5;display:grid;min-width:130px;background:var(--surface-raised);border:1px solid var(--line);border-radius:5px;box-shadow:0 10px 28px rgba(0,0,0,.4),0 0 0 1px rgba(0,0,0,.15);overflow:hidden; }
+.clean-recipe-unified .clean-step-menu-items button { padding:8px 11px;border:0;border-bottom:1px solid var(--line-soft);background:transparent;color:var(--text);text-align:left;font-size:12px;cursor:pointer; }
+.clean-recipe-unified .clean-step-menu-items button:last-child { border-bottom:0; }
+.clean-recipe-unified .clean-step-menu-items button:hover:not(:disabled) { background:var(--surface-muted); }
+.clean-recipe-unified .clean-step-menu-items button:disabled { color:var(--disabled-text);cursor:not-allowed; }
 
 .clean-disclosure { border-top:1px solid var(--line-soft);margin-top:2px;padding:4px 0; }
 .clean-disclosure > summary { cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 0;color:var(--muted);font:600 10px var(--mono);letter-spacing:.1em;text-transform:uppercase; }
@@ -637,6 +674,7 @@
 .clean-value-chips li { margin:0; }
 .clean-value-chips label { position:relative;display:flex !important;flex-direction:row !important;align-items:center;gap:5px;padding:5px 10px;border:1px solid var(--line);border-radius:999px;background:var(--surface-raised);color:var(--muted);font:11px var(--mono) !important;text-transform:none !important;cursor:pointer;white-space:nowrap; }
 .clean-value-chips label input { position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;cursor:pointer; }
+.clean-value-chips label:hover:not(.is-selected) { border-color:var(--muted);color:var(--text); }
 .clean-value-chips label.is-selected { border-color:var(--accent);background:var(--accent-soft);color:var(--text); }
 .clean-value-chips label small { color:inherit;opacity:.7; }
 .clean-value-chips label.is-mapped::after { content:"✓";color:var(--good);font-weight:700; }
@@ -644,6 +682,16 @@
 .clean-mapping-target-input { width:100%;min-width:110px;padding:6px 8px;border:1px solid var(--line);border-radius:4px;background:var(--surface);color:var(--text);font:12px var(--mono); }
 .clean-mapping-target-input:focus-visible { outline:2px solid var(--focus);outline-offset:1px; }
 .clean-mapping-target-input::placeholder { color:var(--faint); }
+.clean-mapping-target-input:disabled { color:var(--disabled-text);background:var(--surface);cursor:not-allowed; }
+
+/* Reusable "raised control" edge: a restrained, inset one-pixel light top /
+   dark bottom hairline that reads as recessed (inputs) or raised (buttons)
+   depth without a glow, blur or metallic illustration - the corrected
+   reading of "control depth" the approved image actually shows. */
+.clean-mapping-target-input,.clean-manual-form select,.clean-manual-form input,.clean-value-chips label {
+  box-shadow:inset 0 1px 0 color-mix(in srgb,var(--text) 6%,transparent),inset 0 -1px 0 color-mix(in srgb,black 20%,transparent);
+}
+.clean-mapping-target-input:focus-visible,.clean-manual-form select:focus-visible,.clean-manual-form input:focus-visible { box-shadow:none;outline:2px solid var(--focus);outline-offset:1px; }
 
 /* Density: tighten the review pane so the mapping table and an affected-row sample are visible together */
 .clean-preview-summary { margin:4px 0 10px;font-size:12px; }

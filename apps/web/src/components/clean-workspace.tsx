@@ -667,13 +667,24 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
         {recipePreview ? recipes.find((recipe) => recipe.recipe_id === recipePreview.recipe_id)?.steps.map((step, index) => <li key={step.step_id} className={step.enabled ? "is-preview" : ""}>
           <i aria-hidden="true" /><span className="clean-step-number">{String(clean.history.length + index + 1).padStart(2, "0")}</span>
           <div className="clean-step-body"><strong>{step.request.operation.replaceAll("_", " ")}<span className={`clean-step-status ${step.enabled ? "is-reviewed" : "is-disabled"}`}>{step.enabled ? "Preview" : "Disabled"}</span></strong><small>{step.request.column ?? "dataset"} · {recipePreview.step_impacts[index] ?? 0} affected</small></div>
-        </li>) : draftSteps.length ? draftSteps.map((step, index) => <li key={step.step_id} className={step.enabled ? "is-draft" : ""}>
-          <i aria-hidden="true" /><span className="clean-step-number">{String(clean.history.length + index + 1).padStart(2, "0")}</span>
-          <div className="clean-step-body">
-            <strong>{step.request.operation.replaceAll("_", " ")}<span className={`clean-step-status ${step.enabled ? "is-draft" : "is-disabled"}`}>{step.enabled ? "Draft" : "Disabled"}</span></strong>
-            <small>{step.request.column ?? "dataset"}{draftPreview ? ` · ${draftPreview.step_impacts[index] ?? 0} affected` : ""}</small>
-            <div className="clean-step-actions"><button aria-label={`Move step ${index + 1} up`} disabled={index === 0} onClick={() => setDraftSteps((current) => { const next = [...current]; [next[index - 1], next[index]] = [next[index]!, next[index - 1]!]; return next; })}>↑</button><button aria-label={`Move step ${index + 1} down`} disabled={index === draftSteps.length - 1} onClick={() => setDraftSteps((current) => { const next = [...current]; [next[index], next[index + 1]] = [next[index + 1]!, next[index]!]; return next; })}>↓</button><button aria-label={`Edit step ${index + 1}`} onClick={() => loadDraftStep(index)}>Edit</button><button aria-label={`${step.enabled ? "Disable" : "Enable"} step ${index + 1}`} onClick={() => setDraftSteps((current) => current.map((item, at) => at === index ? { ...item, enabled: !item.enabled } : item))}>{step.enabled ? "Disable" : "Enable"}</button><button aria-label={`Remove step ${index + 1}`} onClick={() => setDraftSteps((current) => current.filter((_, at) => at !== index))}>Remove</button></div>
-          </div>
+        </li>) : draftSteps.length ? draftSteps.map((step, index) => <li key={step.step_id} className={`${step.enabled ? "is-draft" : ""} ${editingStepIndex === index ? "is-selected" : ""}`.trim()}>
+          <i aria-hidden="true" />
+          <button type="button" className="clean-step-select" aria-current={editingStepIndex === index ? "step" : undefined} onClick={() => loadDraftStep(index)}>
+            <span className="clean-step-number">{String(clean.history.length + index + 1).padStart(2, "0")}</span>
+            <span className="clean-step-body">
+              <strong>{step.request.operation.replaceAll("_", " ")}<span className={`clean-step-status ${step.enabled ? "is-draft" : "is-disabled"}`}>{step.enabled ? "Draft" : "Disabled"}</span></strong>
+              <small>{step.request.column ?? "dataset"}{draftPreview ? ` · ${draftPreview.step_impacts[index] ?? 0} affected` : ""}</small>
+            </span>
+          </button>
+          <details className="clean-step-menu">
+            <summary aria-label={`More actions for step ${index + 1}`}>⋯</summary>
+            <div className="clean-step-menu-items">
+              <button aria-label={`Move step ${index + 1} up`} disabled={index === 0} onClick={() => setDraftSteps((current) => { const next = [...current]; [next[index - 1], next[index]] = [next[index]!, next[index - 1]!]; return next; })}>Move up</button>
+              <button aria-label={`Move step ${index + 1} down`} disabled={index === draftSteps.length - 1} onClick={() => setDraftSteps((current) => { const next = [...current]; [next[index], next[index + 1]] = [next[index + 1]!, next[index]!]; return next; })}>Move down</button>
+              <button aria-label={`${step.enabled ? "Disable" : "Enable"} step ${index + 1}`} onClick={() => setDraftSteps((current) => current.map((item, at) => at === index ? { ...item, enabled: !item.enabled } : item))}>{step.enabled ? "Disable" : "Enable"}</button>
+              <button aria-label={`Remove step ${index + 1}`} onClick={() => setDraftSteps((current) => current.filter((_, at) => at !== index))}>Remove</button>
+            </div>
+          </details>
         </li>) : (preview && pendingRequest) ? <li className="is-preview">
           <i aria-hidden="true" /><span className="clean-step-number">{String(clean.history.length + 1).padStart(2, "0")}</span>
           <div className="clean-step-body"><strong>{OPERATIONS.find((item) => item.value === pendingRequest.operation)?.label ?? pendingRequest.operation.replaceAll("_", " ")}<span className="clean-step-status is-reviewed">Preview</span></strong><small>{(preview.changed_rows_total ?? preview.affected_rows).toLocaleString()} affected · unsaved step</small></div>
