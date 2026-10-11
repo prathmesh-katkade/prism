@@ -26,7 +26,15 @@ test("100k-row UI observation through Overview, Clean, SQL, and Visualize", asyn
 
   started = Date.now();
   await page.getByRole("button", { name: /Clean native/i }).click();
-  await expect(page.getByRole("heading", { name: /found/ })).toBeVisible({ timeout: 150_000 });
+  // The Issues count lives in a <details> summary badge, not a heading; the
+  // disclosure is collapsed by default and must be opened before its
+  // finding button is interactable.
+  // With real issues present (this fixture deliberately has missing
+  // revenue values), the badge shows a plain count, not the "N/100" health-
+  // score fallback it shows when there are none.
+  const issuesSummary = page.locator(".clean-disclosure summary").filter({ hasText: "Issues" });
+  await expect(issuesSummary).not.toContainText("/100", { timeout: 150_000 });
+  await issuesSummary.click();
   timings.clean_workspace_open_ms = Date.now() - started;
   started = Date.now();
   await page.getByRole("button", { name: /revenue.*missing/i }).click();
