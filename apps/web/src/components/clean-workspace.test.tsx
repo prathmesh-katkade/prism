@@ -230,6 +230,186 @@ describe("Clean workspace", () => {
     expect(screen.getByText(/still waiting on a reply when the app last closed/)).toBeInTheDocument();
   });
 
+  it("sends the actual operation parameters to Atlas, not just the operation name and column", async () => {
+    let captured: Record<string, unknown> | null = null;
+    const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path.endsWith("/state")) return json({ dataset: dataset0, issues: [], history: [], health });
+      if (path.includes("/rows")) return json(rowsPage);
+      if (path.includes("/profile")) return json({ columns: [{ name: "revenue", semantic_type: "numeric" }] });
+      if (path.includes("/recipes")) return json([]);
+      if (path.endsWith("/workspace-proposals")) {
+        captured = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+        return json({ provider: "ollama", explanation: "Ok.", evidence: [] });
+      }
+      return json({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText(/Rows 1–5 of 5/)).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "+ Add step" }));
+    fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "fill_missing" } });
+    fireEvent.change(screen.getByLabelText("Column"), { target: { value: "revenue" } });
+    fireEvent.change(screen.getByLabelText("Fill strategy"), { target: { value: "constant" } });
+    fireEvent.change(screen.getByLabelText("Constant fill value"), { target: { value: "N/A" } });
+
+    fireEvent.click(screen.getByRole("tab", { name: /Atlas/ }));
+    fireEvent.change(screen.getByLabelText("Ask Atlas"), { target: { value: "is this reasonable?" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ask Atlas" }));
+    await waitFor(() => expect(captured).not.toBeNull());
+
+    expect(captured!.selected_operation).toBe("fill_missing");
+    expect(captured!.selected_column).toBe("revenue");
+    expect(captured!.selected_parameters).toMatchObject({ fill_strategy: "constant", fill_value: "N/A" });
+    expect(captured!.selected_parameters).not.toHaveProperty("operation"); // already sent as selected_operation - not duplicated
+    expect(captured!.selected_parameters).not.toHaveProperty("column"); // already sent as selected_column - not duplicated
+  });
+
+  it("excludes a stale turn's explanation from the history sent with a new question", async () => {
+    let secondBody: Record<string, unknown> | null = null;
+    let applied = false;
+    const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path.endsWith("/state")) return applied ? json({ dataset: dataset1, issues: [], history: [{ transformation_id: "t1", operation: "drop_duplicates", column: null, parameters: {}, affected_rows: 1, affected_columns: [], source_revision: 0, resulting_revision: 1, source_fingerprint: dataset0.source_fingerprint, resulting_fingerprint: "b".repeat(64), reversible: true, created_at: "2026-08-28T00:00:00Z" }], health }) : json({ dataset: dataset0, issues: [], history: [], health });
+      if (path.includes("/rows")) return json(rowsPage);
+      if (path.includes("/profile")) return json({ columns: [] });
+      if (path.includes("/recipes")) return json([]);
+      if (path.endsWith("/preview")) return json({ operation: "drop_duplicates", review_token: "r1", source_revision: 0, affected_rows: 1, affected_columns: [], before_sample: [], after_sample: [], warnings: [], projected_health: health });
+      if (path.endsWith("/apply")) { applied = true; return json({ dataset: dataset1, transformation: { transformation_id: "t1", operation: "drop_duplicates", column: null, parameters: {}, affected_rows: 1, affected_columns: [], source_revision: 0, resulting_revision: 1, source_fingerprint: dataset0.source_fingerprint, resulting_fingerprint: "b".repeat(64), reversible: true, created_at: "2026-08-28T00:00:00Z" }, issues: [], health }, 201); }
+      if (path.endsWith("/workspace-proposals")) {
+        const body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+        if (body.intent === "first question") return json({ provider: "ollama", explanation: "First answer, at revision 0.", evidence: [] });
+        secondBody = body;
+        return json({ provider: "ollama", explanation: "Second answer.", evidence: [] });
+      }
+      return json({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText(/Rows 1–5 of 5/)).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("tab", { name: /Atlas/ }));
+    fireEvent.change(screen.getByLabelText("Ask Atlas"), { target: { value: "first question" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ask Atlas" }));
+    await waitFor(() => expect(screen.getByText("First answer, at revision 0.")).toBeInTheDocument());
+
+    // Apply a real change elsewhere, moving the dataset to revision 1 - the
+    // first turn (asked about revision 0) is now stale.
+    fireEvent.click(screen.getByRole("tab", { name: "Step settings" }));
+    fireEvent.click(screen.getByRole("button", { name: "+ Add step" }));
+    fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "drop_duplicates" } });
+    fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Apply reviewed change" })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Apply reviewed change" }));
+    await waitFor(() => expect(screen.getByText("4 rows · 3 columns · revision 1")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("tab", { name: /Atlas/ }));
+    fireEvent.change(screen.getByLabelText("Ask Atlas"), { target: { value: "second question" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ask Atlas" }));
+    // Wait for the full round trip to settle (not just that the request was
+    // sent) so this test's own state updates and persistence effect are
+    // fully flushed before it ends - otherwise a dangling async write can
+    // land during a LATER test instead, after this one already cleared
+    // storage, corrupting that test's own assertions.
+    await waitFor(() => expect(screen.getByText("Second answer.")).toBeInTheDocument());
+
+    // The stale (revision-0) turn's explanation must not be sent as if it
+    // were still a current fact about this (now revision-1) dataset.
+    expect(secondBody!.history).toBeUndefined();
+  });
+
+  it("never overwrites one dataset's stored Atlas conversation with another's when switching between them", async () => {
+    // ds_2 already has its own, distinct persisted conversation from a prior
+    // session - simulating exactly what loadStoredTurns would have written
+    // for it earlier, independent of whatever happens to ds_1 in this test.
+    window.localStorage.setItem("atlas-dock:ds_2", JSON.stringify([
+      { id: "turn_old", intent: "ds_2's own earlier question", revision: 0, status: "done", response: { kind: "clean", provider: "ollama", explanation: "ds_2's own earlier answer.", evidence: [] } },
+    ]));
+    const fetchMock = vi.fn(async (input: string | URL) => {
+      const path = String(input);
+      if (path.endsWith("/state")) return json({ dataset: dataset0, issues: [], history: [], health });
+      if (path.includes("/rows")) return json(rowsPage);
+      if (path.includes("/profile")) return json({ columns: [] });
+      if (path.includes("/recipes")) return json([]);
+      if (path.endsWith("/workspace-proposals")) return json({ provider: "ollama", explanation: "ds_1's real answer.", evidence: [], clean_operation: { operation: "drop_duplicates" } });
+      return json({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { rerender } = render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText(/Rows 1–5 of 5/)).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("tab", { name: /Atlas/ }));
+    fireEvent.change(screen.getByLabelText("Ask Atlas"), { target: { value: "ds_1's own question" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ask Atlas" }));
+    await waitFor(() => expect(screen.getByText("ds_1's real answer.")).toBeInTheDocument());
+
+    // Switch to ds_2. Its own stored conversation must load untouched - not
+    // ds_1's, and ds_2's OWN storage slot must still hold its OWN data, not
+    // get silently overwritten by the effects pass that handles this switch.
+    rerender(<CleanWorkspace datasetId="ds_2" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText(/Rows 1–5 of 5/)).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("tab", { name: /Atlas/ }));
+    expect(screen.getByText("ds_2's own earlier answer.")).toBeInTheDocument();
+    expect(screen.queryByText("ds_1's real answer.")).not.toBeInTheDocument();
+
+    const ds2Stored = JSON.parse(window.localStorage.getItem("atlas-dock:ds_2") ?? "[]") as Array<{ intent: string }>;
+    expect(ds2Stored.map((turn) => turn.intent)).toEqual(["ds_2's own earlier question"]);
+    const ds1Stored = JSON.parse(window.localStorage.getItem("atlas-dock:ds_1") ?? "[]") as Array<{ intent: string }>;
+    expect(ds1Stored.map((turn) => turn.intent)).toEqual(["ds_1's own question"]);
+  });
+
+  it("drops a corrupt stored conversation instead of crashing or rendering garbage", async () => {
+    window.localStorage.setItem("atlas-dock:ds_1", JSON.stringify([
+      { id: "turn_ok", intent: "a valid prior turn", revision: 0, status: "done", response: { kind: "clean", provider: "ollama", explanation: "a valid answer.", evidence: [] } },
+      { id: "turn_bad" }, // missing intent/revision/status entirely
+      "not even an object",
+      { id: "turn_bad_status", intent: "x", revision: 0, status: "not-a-real-status" },
+      null,
+    ]));
+    const fetchMock = vi.fn(async (input: string | URL) => {
+      const path = String(input);
+      if (path.endsWith("/state")) return json({ dataset: dataset0, issues: [], history: [], health });
+      if (path.includes("/rows")) return json(rowsPage);
+      if (path.includes("/profile")) return json({ columns: [] });
+      if (path.includes("/recipes")) return json([]);
+      return json({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText(/Rows 1–5 of 5/)).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("tab", { name: /Atlas/ }));
+    expect(screen.getByText("a valid answer.")).toBeInTheDocument(); // the one real turn still renders
+    expect(document.querySelectorAll(".atlas-dock-turns > li").length).toBe(1); // the four corrupt entries were dropped, not rendered as broken turns
+  });
+
+  it("clears a stored conversation through a visible control, both on screen and in storage", async () => {
+    window.localStorage.setItem("atlas-dock:ds_1", JSON.stringify([
+      { id: "turn_1", intent: "a question to clear", revision: 0, status: "done", response: { kind: "clean", provider: "ollama", explanation: "an answer to clear.", evidence: [] } },
+    ]));
+    const fetchMock = vi.fn(async (input: string | URL) => {
+      const path = String(input);
+      if (path.endsWith("/state")) return json({ dataset: dataset0, issues: [], history: [], health });
+      if (path.includes("/rows")) return json(rowsPage);
+      if (path.includes("/profile")) return json({ columns: [] });
+      if (path.includes("/recipes")) return json([]);
+      return json({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText(/Rows 1–5 of 5/)).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("tab", { name: /Atlas/ }));
+    expect(screen.getByText("an answer to clear.")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Clear conversation" }));
+    expect(screen.queryByText("an answer to clear.")).not.toBeInTheDocument();
+    // The turns-changed save effect legitimately re-persists the now-empty
+    // state right after clearConversation() removes the key outright - "[]"
+    // and an absent key restore identically via loadStoredTurns, so either
+    // is correct; what matters is the cleared turn itself is gone from storage.
+    const stored = JSON.parse(window.localStorage.getItem("atlas-dock:ds_1") ?? "[]") as unknown[];
+    expect(stored).toEqual([]);
+  });
+
   it("docks a real Atlas panel with honest context chips and a working starter question, and switching to it never loses the selected step", async () => {
     const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
       const path = String(input);

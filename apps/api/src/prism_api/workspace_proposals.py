@@ -85,7 +85,10 @@ async def propose(request: WorkspaceProposalRequest, http_request: Request) -> W
     }[request.kind]
     focus = ""
     if request.selected_operation:
-        focus = f" The analyst currently has '{request.selected_operation}'" + (f" on column '{request.selected_column}'" if request.selected_column else "") + " open for review - prefer that context when it's relevant to the intent."
+        params_text = ""
+        if request.selected_parameters:
+            params_text = " with " + ", ".join(f"{key}={value!r}" for key, value in request.selected_parameters.items())
+        focus = f" The analyst currently has '{request.selected_operation}'" + (f" on column '{request.selected_column}'" if request.selected_column else "") + params_text + " open for review - prefer that context when it's relevant to the intent."
     history_text = ""
     if request.history:
         turns = "; ".join(f"Q: {entry.intent} A: {entry.explanation}" for entry in request.history)

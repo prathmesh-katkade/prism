@@ -2538,6 +2538,7 @@ export interface WorkspaceProposalRequest {
   expected_revision?: number;
   selected_operation?: string;
   selected_column?: string;
+  selected_parameters?: Record<string, unknown>;
   history?: WorkspaceProposalHistoryEntry[];
 }
 

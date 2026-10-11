@@ -1006,6 +1006,13 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
           focusLabel={manualMode ? (manualSpec?.label ?? manualOperation.replaceAll("_", " ")) : selectedIssue ? (selectedIssue.column ?? "Dataset issue") : selectedFinding ? selectedFinding.column : "No step selected"}
           operation={manualMode ? manualOperation : null}
           column={manualMode ? manualColumn || null : selectedIssue?.column ?? selectedFinding?.column ?? null}
+          parameters={(() => {
+            const source = pendingRequest ?? (manualMode ? manualBuild.request : null);
+            if (!source) return null;
+            const excluded = new Set(["operation", "column", "review_token"]); // already sent as their own fields
+            const entries = Object.entries(source).filter(([key, value]) => !excluded.has(key) && value !== undefined && value !== null);
+            return entries.length ? Object.fromEntries(entries) : null;
+          })()}
           onReview={(proposal) => {
             if (!proposal.clean_operation) return;
             setManualMode(true); setSelectedIssue(null); setEditingStepIndex(null); setInspectorTab("settings");

@@ -129,6 +129,7 @@
 .atlas-dock-header { display:flex;align-items:center;gap:12px; }
 .atlas-dock-header strong { display:block;font-size:15px; }
 .atlas-dock-header small { color:var(--faint);font-size:11px; }
+.atlas-dock-header .atlas-dock-clear { margin-left:auto;flex-shrink:0; }
 .atlas-dock-privacy { margin:0;padding:6px 9px;border:1px solid var(--line);border-radius:4px;background:var(--surface-raised);color:var(--muted);font-size:11px; }
 .atlas-dock-chips { display:flex;flex-wrap:wrap;gap:6px;margin:0;padding:0;list-style:none; }
 .atlas-dock-chips li { padding:4px 9px;border:1px solid var(--line);border-radius:999px;background:var(--surface-raised);color:var(--muted);font:11px var(--mono); }

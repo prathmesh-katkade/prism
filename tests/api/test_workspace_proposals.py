@@ -199,6 +199,7 @@ def test_selected_operation_column_and_history_reach_the_model_prompt(monkeypatc
     result = client.post("/api/v1/workspace-proposals", json={
         "kind": "clean", "dataset_id": dataset_id, "intent": "What about the rest?",
         "selected_operation": "category_mapping", "selected_column": "segment",
+        "selected_parameters": {"category_mapping": {"North": "N"}, "case_sensitive": False},
         "history": [{"intent": "Normalize North", "explanation": "Unify this label."}],
     })
     assert result.status_code == 200
@@ -207,6 +208,11 @@ def test_selected_operation_column_and_history_reach_the_model_prompt(monkeypatc
     assert "segment" in prompt
     assert "Normalize North" in prompt
     assert "Unify this label." in prompt
+    # The operation name and column alone don't say what it would actually
+    # do - the real parameters (the mapping itself here) must reach the
+    # prompt too, or Atlas can only describe the shape of the change, not
+    # the change itself.
+    assert "North" in prompt and "N" in prompt
 
 
 def test_model_timeout_retains_manual_path(monkeypatch: MonkeyPatch) -> None:

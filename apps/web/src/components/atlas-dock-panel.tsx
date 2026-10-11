@@ -46,26 +46,47 @@ type Turn = {
   error?: string;
 };
 
+const TURN_STATUSES = new Set(["pending", "done", "error", "cancelled", "interrupted"]);
+
 function storageKey(datasetId: string): string { return `atlas-dock:${datasetId}`; }
+
+/** A corrupt or unsupported entry (hand-edited localStorage, a future or
+ * older app version's shape, truncated JSON that still parsed) must be
+ * dropped, not rendered or crash the conversation - every field this
+ * component actually reads is checked, not just that something parsed. */
+function isValidTurn(value: unknown): value is Turn {
+  if (typeof value !== "object" || value === null) return false;
+  const turn = value as Record<string, unknown>;
+  return typeof turn.id === "string" && turn.id.length > 0
+    && typeof turn.intent === "string"
+    && typeof turn.revision === "number"
+    && typeof turn.status === "string" && TURN_STATUSES.has(turn.status);
+}
 
 function loadStoredTurns(datasetId: string): Turn[] {
   try {
     const raw = window.localStorage.getItem(storageKey(datasetId));
     if (!raw) return [];
-    const parsed = JSON.parse(raw) as Turn[];
+    const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    // A pending request's connection is gone with the page that made it -
-    // restore it as interrupted, never as still (falsely) in progress.
-    return parsed.map((turn) => turn.status === "pending" ? { ...turn, status: "interrupted" as const } : turn);
+    return parsed.filter(isValidTurn).map((turn) =>
+      // A pending request's connection is gone with the page that made it -
+      // restore it as interrupted, never as still (falsely) in progress.
+      turn.status === "pending" ? { ...turn, status: "interrupted" as const } : turn);
   } catch { return []; }
 }
 
-function saveStoredTurns(datasetId: string, turns: Turn[]): void {
-  try { window.localStorage.setItem(storageKey(datasetId), JSON.stringify(turns.slice(-STORED_TURNS_LIMIT))); } catch { /* storage unavailable or full - the in-memory conversation still works this session */ }
+/** Returns false when persistence could not be guaranteed (storage
+ * unavailable, full, or disabled) so the caller can make that visible
+ * rather than silently keep working as if the conversation would survive
+ * a reload. */
+function saveStoredTurns(datasetId: string, turns: Turn[]): boolean {
+  try { window.localStorage.setItem(storageKey(datasetId), JSON.stringify(turns.slice(-STORED_TURNS_LIMIT))); return true; }
+  catch { return false; }
 }
 
 export function AtlasDockPanel({
-  datasetId, datasetName, revision, focusLabel, operation, column, onReview,
+  datasetId, datasetName, revision, focusLabel, operation, column, parameters, onReview,
 }: {
   datasetId: string | undefined;
   datasetName: string;
@@ -73,10 +94,16 @@ export function AtlasDockPanel({
   focusLabel: string;
   operation: string | null;
   column: string | null;
+  /** The actual parameters of the operation currently selected for review
+   * (e.g. a category_mapping's values, a fill_missing's strategy) - without
+   * this, Atlas only ever knows an operation's name and column, not what it
+   * would actually do, so it can't explain the real proposed change. */
+  parameters: Record<string, unknown> | null;
   onReview(proposal: WorkspaceProposalResponse): void;
 }) {
   const [intent, setIntent] = useState("");
   const [turns, setTurns] = useState<Turn[]>(() => (typeof window !== "undefined" && datasetId ? loadStoredTurns(datasetId) : []));
+  const [persistenceFailed, setPersistenceFailed] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const pending = turns.find((turn) => turn.status === "pending");
 
@@ -86,9 +113,17 @@ export function AtlasDockPanel({
   // persisted history just because the component didn't happen to mount
   // fresh on it.
   const datasetRef = useRef(datasetId);
+  // The save effect below runs in the SAME effects pass as this one, in
+  // declaration order, whenever datasetId changes - but `turns` in that
+  // pass is still the OUTGOING dataset's turns (setTurns here only takes
+  // effect on the next render). Without this guard, that one pass would
+  // call saveStoredTurns(newDatasetId, oldDatasetsTurns) and overwrite the
+  // new dataset's own stored conversation with the old one's.
+  const skipNextSaveRef = useRef(false);
   useEffect(() => {
     if (datasetRef.current !== datasetId) {
       datasetRef.current = datasetId;
+      skipNextSaveRef.current = true;
       setTurns(datasetId ? loadStoredTurns(datasetId) : []);
       abortRef.current?.abort();
     }
@@ -97,7 +132,8 @@ export function AtlasDockPanel({
   // Mirror every change to this dataset's own storage slot - the actual
   // persistence; the effect above only ever reads it.
   useEffect(() => {
-    if (datasetId) saveStoredTurns(datasetId, turns);
+    if (skipNextSaveRef.current) { skipNextSaveRef.current = false; return; }
+    if (datasetId) setPersistenceFailed(!saveStoredTurns(datasetId, turns));
   }, [datasetId, turns]);
 
   const dockPose: AtlasPose = pending ? "working" : turns.length ? "presenting" : intent.trim() ? "idle" : "waiting";
@@ -108,9 +144,12 @@ export function AtlasDockPanel({
     const askedAtRevision = revision;
     // A bounded slice of this same conversation's own prior turns - real
     // context for a follow-up question, never a transcript sent anywhere
-    // else or retained past this one request.
+    // else or retained past this one request. A turn asked about a revision
+    // that no longer exists is excluded entirely, not sent as if its
+    // explanation were still a current fact about this dataset - the same
+    // staleness this component already marks visually for the analyst.
     const history = turns
-      .filter((turn) => turn.status === "done" && turn.response)
+      .filter((turn) => turn.status === "done" && turn.response && turn.revision === askedAtRevision)
       .slice(-HISTORY_LIMIT)
       .map((turn) => ({ intent: turn.intent, explanation: turn.response!.explanation }));
     setTurns((current) => [...current, { id, intent: text.trim(), revision: askedAtRevision, status: "pending" }]);
@@ -125,6 +164,7 @@ export function AtlasDockPanel({
           expected_revision: askedAtRevision,
           ...(operation ? { selected_operation: operation } : {}),
           ...(column ? { selected_column: column } : {}),
+          ...(operation && parameters && Object.keys(parameters).length ? { selected_parameters: parameters } : {}),
           ...(history.length ? { history } : {}),
         }),
         signal: controller.signal,
@@ -146,12 +186,21 @@ export function AtlasDockPanel({
 
   function cancel() { abortRef.current?.abort(); }
 
+  function clearConversation() {
+    if (!datasetId) return;
+    setTurns([]);
+    try { window.localStorage.removeItem(storageKey(datasetId)); } catch { /* nothing durable to clear if storage was already unavailable */ }
+    setPersistenceFailed(false);
+  }
+
   return <div className="atlas-dock" aria-label="Atlas assistant">
     <header className="atlas-dock-header">
       <AtlasCharacter pose={dockPose} size="large" />
       <div><strong>Atlas</strong><small>Your investigation assistant</small></div>
+      {turns.length ? <button type="button" className="secondary atlas-dock-clear" onClick={clearConversation}>Clear conversation</button> : null}
     </header>
     <p className="atlas-dock-privacy">Only this PRISM context is shared.</p>
+    {persistenceFailed ? <p className="query-error" role="alert">This conversation could not be saved — it will not survive a reload. Browser storage may be full or disabled.</p> : null}
     <ul className="atlas-dock-chips" aria-label="Current context">
       <li>{datasetName}</li>
       <li>Revision {revision}</li>

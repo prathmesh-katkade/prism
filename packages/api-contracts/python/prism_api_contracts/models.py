@@ -998,6 +998,7 @@ class WorkspaceProposalRequest(ContractModel):
     expected_revision: Optional[int] = Field(default=None, ge=0)
     selected_operation: Optional[str] = Field(default=None, max_length=80)
     selected_column: Optional[str] = Field(default=None, max_length=200)
+    selected_parameters: dict[str, Any] = Field(default_factory=dict, max_length=20)
     history: list[WorkspaceProposalHistoryEntry] = Field(default_factory=list, max_length=5)
 
 
