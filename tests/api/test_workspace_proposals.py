@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import asyncio
 import json
 
 import httpx
 from fastapi.testclient import TestClient
 from prism_api.main import create_app
+from prism_api.workspace_proposals import propose
+from prism_api_contracts import WorkspaceProposalRequest
 from pytest import MonkeyPatch
 
 
@@ -16,6 +19,17 @@ def _source(client: TestClient) -> str:
 
 def _model_response(candidate: object) -> httpx.Response:
     return httpx.Response(200, json={"response": json.dumps(candidate)}, request=httpx.Request("POST", "http://127.0.0.1:11434/api/generate"))
+
+
+def _mock_ollama(monkeypatch: MonkeyPatch, respond) -> None:  # type: ignore[no-untyped-def]
+    """propose() calls httpx.AsyncClient().post(...), not the module-level
+    httpx.post, so it can race the request against client disconnection -
+    patch the instance method actually used. `respond` is a plain sync
+    callable (url, json=...) -> httpx.Response; wrapped here so test bodies
+    stay simple."""
+    async def fake_post(_self: httpx.AsyncClient, url: str, json: dict[str, object], **_kwargs: object) -> httpx.Response:
+        return respond(url, json=json)
+    monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
 
 
 def test_unavailable_model_retains_manual_path(monkeypatch: MonkeyPatch) -> None:
@@ -31,7 +45,7 @@ def test_unavailable_model_retains_manual_path(monkeypatch: MonkeyPatch) -> None
 
 def test_model_clean_proposal_is_typed_and_previewed_without_applying(monkeypatch: MonkeyPatch) -> None:
     monkeypatch.setenv("PRISM_AI_PROVIDER", "ollama")
-    monkeypatch.setattr(httpx, "post", lambda *_args, **_kwargs: _model_response({
+    _mock_ollama(monkeypatch, lambda *_a, **_k: _model_response({
         "explanation": "Unify this label.",
         "clean_operation": {"operation": "category_mapping", "column": "segment", "category_mapping": {"North": "N"}},
     }))
@@ -50,11 +64,11 @@ def test_model_sql_mutation_and_invalid_chart_fail_closed(monkeypatch: MonkeyPat
     monkeypatch.setenv("PRISM_AI_PROVIDER", "ollama")
     client = TestClient(create_app())
     dataset_id = _source(client)
-    monkeypatch.setattr(httpx, "post", lambda *_args, **_kwargs: _model_response({"explanation": "Write rows", "sql_draft": "DELETE FROM data"}))
+    _mock_ollama(monkeypatch, lambda *_a, **_k: _model_response({"explanation": "Write rows", "sql_draft": "DELETE FROM data"}))
     sql = client.post("/api/v1/workspace-proposals", json={"kind": "sql", "dataset_id": dataset_id, "intent": "Summarize revenue"}).json()
     assert sql["provider"] == "unavailable"
     assert sql["sql_draft"] is None
-    monkeypatch.setattr(httpx, "post", lambda *_args, **_kwargs: _model_response({"explanation": "Chart unknown", "chart_spec": {
+    _mock_ollama(monkeypatch, lambda *_a, **_k: _model_response({"explanation": "Chart unknown", "chart_spec": {
         "mark": "bar", "intent": "comparison", "dimension": "absent", "measure": "revenue", "aggregation": "sum",
     }}))
     chart = client.post("/api/v1/workspace-proposals", json={"kind": "chart", "dataset_id": dataset_id, "intent": "Revenue by segment"}).json()
@@ -79,7 +93,7 @@ def test_expected_revision_mismatch_is_rejected_outright(monkeypatch: MonkeyPatc
 
 def test_expected_revision_matching_current_is_accepted(monkeypatch: MonkeyPatch) -> None:
     monkeypatch.setenv("PRISM_AI_PROVIDER", "ollama")
-    monkeypatch.setattr(httpx, "post", lambda *_args, **_kwargs: _model_response({
+    _mock_ollama(monkeypatch, lambda *_a, **_k: _model_response({
         "explanation": "Unify this label.",
         "clean_operation": {"operation": "category_mapping", "column": "segment", "category_mapping": {"North": "N"}},
     }))
@@ -90,6 +104,82 @@ def test_expected_revision_matching_current_is_accepted(monkeypatch: MonkeyPatch
     })
     assert result.status_code == 200
     assert result.json()["provider"] == "ollama"
+
+
+def test_a_mutation_during_the_model_call_is_detected_not_silently_served(monkeypatch: MonkeyPatch) -> None:
+    """The model call can take seconds; a real client could apply a change to
+    the same dataset while it's in flight. The single pre-call revision check
+    cannot catch this - it already passed before the model was even asked.
+    Simulate the race directly: the mocked httpx.post itself mutates the
+    dataset (a real apply, through the real endpoint) before returning the
+    model's response, exactly where the real network wait would be."""
+    monkeypatch.setenv("PRISM_AI_PROVIDER", "ollama")
+    client = TestClient(create_app())
+    dataset_id = _source(client)
+
+    def mutate_then_respond(*_args: object, **_kwargs: object) -> httpx.Response:
+        preview = client.post(f"/api/v1/clean/datasets/{dataset_id}/preview", json={"operation": "drop_duplicates"}).json()
+        applied = client.post(f"/api/v1/clean/datasets/{dataset_id}/apply", json={"operation": "drop_duplicates", "review_token": preview["review_token"]})
+        assert applied.status_code == 201
+        return _model_response({
+            "explanation": "Unify this label.",
+            "clean_operation": {"operation": "category_mapping", "column": "segment", "category_mapping": {"North": "N"}},
+        })
+
+    _mock_ollama(monkeypatch, mutate_then_respond)
+    result = client.post("/api/v1/workspace-proposals", json={"kind": "clean", "dataset_id": dataset_id, "intent": "Normalize North"})
+    assert result.status_code == 409
+    assert "revision" in result.json()["detail"].lower()
+    assert client.get(f"/api/v1/overview/datasets/{dataset_id}/profile").json()["dataset"]["revision"] == 1  # the race's own mutation, untouched
+
+
+class _DisconnectsOnceInFlight:
+    """Starlette's real Request.is_disconnected() awaits the ASGI receive
+    channel, which yields control to the event loop - giving a concurrently
+    scheduled task (the Ollama call here) a chance to actually start running
+    before this is even checked. Returning True with no yield at all would
+    test cancelling a request that was never truly in flight; sleep(0) once
+    first makes this a genuine mid-flight cancellation, the real scenario."""
+    def __init__(self) -> None:
+        self._yielded = False
+
+    async def is_disconnected(self) -> bool:
+        if not self._yielded:
+            self._yielded = True
+            await asyncio.sleep(0)
+        return True
+
+
+def test_a_client_disconnect_cancels_the_in_flight_model_call(monkeypatch: MonkeyPatch) -> None:
+    """A real analyst can close the tab or navigate away while the model is
+    still responding (the Ollama call alone can take up to
+    PRISM_OLLAMA_TIMEOUT_SECONDS). propose() must notice and actually cancel
+    its own connection to Ollama - not just stop waiting - and must not hang
+    around for the model's full response once nobody is listening. Call the
+    coroutine directly with a Request double that reports disconnected
+    immediately: this is the one case TestClient's all-or-nothing request
+    cycle cannot simulate (a client that *leaves mid-flight*)."""
+    monkeypatch.setenv("PRISM_AI_PROVIDER", "ollama")
+    client = TestClient(create_app())
+    dataset_id = _source(client)
+
+    cancelled = {"value": False}
+
+    async def hang_until_cancelled(_self: httpx.AsyncClient, _url: str, json: dict[str, object], **_kwargs: object) -> httpx.Response:
+        try:
+            await asyncio.sleep(3600)  # would hang this test if cancellation didn't actually happen
+        except asyncio.CancelledError:
+            cancelled["value"] = True
+            raise
+        raise AssertionError("the mocked Ollama call completed instead of being cancelled")
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", hang_until_cancelled)
+
+    request = WorkspaceProposalRequest(kind="clean", dataset_id=dataset_id, intent="Normalize North")
+    result = asyncio.run(asyncio.wait_for(propose(request, _DisconnectsOnceInFlight()), timeout=5))  # type: ignore[arg-type]
+    assert result.provider == "unavailable"
+    assert "disconnect" in result.explanation.lower()
+    assert cancelled["value"] is True, "cancelling generate_task must actually deliver CancelledError to the in-flight Ollama call, not just stop awaiting it"
 
 
 def test_selected_operation_column_and_history_reach_the_model_prompt(monkeypatch: MonkeyPatch) -> None:
@@ -103,7 +193,7 @@ def test_selected_operation_column_and_history_reach_the_model_prompt(monkeypatc
         captured.update(json)
         return _model_response({"explanation": "Follow-up answer.", "clean_operation": {"operation": "drop_duplicates"}})
 
-    monkeypatch.setattr(httpx, "post", capture)
+    _mock_ollama(monkeypatch, capture)
     client = TestClient(create_app())
     dataset_id = _source(client)
     result = client.post("/api/v1/workspace-proposals", json={
@@ -125,7 +215,7 @@ def test_model_timeout_retains_manual_path(monkeypatch: MonkeyPatch) -> None:
     def timeout(*_args: object, **_kwargs: object) -> httpx.Response:
         raise httpx.TimeoutException("offline")
 
-    monkeypatch.setattr(httpx, "post", timeout)
+    _mock_ollama(monkeypatch, timeout)
     client = TestClient(create_app())
     dataset_id = _source(client)
     result = client.post("/api/v1/workspace-proposals", json={"kind": "sql", "dataset_id": dataset_id, "intent": "Count rows"})

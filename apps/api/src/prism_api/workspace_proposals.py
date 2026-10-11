@@ -7,12 +7,14 @@ manual work. This module does not resolve or alter Atlas production bindings.
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import json
 import os
 
 import httpx
 import sqlglot
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from prism_api_contracts import (
     CleanTransformationRequest,
     VisualizationDataResponse,
@@ -53,7 +55,7 @@ def _read_only_local_sql(sql: str, columns: set[str]) -> None:
 
 
 @router.post("", response_model=WorkspaceProposalResponse)
-def propose(request: WorkspaceProposalRequest) -> WorkspaceProposalResponse:
+async def propose(request: WorkspaceProposalRequest, http_request: Request) -> WorkspaceProposalResponse:
     source = overview_store.get(request.dataset_id)
     # The conversation is bound to the revision it started at (or that the
     # caller otherwise expects right now). A later ask against a dataset
@@ -103,23 +105,73 @@ def propose(request: WorkspaceProposalRequest) -> WorkspaceProposalResponse:
     }
     try:
         timeout = min(30.0, max(1.0, float(os.environ.get("PRISM_OLLAMA_TIMEOUT_SECONDS", "10"))))
-        response = httpx.post(os.environ.get("PRISM_OLLAMA_BASE_URL", "http://127.0.0.1:11434").rstrip("/") + "/api/generate", json=payload, timeout=timeout)
+        url = os.environ.get("PRISM_OLLAMA_BASE_URL", "http://127.0.0.1:11434").rstrip("/") + "/api/generate"
+        async with httpx.AsyncClient(timeout=timeout) as async_client:
+            generate_task = asyncio.ensure_future(async_client.post(url, json=payload))
+            # A real analyst can close the tab or navigate away while the model is
+            # still "thinking" - poll for that instead of only awaiting the call,
+            # so an abandoned request doesn't keep running server-side unnoticed.
+            # Cancelling generate_task here closes this function's own HTTP
+            # connection to Ollama, which is the real mechanism by which a model
+            # server can notice a dropped client and stop generating - but that
+            # is a hint to Ollama's own server, not a guarantee it honors
+            # immediately (in-flight GPU work for the current step may still
+            # complete first). Never claim inference itself stopped from this
+            # alone; the UI layer that surfaces cancellation says so explicitly.
+            while not generate_task.done():
+                if await http_request.is_disconnected():
+                    generate_task.cancel()
+                    with contextlib.suppress(asyncio.CancelledError, httpx.HTTPError):
+                        await generate_task
+                    return _unavailable(request, "The analyst disconnected before the model responded.", evidence)
+                await asyncio.sleep(0.05)
+            response = await generate_task
         response.raise_for_status()
         candidate = json.loads(response.json()["response"])
         if not isinstance(candidate, dict) or not isinstance(candidate.get("explanation"), str):
             raise ValueError("Model response did not contain a typed explanation.")
         explanation = candidate["explanation"][:500]
+        # The model call above can take seconds; a mutation applied while it was
+        # "thinking" would otherwise go undetected by the single pre-call check
+        # above, since the evidence shown to the model and returned to the
+        # caller was built from the dataset as of *before* that wait. Re-read it
+        # now and refuse to serve a preview/evidence pair that may already
+        # silently describe a revision that no longer exists, rather than
+        # reasoning about it as if it were still current. Deliberately not
+        # caught by this function's own broad except below (that one downgrades
+        # model-output problems to "unavailable"; a dataset that moved under
+        # the request is a real conflict, same as the pre-call check above).
+        refreshed = overview_store.get(request.dataset_id)
+        if refreshed.dataset.revision != source.dataset.revision or refreshed.source_fingerprint != source.source_fingerprint:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Dataset {request.dataset_id} changed while the model was responding (now revision {refreshed.dataset.revision}). Ask again against the current revision.",
+            )
         if request.kind == "clean":
             operation = CleanTransformationRequest.model_validate(candidate["clean_operation"])
             if operation.review_token is not None:
                 raise ValueError("Model output may not submit a review token.")
-            preview = preview_transformation(request.dataset_id, operation)
+            try:
+                preview = preview_transformation(request.dataset_id, operation)
+            except HTTPException as error:
+                # The model proposed an operation preview_transformation itself
+                # rejects (e.g. an unknown column) - model-output validation,
+                # not a dataset-state conflict, so it belongs with this
+                # function's other "model output was unusable" cases below.
+                raise ValueError(f"Model-proposed operation was invalid: {error.detail}") from error
             return WorkspaceProposalResponse(kind=request.kind, provider="ollama", explanation=explanation, evidence=evidence,
                                              clean_operation=operation, clean_preview=preview)
         if request.kind == "chart":
             spec = VisualizationSpec.model_validate(candidate["chart_spec"])
-            data, truncated, warnings = _aggregate(source.frame, spec)
-            facets, facet_warnings = _facets(source.frame, spec)
+            try:
+                data, truncated, warnings = _aggregate(source.frame, spec)
+                facets, facet_warnings = _facets(source.frame, spec)
+            except HTTPException as error:
+                # Same reasoning as the clean path above: the model proposed a
+                # spec _aggregate/_facets themselves reject (e.g. an unknown
+                # column) - model-output validation, not a dataset-state
+                # conflict.
+                raise ValueError(f"Model-proposed chart was invalid: {error.detail}") from error
             warnings.extend(facet_warnings)
             chart_preview = VisualizationDataResponse(spec=spec, data=data, truncated=truncated,
                                                       warnings=warnings, provenance=_provenance(source), facets=facets)
@@ -131,5 +183,5 @@ def propose(request: WorkspaceProposalRequest) -> WorkspaceProposalResponse:
         _read_only_local_sql(sql, set(source.frame.columns))
         return WorkspaceProposalResponse(kind=request.kind, provider="ollama", explanation=explanation, evidence=evidence,
                                          sql_draft=sql)
-    except (httpx.HTTPError, ValueError, KeyError, TypeError, json.JSONDecodeError, ValidationError, HTTPException) as error:
+    except (httpx.HTTPError, ValueError, KeyError, TypeError, json.JSONDecodeError, ValidationError) as error:
         return _unavailable(request, f"The local model proposal was unavailable or failed validation ({type(error).__name__}). Use manual controls.", evidence)

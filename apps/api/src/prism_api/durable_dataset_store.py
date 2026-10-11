@@ -54,6 +54,13 @@ _revisions = Table(
     Column("frame_json", Text().with_variant(LONGTEXT(), "mysql"), nullable=False),
     Column("is_active", Boolean, nullable=False, index=True),
     Column("activated_at", DateTime(timezone=True), nullable=False, index=True),
+    # Cross-dataset recency (latest()/list_current()) cannot rely on
+    # activated_at alone: MySQL's DATETIME truncates to whole seconds by
+    # default, so two uploads within the same second make "latest" resolve
+    # non-deterministically. sequence is a strictly monotonic tiebreaker,
+    # allocated under a real DB-level UNIQUE constraint (see _next_sequence),
+    # not a timestamp - immune to clock resolution on any backend.
+    Column("sequence", Integer, nullable=True, unique=True, index=True),
 )
 _schema = Table("prism_dataset_schema_version", _metadata, Column("version", Integer, primary_key=True))
 
@@ -77,12 +84,24 @@ class DurableDatasetStore:
         url = database_url or history_database_url()
         self.engine = create_engine(url, future=True, pool_pre_ping=True, connect_args={"check_same_thread": False} if url.startswith("sqlite") else {})
         _metadata.create_all(self.engine)
+        columns = inspect(self.engine).get_columns("prism_dataset_revisions")
         if self.engine.dialect.name == "mysql":
-            columns = inspect(self.engine).get_columns("prism_dataset_revisions")
             frame_column = next(column for column in columns if column["name"] == "frame_json")
             if not isinstance(frame_column["type"], LONGTEXT):
                 with self.engine.begin() as connection:
                     connection.execute(text("ALTER TABLE prism_dataset_revisions MODIFY COLUMN frame_json LONGTEXT NOT NULL"))
+        if not any(column["name"] == "sequence" for column in columns):
+            # A database created before the sequence tiebreaker existed:
+            # create_all() only creates missing tables, not missing columns
+            # on an existing one. SQLite can't add a UNIQUE constraint via
+            # ALTER TABLE ADD COLUMN on an existing table without a full
+            # rebuild; the retry-on-conflict allocation in _next_sequence
+            # still protects fresh writes without it, which is enough for
+            # this app's single-process local/test SQLite usage. CI's MySQL
+            # service container always starts from an empty database, so
+            # this branch only matters for a pre-existing deployment.
+            with self.engine.begin() as connection:
+                connection.execute(text("ALTER TABLE prism_dataset_revisions ADD COLUMN sequence INTEGER"))
         with self.engine.begin() as connection:
             if connection.execute(select(_schema.c.version).limit(1)).scalar_one_or_none() is None:
                 connection.execute(insert(_schema).values(version=1))
@@ -97,18 +116,41 @@ class DurableDatasetStore:
     def _frame_json(frame: pd.DataFrame) -> str:
         return str(frame.to_json(orient="table", date_format="iso", index=True))
 
+    @staticmethod
+    def _next_sequence(connection) -> int:  # type: ignore[no-untyped-def]
+        """The next value for the cross-dataset recency tiebreaker.
+
+        Computed and inserted inside the caller's own transaction, under the
+        column's UNIQUE constraint: if two overlapping writes both read the
+        same MAX(sequence), only one insert can win, and the loser retries
+        (same shape as add_revision's existing revision-allocation race
+        guard below) rather than two rows silently sharing one sequence
+        value and leaving "latest" ambiguous again.
+        """
+        current = connection.execute(select(func.max(_revisions.c.sequence))).scalar_one()
+        return (current or 0) + 1
+
     def put(self, frame: pd.DataFrame, source_name: str, source_fingerprint: str) -> OverviewDataset:
         dataset = OverviewDataset(dataset_id=f"ds_{uuid.uuid4().hex}", revision=0, source_name=source_name, source_fingerprint=source_fingerprint, row_count=len(frame), column_count=len(frame.columns))
-        with self.engine.begin() as connection:
-            connection.execute(insert(_revisions).values(dataset_id=dataset.dataset_id, revision=0, source_fingerprint=source_fingerprint, source_name=source_name, row_count=len(frame), column_count=len(frame.columns), frame_json=self._frame_json(frame), is_active=True, activated_at=datetime.now(timezone.utc)))
-        return dataset
+        max_attempts = 20
+        for attempt in range(max_attempts):
+            try:
+                with self.engine.begin() as connection:
+                    sequence = self._next_sequence(connection)
+                    connection.execute(insert(_revisions).values(dataset_id=dataset.dataset_id, revision=0, source_fingerprint=source_fingerprint, source_name=source_name, row_count=len(frame), column_count=len(frame.columns), frame_json=self._frame_json(frame), is_active=True, activated_at=datetime.now(timezone.utc), sequence=sequence))
+                return dataset
+            except IntegrityError:
+                if attempt == max_attempts - 1:
+                    raise
+                time.sleep(0.01 * (attempt + 1) + random.uniform(0, 0.01))
+        raise AssertionError("unreachable")
 
     def list_current(self, limit: int = 100) -> list[OverviewDataset]:
         """List active dataset heads without returning stored rows or abandoned revisions."""
         with self.engine.connect() as connection:
             rows = connection.execute(
                 select(_revisions).where(_revisions.c.is_active.is_(True))
-                .order_by(desc(_revisions.c.activated_at), desc(_revisions.c.revision))
+                .order_by(desc(func.coalesce(_revisions.c.sequence, 0)), desc(_revisions.c.activated_at), desc(_revisions.c.revision))
                 .limit(max(1, limit * 4))
             ).mappings().all()
         heads: dict[str, OverviewDataset] = {}
@@ -137,7 +179,11 @@ class DurableDatasetStore:
 
     def latest(self) -> StoredDataset | None:
         with self.engine.connect() as connection:
-            dataset_id = connection.execute(select(_revisions.c.dataset_id).where(_revisions.c.is_active.is_(True)).order_by(desc(_revisions.c.activated_at)).limit(1)).scalar_one_or_none()
+            dataset_id = connection.execute(
+                select(_revisions.c.dataset_id).where(_revisions.c.is_active.is_(True))
+                .order_by(desc(func.coalesce(_revisions.c.sequence, 0)), desc(_revisions.c.activated_at))
+                .limit(1)
+            ).scalar_one_or_none()
         # Activation chooses the dataset; revision identity chooses its head.
         return None if dataset_id is None else self.get(dataset_id)
 
@@ -191,7 +237,7 @@ class DurableDatasetStore:
                         )
                     ).scalar_one_or_none()
                     if existing is None:
-                        connection.execute(insert(_revisions).values(dataset_id=dataset_id, revision=dataset.revision, source_fingerprint=fingerprint, source_name=dataset.source_name, row_count=len(frame), column_count=len(frame.columns), frame_json=self._frame_json(frame), is_active=True, activated_at=datetime.now(timezone.utc)))
+                        connection.execute(insert(_revisions).values(dataset_id=dataset_id, revision=dataset.revision, source_fingerprint=fingerprint, source_name=dataset.source_name, row_count=len(frame), column_count=len(frame.columns), frame_json=self._frame_json(frame), is_active=True, activated_at=datetime.now(timezone.utc), sequence=self._next_sequence(connection)))
                     else:
                         # Reapplying the same deterministic transformation after undo
                         # revives its immutable historical revision instead of inserting
@@ -205,7 +251,7 @@ class DurableDatasetStore:
                                     _revisions.c.source_fingerprint == fingerprint,
                                 )
                             )
-                            .values(is_active=True, activated_at=datetime.now(timezone.utc))
+                            .values(is_active=True, activated_at=datetime.now(timezone.utc), sequence=self._next_sequence(connection))
                         )
                     active_at_revision = connection.execute(
                         select(func.count())
@@ -227,8 +273,19 @@ class DurableDatasetStore:
         target = next((item for item in available if item.dataset.revision == revision), None)
         if target is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Revision {revision} was not found for this dataset.")
-        with self.engine.begin() as connection:
-            connection.execute(update(_revisions).where(and_(_revisions.c.dataset_id == dataset_id, _revisions.c.is_active.is_(True), _revisions.c.revision > revision)).values(is_active=False))
-            connection.execute(update(_revisions).where(and_(_revisions.c.dataset_id == dataset_id, _revisions.c.revision == target.dataset.revision, _revisions.c.source_fingerprint == target.source_fingerprint)).values(is_active=True, activated_at=datetime.now(timezone.utc)))
         del current
-        return target.dataset
+        max_attempts = 20
+        for attempt in range(max_attempts):
+            try:
+                with self.engine.begin() as connection:
+                    connection.execute(update(_revisions).where(and_(_revisions.c.dataset_id == dataset_id, _revisions.c.is_active.is_(True), _revisions.c.revision > revision)).values(is_active=False))
+                    # Reverting makes this revision the dataset's current head again,
+                    # which should also make it win cross-dataset "latest" against
+                    # anything activated earlier - same tiebreaker as put()/add_revision().
+                    connection.execute(update(_revisions).where(and_(_revisions.c.dataset_id == dataset_id, _revisions.c.revision == target.dataset.revision, _revisions.c.source_fingerprint == target.source_fingerprint)).values(is_active=True, activated_at=datetime.now(timezone.utc), sequence=self._next_sequence(connection)))
+                return target.dataset
+            except IntegrityError:
+                if attempt == max_attempts - 1:
+                    raise
+                time.sleep(0.01 * (attempt + 1) + random.uniform(0, 0.01))
+        raise AssertionError("unreachable")

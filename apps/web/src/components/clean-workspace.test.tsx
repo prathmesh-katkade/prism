@@ -423,6 +423,39 @@ describe("Clean workspace", () => {
     expect(staleNotes[0]!.textContent).toMatch(/revision 0.*now at revision 1/);
   });
 
+  it("describes Atlas's exception count as rows, with distinct values called out separately, not conflated", async () => {
+    const fetchMock = vi.fn(async (input: string | URL) => {
+      const path = String(input);
+      if (path.endsWith("/state")) return json({ dataset: dataset0, issues: [], history: [], health });
+      if (path.includes("/rows")) return json(rowsPage);
+      if (path.includes("/profile")) return json({ columns: [] });
+      if (path.includes("/recipes")) return json([]);
+      if (path.endsWith("/workspace-proposals")) return json({
+        provider: "ollama", explanation: "Map the regions.", evidence: [],
+        clean_operation: { operation: "category_mapping", column: "region" },
+        clean_preview: {
+          operation: "category_mapping", review_token: "r1", source_revision: 0, affected_rows: 10, changed_rows_total: 10,
+          exception_rows_total: 4, unresolved_values: ["Mumbai", "Pune"], // 4 exception rows, but only 2 distinct unresolved values
+          affected_columns: ["region"], before_sample: [], after_sample: [], warnings: [], projected_health: health,
+        },
+      });
+      return json({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText(/Rows 1–5 of 5/)).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("tab", { name: /Atlas/ }));
+    fireEvent.change(screen.getByLabelText("Ask Atlas"), { target: { value: "map the regions" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ask Atlas" }));
+
+    const ambiguity = await screen.findByText(/didn't match anything/);
+    // The row count (4) must read as rows, not values - and the distinct
+    // value count (2) must appear separately, not merged into one number.
+    expect(ambiguity.textContent).toMatch(/4 rows didn't match anything in this proposal \(2 distinct values\)/);
+    expect(screen.getByRole("button", { name: "Ask Atlas how to handle them" })).toBeInTheDocument();
+  });
+
   it("lets an in-flight Atlas request be genuinely cancelled, not just visually hidden", async () => {
     const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
       const path = String(input);
@@ -452,7 +485,12 @@ describe("Clean workspace", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument());
 
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-    await waitFor(() => expect(screen.getByText("Cancelled.")).toBeInTheDocument());
+    // Honest about what cancelling a browser fetch does and doesn't prove:
+    // it stops this client from waiting, and PRISM also closes its own
+    // connection to the model server (a real signal that server can act on),
+    // but neither guarantees the model's own in-flight computation stopped.
+    await waitFor(() => expect(screen.getByText(/Stopped waiting/)).toBeInTheDocument());
+    expect(screen.getByText(/isn't guaranteed/)).toBeInTheDocument();
 
     // The request's own AbortSignal actually fired - this is real
     // cancellation of the in-flight fetch, not just hiding a spinner while

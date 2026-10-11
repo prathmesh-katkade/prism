@@ -169,7 +169,7 @@ export function AtlasDockPanel({
           <p className="atlas-dock-ask">{turn.intent}</p>
           {stale ? <p className="atlas-dock-stale-note">This was asked about revision {turn.revision}; the dataset is now at revision {revision}. No longer current - ask again if still relevant.</p> : null}
           {turn.status === "pending" ? <div className="atlas-dock-message"><strong>Checking local model…</strong><button type="button" className="secondary" onClick={cancel}>Cancel</button></div> : null}
-          {turn.status === "cancelled" ? <p className="quiet-note">Cancelled.</p> : null}
+          {turn.status === "cancelled" ? <p className="quiet-note">Stopped waiting for a reply. PRISM also closed its own connection to the local model, which usually makes it stop generating too, but that isn't guaranteed — in-flight model computation may continue briefly.</p> : null}
           {turn.status === "interrupted" ? <p className="quiet-note">This was still waiting on a reply when the app last closed - that request is gone. Ask again if still relevant.</p> : null}
           {turn.status === "error" ? <p className="query-error" role="alert">{turn.error}</p> : null}
           {turn.status === "done" && turn.response ? <div className="atlas-dock-message">
@@ -179,13 +179,14 @@ export function AtlasDockPanel({
             {turn.response.clean_preview ? (() => {
               const preview = turn.response.clean_preview!;
               const affected = preview.changed_rows_total ?? preview.affected_rows;
-              const exceptions = preview.exception_rows_total ?? 0;
+              const exceptionRows = preview.exception_rows_total ?? 0;
+              const distinctValues = (preview.unresolved_values ?? []).length;
               return <div className="atlas-dock-computed">
                 <span className="eyebrow">PRISM computed this deterministically</span>
                 <p><strong>{affected.toLocaleString()}</strong> row{affected === 1 ? "" : "s"} would change.</p>
-                {exceptions > 0 ? <div className="atlas-dock-ambiguity">
-                  <p><strong className="is-amber">{exceptions.toLocaleString()}</strong> value{exceptions === 1 ? "" : "s"} didn't match anything in this proposal — review {exceptions === 1 ? "it" : "them"} before applying, or leave {exceptions === 1 ? "it" : "them"} unchanged.</p>
-                  <button type="button" className="secondary" disabled={Boolean(pending)} onClick={() => void ask(`How should I handle the ${exceptions} value${exceptions === 1 ? "" : "s"} that didn't match in the last proposal?`)}>Ask Atlas how to handle {exceptions === 1 ? "it" : "them"}</button>
+                {exceptionRows > 0 ? <div className="atlas-dock-ambiguity">
+                  <p><strong className="is-amber">{exceptionRows.toLocaleString()}</strong> row{exceptionRows === 1 ? "" : "s"} didn't match anything in this proposal{distinctValues ? ` (${distinctValues.toLocaleString()} distinct value${distinctValues === 1 ? "" : "s"})` : ""} — review {exceptionRows === 1 ? "it" : "them"} before applying, or leave {exceptionRows === 1 ? "it" : "them"} unchanged.</p>
+                  <button type="button" className="secondary" disabled={Boolean(pending)} onClick={() => void ask(`How should I handle the ${exceptionRows} row${exceptionRows === 1 ? "" : "s"} that didn't match in the last proposal?`)}>Ask Atlas how to handle {exceptionRows === 1 ? "it" : "them"}</button>
                 </div> : null}
               </div>;
             })() : null}

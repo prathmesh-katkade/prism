@@ -72,6 +72,11 @@ test("100k-row Pattern Review performance: discover, verify, extract preview, ap
   // blocking on the in-flight request. invoice_id no longer exists as a column
   // after the extraction above replaced it with invoice_id_part1/part2, so reuse
   // the still-present amount (numeric unit) finding instead.
+  // Apply's refresh() transitions state to "loading" and back to "ready",
+  // which is an early-return in clean-workspace.tsx that swaps out the
+  // entire component tree - every <details> disclosure, Patterns included,
+  // remounts and collapses back to closed. Re-open it before clicking in.
+  await page.locator(".clean-disclosure summary").filter({ hasText: "Patterns" }).click();
   await numericFinding.click();
   started = Date.now();
   await page.getByRole("button", { name: "Verify all rows" }).click();
