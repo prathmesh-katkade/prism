@@ -320,6 +320,78 @@ describe("Clean workspace", () => {
     expect(document.querySelector(".clean-impact-summary")?.textContent).not.toContain("1");
   });
 
+  it("invalidates a pending preview request the instant a parameter is edited, even with no second Preview click", async () => {
+    let resolveNotes: ((value: Response) => void) | null = null;
+    const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path.endsWith("/state")) return json({ dataset: dataset0, issues: [], history: [], health });
+      if (path.includes("/rows")) return json(rowsPage);
+      if (path.includes("/profile")) return json({ columns: [{ name: "notes", semantic_type: "text" }, { name: "region", semantic_type: "text" }] });
+      if (path.includes("/recipes")) return json([]);
+      if (path.endsWith("/preview")) {
+        const body = JSON.parse(String(init?.body ?? "{}"));
+        if (body.column !== "notes") throw new Error("only the notes request is expected in this test");
+        return new Promise<Response>((resolve) => { resolveNotes = resolve; });
+      }
+      return json({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText(/Rows 1–5 of 5/)).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "+ Add step" }));
+    fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "trim_whitespace" } });
+    fireEvent.change(screen.getByLabelText("Column"), { target: { value: "notes" } });
+    fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+    await waitFor(() => expect(resolveNotes).not.toBeNull());
+
+    // The analyst changes the column before the in-flight request for the
+    // OLD column ever resolved - no second Preview click, just the edit
+    // itself. That alone must be what invalidates the pending request.
+    fireEvent.change(screen.getByLabelText("Column"), { target: { value: "region" } });
+
+    // The stale request for "notes" now resolves. Without the fix, nothing
+    // told previewOperation anything had changed, so this would land and
+    // show a 1-affected-row preview next to a form that now reads "region".
+    resolveNotes!(await json({ operation: "trim_whitespace", review_token: "r_notes", source_revision: 0, affected_rows: 1, affected_columns: ["notes"], before_sample: [], after_sample: [], warnings: [], projected_health: health }));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(document.querySelector(".clean-impact-summary")).toBeNull();
+    expect(screen.getByRole("button", { name: "Preview" })).toBeInTheDocument(); // not "Recompute preview" - there is no live preview to call stale
+  });
+
+  it("invalidates a pending preview request when the dataset is switched before it resolves", async () => {
+    let resolvePreview: ((value: Response) => void) | null = null;
+    const fetchMock = vi.fn(async (input: string | URL) => {
+      const path = String(input);
+      if (path.endsWith("/state")) return json({ dataset: dataset0, issues: [], history: [], health });
+      if (path.includes("/rows")) return json(rowsPage);
+      if (path.includes("/profile")) return json({ columns: [{ name: "notes", semantic_type: "text" }] });
+      if (path.includes("/recipes")) return json([]);
+      if (path.endsWith("/preview")) return new Promise<Response>((resolve) => { resolvePreview = resolve; });
+      return json({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { rerender } = render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText(/Rows 1–5 of 5/)).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "+ Add step" }));
+    fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "trim_whitespace" } });
+    fireEvent.change(screen.getByLabelText("Column"), { target: { value: "notes" } });
+    fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+    await waitFor(() => expect(resolvePreview).not.toBeNull());
+
+    // The analyst switches to a different dataset before the request for
+    // the PREVIOUS one resolves.
+    rerender(<CleanWorkspace datasetId="ds_2" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText(/Rows 1–5 of 5/)).toBeInTheDocument());
+
+    // The stale request now resolves. It describes ds_1, which is no longer
+    // the dataset on screen - it must not render as this dataset's preview.
+    resolvePreview!(await json({ operation: "trim_whitespace", review_token: "r_stale", source_revision: 0, affected_rows: 1, affected_columns: ["notes"], before_sample: [], after_sample: [], warnings: [], projected_health: health }));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(document.querySelector(".clean-impact-summary")).toBeNull();
+  });
+
   it("loads the form fields a proposal describes, not just its preview, when handed off to Step settings", async () => {
     const fetchMock = vi.fn(async (input: string | URL) => {
       const path = String(input);

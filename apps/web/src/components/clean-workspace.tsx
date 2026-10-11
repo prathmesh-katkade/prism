@@ -207,6 +207,12 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
     if (verifyPollTimer.current) clearTimeout(verifyPollTimer.current);
     verifyJobId.current = null; verifyRequestId.current += 1; setVerifying(false); setVerifyProgress(null);
     setSelectedFinding(null);
+    // Same reasoning as the verify guard above, for Preview: a request fired
+    // against the dataset being switched away from must not be allowed to
+    // land here and present stale-dataset numbers as if they described the
+    // one now showing.
+    previewRequestId.current += 1;
+    setPreview(null); setPendingRequest(null);
     if (datasetId) void refresh(datasetId); else { setState("empty"); setClean(null); setProfile(null); setRows(null); }
   }, [datasetId, refresh]);
 
@@ -225,6 +231,7 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
     if (!datasetId) return;
     if (verifying) cancelVerify();
     setSelectedFinding(null);
+    previewRequestId.current += 1; // a preview from whatever was selected before must not land against this issue
     setManualMode(false); setSelectedIssue(issue); setPreview(null); setAtlas(null); setPendingRequest(null);
     onSelectContext({ objectId: issue.issue_id, label: issue.column ?? "Dataset-level issue", type: "finding", state: "ready", actions: [{ id: "atlas-explain-issue", label: "Ask Atlas to explain" }], metadata: [`${issue.affected_rows.toLocaleString()} affected rows`, `${issue.severity} severity`] });
     try {
@@ -239,6 +246,7 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
   function startManualOperation() {
     if (verifying) cancelVerify();
     setSelectedFinding(null);
+    previewRequestId.current += 1; // a preview request from whatever was selected before must not land here
     setManualMode(true); setSelectedIssue(null); setAtlas(null); setPreview(null); setPendingRequest(null);
     // A genuinely new step, not a continuation of whatever was last edited.
     // Without this, "+ Add step" right after finishing a previous step kept
@@ -250,12 +258,18 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
     onSelectContext({ objectId: "manual-operation", label: "Manual operation", type: "finding", state: "ready", actions: [], metadata: ["Not yet previewed"] });
   }
 
-  /** Any parameter edit after a preview exists makes that preview describe a
-   * build that no longer exists - clear it (and the request it was computed
-   * for) rather than leave stale impact/review numbers next to a changed
-   * form, and remember that it WAS previewed so the inspector can say
-   * "stale, recompute" instead of the generic pre-preview copy. */
+  /** Any parameter edit makes whatever preview request is in flight (or
+   * already landed) describe a build that no longer exists. Bumping
+   * previewRequestId unconditionally - not just when a preview has already
+   * committed - is what actually matters: without it, a request fired
+   * before this edit can still land afterward and pass previewOperation's
+   * own staleness check (nothing told it anything changed), silently
+   * restoring a preview for parameters the form no longer shows. If a
+   * preview HAD already committed, also clear it and remember that it WAS
+   * previewed so the inspector can say "stale, recompute" instead of the
+   * generic pre-preview copy. */
   function invalidateManualPreview() {
+    previewRequestId.current += 1;
     if (preview) { setPreview(null); setPendingRequest(null); setManualPreviewStale(true); }
   }
 
@@ -273,7 +287,15 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
       const response = await fetch(apiUrl(`/api/v1/clean/datasets/${datasetId}/preview`), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(request) });
       if (requestId !== previewRequestId.current) return;
       if (!response.ok) throw new Error((await response.json() as { detail?: string }).detail ?? "Preview failed.");
-      setPreview(await response.json() as CleanPreviewResponse);
+      const body = await response.json() as CleanPreviewResponse;
+      // Parsing the body above is itself an async step - a parameter edit,
+      // dataset switch, or discard can invalidate this request while it was
+      // running, same as while the network fetch itself was in flight. The
+      // check right after the fetch resolves is not enough on its own:
+      // re-check immediately before the state that would make this preview
+      // actionable actually commits.
+      if (requestId !== previewRequestId.current) return;
+      setPreview(body);
     } catch (reason) { if (requestId === previewRequestId.current) setError(reason instanceof Error ? reason.message : "Preview failed."); }
   }
 
@@ -424,6 +446,7 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
 
   async function previewSavedRecipe(recipe: CleanRecipe) {
     if (!datasetId) return;
+    previewRequestId.current += 1; // switching to a recipe preview must outrun any manual preview still in flight
     setRecipeError(null); setRecipePreview(null); setPreview(null); setPendingRequest(null);
     try {
       const response = await fetch(apiUrl(`/api/v1/clean/datasets/${datasetId}/recipes/${recipe.recipe_id}/preview`), { method: "POST" });
@@ -493,6 +516,7 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
       if (!response.ok) throw new Error((await response.json() as { detail?: string }).detail ?? "Applying the transformation failed.");
       const applied = await response.json() as { transformation: { transformation_id: string; operation: string } };
       onSelectContext({ objectId: applied.transformation.transformation_id, analyticalObjectId: `clean_${applied.transformation.transformation_id}`, label: `Clean — ${applied.transformation.operation.replaceAll("_", " ")}`, type: "finding", state: "ready", actions: [], metadata: ["Immutable transformation record"] });
+      previewRequestId.current += 1; // the dataset just moved to a new revision; nothing previewed against the old one may land now
       setPreview(null); setPendingRequest(null); setSelectedIssue(null); setAtlas(null); setManualMode(false);
       await refresh(datasetId);
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Applying the transformation failed."); }
@@ -500,6 +524,7 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
   }
 
   function selectFinding(finding: PatternFinding) {
+    previewRequestId.current += 1; // a preview from whatever was selected before must not land against this finding
     setManualMode(false); setSelectedIssue(null); setRecipePreview(null); setPreview(null); setPendingRequest(null); setAtlas(null);
     if (verifyPollTimer.current) clearTimeout(verifyPollTimer.current);
     verifyJobId.current = null; verifyRequestId.current += 1; setVerifying(false); setVerifyProgress(null);
@@ -691,6 +716,7 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
   async function undoTo(revision: number) {
     if (!datasetId) return;
     await fetch(apiUrl(`/api/v1/clean/datasets/${datasetId}/undo`), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ to_revision: revision }) });
+    previewRequestId.current += 1; // the dataset just moved to a different revision; nothing previewed against the old one may land now
     setPreview(null); setPendingRequest(null); setSelectedIssue(null); setAtlas(null); setManualMode(false);
     await refresh(datasetId);
   }
@@ -962,7 +988,7 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
         </div>
         <SampleTable rows={rows?.rows ?? []} />
       </>}
-      {preview && pendingRequest ? <div className="clean-apply-bar"><span>Nothing changes until Apply. Review source revision {preview.source_revision ?? clean.dataset.revision} and the rows above.</span><button disabled={applying || !preview.review_token} onClick={() => void apply()}>{applying ? "Applying…" : "Apply reviewed change"}</button><button className="secondary" onClick={() => { setPreview(null); setPendingRequest(null); }}>Discard preview</button></div> : null}
+      {preview && pendingRequest ? <div className="clean-apply-bar"><span>Nothing changes until Apply. Review source revision {preview.source_revision ?? clean.dataset.revision} and the rows above.</span><button disabled={applying || !preview.review_token} onClick={() => void apply()}>{applying ? "Applying…" : "Apply reviewed change"}</button><button className="secondary" onClick={() => { previewRequestId.current += 1; setPreview(null); setPendingRequest(null); }}>Discard preview</button></div> : null}
     </section>
     <aside className="inspector clean-inspector" aria-label="Selected issue and transformation inspector">
       <div className="clean-inspector-tabs" role="tablist" aria-label="Inspector view">
