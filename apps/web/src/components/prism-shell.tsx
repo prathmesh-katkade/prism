@@ -229,6 +229,13 @@ export function PrismShell() {
         if (resizeObserver && observedEl) resizeObserver.unobserve(observedEl);
         if (!resizeObserver) resizeObserver = new ResizeObserver(measure);
         resizeObserver.observe(threePane);
+        // Clean's own recipe/inspector separators can change the columns
+        // without changing the outer grid's width. Track the column edges
+        // too so the fixed Apply footer stays aligned while dragging.
+        if (threePane.classList.contains("clean-workspace")) {
+          if (threePane.querySelector(".clean-issues")) resizeObserver.observe(threePane.querySelector(".clean-issues")!);
+          if (threePane.querySelector(".clean-inspector")) resizeObserver.observe(threePane.querySelector(".clean-inspector")!);
+        }
         observedEl = threePane;
         measure();
       }

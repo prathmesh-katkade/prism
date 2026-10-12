@@ -16,9 +16,13 @@ import httpx
 import sqlglot
 from fastapi import APIRouter, HTTPException, Request
 from prism_api_contracts import (
+    CleanOperation,
+    CleanPreviewResponse,
     CleanTransformationRequest,
     VisualizationDataResponse,
     VisualizationSpec,
+    WorkspaceProposalClarification,
+    WorkspaceProposalClarificationChoice,
     WorkspaceProposalRequest,
     WorkspaceProposalResponse,
 )
@@ -36,6 +40,30 @@ router = APIRouter(prefix="/api/v1/workspace-proposals", tags=["workspace-propos
 
 def _unavailable(request: WorkspaceProposalRequest, reason: str, evidence: list[str]) -> WorkspaceProposalResponse:
     return WorkspaceProposalResponse(kind=request.kind, provider="unavailable", explanation=reason, evidence=evidence)
+
+
+def _clarification_for(operation: CleanTransformationRequest, preview: CleanPreviewResponse) -> WorkspaceProposalClarification | None:
+    """One complete, bounded clarification: a convert_type to datetime left
+    with no declared date_format, where the preview's own deterministic
+    ambiguous-date detector (clean.py's _detect_ambiguous_dates, reused here
+    rather than re-implemented) found values day/month order can't resolve
+    on its own. Explicit question, explicit permitted choices, each one a
+    typed date_format to re-preview with - never a second free-text ask.
+    Answering only changes what gets PREVIEWED; applying still goes through
+    the normal Clean approval gate, same as any other operation."""
+    if operation.operation is not CleanOperation.CONVERT_TYPE or operation.target_type != "datetime" or operation.date_format or not operation.column:
+        return None
+    if not preview.unresolved_values:
+        return None
+    sample = ", ".join(preview.unresolved_values[:3])
+    return WorkspaceProposalClarification(
+        question=f"Some dates in {operation.column!r} (e.g. {sample}) could be day-first or month-first - which order should PRISM use?",
+        column=operation.column,
+        choices=[
+            WorkspaceProposalClarificationChoice(label="Day first (31/12/2026 = 31 December)", parameters={"date_format": "%d/%m/%Y"}),
+            WorkspaceProposalClarificationChoice(label="Month first (12/31/2026 = December 31)", parameters={"date_format": "%m/%d/%Y"}),
+        ],
+    )
 
 
 def _read_only_local_sql(sql: str, columns: set[str]) -> None:
@@ -163,7 +191,7 @@ async def propose(request: WorkspaceProposalRequest, http_request: Request) -> W
                 # function's other "model output was unusable" cases below.
                 raise ValueError(f"Model-proposed operation was invalid: {error.detail}") from error
             return WorkspaceProposalResponse(kind=request.kind, provider="ollama", explanation=explanation, evidence=evidence,
-                                             clean_operation=operation, clean_preview=preview)
+                                             clean_operation=operation, clean_preview=preview, clarification=_clarification_for(operation, preview))
         if request.kind == "chart":
             spec = VisualizationSpec.model_validate(candidate["chart_spec"])
             try:

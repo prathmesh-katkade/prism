@@ -182,6 +182,72 @@ def test_a_client_disconnect_cancels_the_in_flight_model_call(monkeypatch: Monke
     assert cancelled["value"] is True, "cancelling generate_task must actually deliver CancelledError to the in-flight Ollama call, not just stop awaiting it"
 
 
+def test_an_ambiguous_date_conversion_returns_a_real_bounded_clarification(monkeypatch: MonkeyPatch) -> None:
+    """The one complete clarification flow this release implements: a
+    convert_type to datetime with no date_format, against data the
+    deterministic ambiguous-date detector (clean.py, reused not
+    reimplemented) actually flags. Explicit question, explicit permitted
+    choices, each a typed date_format - never a free-text follow-up, and
+    nothing applied by this response alone."""
+    monkeypatch.setenv("PRISM_AI_PROVIDER", "ollama")
+    client = TestClient(create_app())
+    # The non-date sentinel keeps the source column text-typed at ingestion;
+    # otherwise pandas may infer datetime before Clean can review the
+    # ambiguous 03/04 value. The day=15 value also tests the chosen format's
+    # treatment of a value whose order is not itself ambiguous.
+    upload = client.post("/api/v1/overview/datasets", files={"file": (
+        "orders.csv", b"segment,ordered_at\nNorth,03/04/2026\nSouth,15/06/2026\nWest,not-a-date\n", "text/csv",
+    )})
+    assert upload.status_code == 201
+    dataset_id = upload.json()["dataset_id"]
+    _mock_ollama(monkeypatch, lambda *_a, **_k: _model_response({
+        "explanation": "Convert ordered_at to a real date column.",
+        "clean_operation": {"operation": "convert_type", "column": "ordered_at", "target_type": "datetime"},
+    }))
+
+    result = client.post("/api/v1/workspace-proposals", json={"kind": "clean", "dataset_id": dataset_id, "intent": "Make ordered_at a date"})
+    assert result.status_code == 200
+    body = result.json()
+    clarification = body["clarification"]
+    assert clarification is not None
+    assert clarification["column"] == "ordered_at"
+    assert "03/04/2026" in clarification["question"]
+    assert len(clarification["choices"]) == 2
+    labels = [choice["label"] for choice in clarification["choices"]]
+    assert any("Day first" in label for label in labels)
+    assert any("Month first" in label for label in labels)
+    date_formats = {choice["parameters"]["date_format"] for choice in clarification["choices"]}
+    assert date_formats == {"%d/%m/%Y", "%m/%d/%Y"}
+
+    # Answering resumes the appropriate preview: applying a choice's own
+    # parameters to the same operation and re-previewing must actually
+    # resolve the ambiguity, not just echo a label back.
+    day_first = next(choice for choice in clarification["choices"] if "Day first" in choice["label"])
+    resumed = client.post(f"/api/v1/clean/datasets/{dataset_id}/preview", json={
+        "operation": "convert_type", "column": "ordered_at", "target_type": "datetime", **day_first["parameters"],
+    })
+    assert resumed.status_code == 200
+    assert resumed.json()["unresolved_values"] == []  # the explicit format resolved every value; no more ambiguity
+    # Nothing was mutated by any of this - still revision 0.
+    assert client.get(f"/api/v1/overview/datasets/{dataset_id}/profile").json()["dataset"]["revision"] == 0
+
+
+def test_a_declared_date_format_or_unambiguous_dates_return_no_clarification(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setenv("PRISM_AI_PROVIDER", "ollama")
+    client = TestClient(create_app())
+    upload = client.post("/api/v1/overview/datasets", files={"file": (
+        "orders.csv", b"segment,ordered_at\nNorth,2026-03-04\nSouth,2026-05-06\n", "text/csv",
+    )})
+    dataset_id = upload.json()["dataset_id"]
+    _mock_ollama(monkeypatch, lambda *_a, **_k: _model_response({
+        "explanation": "Convert ordered_at to a real date column.",
+        "clean_operation": {"operation": "convert_type", "column": "ordered_at", "target_type": "datetime"},
+    }))
+    result = client.post("/api/v1/workspace-proposals", json={"kind": "clean", "dataset_id": dataset_id, "intent": "Make ordered_at a date"})
+    assert result.status_code == 200
+    assert result.json()["clarification"] is None  # ISO dates are not ambiguous - nothing to ask
+
+
 def test_selected_operation_column_and_history_reach_the_model_prompt(monkeypatch: MonkeyPatch) -> None:
     """The analyst's current focus and this same conversation's own prior
     turns are real context for a follow-up - verify they actually reach the

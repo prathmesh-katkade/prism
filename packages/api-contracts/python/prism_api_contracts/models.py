@@ -1002,6 +1002,24 @@ class WorkspaceProposalRequest(ContractModel):
     history: list[WorkspaceProposalHistoryEntry] = Field(default_factory=list, max_length=5)
 
 
+class WorkspaceProposalClarificationChoice(ContractModel):
+    label: str = Field(min_length=1, max_length=120)
+    """The CleanTransformationRequest field values this choice sets if picked
+    - e.g. {"date_format": "%d/%m/%Y"}. Applied on top of clean_operation,
+    never as a separate, untyped instruction."""
+    parameters: dict[str, Any] = Field(default_factory=dict, max_length=10)
+
+
+class WorkspaceProposalClarification(ContractModel):
+    """A bounded, resumable question with explicit permitted choices - never
+    a second free-text "ask Atlas again" loop. Always answered by picking
+    one of `choices`, which re-runs the same preview with that choice's
+    parameters merged in; nothing is applied from answering alone."""
+    question: str = Field(min_length=1, max_length=500)
+    column: Optional[str] = Field(default=None, max_length=200)
+    choices: list[WorkspaceProposalClarificationChoice] = Field(min_length=2, max_length=6)
+
+
 class WorkspaceProposalResponse(ContractModel):
     kind: Literal["clean", "chart", "sql"]
     provider: Literal["ollama", "unavailable"]
@@ -1009,6 +1027,7 @@ class WorkspaceProposalResponse(ContractModel):
     evidence: list[str] = Field(default_factory=list)
     clean_operation: Optional[CleanTransformationRequest] = None
     clean_preview: Optional[CleanPreviewResponse] = None
+    clarification: Optional[WorkspaceProposalClarification] = None
     chart_spec: Optional[VisualizationSpec] = None
     chart_preview: Optional[VisualizationDataResponse] = None
     sql_draft: Optional[str] = None

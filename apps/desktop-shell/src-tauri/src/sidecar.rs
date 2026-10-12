@@ -61,10 +61,22 @@ pub fn spawn(app: &AppHandle) -> tauri::Result<bool> {
     // sidecar's cwd to Tauri's own stable, OS-appropriate app-data directory
     // makes all four of those stores land in one real, predictable place
     // every launch, regardless of how the app was opened.
-    let data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| tauri::Error::Anyhow(anyhow::anyhow!(e)))?;
+    // Release smoke tests and user-test sessions need a separate persistent
+    // store without changing the installed app's data. Production keeps the
+    // OS app-data location unless an explicit absolute override is supplied.
+    let data_dir = if let Some(value) = std::env::var_os("PRISM_DESKTOP_DATA_DIR") {
+        let path = std::path::PathBuf::from(value);
+        if !path.is_absolute() {
+            return Err(tauri::Error::Anyhow(anyhow::anyhow!(
+                "PRISM_DESKTOP_DATA_DIR must be an absolute path"
+            )));
+        }
+        path
+    } else {
+        app.path()
+            .app_data_dir()
+            .map_err(|e| tauri::Error::Anyhow(anyhow::anyhow!(e)))?
+    };
     std::fs::create_dir_all(&data_dir)
         .map_err(|e| tauri::Error::Anyhow(anyhow::anyhow!(e)))?;
     log::info!("[prism-api] working directory: {}", data_dir.display());

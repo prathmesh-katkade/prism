@@ -2526,6 +2526,17 @@ export type VizMark = "bar" | "horizontal_bar" | "line" | "scatter" | "histogram
 
 export type VizSortBy = "value_desc" | "value_asc" | "label_asc" | "label_desc";
 
+export interface WorkspaceProposalClarification {
+  question: string;
+  column?: string;
+  choices: WorkspaceProposalClarificationChoice[];
+}
+
+export interface WorkspaceProposalClarificationChoice {
+  label: string;
+  parameters?: Record<string, unknown>;
+}
+
 export interface WorkspaceProposalHistoryEntry {
   intent: string;
   explanation: string;
@@ -2549,6 +2560,7 @@ export interface WorkspaceProposalResponse {
   evidence?: string[];
   clean_operation?: CleanTransformationRequest;
   clean_preview?: CleanPreviewResponse;
+  clarification?: WorkspaceProposalClarification;
   chart_spec?: VisualizationSpec;
   chart_preview?: VisualizationDataResponse;
   sql_draft?: string;

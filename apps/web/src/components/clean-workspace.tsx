@@ -40,6 +40,12 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
   const [selectedIssue, setSelectedIssue] = useState<CleanIssue | null>(null);
   const [manualMode, setManualMode] = useState(false);
   const [inspectorTab, setInspectorTab] = useState<"settings" | "atlas">("settings");
+  const gridRef = useRef<HTMLElement | null>(null);
+  const recipePaneRef = useRef<HTMLElement | null>(null);
+  const inspectorPaneRef = useRef<HTMLElement | null>(null);
+  const [recipePaneWidth, setRecipePaneWidth] = useState<number | null>(null);
+  const [inspectorPaneWidth, setInspectorPaneWidth] = useState<number | null>(null);
+  const resizingPane = useRef<"recipe" | "inspector" | null>(null);
   const [pendingRequest, setPendingRequest] = useState<CleanTransformationRequest | null>(null);
   const [preview, setPreview] = useState<CleanPreviewResponse | null>(null);
   const [reviewView, setReviewView] = useState<"before" | "changes" | "after">("changes");
@@ -255,6 +261,7 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
     // same stale-index gap that let an unsaved, never-added step claim a
     // real position number ("STEP 3") in the first place.
     setEditingStepIndex(null); setManualPreviewStale(false);
+    if (inspectorPaneRef.current) inspectorPaneRef.current.scrollTop = 0;
     onSelectContext({ objectId: "manual-operation", label: "Manual operation", type: "finding", state: "ready", actions: [], metadata: ["Not yet previewed"] });
   }
 
@@ -431,6 +438,7 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
     const request = draftSteps[index]?.request;
     if (!request) return;
     setEditingStepIndex(index); setManualMode(true); setSelectedIssue(null);
+    if (inspectorPaneRef.current) inspectorPaneRef.current.scrollTop = 0;
     loadRequestIntoForm(request);
     // Selecting a step in the recipe list must show that step's own real
     // preview in the centre panel immediately, not whatever preview (if
@@ -739,6 +747,30 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
   // saved, and showing "STEP 3" for an unsaved, uncommitted step claimed a
   // position that didn't exist in the recipe list above it.
   const manualStepNumber = editingStepIndex !== null ? clean.history.length + editingStepIndex + 1 : null;
+
+  function resizeCleanPane(side: "recipe" | "inspector", proposedWidth: number) {
+    const grid = gridRef.current;
+    if (!grid) return;
+    const otherWidth = side === "recipe" ? (inspectorPaneRef.current?.getBoundingClientRect().width ?? 320) : (recipePaneRef.current?.getBoundingClientRect().width ?? 340);
+    const largest = Math.max(270, Math.min(440, grid.getBoundingClientRect().width - otherWidth - 370));
+    const width = Math.round(Math.max(270, Math.min(largest, proposedWidth)));
+    if (side === "recipe") setRecipePaneWidth(width);
+    else setInspectorPaneWidth(width);
+  }
+
+  function onPanePointerMove(side: "recipe" | "inspector", event: React.PointerEvent<HTMLDivElement>) {
+    if (resizingPane.current !== side || !gridRef.current) return;
+    const bounds = gridRef.current.getBoundingClientRect();
+    resizeCleanPane(side, side === "recipe" ? event.clientX - bounds.left : bounds.right - event.clientX);
+  }
+
+  function onPaneKeyDown(side: "recipe" | "inspector", event: React.KeyboardEvent<HTMLDivElement>) {
+    const delta = event.key === "ArrowRight" ? 16 : event.key === "ArrowLeft" ? -16 : 0;
+    if (!delta) return;
+    event.preventDefault();
+    const current = side === "recipe" ? (recipePaneRef.current?.getBoundingClientRect().width ?? 340) : (inspectorPaneRef.current?.getBoundingClientRect().width ?? 320);
+    resizeCleanPane(side, current + (side === "recipe" ? delta : -delta));
+  }
   // The small launcher icon reflects whether there's real step context for
   // Atlas to work from right now - it never claims "working" unless the
   // dock panel itself is actually mid-request (that pose lives there).
@@ -751,14 +783,14 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
    * which already does the right thing (recompute immediately if a preview
    * is live, just update and mark stale otherwise) regardless of which
    * state this renders in. */
-  function renderMappingTable(values: ReadonlyArray<{ value: string; count?: number }>) {
+  function renderMappingTable(values: ReadonlyArray<{ value: string; count?: number }>, review = false) {
     return <>
-      <div className="clean-mapping-bulk">
+      {!review ? <div className="clean-mapping-bulk">
         <ul className="clean-value-chips">{values.map((item) => <li key={item.value}><label className={categorySelected.has(item.value) ? "is-selected" : categoryMapping[item.value] ? "is-mapped" : ""}><input type="checkbox" checked={categorySelected.has(item.value)} onChange={() => toggleCategorySelected(item.value)} /> <span>{item.value}</span>{item.count !== undefined ? <small>{item.count.toLocaleString()}</small> : null}</label></li>)}</ul>
         <label>Map selected to<input aria-label="Map selected values to" value={categoryTarget} onChange={(event) => setCategoryTarget(event.target.value)} placeholder="e.g. Bengaluru" /></label>
         <button type="button" className="secondary" disabled={categorySelected.size === 0 || !categoryTarget.trim()} onClick={assignCategoryMapping}>Assign mapping to selected</button>
-      </div>
-      <div className="data-table-wrap clean-mapping-review" tabIndex={0}><table><thead><tr><th>Source value</th><th>Proposed value</th><th>Rows</th><th>Status</th></tr></thead><tbody>{values.map((item) => {
+      </div> : null}
+      <div className={`data-table-wrap clean-mapping-review${review ? " is-review" : ""}`} tabIndex={0}><table><thead><tr><th>Source value</th><th>Proposed value</th><th>Rows</th><th>Status</th></tr></thead><tbody>{values.map((item) => {
         const target = categoryMapping[item.value] ?? "";
         const mapped = Boolean(target);
         return <tr key={item.value}>
@@ -768,17 +800,22 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
           <td>{mapped ? <span className="health-pill good">Will change</span> : <span className="health-pill warn">Needs decision</span>}</td>
         </tr>;
       })}</tbody></table><datalist id="clean-mapping-target-options">{Array.from(new Set(Object.values(categoryMapping))).map((value) => <option key={value} value={value} />)}</datalist></div>
+      {review ? <details className="clean-mapping-bulk-disclosure"><summary>Bulk assign source values</summary><div className="clean-mapping-bulk">
+        <ul className="clean-value-chips">{values.map((item) => <li key={item.value}><label className={categorySelected.has(item.value) ? "is-selected" : categoryMapping[item.value] ? "is-mapped" : ""}><input type="checkbox" checked={categorySelected.has(item.value)} onChange={() => toggleCategorySelected(item.value)} /> <span>{item.value}</span>{item.count !== undefined ? <small>{item.count.toLocaleString()}</small> : null}</label></li>)}</ul>
+        <label>Map selected to<input aria-label="Map selected values to" value={categoryTarget} onChange={(event) => setCategoryTarget(event.target.value)} placeholder="e.g. Bengaluru" /></label>
+        <button type="button" className="secondary" disabled={categorySelected.size === 0 || !categoryTarget.trim()} onClick={assignCategoryMapping}>Assign mapping to selected</button>
+      </div></details> : null}
     </>;
   }
 
-  return <article className="clean-workspace three-pane">
+  return <article ref={gridRef} className="clean-workspace three-pane" style={{ "--clean-recipe-width": recipePaneWidth ? `${recipePaneWidth}px` : undefined, "--clean-inspector-width": inspectorPaneWidth ? `${inspectorPaneWidth}px` : undefined } as React.CSSProperties}>
     <header className="clean-dataset-header">
       <div><span className="eyebrow">Source: {clean.dataset.source_name}</span><h1>{preview?.operation === "category_mapping" ? "Review category mapping" : "Clean dataset"}</h1><p>{clean.dataset.row_count.toLocaleString()} rows · {clean.dataset.column_count} columns · revision {clean.dataset.revision}</p></div>
       {/* Unlike a numbered, gated wizard, every stage here is freely reachable at
           any time and never claims a later workspace is "done" - there is no
           dataset-wide notion of Clean/SQL/Visualize/Report completion to report
           honestly, only this revision's own applied-or-not state shown elsewhere. */}
-      <nav className="clean-workflow-strip" aria-label="Workflow">
+      <div className="clean-header-actions"><nav className="clean-workflow-strip" aria-label="Workflow">
         <span className="is-current">Clean</span>
         <span aria-hidden="true">→</span>
         <button type="button" onClick={() => onOpenWorkflow("sql-lab")}>SQL Lab</button>
@@ -786,9 +823,9 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
         <button type="button" onClick={() => onOpenWorkflow("visualize")}>Visualize</button>
         <span aria-hidden="true">→</span>
         <button type="button" onClick={() => onOpenWorkflow("reports")}>Reports</button>
-      </nav>
+      </nav><button type="button" className={`atlas-launcher ${inspectorTab === "atlas" ? "is-active" : ""}`} aria-controls="clean-atlas-panel" aria-pressed={inspectorTab === "atlas"} onClick={() => setInspectorTab("atlas")}><AtlasCharacter pose={atlasPose} size="small" /><span><strong>Atlas</strong><small>Ask about this step</small></span></button></div>
     </header>
-    <nav className="clean-issues" aria-label="Data quality issue navigator and manual operation editor" tabIndex={0}>
+    <nav ref={recipePaneRef} className="clean-issues" aria-label="Data quality issue navigator and manual operation editor" tabIndex={0}>
       <div className="section-title"><div><span className="eyebrow">TRANSFORMATION RECIPE</span><h2>{clean.history.length || draftSteps.length || recipePreview || (preview && pendingRequest) ? `${clean.history.length + (recipePreview ? (recipes.find((recipe) => recipe.recipe_id === recipePreview.recipe_id)?.steps.length ?? 0) : draftSteps.length ? draftSteps.length : (preview && pendingRequest) ? 1 : 0)} step(s)` : "Empty"}</h2></div></div>
       <ol className="clean-recipe-unified" aria-label="Unified transformation recipe">
         {clean.history.map((item, index) => <li key={item.transformation_id} className="is-applied">
@@ -924,7 +961,7 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
         {reviewView === "changes" ? <>
           <p className="clean-preview-summary">{preview.operation.replaceAll("_", " ")} affects <strong>{(preview.changed_rows_total ?? preview.affected_rows).toLocaleString()}</strong> row(s){(preview.affected_columns ?? []).length ? ` in ${(preview.affected_columns ?? []).join(", ")}` : ""}. Projected health <strong>{preview.projected_health.total}/100</strong> (currently {clean.health.total}/100).</p>
           <div className="clean-impact-summary"><div><strong>{(preview.changed_rows_total ?? preview.affected_rows).toLocaleString()}</strong><span>affected rows</span></div><div><strong>{Object.keys(pendingRequest?.category_mapping ?? {}).length.toLocaleString()}</strong><span>mapped labels</span></div><div><strong>{(preview.exception_rows_total ?? 0).toLocaleString()}</strong><span>exceptions</span></div></div>
-          {preview.operation === "category_mapping" && pendingRequest ? renderMappingTable(columnValues?.values ?? Object.keys(pendingRequest.category_mapping ?? {}).map((value) => ({ value }))) : null}
+          {preview.operation === "category_mapping" && pendingRequest ? renderMappingTable(columnValues?.values ?? Object.keys(pendingRequest.category_mapping ?? {}).map((value) => ({ value })), true) : null}
           {(preview.warnings ?? []).length ? <ul className="clean-warnings">{(preview.warnings ?? []).map((warning) => <li key={warning}>{warning}</li>)}</ul> : null}
           <div className="clean-review-tabs is-underline" role="tablist" aria-label="Inspect review results"><button role="tab" aria-selected={reviewRowsView === "affected"} onClick={() => setReviewRowsView("affected")}>Affected rows ({(preview.changed_rows_total ?? preview.affected_rows).toLocaleString()})</button><button role="tab" aria-selected={reviewRowsView === "exceptions"} onClick={() => setReviewRowsView("exceptions")}>Exceptions ({(preview.exception_rows_total ?? 0).toLocaleString()})</button><button role="tab" aria-selected={reviewRowsView === "validation"} onClick={() => setReviewRowsView("validation")}>Validation</button></div>
           {reviewRowsView === "affected" ? <InspectionTable rows={preview.changed_rows ?? []} total={preview.changed_rows_total ?? preview.affected_rows} /> : null}
@@ -938,7 +975,17 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
         <p className="clean-preview-summary">Recipe version {recipePreview.recipe_version} reviewed against revision {recipePreview.source_revision}. Projected health: <strong>{recipePreview.projected_health.total}/100</strong>.</p>
         <div className="clean-diff"><div><span className="eyebrow">BEFORE</span><SampleTable rows={recipePreview.before_sample} /></div><div><span className="eyebrow">AFTER</span><SampleTable rows={recipePreview.after_sample} /></div></div>
         <p className="quiet-note">No dataset changes until Apply reviewed recipe.</p>
-      </> : draftPreview ? <>
+      </> : manualMode && manualOperation === "category_mapping" ? <div className="clean-centre-editor">
+        <div className="section-title"><div><span className="eyebrow">MAPPING EDITOR</span><h2>Map source values to targets</h2></div></div>
+        {columnValues ? <>
+          <p className="quiet-note">{columnValues.total_distinct.toLocaleString()} distinct value(s) in {manualColumn || "the selected column"}{columnValues.truncated ? ` (showing the top ${columnValues.values.length})` : ""}. Select several and assign them all at once, or type a value directly into a row. Operation-wide settings (case sensitivity, unmatched values) are on the right.</p>
+          {renderMappingTable(columnValues.values)}
+        </> : <p className="quiet-note">{manualColumn ? "Loading distinct values…" : "Choose a column on the right to see its distinct values here."}</p>}
+      </div> : manualMode && manualOperation === "deduplicate_survivorship" ? <div className="clean-centre-editor">
+        <div className="section-title"><div><span className="eyebrow">GROUPING COLUMNS</span><h2>Choose columns that define a duplicate</h2></div></div>
+        <p className="quiet-note">Group rows that share the same value in every selected column; keep one row per group, chosen by the survivorship rule on the right.</p>
+        <ul className="clean-value-list">{(profile?.columns ?? []).map((column) => <li key={column.name}><label><input type="checkbox" checked={survivorshipColumns.has(column.name)} onChange={() => toggleSurvivorshipColumn(column.name)} /> <span>{column.name}</span> <small>{column.semantic_type}</small></label></li>)}</ul>
+      </div> : draftPreview ? <>
         <p className="clean-preview-summary">Draft recipe recalculated against revision {draftPreview.source_revision}. Projected health: <strong>{draftPreview.projected_health.total}/100</strong>. Save the recipe and preview its version before Apply.</p>
         <div className="clean-diff"><div><span className="eyebrow">BEFORE</span><SampleTable rows={draftPreview.before_sample} /></div><div><span className="eyebrow">AFTER</span><SampleTable rows={draftPreview.after_sample} /></div></div>
       </> : selectedFinding ? <>
@@ -969,17 +1016,7 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
           {exceptionPage ? (exceptionPage.rows ?? []).map((row) => <tr key={row.source_row}><td><code>{row.source_row}</code></td><td><code>{row.value}</code></td></tr>) : (selectedFinding.exception_examples ?? []).map((value, index) => <tr key={index}><td><code>{(selectedFinding.exception_source_rows ?? [])[index] ?? "—"}</code></td><td><code>{value}</code></td></tr>)}
         </tbody></table></div><div className="clean-table-toolbar"><button type="button" className="secondary" disabled={exceptionsLoading || !exceptionPage || exceptionPage.offset === 0} onClick={() => void loadExceptionPage(Math.max(0, (exceptionPage?.offset ?? 0) - 10))}>Previous exceptions</button><button type="button" className="secondary" disabled={exceptionsLoading || (exceptionPage ? exceptionPage.offset + (exceptionPage.rows ?? []).length >= exceptionPage.total : (selectedFinding.exception_examples ?? []).length >= selectedFinding.exception_count)} onClick={() => void loadExceptionPage(exceptionPage ? exceptionPage.offset + (exceptionPage.rows ?? []).length : (selectedFinding.exception_examples ?? []).length)}>{exceptionsLoading ? "Loading…" : "Next exceptions"}</button></div></> : <p className="quiet-note">No exceptions in the examined rows.</p>}
         <p className="quiet-note">Source revision {selectedFinding.source_revision} · fingerprint {selectedFinding.source_fingerprint.slice(0, 12)}…</p>
-      </> : manualMode && manualOperation === "category_mapping" ? <div className="clean-centre-editor">
-        <div className="section-title"><div><span className="eyebrow">MAPPING EDITOR</span><h2>Map source values to targets</h2></div></div>
-        {columnValues ? <>
-          <p className="quiet-note">{columnValues.total_distinct.toLocaleString()} distinct value(s) in {manualColumn || "the selected column"}{columnValues.truncated ? ` (showing the top ${columnValues.values.length})` : ""}. Select several and assign them all at once, or type a value directly into a row. Operation-wide settings (case sensitivity, unmatched values) are on the right.</p>
-          {renderMappingTable(columnValues.values)}
-        </> : <p className="quiet-note">{manualColumn ? "Loading distinct values…" : "Choose a column on the right to see its distinct values here."}</p>}
-      </div> : manualMode && manualOperation === "deduplicate_survivorship" ? <div className="clean-centre-editor">
-        <div className="section-title"><div><span className="eyebrow">GROUPING COLUMNS</span><h2>Choose columns that define a duplicate</h2></div></div>
-        <p className="quiet-note">Group rows that share the same value in every selected column; keep one row per group, chosen by the survivorship rule on the right.</p>
-        <ul className="clean-value-list">{(profile?.columns ?? []).map((column) => <li key={column.name}><label><input type="checkbox" checked={survivorshipColumns.has(column.name)} onChange={() => toggleSurvivorshipColumn(column.name)} /> <span>{column.name}</span> <small>{column.semantic_type}</small></label></li>)}</ul>
-      </div> : <>
+      </> : <>
         <p className="quiet-note">{selectedIssue ? "Select an issue to preview a proposed fix before applying it." : manualMode ? "Fill in the operation on the left and select Preview — nothing is changed until you apply." : "This is the dataset as it stands at the current revision. Select an issue or start a manual operation to preview a fix."} Nothing is changed until you apply.</p>
         <div className="clean-table-toolbar">
           <span className="quiet-note">{rows ? `Rows ${rows.offset + 1}–${Math.min(rows.offset + rows.limit, rows.total_rows)} of ${rows.total_rows.toLocaleString()}` : "Loading rows…"}</span>
@@ -990,7 +1027,9 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
       </>}
       {preview && pendingRequest ? <div className="clean-apply-bar"><span>Nothing changes until Apply. Review source revision {preview.source_revision ?? clean.dataset.revision} and the rows above.</span><button disabled={applying || !preview.review_token} onClick={() => void apply()}>{applying ? "Applying…" : "Apply reviewed change"}</button><button className="secondary" onClick={() => { previewRequestId.current += 1; setPreview(null); setPendingRequest(null); }}>Discard preview</button></div> : null}
     </section>
-    <aside className="inspector clean-inspector" aria-label="Selected issue and transformation inspector">
+    <div className="clean-pane-separator is-recipe" role="separator" tabIndex={0} aria-label="Resize recipe panel" aria-orientation="vertical" aria-valuemin={270} aria-valuemax={440} aria-valuenow={recipePaneWidth ?? 340} onKeyDown={(event) => onPaneKeyDown("recipe", event)} onPointerDown={(event) => { resizingPane.current = "recipe"; event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={(event) => onPanePointerMove("recipe", event)} onPointerUp={(event) => { resizingPane.current = null; event.currentTarget.releasePointerCapture(event.pointerId); }} onPointerCancel={() => { resizingPane.current = null; }} />
+    <div className="clean-pane-separator is-inspector" role="separator" tabIndex={0} aria-label="Resize inspector panel" aria-orientation="vertical" aria-valuemin={270} aria-valuemax={440} aria-valuenow={inspectorPaneWidth ?? 320} onKeyDown={(event) => onPaneKeyDown("inspector", event)} onPointerDown={(event) => { resizingPane.current = "inspector"; event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={(event) => onPanePointerMove("inspector", event)} onPointerUp={(event) => { resizingPane.current = null; event.currentTarget.releasePointerCapture(event.pointerId); }} onPointerCancel={() => { resizingPane.current = null; }} />
+    <aside ref={inspectorPaneRef} className="inspector clean-inspector" aria-label="Selected issue and transformation inspector">
       <div className="clean-inspector-tabs" role="tablist" aria-label="Inspector view">
         <button type="button" role="tab" aria-selected={inspectorTab === "atlas"} className={inspectorTab === "atlas" ? "is-selected" : ""} onClick={() => setInspectorTab("atlas")}><AtlasCharacter pose={atlasPose} size="small" />Atlas</button>
         <button type="button" role="tab" aria-selected={inspectorTab === "settings"} className={inspectorTab === "settings" ? "is-selected" : ""} onClick={() => setInspectorTab("settings")}>Step settings</button>
@@ -998,7 +1037,7 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
       {/* Both tabs stay mounted (hidden via the `hidden` attribute, not
           conditionally rendered) so switching tabs never discards Atlas's
           in-session conversation state or any Step-settings form state. */}
-      <div hidden={inspectorTab !== "atlas"}>
+      <div id="clean-atlas-panel" role="tabpanel" aria-label="Atlas assistant" hidden={inspectorTab !== "atlas"}>
         <AtlasDockPanel
           datasetId={datasetId}
           datasetName={clean.dataset.source_name}
@@ -1114,6 +1153,13 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
             <strong>{exceptions > 0 ? "Review required" : "Ready to apply"}</strong>
             <p>{exceptions > 0 ? `${exceptions.toLocaleString()} exception row${exceptions === 1 ? "" : "s"} need${exceptions === 1 ? "s" : ""} a decision before applying.` : "Nothing further to resolve for this preview."}</p>
             {exceptions > 0 ? <button type="button" className="secondary" onClick={() => setReviewRowsView("exceptions")}>Inspect exceptions</button> : null}
+          </div>
+          <div className="clean-preview-checks" aria-label="Preview checks">
+            <span className="eyebrow">PREVIEW CHECKS</span>
+            <p><span className={preview.source_revision === clean.dataset.revision ? "is-good" : "is-amber"}>●</span> Source revision {preview.source_revision} {preview.source_revision === clean.dataset.revision ? "is current" : "changed — preview again"}</p>
+            <p><span className={preview.review_token && !manualPreviewStale ? "is-good" : "is-amber"}>●</span> {preview.review_token && !manualPreviewStale ? "Reviewed parameters have a one-use token" : "Parameters need a fresh preview"}</p>
+            <p><span className={exceptions ? "is-amber" : "is-good"}>●</span> {exceptions ? `${exceptions.toLocaleString()} exception row${exceptions === 1 ? "" : "s"} to inspect` : "No exception rows in this preview"}</p>
+            {preview.warnings?.length ? <p><span className="is-amber">●</span> {preview.warnings.length} warning{preview.warnings.length === 1 ? "" : "s"} in the review</p> : null}
           </div>
         </>;
       })() : null}

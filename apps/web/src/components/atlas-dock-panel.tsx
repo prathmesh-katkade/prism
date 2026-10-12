@@ -29,7 +29,7 @@
  * "interrupted" rather than silently re-shown as if still loading.
  */
 import { useEffect, useRef, useState } from "react";
-import type { WorkspaceProposalResponse } from "@prism/api-contracts";
+import type { CleanPreviewResponse, CleanTransformationRequest, WorkspaceProposalResponse } from "@prism/api-contracts";
 import { apiUrl } from "../config/api";
 import { AtlasCharacter, type AtlasPose } from "./atlas-character";
 
@@ -44,11 +44,39 @@ type Turn = {
   status: "pending" | "done" | "error" | "cancelled" | "interrupted";
   response?: WorkspaceProposalResponse;
   error?: string;
+  selectedChoice?: string;
 };
 
 const TURN_STATUSES = new Set(["pending", "done", "error", "cancelled", "interrupted"]);
 
 function storageKey(datasetId: string): string { return `atlas-dock:${datasetId}`; }
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function validStoredResponse(value: unknown): value is WorkspaceProposalResponse {
+  if (!isRecord(value) || !["ollama", "unavailable"].includes(String(value.provider)) || typeof value.explanation !== "string") return false;
+  if (value.evidence !== undefined && (!Array.isArray(value.evidence) || !value.evidence.every((item) => typeof item === "string"))) return false;
+  if (value.clean_operation !== undefined && (!isRecord(value.clean_operation) || typeof value.clean_operation.operation !== "string")) return false;
+  if (value.clean_preview !== undefined) {
+    const preview = value.clean_preview;
+    if (!isRecord(preview) || typeof preview.operation !== "string" || !Number.isFinite(preview.affected_rows) || (preview.affected_rows as number) < 0
+      || (preview.changed_rows_total !== undefined && (!Number.isFinite(preview.changed_rows_total) || (preview.changed_rows_total as number) < 0))
+      || (preview.exception_rows_total !== undefined && (!Number.isFinite(preview.exception_rows_total) || (preview.exception_rows_total as number) < 0))
+      || (preview.unresolved_values !== undefined && (!Array.isArray(preview.unresolved_values) || !preview.unresolved_values.every((item) => typeof item === "string")))) return false;
+    if (preview.warnings !== undefined && (!Array.isArray(preview.warnings) || !preview.warnings.every((item) => typeof item === "string"))) return false;
+  }
+  if (value.clarification !== undefined && value.clarification !== null) {
+    const clarification = value.clarification;
+    if (!isRecord(clarification) || typeof clarification.question !== "string" || (clarification.column !== undefined && typeof clarification.column !== "string") || !Array.isArray(clarification.choices)
+      || clarification.choices.length < 2 || clarification.choices.length > 6
+      || !clarification.choices.every((choice) => isRecord(choice) && typeof choice.label === "string" && isRecord(choice.parameters)
+        && ["%d/%m/%Y", "%m/%d/%Y"].includes(String(choice.parameters.date_format))
+        && Object.keys(choice.parameters).every((key) => key === "date_format"))) return false;
+  }
+  return true;
+}
 
 /** A corrupt or unsupported entry (hand-edited localStorage, a future or
  * older app version's shape, truncated JSON that still parsed) must be
@@ -59,8 +87,14 @@ function isValidTurn(value: unknown): value is Turn {
   const turn = value as Record<string, unknown>;
   return typeof turn.id === "string" && turn.id.length > 0
     && typeof turn.intent === "string"
-    && typeof turn.revision === "number"
-    && typeof turn.status === "string" && TURN_STATUSES.has(turn.status);
+    && Number.isInteger(turn.revision) && (turn.revision as number) >= 0
+    && typeof turn.status === "string" && TURN_STATUSES.has(turn.status)
+    && (turn.status !== "done" || validStoredResponse(turn.response))
+    && (turn.response === undefined || validStoredResponse(turn.response))
+    && (turn.error === undefined || typeof turn.error === "string")
+    && (turn.selectedChoice === undefined || (typeof turn.selectedChoice === "string" && isRecord(turn.response)
+      && isRecord(turn.response.clarification) && Array.isArray(turn.response.clarification.choices)
+      && turn.response.clarification.choices.some((choice: unknown) => isRecord(choice) && choice.label === turn.selectedChoice)));
 }
 
 function loadStoredTurns(datasetId: string): Turn[] {
@@ -104,7 +138,13 @@ export function AtlasDockPanel({
   const [intent, setIntent] = useState("");
   const [turns, setTurns] = useState<Turn[]>(() => (typeof window !== "undefined" && datasetId ? loadStoredTurns(datasetId) : []));
   const [persistenceFailed, setPersistenceFailed] = useState(false);
+  const [clarifyingTurnId, setClarifyingTurnId] = useState<string | null>(null);
+  const [clarificationError, setClarificationError] = useState<{ turnId: string; message: string } | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const clarificationAbortRef = useRef<AbortController | null>(null);
+  const clarificationRequestId = useRef(0);
+  const revisionRef = useRef(revision);
+  revisionRef.current = revision;
   const pending = turns.find((turn) => turn.status === "pending");
 
   // A conversation is about one dataset. Loading a different dataset
@@ -126,8 +166,19 @@ export function AtlasDockPanel({
       skipNextSaveRef.current = true;
       setTurns(datasetId ? loadStoredTurns(datasetId) : []);
       abortRef.current?.abort();
+      clarificationAbortRef.current?.abort();
+      clarificationRequestId.current += 1;
+      setClarifyingTurnId(null);
+      setClarificationError(null);
     }
   }, [datasetId]);
+
+  useEffect(() => {
+    clarificationAbortRef.current?.abort();
+    clarificationRequestId.current += 1;
+    setClarifyingTurnId(null);
+    setClarificationError(null);
+  }, [revision]);
 
   // Mirror every change to this dataset's own storage slot - the actual
   // persistence; the effect above only ever reads it.
@@ -186,9 +237,55 @@ export function AtlasDockPanel({
 
   function cancel() { abortRef.current?.abort(); }
 
+  async function chooseClarification(turn: Turn, choiceIndex: number) {
+    const response = turn.response;
+    const choice = response?.clarification?.choices[choiceIndex];
+    const operation = response?.clean_operation;
+    if (!datasetId || !choice || !operation || turn.revision !== revision || clarifyingTurnId) return;
+    // Clarifications come from the server's bounded date ambiguity rule.
+    // Keep the client equally narrow: no arbitrary response parameters are
+    // accepted as mutation authority, and every choice merely re-previews.
+    const format = choice.parameters?.date_format;
+    if (operation.operation !== "convert_type" || operation.target_type !== "datetime"
+      || operation.column !== response?.clarification?.column
+      || !["%d/%m/%Y", "%m/%d/%Y"].includes(String(format))
+      || Object.keys(choice.parameters ?? {}).some((key) => key !== "date_format")) {
+      setClarificationError({ turnId: turn.id, message: "This choice is no longer a valid date-format clarification. Ask Atlas again." });
+      return;
+    }
+    const requestId = ++clarificationRequestId.current;
+    const controller = new AbortController();
+    clarificationAbortRef.current = controller;
+    setClarifyingTurnId(turn.id);
+    setClarificationError(null);
+    const resumed: CleanTransformationRequest = { ...operation, date_format: format as string };
+    delete resumed.review_token;
+    try {
+      const result = await fetch(apiUrl(`/api/v1/clean/datasets/${datasetId}/preview`), {
+        method: "POST", headers: { "content-type": "application/json" }, signal: controller.signal,
+        body: JSON.stringify(resumed),
+      });
+      if (!result.ok) throw new Error((await result.json() as { detail?: string }).detail ?? "Could not preview this date order.");
+      const preview = await result.json() as CleanPreviewResponse;
+      if (requestId !== clarificationRequestId.current || controller.signal.aborted || datasetRef.current !== datasetId || revisionRef.current !== turn.revision) return;
+      if (preview.source_revision !== turn.revision) throw new Error("The dataset changed. Ask Atlas again against its current revision.");
+      setTurns((current) => current.map((item) => item.id === turn.id && item.revision === turn.revision
+        ? { ...item, selectedChoice: choice.label, response: { ...response, clean_operation: resumed, clean_preview: preview } }
+        : item));
+    } catch (reason) {
+      if (!controller.signal.aborted && requestId === clarificationRequestId.current) setClarificationError({ turnId: turn.id, message: reason instanceof Error ? reason.message : "Could not preview this date order." });
+    } finally {
+      if (requestId === clarificationRequestId.current) setClarifyingTurnId(null);
+      if (clarificationAbortRef.current === controller) clarificationAbortRef.current = null;
+    }
+  }
+
   function clearConversation() {
     if (!datasetId) return;
     setTurns([]);
+    clarificationAbortRef.current?.abort();
+    clarificationRequestId.current += 1;
+    setClarifyingTurnId(null); setClarificationError(null);
     try { window.localStorage.removeItem(storageKey(datasetId)); } catch { /* nothing durable to clear if storage was already unavailable */ }
     setPersistenceFailed(false);
   }
@@ -225,6 +322,18 @@ export function AtlasDockPanel({
             <strong>{turn.response.provider === "ollama" ? "Atlas proposed (local model)" : "Local model unavailable"}</strong>
             <p>{turn.response.explanation}</p>
             {(turn.response.evidence ?? []).length ? <ul>{(turn.response.evidence ?? []).map((item) => <li key={item}>{item}</li>)}</ul> : null}
+            {turn.response.clarification ? <fieldset className="atlas-dock-clarification" disabled={stale || Boolean(pending) || Boolean(clarifyingTurnId)}>
+              <legend>Analyst decision required</legend>
+              <p>{turn.response.clarification.question}</p>
+              <div className="atlas-dock-choices">
+                {turn.response.clarification.choices.map((choice, index) => <button type="button" className={turn.selectedChoice === choice.label ? "is-selected" : "secondary"} key={`${choice.label}-${index}`} onClick={() => void chooseClarification(turn, index)} aria-pressed={turn.selectedChoice === choice.label}>
+                  {choice.label}
+                </button>)}
+              </div>
+              {clarifyingTurnId === turn.id ? <p role="status">Previewing the selected date order…</p> : null}
+              {turn.selectedChoice ? <p role="status">Previewed with {turn.selectedChoice}. Inspect the conversion warnings and changed rows in Step settings before Apply.</p> : null}
+              {clarificationError?.turnId === turn.id && !stale ? <p className="query-error" role="alert">{clarificationError.message}</p> : null}
+            </fieldset> : null}
             {turn.response.clean_preview ? (() => {
               const preview = turn.response.clean_preview!;
               const affected = preview.changed_rows_total ?? preview.affected_rows;
@@ -233,13 +342,14 @@ export function AtlasDockPanel({
               return <div className="atlas-dock-computed">
                 <span className="eyebrow">PRISM computed this deterministically</span>
                 <p><strong>{affected.toLocaleString()}</strong> row{affected === 1 ? "" : "s"} would change.</p>
-                {exceptionRows > 0 ? <div className="atlas-dock-ambiguity">
+                {exceptionRows > 0 && !turn.response?.clarification ? <div className="atlas-dock-ambiguity">
                   <p><strong className="is-amber">{exceptionRows.toLocaleString()}</strong> row{exceptionRows === 1 ? "" : "s"} didn't match anything in this proposal{distinctValues ? ` (${distinctValues.toLocaleString()} distinct value${distinctValues === 1 ? "" : "s"})` : ""} — review {exceptionRows === 1 ? "it" : "them"} before applying, or leave {exceptionRows === 1 ? "it" : "them"} unchanged.</p>
                   <button type="button" className="secondary" disabled={Boolean(pending)} onClick={() => void ask(`How should I handle the ${exceptionRows} row${exceptionRows === 1 ? "" : "s"} that didn't match in the last proposal?`)}>Ask Atlas how to handle {exceptionRows === 1 ? "it" : "them"}</button>
                 </div> : null}
+                {turn.selectedChoice && preview.warnings?.length ? <ul aria-label="Conversion warnings">{preview.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul> : null}
               </div>;
             })() : null}
-            {!stale && turn.response.provider === "ollama" && turn.response.clean_operation ? <button type="button" onClick={() => onReview(turn.response!)}>Review in Step settings</button> : null}
+            {!stale && turn.response.provider === "ollama" && turn.response.clean_operation && (!turn.response.clarification || turn.selectedChoice) ? <button type="button" onClick={() => onReview(turn.response!)}>Review in Step settings</button> : null}
           </div> : null}
         </li>;
       })}

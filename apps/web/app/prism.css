@@ -8,11 +8,11 @@
      packages/design-system/typescript/src/tokens.css's --prism-* values
      one-for-one so the shell and Atlas never diverge again. */
   --canvas:#141310; --surface:#1C1A16; --surface-raised:#25221C; --surface-muted:#2A271F; --table-header:#2A271F;
-  --line:#423B2D; --line-soft:#302C22; --text:#EEE9DC; --muted:#B8B09F; --faint:#8C8575;
+  --line:#423B2D; --line-soft:#302C22; --text:#EEE9DC; --muted:#B8B09F; --faint:#A69E8D;
   --accent:#D6AE50; --accent-hover:#DBB865; --accent-pressed:#B89645; --accent-soft:#3B301A;
   --focus:#7FB2E8; --blue:#6FA3D8; --blue-soft:color-mix(in srgb,#6FA3D8 16%,transparent);
-  --danger:#BA8181; --danger-soft:color-mix(in srgb,#BA8181 16%,transparent);
-  --good:#739269; --good-soft:color-mix(in srgb,#739269 16%,transparent);
+  --danger:#D99B9B; --danger-soft:color-mix(in srgb,#D99B9B 16%,transparent);
+  --good:#94B48A; --good-soft:color-mix(in srgb,#94B48A 16%,transparent);
   --amber:#B58B3C; --amber-soft:color-mix(in srgb,#B58B3C 16%,transparent);
   --disabled-text:#817C6F;
   --serif: Georgia, "Times New Roman", serif; --sans: Inter, ui-sans-serif, system-ui, sans-serif; --mono: "SFMono-Regular", Consolas, monospace; color-scheme:dark;
@@ -151,6 +151,13 @@
 .atlas-dock-ambiguity p { margin:0;color:var(--muted); }
 .atlas-dock-ambiguity button { justify-self:start; }
 .atlas-dock-computed strong.is-amber { color:var(--amber); }
+.atlas-dock-clarification { min-width:0;margin:4px 0;padding:10px 12px;border:1px solid var(--amber);border-radius:4px;background:var(--surface); }
+.atlas-dock-clarification legend { padding:0 5px;color:var(--amber);font:600 10px var(--mono);letter-spacing:.06em;text-transform:uppercase; }
+.atlas-dock-clarification p { margin:4px 0 9px;color:var(--text);font-size:12px;line-height:1.45; }
+.atlas-dock-choices { display:grid;gap:6px; }
+.atlas-dock-choices button { width:100%;min-height:34px;text-align:left;white-space:normal; }
+.atlas-dock-choices button.is-selected { border-color:var(--accent);background:var(--accent-soft);color:var(--text); }
+.atlas-dock-clarification:disabled { opacity:.68; }
 .atlas-dock-input { display:grid;gap:6px; }
 .atlas-dock-input label { display:grid;gap:5px;color:var(--faint);font:10px var(--mono);letter-spacing:.06em;text-transform:uppercase; }
 .atlas-dock-input textarea { min-height:64px;resize:vertical;padding:9px;background:var(--surface-raised);border:1px solid var(--line);border-radius:4px;color:var(--text);font:13px/1.5 var(--sans); }
@@ -607,6 +614,10 @@
 .clean-impact-summary > div { display:grid;gap:6px;justify-items:center;border-right:1px solid var(--line);text-align:center; }
 .clean-impact-summary > div:last-child { border-right:0; }.clean-impact-summary strong { color:var(--focus);font:650 26px var(--sans); }.clean-impact-summary span { color:var(--muted);font-size:12px; }
 .clean-mapping-bulk { display:grid;gap:8px;margin:0 0 14px;padding:12px;border:1px solid var(--line);border-radius:6px;background:var(--surface-raised); }
+.clean-mapping-bulk-disclosure { margin:0 0 10px;border:1px solid var(--line);border-radius:5px;background:var(--surface-raised); }
+.clean-mapping-bulk-disclosure summary { padding:8px 11px;color:var(--muted);font-size:12px;font-weight:600;cursor:pointer; }
+.clean-mapping-bulk-disclosure summary:hover { color:var(--text); }
+.clean-mapping-bulk-disclosure .clean-mapping-bulk { margin:0;border:0;border-top:1px solid var(--line);border-radius:0; }
 .clean-mapping-bulk .clean-value-chips { margin:0; }
 .clean-mapping-bulk label { display:grid;gap:5px;color:var(--muted);font:10px var(--mono);letter-spacing:.06em;text-transform:uppercase; }
 .clean-mapping-bulk input { padding:7px;background:var(--surface);border:1px solid var(--line);border-radius:3px;color:var(--text);font:12px var(--mono); }
@@ -736,11 +747,17 @@
    them. Grid's own default (stretch) makes each column fill the row with
    its own background instead; the inspector keeps its own align-self
    below so this doesn't disturb its sticky/max-height behavior. */
-.clean-workspace.three-pane { grid-template-rows:118px auto; }
+.shell-body.has-local-inspector .clean-workspace.three-pane { position:relative;grid-template-columns:var(--clean-recipe-width,clamp(300px,24%,360px)) minmax(0,1fr) var(--clean-inspector-width,clamp(290px,20%,330px));grid-template-rows:118px auto; }
+.clean-pane-separator { position:absolute;top:118px;bottom:0;z-index:6;width:10px;transform:translateX(-50%);cursor:col-resize;touch-action:none;background:transparent; }
+.clean-pane-separator::after { content:"";display:block;width:1px;height:100%;margin:auto;background:var(--line); }
+.clean-pane-separator:hover::after,.clean-pane-separator:focus-visible::after { width:3px;background:var(--accent); }
+.clean-pane-separator.is-recipe { left:var(--clean-recipe-width,clamp(300px,24%,360px)); }
+.clean-pane-separator.is-inspector { right:var(--clean-inspector-width,clamp(290px,20%,330px));transform:translateX(50%); }
+.clean-pane-separator:focus-visible { outline:2px solid var(--focus);outline-offset:-2px; }
 .clean-workspace.three-pane > .clean-dataset-header { grid-column:1 / 3; grid-row:1; }
 .clean-workspace.three-pane > .clean-issues { grid-row:2; }
 .clean-workspace.three-pane > .clean-preview { grid-row:2; }
-.clean-workspace.three-pane > .clean-inspector { grid-row:1 / 3; align-self:start;position:sticky;top:12px;max-height:calc(100vh - 150px);overflow-y:auto; }
+.clean-workspace.three-pane > .clean-inspector { grid-row:1 / 3; align-self:start;position:sticky;top:12px;height:calc(100vh - 102px);max-height:calc(100vh - 102px);overflow-y:auto; }
 /* A viewport media query here was the actual bug: at the window's own
    1366px default, the nav rail and padding already consume ~250-300px
    before .clean-workspace ever sees the remaining space, so the "is there
@@ -752,8 +769,11 @@
    the declared 1024px minimum reliably does fall back, instead of both
    being left to coincidence with the shared viewport breakpoint. */
 @container prism-workspace (max-width:950px) {
-  .clean-workspace.three-pane { grid-template-columns:1fr;grid-template-rows:none; }
-  .clean-workspace.three-pane > .clean-dataset-header,.clean-workspace.three-pane > .clean-issues,.clean-workspace.three-pane > .clean-preview,.clean-workspace.three-pane > .clean-inspector { grid-column:1;grid-row:auto;position:static;max-height:none;border-inline:0;border-top:1px solid var(--line); }
+  .shell-body.has-local-inspector .clean-workspace.three-pane { grid-template-columns:minmax(0,1fr);grid-template-rows:none; }
+  .clean-workspace.three-pane > .clean-dataset-header,.clean-workspace.three-pane > .clean-issues,.clean-workspace.three-pane > .clean-preview,.clean-workspace.three-pane > .clean-inspector { grid-column:1;grid-row:auto;position:static;min-width:0;height:auto;max-height:none;border-inline:0;border-top:1px solid var(--line); }
+  .clean-dataset-header h1 { white-space:normal;overflow-wrap:anywhere; }
+  .clean-recipe-actions { flex-wrap:wrap; }
+  .clean-pane-separator { display:none; }
 }
 
 .clean-dataset-header { display:flex;align-items:center;justify-content:space-between;gap:20px;padding:16px 22px;background:var(--surface);border-bottom:1px solid var(--line);border-right:1px solid var(--line); }
@@ -763,6 +783,16 @@
 .clean-dataset-header .clean-workflow-strip { flex:none; }
 .clean-dataset-header p { margin:4px 0 0;color:var(--muted);font-size:12px; }
 .clean-dataset-header .clean-workflow-strip { margin:0;padding:0;border:0; }
+.clean-header-actions { display:flex;align-items:center;justify-content:flex-end;gap:14px;min-width:0;flex-wrap:wrap; }
+.clean-dataset-header .atlas-launcher { flex:none;border-radius:5px;min-height:38px;padding:5px 9px; }
+.clean-dataset-header .atlas-launcher[aria-pressed="true"] { background:var(--accent-soft); }
+.clean-preview-checks { display:grid;gap:6px;margin:10px 0;padding:11px;border:1px solid var(--line);border-radius:5px;background:var(--surface-raised); }
+.clean-preview-checks .eyebrow { margin:0 0 2px; }
+.clean-preview-checks p { margin:0;color:var(--muted);font-size:11px;line-height:1.4; }
+.clean-preview-checks p span { margin-right:5px; }
+.clean-preview-checks .is-good { color:var(--good); }
+.clean-preview-checks .is-amber { color:var(--amber); }
+@media (max-width:1300px) { .clean-header-actions { gap:7px; }.clean-dataset-header .atlas-launcher small { display:none; } }
 
 /* Unified recipe: one coherent numbered sequence, Applied/Preview/Draft/Disabled derived from real state */
 .clean-recipe-unified { list-style:none;margin:0 0 14px;padding:0;border:1px solid var(--line);background:var(--line);display:grid;gap:1px; }
@@ -831,6 +861,8 @@
 .clean-mapping-target-input:focus-visible { outline:2px solid var(--focus);outline-offset:1px; }
 .clean-mapping-target-input::placeholder { color:var(--faint); }
 .clean-mapping-target-input:disabled { color:var(--disabled-text);background:var(--surface);cursor:not-allowed; }
+.atlas-run-controls button { padding:7px 10px;border:1px solid var(--line);border-radius:4px;background:var(--surface-raised);color:var(--text);cursor:pointer; }
+.atlas-run-controls button:focus-visible { outline:2px solid var(--focus);outline-offset:2px; }
 
 /* Reusable "raised control" edge: a restrained, inset one-pixel light top /
    dark bottom hairline that reads as recessed (inputs) or raised (buttons)
@@ -846,6 +878,10 @@
 .clean-impact-summary { padding:12px 0;margin:0 0 12px; }
 .clean-impact-summary strong { font-size:21px; }
 .clean-mapping-review th,.clean-mapping-review td { padding:9px 12px; }
+.clean-mapping-review.is-review { max-height:210px;overflow:auto; }
+.clean-mapping-review.is-review th { position:sticky;top:0;z-index:1; }
+.clean-mapping-review th { padding-block:8px; }
+.clean-mapping-review td,.clean-mapping-review td:nth-child(2) { padding-block:5px; }
 .clean-mapping-review th { background:var(--table-header); }
 .clean-mapping-review + .quiet-note { display:none; }
 .clean-review-tabs + p.quiet-note,.clean-review-tabs.is-underline + p.quiet-note { margin:6px 0; }

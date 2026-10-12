@@ -1,5 +1,17 @@
 # PRISM desktop shell
 
+## Isolated desktop test data
+
+The packaged app normally starts its API sidecar in Tauri's OS app-data
+directory. For a persistent user-test session, set `PRISM_DESKTOP_DATA_DIR`
+to an **absolute** directory before launching `app.exe`; the sidecar uses it
+as its working directory for its local stores. Relative paths are rejected.
+If an explicit `PRISM_ANALYTICAL_HISTORY_DATABASE_URL` is needed, point it at
+a SQLite file inside the same test directory. Leaving the override unset
+preserves the installed app's existing data location. Quit the current app
+and sidecar before launching a different build because the API binds to
+`127.0.0.1:8000`.
+
 Tauri v2 shell wrapping Prism's real native app (`apps/web`, which includes
 Atlas as one of its workflow tabs — see below) plus `apps/api` as a sidecar.
 See `DESKTOP_MIGRATION_PLAN.md` at the repo root for the phased plan this

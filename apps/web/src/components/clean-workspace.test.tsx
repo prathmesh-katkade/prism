@@ -13,6 +13,26 @@ const rowsPage = { dataset: dataset0, offset: 0, limit: 30, total_rows: dataset0
 afterEach(() => { vi.restoreAllMocks(); window.localStorage.clear(); });
 
 describe("Clean workspace", () => {
+  it("opens Atlas from the header and resizes both Clean panes by keyboard", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: string | URL) => {
+      const path = String(input);
+      if (path.endsWith("/state")) return json({ dataset: dataset0, issues: [], history: [], health });
+      if (path.includes("/rows")) return json(rowsPage);
+      if (path.includes("/profile")) return json({ columns: [] });
+      if (path.includes("/recipes")) return json([]);
+      return json({});
+    }));
+    render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText(/Rows 1–5 of 5/)).toBeInTheDocument());
+    const launcher = screen.getByRole("button", { name: /Atlas Ask about this step/ });
+    fireEvent.click(launcher);
+    expect(launcher).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("tabpanel", { name: "Atlas assistant" })).toBeVisible();
+    fireEvent.keyDown(screen.getByRole("separator", { name: "Resize recipe panel" }), { key: "ArrowRight" });
+    fireEvent.keyDown(screen.getByRole("separator", { name: "Resize inspector panel" }), { key: "ArrowLeft" });
+    expect(document.querySelector(".clean-workspace")).toHaveStyle({ "--clean-recipe-width": "270px", "--clean-inspector-width": "270px" });
+  });
+
   it("prompts to load a dataset first when none is active", () => {
     render(<CleanWorkspace datasetId={undefined} onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
     expect(screen.getByText("Load a dataset in Overview first.")).toBeInTheDocument();
@@ -168,7 +188,15 @@ describe("Clean workspace", () => {
     fireEvent.change(screen.getByLabelText("Column"), { target: { value: "notes" } });
     fireEvent.click(screen.getByRole("button", { name: "Add step to draft" }));
 
+    // Once the downstream draft preview has landed, starting a different
+    // kind of step must still expose that step's centre editor. The draft
+    // summary must not cover the mapping controls for a new step.
+    await waitFor(() => expect(screen.getByText(/Draft recipe recalculated against revision/)).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "+ Add step" }));
+    fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "category_mapping" } });
+    fireEvent.change(screen.getByLabelText("Column"), { target: { value: "region" } });
+    expect(screen.getByRole("heading", { name: "Map source values to targets" })).toBeInTheDocument();
+
     fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "drop_column" } });
     fireEvent.change(screen.getByLabelText("Column"), { target: { value: "region" } });
     fireEvent.click(screen.getByRole("button", { name: "Add step to draft" }));
