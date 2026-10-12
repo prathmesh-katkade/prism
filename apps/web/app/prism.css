@@ -768,14 +768,6 @@
    single-column far earlier than the content actually requires it, and
    the declared 1024px minimum reliably does fall back, instead of both
    being left to coincidence with the shared viewport breakpoint. */
-@container prism-workspace (max-width:950px) {
-  .shell-body.has-local-inspector .clean-workspace.three-pane { grid-template-columns:minmax(0,1fr);grid-template-rows:none; }
-  .clean-workspace.three-pane > .clean-dataset-header,.clean-workspace.three-pane > .clean-issues,.clean-workspace.three-pane > .clean-preview,.clean-workspace.three-pane > .clean-inspector { grid-column:1;grid-row:auto;position:static;min-width:0;height:auto;max-height:none;border-inline:0;border-top:1px solid var(--line); }
-  .clean-dataset-header h1 { white-space:normal;overflow-wrap:anywhere; }
-  .clean-recipe-actions { flex-wrap:wrap; }
-  .clean-pane-separator { display:none; }
-}
-
 .clean-dataset-header { display:flex;align-items:center;justify-content:space-between;gap:20px;padding:16px 22px;background:var(--surface);border-bottom:1px solid var(--line);border-right:1px solid var(--line); }
 .clean-dataset-header > div:first-child { min-width:0; }
 .clean-dataset-header .eyebrow { margin:0 0 4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
@@ -793,6 +785,18 @@
 .clean-preview-checks .is-good { color:var(--good); }
 .clean-preview-checks .is-amber { color:var(--amber); }
 @media (max-width:1300px) { .clean-header-actions { gap:7px; }.clean-dataset-header .atlas-launcher small { display:none; } }
+@container prism-workspace (max-width:950px) {
+  .shell-body.has-local-inspector .clean-workspace.three-pane { grid-template-columns:minmax(0,1fr);grid-template-rows:none; }
+  .clean-workspace.three-pane > .clean-dataset-header,.clean-workspace.three-pane > .clean-issues,.clean-workspace.three-pane > .clean-preview,.clean-workspace.three-pane > .clean-inspector { grid-column:1;grid-row:auto;position:static;min-width:0;height:auto;max-height:none;border-inline:0;border-top:1px solid var(--line); }
+  .clean-dataset-header { display:grid;grid-template-columns:minmax(0,1fr);align-items:start;gap:10px; }
+  .clean-dataset-header h1 { white-space:normal;overflow-wrap:anywhere; }
+  .clean-header-actions { justify-content:flex-start; }
+  .clean-dataset-header .clean-workflow-strip { flex-wrap:wrap; }
+  .clean-recipe-actions { flex-wrap:wrap; }
+  .shell-body.has-local-inspector .clean-apply-bar { position:static;margin:16px -22px -22px; }
+  .shell-body.has-local-inspector .clean-preview:has(.clean-apply-bar) { padding-bottom:22px; }
+  .clean-pane-separator { display:none; }
+}
 
 /* Unified recipe: one coherent numbered sequence, Applied/Preview/Draft/Disabled derived from real state */
 .clean-recipe-unified { list-style:none;margin:0 0 14px;padding:0;border:1px solid var(--line);background:var(--line);display:grid;gap:1px; }
@@ -878,7 +882,7 @@
 .clean-impact-summary { padding:12px 0;margin:0 0 12px; }
 .clean-impact-summary strong { font-size:21px; }
 .clean-mapping-review th,.clean-mapping-review td { padding:9px 12px; }
-.clean-mapping-review.is-review { max-height:210px;overflow:auto; }
+.clean-mapping-review.is-review { max-height:clamp(140px,calc(100vh - 760px),210px);overflow:auto; }
 .clean-mapping-review.is-review th { position:sticky;top:0;z-index:1; }
 .clean-mapping-review th { padding-block:8px; }
 .clean-mapping-review td,.clean-mapping-review td:nth-child(2) { padding-block:5px; }
