@@ -12,7 +12,8 @@ Claude's intentional uncommitted date-clarification contract and tests were
 preserved and completed with the Atlas choice UI and a real Clean re-preview.
 Current verification and visual evidence are tracked in
 [`verification-20261012.md`](verification-20261012.md). The rebuilt desktop
-executable is running against `.prism/desktop-user-test-20261012`; a genuine
+executable contains the code committed at `ca824b3af0a57603f99a29aae72081ccb3c4ad0c`
+and is running against `.prism/desktop-user-test-20261012`; a genuine
 stop/start preserved the same dataset fingerprint and revision. Windows
 Computer Use auto-review rejected native-window inspection (“Computer Use was
 not approved to use app”), so browser captures must not be presented as
