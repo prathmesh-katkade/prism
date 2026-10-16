@@ -19,6 +19,7 @@ import { AtlasInvestigation } from "./atlas-investigation";
 import { AtlasStatusBadge } from "./atlas-status-badge";
 import { AiProviderBadge } from "./ai-provider-badge";
 import { parseAtlasHistoryQuery, type AtlasHistoryQuery } from "../state/atlas-history-link";
+import { apiUrl } from "../config/api";
 import { EvolutionWorkspace } from "./evolution-workspace";
 import { migrationPresentation, phaseTwoMigrations, type InspectorObjectState, type ShellStatus, type WorkspaceTab } from "../state/shell-model";
 import { useLayoutState } from "../state/use-layout-state";
@@ -103,7 +104,20 @@ export function PrismShell() {
   const [atlasHistory, setAtlasHistory] = useState<AtlasHistoryQuery>(noAtlasHistory);
   useEffect(() => {
     const datasetId = initialDatasetId();
-    if (datasetId) setActiveDatasetId(datasetId);
+    if (datasetId) {
+      setActiveDatasetId(datasetId);
+    } else {
+      // No explicit dataset in the URL - the normal desktop-app launch path,
+      // not a shared link. Restore the most recently active dataset from the
+      // server's own durable store (the same "latest" ordering SQL Lab's
+      // connection list and AI Analyst already resolve through) rather than
+      // leaving every workspace on an empty state after every restart, even
+      // though the dataset itself survived.
+      void fetch(apiUrl("/api/v1/overview/datasets"))
+        .then((response) => (response.ok ? response.json() as Promise<{ dataset_id: string }[]> : []))
+        .then((datasets) => { if (datasets.length) setActiveDatasetId(datasets[0]!.dataset_id); })
+        .catch(() => { /* nothing durable to restore; workspaces show their normal empty state */ });
+    }
     const runId = initialRunId();
     if (runId) setActiveAtlasRunId(runId);
     const history = initialAtlasHistory();
