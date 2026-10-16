@@ -225,6 +225,10 @@ def test_a_client_disconnect_cancels_the_in_flight_model_call(monkeypatch: Monke
     immediately: this is the one case TestClient's all-or-nothing request
     cycle cannot simulate (a client that *leaves mid-flight*)."""
     monkeypatch.setenv("PRISM_AI_PROVIDER", "ollama")
+    # An explicit model skips the autodiscovery GET /api/tags call entirely -
+    # this test is about cancelling the generate POST specifically, not
+    # discovery, which has its own dedicated tests above.
+    monkeypatch.setenv("PRISM_OLLAMA_MODEL", "test-local-model")
     client = TestClient(create_app())
     dataset_id = _source(client)
 
