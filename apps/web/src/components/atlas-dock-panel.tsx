@@ -319,7 +319,7 @@ export function AtlasDockPanel({
           {turn.status === "interrupted" ? <p className="quiet-note">This was still waiting on a reply when the app last closed - that request is gone. Ask again if still relevant.</p> : null}
           {turn.status === "error" ? <div className="atlas-dock-error" role="alert"><p>{turn.error}</p><button type="button" className="secondary" disabled={Boolean(pending) || stale} onClick={() => void ask(turn.intent)}>Retry</button></div> : null}
           {turn.status === "done" && turn.response ? <div className="atlas-dock-message">
-            <strong>{turn.response.provider === "ollama" ? turn.response.clean_operation || turn.response.sql_draft || turn.response.chart_spec ? "Atlas proposed (local model)" : "Atlas explained (local model)" : "Local model unavailable"}</strong>
+            <strong>{turn.response.provider === "ollama" ? `Atlas ${turn.response.clean_operation || turn.response.sql_draft || turn.response.chart_spec ? "proposed" : "explained"} (${turn.response.model ?? "local model"})` : "Local model unavailable"}</strong>
             <p>{turn.response.explanation}</p>
             {turn.response.provider === "unavailable" ? <button type="button" className="secondary" disabled={Boolean(pending) || stale} onClick={() => void ask(turn.intent)}>Retry with local model</button> : null}
             {(turn.response.evidence ?? []).length ? <details className="atlas-dock-evidence"><summary>Inspect source evidence and provenance</summary><ul>{(turn.response.evidence ?? []).map((item) => <li key={item}>{item}</li>)}</ul></details> : null}

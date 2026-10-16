@@ -59,6 +59,7 @@ def test_model_autodiscovery_uses_real_tag_names_without_configured_model(monkey
     assert result.status_code == 200
     assert result.json()["provider"] == "ollama"
     assert selected == ["qwen2.5:3b"]
+    assert result.json()["model"] == "qwen2.5:3b"  # a model chosen by autodiscovery must still be visible, not just used
 
 
 def test_unavailable_model_retains_manual_path(monkeypatch: MonkeyPatch) -> None:
@@ -84,6 +85,7 @@ def test_model_clean_proposal_is_typed_and_previewed_without_applying(monkeypatc
     assert result.status_code == 200
     body = result.json()
     assert body["provider"] == "ollama"
+    assert body["model"] == "test-local-model"  # the analyst must be able to see which model actually answered
     assert body["clean_preview"]["affected_rows"] == 1
     assert body["clean_preview"]["source_revision"] == 0
     assert client.get(f"/api/v1/overview/datasets/{dataset_id}/profile").json()["dataset"]["revision"] == 0

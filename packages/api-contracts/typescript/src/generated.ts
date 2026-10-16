@@ -2556,6 +2556,7 @@ export interface WorkspaceProposalRequest {
 export interface WorkspaceProposalResponse {
   kind: "clean" | "chart" | "sql";
   provider: "ollama" | "unavailable";
+  model?: string;
   explanation: string;
   evidence?: string[];
   clean_operation?: CleanTransformationRequest;

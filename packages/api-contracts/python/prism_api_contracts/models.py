@@ -1023,6 +1023,12 @@ class WorkspaceProposalClarification(ContractModel):
 class WorkspaceProposalResponse(ContractModel):
     kind: Literal["clean", "chart", "sql"]
     provider: Literal["ollama", "unavailable"]
+    """The Ollama model that actually answered, when no PRISM_OLLAMA_MODEL is
+    configured and one was chosen from whatever is installed - this lane
+    picks from real local models, never a fixed name, so the analyst must be
+    able to see which one actually ran rather than trust an unlabeled
+    answer."""
+    model: Optional[str] = None
     explanation: str
     evidence: list[str] = Field(default_factory=list)
     clean_operation: Optional[CleanTransformationRequest] = None

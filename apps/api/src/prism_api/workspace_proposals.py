@@ -218,7 +218,7 @@ async def propose(request: WorkspaceProposalRequest, http_request: Request) -> W
             )
         if request.kind == "clean":
             if candidate.get("clean_operation") is None:
-                return WorkspaceProposalResponse(kind=request.kind, provider="ollama", explanation=explanation, evidence=evidence)
+                return WorkspaceProposalResponse(kind=request.kind, provider="ollama", model=payload["model"], explanation=explanation, evidence=evidence)
             operation = CleanTransformationRequest.model_validate(candidate["clean_operation"])
             if operation.review_token is not None:
                 raise ValueError("Model output may not submit a review token.")
@@ -230,7 +230,7 @@ async def propose(request: WorkspaceProposalRequest, http_request: Request) -> W
                 # not a dataset-state conflict, so it belongs with this
                 # function's other "model output was unusable" cases below.
                 raise ValueError(f"Model-proposed operation was invalid: {error.detail}") from error
-            return WorkspaceProposalResponse(kind=request.kind, provider="ollama", explanation=explanation, evidence=evidence,
+            return WorkspaceProposalResponse(kind=request.kind, provider="ollama", model=payload["model"], explanation=explanation, evidence=evidence,
                                              clean_operation=operation, clean_preview=preview, clarification=_clarification_for(operation, preview))
         if request.kind == "chart":
             spec = VisualizationSpec.model_validate(candidate["chart_spec"])
@@ -246,13 +246,13 @@ async def propose(request: WorkspaceProposalRequest, http_request: Request) -> W
             warnings.extend(facet_warnings)
             chart_preview = VisualizationDataResponse(spec=spec, data=data, truncated=truncated,
                                                       warnings=warnings, provenance=_provenance(source), facets=facets)
-            return WorkspaceProposalResponse(kind=request.kind, provider="ollama", explanation=explanation, evidence=evidence,
+            return WorkspaceProposalResponse(kind=request.kind, provider="ollama", model=payload["model"], explanation=explanation, evidence=evidence,
                                              chart_spec=spec, chart_preview=chart_preview)
         sql = candidate["sql_draft"]
         if not isinstance(sql, str) or len(sql) > 50_000:
             raise ValueError("Model SQL must be a bounded text query.")
         _read_only_local_sql(sql, set(source.frame.columns))
-        return WorkspaceProposalResponse(kind=request.kind, provider="ollama", explanation=explanation, evidence=evidence,
+        return WorkspaceProposalResponse(kind=request.kind, provider="ollama", model=payload["model"], explanation=explanation, evidence=evidence,
                                          sql_draft=sql)
     except httpx.HTTPStatusError as error:
         logger.warning("local_model_http_failure status=%s", error.response.status_code)

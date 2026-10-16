@@ -36,6 +36,18 @@ describe("Atlas Clean clarification", () => {
     expect(screen.queryByRole("button", { name: "Review in Step settings" })).not.toBeInTheDocument();
   });
 
+  it("names the actual local model that answered, when the backend reports one", async () => {
+    // This lane picks a model from whatever is actually installed when none
+    // is explicitly configured - the analyst must be able to see which one
+    // really ran, not just an unlabeled "local model".
+    const answer = { kind: "clean", provider: "ollama", model: "qwen2.5:3b", explanation: "Review blank regions first.", evidence: [] };
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(answer), { status: 200 })));
+    render(panel());
+    fireEvent.click(screen.getByRole("button", { name: "What should I review first?" }));
+    await waitFor(() => expect(screen.getByText(answer.explanation)).toBeInTheDocument());
+    expect(screen.getByText("Atlas explained (qwen2.5:3b)")).toBeInTheDocument();
+  });
+
   it("keeps verbose source provenance behind an inspectable disclosure and offers retry", async () => {
     const unavailable = { kind: "clean", provider: "unavailable", explanation: "The selected local model is not installed.", evidence: ["Source ds_1, revision 0, fingerprint abc."] };
     const fetchMock = vi.fn(async () => new Response(JSON.stringify(unavailable), { status: 200 }));
