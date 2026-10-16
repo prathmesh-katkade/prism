@@ -3,7 +3,83 @@
 One durable file, updated at every checkpoint rather than left to scatter
 across phase docs. Read this first in any new session.
 
-## Current continuation — 2026-10-12
+## Current continuation — 2026-10-17
+
+Claude resumed from pushed feature SHA `557cd37a13f5af04b7fdfe27d6ff2742f7715b1b`
+(Codex's prior continuation, both CI jobs and local gates green at that
+SHA) and remote main unchanged at `c9472ca822293e8767ec7d8dc617e8be964232d8`.
+`verification-20261013.md` and `reference-implementation-spec-20261012.md`
+are the authoritative status/spec docs for the visual-fidelity work - this
+entry does not repeat them, it only tracks what changed on top.
+
+**Correctness fixes this round** (each independently verified: typecheck,
+lint, full web test suite, full relevant pytest selection, ruff, mypy,
+boundaries, secrets, contract-check all clean; new regression tests
+confirmed to fail against the pre-fix code and pass against the fix):
+1. Preserved and committed Claude's own uncommitted date-clarification work
+   that Codex had built on - confirmed intact, nothing lost across the
+   handoff.
+2. `_choose_installed_model`'s selection is appropriate for this
+   explicitly-separate, non-governed lane (confirmed by the module's own
+   docstring), but the chosen model was never visible to the analyst -
+   added a `model` field to `WorkspaceProposalResponse`, surfaced in
+   Atlas's dock ("Atlas explained (qwen2.5:3b)" instead of an unlabeled
+   "(local model)").
+3. **Real bug**: `activeDatasetId` in `prism-shell.tsx` only ever hydrated
+   from a `?dataset_id=` URL query param - a genuine app restart is a
+   fresh load with no query string, so it never restored, exactly matching
+   verification-20261013.md's "active dataset selection was not reliably
+   restored" finding. Now falls back to `GET /api/v1/overview/datasets`
+   (already ordered most-recent-first by this session's earlier
+   sequence-tiebreaker fix) and restores its first entry. Proved end to
+   end: uploaded a dataset to the real packaged app's sidecar, stopped the
+   app (clean exit, no orphan), relaunched it, confirmed the dataset
+   survived, then verified through a real browser against the identical
+   frontend code (matched-CORS instance, since the packaged window's own
+   CORS config doesn't allow an ad-hoc browser origin) that a plain reload
+   with no query string restores it as the active dataset in Clean -
+   evidence: `evidence/restart-recovery-verified-20261017.png`. A raw
+   Win32 coordinate-click on the actual packaged window to drive this same
+   proof directly in-app still doesn't land reliably (same limitation
+   already noted in this file's history) - not pursued further given the
+   browser-based proof exercises the identical code path.
+4. **Real CI failure found and fixed**: `test_a_client_disconnect_...`
+   (my own test, predating Codex's autodiscovery addition) only mocked
+   `httpx.AsyncClient.post`, not the new `GET /api/tags` autodiscovery
+   call - passed locally only because a real local Ollama happens to be
+   reachable here, failed in CI with a genuine `ConnectError`. Fixed by
+   setting `PRISM_OLLAMA_MODEL` explicitly so the test exercises only
+   cancellation, which is what it's named for.
+5. Added a `ResizeObserver` stub to the web test setup (jsdom doesn't
+   implement it; real browsers do) - surfaced by the restart-recovery
+   test being the first `prism-shell` test to reach a real loaded-dataset
+   render.
+
+**Desktop rebuild**: sidecar + frontend + Tauri release rebuilt from the
+final commit below; launched, sidecar auto-spawn confirmed, window
+renders correctly (`evidence/desktop-smoke-20261017.png`). Left running
+for the owner to inspect.
+
+**Figma MCP**: confirmed still connected (same owner account used for the
+existing `KaDgBRjmB9iqgs7essB4A1` geometry spec) - not used further this
+round; the existing spec and approved PNGs remain authoritative, and no
+further Figma setup was needed per the owner's own instruction not to
+repeat it.
+
+**Not attempted this round** (scope decision, not an oversight): the
+exhaustive pixel-level reference-matching work in
+`reference-implementation-spec-20261012.md`'s mismatch column (recipe/
+mapping/inspector geometry, the full cleaning-plan review composition,
+the Atlas preview-check card, SQL Lab join-evidence population, same-
+state light/dark/narrow native comparisons) - that remains exactly as
+documented in `verification-20261013.md`'s "Open acceptance gaps", not
+re-verified or re-scoped here. Treat those gaps as still open; this
+round's commits only close the specific correctness bugs listed above.
+
+See the commit log from `557cd37` forward for the exact pushed SHAs, and
+the PR's CI checks for the exact-SHA gate results at landing time.
+
+## Historical handoff: 2026-10-12
 
 The `2246880` entry below is a historical handoff, not the current HEAD.
 Codex started from pushed feature SHA `282bbbde23c7c427655d75f0b70da1e6223d1dd0`
