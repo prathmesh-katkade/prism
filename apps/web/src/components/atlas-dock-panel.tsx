@@ -294,7 +294,7 @@ export function AtlasDockPanel({
     <header className="atlas-dock-header">
       <AtlasCharacter pose={dockPose} size="large" />
       <div><strong>Atlas</strong><small>Your investigation assistant</small></div>
-      {turns.length ? <button type="button" className="secondary atlas-dock-clear" onClick={clearConversation}>Clear conversation</button> : null}
+      {turns.length ? <button type="button" className="secondary atlas-dock-clear" aria-label="Clear conversation" title="Clear conversation" onClick={clearConversation}>Clear</button> : null}
     </header>
     <p className="atlas-dock-privacy">Only this PRISM context is shared.</p>
     {persistenceFailed ? <p className="query-error" role="alert">This conversation could not be saved — it will not survive a reload. Browser storage may be full or disabled.</p> : null}
@@ -304,10 +304,10 @@ export function AtlasDockPanel({
       <li>{focusLabel}</li>
       {column ? <li>{column}</li> : null}
     </ul>
-    <div className="atlas-dock-starters">
+    {!turns.length ? <div className="atlas-dock-starters">
       <span className="eyebrow">Starter questions</span>
       {STARTER_QUESTIONS.map((question) => <button key={question} type="button" className="secondary" disabled={!datasetId || Boolean(pending)} onClick={() => void ask(question)}>{question}</button>)}
-    </div>
+    </div> : null}
     {turns.length ? <ol className="atlas-dock-turns" aria-label="Conversation" aria-live="polite">
       {turns.map((turn) => {
         const stale = turn.revision !== revision;
@@ -317,11 +317,12 @@ export function AtlasDockPanel({
           {turn.status === "pending" ? <div className="atlas-dock-message"><strong>Checking local model…</strong><button type="button" className="secondary" onClick={cancel}>Cancel</button></div> : null}
           {turn.status === "cancelled" ? <p className="quiet-note">Stopped waiting for a reply. PRISM also closed its own connection to the local model, which usually makes it stop generating too, but that isn't guaranteed — in-flight model computation may continue briefly.</p> : null}
           {turn.status === "interrupted" ? <p className="quiet-note">This was still waiting on a reply when the app last closed - that request is gone. Ask again if still relevant.</p> : null}
-          {turn.status === "error" ? <p className="query-error" role="alert">{turn.error}</p> : null}
+          {turn.status === "error" ? <div className="atlas-dock-error" role="alert"><p>{turn.error}</p><button type="button" className="secondary" disabled={Boolean(pending) || stale} onClick={() => void ask(turn.intent)}>Retry</button></div> : null}
           {turn.status === "done" && turn.response ? <div className="atlas-dock-message">
-            <strong>{turn.response.provider === "ollama" ? "Atlas proposed (local model)" : "Local model unavailable"}</strong>
+            <strong>{turn.response.provider === "ollama" ? turn.response.clean_operation || turn.response.sql_draft || turn.response.chart_spec ? "Atlas proposed (local model)" : "Atlas explained (local model)" : "Local model unavailable"}</strong>
             <p>{turn.response.explanation}</p>
-            {(turn.response.evidence ?? []).length ? <ul>{(turn.response.evidence ?? []).map((item) => <li key={item}>{item}</li>)}</ul> : null}
+            {turn.response.provider === "unavailable" ? <button type="button" className="secondary" disabled={Boolean(pending) || stale} onClick={() => void ask(turn.intent)}>Retry with local model</button> : null}
+            {(turn.response.evidence ?? []).length ? <details className="atlas-dock-evidence"><summary>Inspect source evidence and provenance</summary><ul>{(turn.response.evidence ?? []).map((item) => <li key={item}>{item}</li>)}</ul></details> : null}
             {turn.response.clarification ? <fieldset className="atlas-dock-clarification" disabled={stale || Boolean(pending) || Boolean(clarifyingTurnId)}>
               <legend>Analyst decision required</legend>
               <p>{turn.response.clarification.question}</p>
@@ -339,9 +340,22 @@ export function AtlasDockPanel({
               const affected = preview.changed_rows_total ?? preview.affected_rows;
               const exceptionRows = preview.exception_rows_total ?? 0;
               const distinctValues = (preview.unresolved_values ?? []).length;
+              const warningCount = preview.warnings?.length ?? 0;
+              const clarificationPending = Boolean(turn.response?.clarification && !turn.selectedChoice);
+              const checks = [
+                { label: "Source revision current", detail: `Revision ${preview.source_revision}`, clear: !stale && preview.source_revision === revision },
+                { label: "Review token issued", detail: preview.review_token ? "One-use preview token" : "Preview again", clear: Boolean(preview.review_token) },
+                { label: "No conversion warnings", detail: warningCount ? `${warningCount} warning${warningCount === 1 ? "" : "s"}` : "No warnings", clear: warningCount === 0 },
+                { label: "No unresolved review", detail: clarificationPending ? "Analyst decision required" : exceptionRows ? `${exceptionRows.toLocaleString()} rows to inspect` : distinctValues ? `${distinctValues.toLocaleString()} values to inspect` : "No unresolved values", clear: !clarificationPending && exceptionRows === 0 && distinctValues === 0 },
+              ];
               return <div className="atlas-dock-computed">
                 <span className="eyebrow">PRISM computed this deterministically</span>
                 <p><strong>{affected.toLocaleString()}</strong> row{affected === 1 ? "" : "s"} would change.</p>
+                <section className="atlas-dock-preview-checks" aria-label="Preview checks">
+                  <header><span>Preview checks</span><strong>{checks.filter((check) => check.clear).length} / {checks.length} clear</strong></header>
+                  <small>Measured checks, not model confidence.</small>
+                  <ul>{checks.map((check) => <li key={check.label} className={check.clear ? "is-good" : "is-amber"}><span aria-hidden="true">{check.clear ? "✓" : "!"}</span><span>{check.label}</span><small>{check.detail}</small></li>)}</ul>
+                </section>
                 {exceptionRows > 0 && !turn.response?.clarification ? <div className="atlas-dock-ambiguity">
                   <p><strong className="is-amber">{exceptionRows.toLocaleString()}</strong> row{exceptionRows === 1 ? "" : "s"} didn't match anything in this proposal{distinctValues ? ` (${distinctValues.toLocaleString()} distinct value${distinctValues === 1 ? "" : "s"})` : ""} — review {exceptionRows === 1 ? "it" : "them"} before applying, or leave {exceptionRows === 1 ? "it" : "them"} unchanged.</p>
                   <button type="button" className="secondary" disabled={Boolean(pending)} onClick={() => void ask(`How should I handle the ${exceptionRows} row${exceptionRows === 1 ? "" : "s"} that didn't match in the last proposal?`)}>Ask Atlas how to handle {exceptionRows === 1 ? "it" : "them"}</button>

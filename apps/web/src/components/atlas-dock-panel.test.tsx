@@ -26,6 +26,30 @@ function panel(onReview = vi.fn(), revision = 0) {
 afterEach(() => { vi.restoreAllMocks(); window.localStorage.clear(); });
 
 describe("Atlas Clean clarification", () => {
+  it("labels an explanation without a proposed edit honestly", async () => {
+    const answer = { kind: "clean", provider: "ollama", explanation: "Review blank regions first.", evidence: [] };
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(answer), { status: 200 })));
+    render(panel());
+    fireEvent.click(screen.getByRole("button", { name: "What should I review first?" }));
+    await waitFor(() => expect(screen.getByText(answer.explanation)).toBeInTheDocument());
+    expect(screen.getByText("Atlas explained (local model)")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Review in Step settings" })).not.toBeInTheDocument();
+  });
+
+  it("keeps verbose source provenance behind an inspectable disclosure and offers retry", async () => {
+    const unavailable = { kind: "clean", provider: "unavailable", explanation: "The selected local model is not installed.", evidence: ["Source ds_1, revision 0, fingerprint abc."] };
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify(unavailable), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    render(panel());
+    fireEvent.click(screen.getByRole("button", { name: "What should I review first?" }));
+    await waitFor(() => expect(screen.getByText(unavailable.explanation)).toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: "What should I review first?" })).not.toBeInTheDocument();
+    expect(screen.getByText("Inspect source evidence and provenance")).toBeInTheDocument();
+    expect(screen.getByText(unavailable.evidence[0]!).closest("details")).not.toHaveAttribute("open");
+    fireEvent.click(screen.getByRole("button", { name: "Retry with local model" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+  });
+
   it("re-previews a typed date choice before review, without applying anything", async () => {
     const onReview = vi.fn();
     const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
@@ -43,11 +67,14 @@ describe("Atlas Clean clarification", () => {
     fireEvent.change(screen.getByLabelText("Ask Atlas"), { target: { value: "Convert the order dates" } });
     fireEvent.click(screen.getByRole("button", { name: "Ask Atlas" }));
     await waitFor(() => expect(screen.getByText(clarification.question)).toBeInTheDocument());
+    expect(screen.getByRole("region", { name: "Preview checks" })).toHaveTextContent("3 / 4 clear");
+    expect(screen.getByRole("region", { name: "Preview checks" })).toHaveTextContent("Analyst decision required");
     expect(screen.queryByRole("button", { name: "Review in Step settings" })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Day first" }));
     await waitFor(() => expect(screen.getByRole("button", { name: "Review in Step settings" })).toBeInTheDocument());
     expect(screen.getByText("1 invalid value became missing.")).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Preview checks" })).toHaveTextContent("3 / 4 clear");
     fireEvent.click(screen.getByRole("button", { name: "Review in Step settings" }));
     expect(onReview).toHaveBeenCalledWith(expect.objectContaining({
       clean_operation: expect.objectContaining({ date_format: "%d/%m/%Y" }),

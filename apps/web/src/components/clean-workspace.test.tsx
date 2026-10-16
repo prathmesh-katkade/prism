@@ -209,12 +209,16 @@ describe("Clean workspace", () => {
     // anything) was last shown there.
     fireEvent.click(within(steps[0] as HTMLElement).getByRole("button", { name: /drop column/i }));
     await waitFor(() => expect(document.querySelector(".clean-preview .clean-impact-summary")?.textContent).toContain("5"));
+    expect(within(steps[0] as HTMLElement).getByText("Review")).toBeInTheDocument();
+    expect(within(steps[1] as HTMLElement).getByText("Draft")).toBeInTheDocument();
 
     // Selecting step 2 (region) must replace it with step 2's own real data
     // (2 affected rows), not leave step 1's stale numbers showing.
     fireEvent.click(within(steps[1] as HTMLElement).getByRole("button", { name: /drop column/i }));
     await waitFor(() => expect(document.querySelector(".clean-preview .clean-impact-summary")?.textContent).toContain("2"));
     expect(document.querySelector(".clean-preview .clean-impact-summary")?.textContent).not.toContain("5");
+    expect(within(steps[0] as HTMLElement).getByText("Draft")).toBeInTheDocument();
+    expect(within(steps[1] as HTMLElement).getByText("Review")).toBeInTheDocument();
   });
 
   it("survives a real restart: a finished Atlas turn reappears after remounting, and one still pending when the app closed comes back marked interrupted, not falsely still loading", async () => {
@@ -669,8 +673,8 @@ describe("Clean workspace", () => {
     // own prose - never presented as if the model computed it.
     const computed = document.querySelector(".atlas-dock-computed")! as HTMLElement;
     expect(within(computed).getByText("PRISM computed this deterministically")).toBeInTheDocument();
-    expect(within(computed).getByText(/3/)).toBeInTheDocument();
-    expect(within(computed).getByText(/2/)).toBeInTheDocument(); // the 2 exceptions needing a decision
+    expect(computed.querySelector(":scope > p")).toHaveTextContent("3 rows would change");
+    expect(computed.querySelector(".atlas-dock-ambiguity")).toHaveTextContent("2 rows didn't match");
 
     // A second question in the same session is a new turn, not a replacement.
     fireEvent.change(screen.getByLabelText("Ask Atlas"), { target: { value: "second question" } });
@@ -837,11 +841,13 @@ describe("Clean workspace", () => {
     fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "drop_duplicates" } });
 
     fireEvent.click(screen.getByRole("button", { name: "Save recipe" }));
+    expect(screen.getByLabelText("Recipe name")).toHaveFocus();
+    fireEvent.click(screen.getByRole("button", { name: "Save named recipe" }));
     await waitFor(() => expect(screen.getByText("Name the recipe before saving it.")).toBeInTheDocument()); // a visible, concrete reason, not a silent no-op
     expect(fetchMock).not.toHaveBeenCalledWith(expect.stringContaining("/recipes"), expect.objectContaining({ method: "POST" }));
 
     fireEvent.change(screen.getByLabelText("Recipe name"), { target: { value: "Drop duplicates nightly" } });
-    fireEvent.click(screen.getByRole("button", { name: "Save recipe" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save named recipe" }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/recipes"), expect.objectContaining({ method: "POST", body: JSON.stringify({ name: "Drop duplicates nightly", steps: [{ request: { operation: "drop_duplicates" }, enabled: true }] }) })));
     await waitFor(() => expect(screen.getByText("Drop duplicates nightly")).toBeInTheDocument());
@@ -928,12 +934,14 @@ describe("Clean workspace", () => {
     const openStepMenu = (row: Element) => { (row.querySelector(".clean-step-menu") as HTMLDetailsElement).open = true; };
     openStepMenu(steps[0]!);
     fireEvent.click(within(steps[0] as HTMLElement).getByRole("button", { name: /move step 1 down/i }));
+    expect((steps[0]!.querySelector(".clean-step-menu") as HTMLDetailsElement).open).toBe(false);
     const reordered = document.querySelectorAll(".clean-recipe-unified > li");
     expect(within(reordered[0] as HTMLElement).getByText(/trim whitespace/i)).toBeInTheDocument();
     expect(within(reordered[1] as HTMLElement).getByText(/drop column/i)).toBeInTheDocument();
 
     openStepMenu(reordered[1]!);
     fireEvent.click(within(reordered[1] as HTMLElement).getByRole("button", { name: /disable step 2/i }));
+    expect((reordered[1]!.querySelector(".clean-step-menu") as HTMLDetailsElement).open).toBe(false);
     expect(within(reordered[1] as HTMLElement).getByText("Disabled")).toBeInTheDocument();
 
     openStepMenu(reordered[1]!);
@@ -1018,14 +1026,19 @@ describe("Clean workspace", () => {
     // action, not after it.
     await waitFor(() => expect(document.querySelector(".clean-centre-editor")).not.toBeInTheDocument());
     const impactEl = screen.getByText("Impact");
-    const reviewEl = screen.getByText("Review required");
+    const reviewEl = screen.getByText("Unmatched values preserved");
+    expect(screen.getByText(/unmatched row stays unchanged/)).toBeInTheDocument();
+    expect(screen.getByText("unmatched rows")).toBeInTheDocument();
+    expect(screen.getByLabelText("Proposed value for Mumbai")).toHaveAttribute("placeholder", "Leave unchanged");
+    expect(screen.getByLabelText("Proposed value for Mumbai").closest("tr")).toHaveTextContent("Preserved");
     const addStepButton = screen.getByRole("button", { name: "Add step to draft" });
     expect(impactEl.compareDocumentPosition(addStepButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(reviewEl.compareDocumentPosition(addStepButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
     fireEvent.click(screen.getByRole("tab", { name: "Exceptions (1)" }));
-    await waitFor(() => expect(screen.getByText(/1 distinct unresolved value/)).toBeInTheDocument());
-    expect(screen.getAllByText(/Mumbai/, { selector: "code" }).length).toBeGreaterThan(0); // source row and unresolved value remain inspectable
+    await waitFor(() => expect(screen.getByText(/1 distinct unmapped value/)).toBeInTheDocument());
+    expect(screen.getAllByText(/Mumbai/, { selector: "code" }).length).toBeGreaterThan(0); // source row and preserved value remain inspectable
+    expect(screen.getByText("preserved", { selector: ".health-pill" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Apply reviewed change" }));
     await waitFor(() => expect(screen.getByText(/revision 1/)).toBeInTheDocument());

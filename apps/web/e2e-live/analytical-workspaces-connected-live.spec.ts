@@ -56,11 +56,14 @@ test("real Clean to SQL to Visualize to Report flow keeps source versions explic
   await page.getByLabel("More actions for step 1").click();
   await page.getByRole("button", { name: "Disable step 1" }).click();
   await expect(page.getByLabel("Data quality issue navigator and manual operation editor")).toContainText("Disabled");
+  await page.getByLabel("More actions for step 1").click();
   await page.getByRole("button", { name: "Enable step 1" }).click();
   await expect(page.getByLabel("Data quality issue navigator and manual operation editor")).toContainText("Downstream preview recomputed");
-  await page.getByLabel("Recipe name").fill("Business duplicate review");
   await page.getByRole("button", { name: "Save recipe", exact: true }).click();
+  await page.getByLabel("Recipe name").fill("Business duplicate review");
+  await page.getByRole("button", { name: "Save named recipe" }).click();
   const savedRecipe = page.locator(".clean-recipe-list > li").filter({ hasText: "Business duplicate review" });
+  await expect(savedRecipe).toBeVisible();
   await savedRecipe.getByRole("button", { name: "Preview", exact: true }).click();
   await expect(savedRecipe).toContainText("Reviewed revision 0");
   await capture(page, "clean-recipe");

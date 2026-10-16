@@ -6,7 +6,7 @@ import json
 import httpx
 from fastapi.testclient import TestClient
 from prism_api.main import create_app
-from prism_api.workspace_proposals import propose
+from prism_api.workspace_proposals import _choose_installed_model, propose
 from prism_api_contracts import WorkspaceProposalRequest
 from pytest import MonkeyPatch
 
@@ -29,7 +29,36 @@ def _mock_ollama(monkeypatch: MonkeyPatch, respond) -> None:  # type: ignore[no-
     stay simple."""
     async def fake_post(_self: httpx.AsyncClient, url: str, json: dict[str, object], **_kwargs: object) -> httpx.Response:
         return respond(url, json=json)
+    monkeypatch.setenv("PRISM_OLLAMA_MODEL", "test-local-model")
     monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
+
+
+def test_local_model_selection_uses_installed_models_only() -> None:
+    assert _choose_installed_model(["qwen3:8b", "qwen2.5:3b"]) == "qwen2.5:3b"
+    assert _choose_installed_model(["custom:latest"]) == "custom:latest"
+    assert _choose_installed_model([]) is None
+
+
+def test_model_autodiscovery_uses_real_tag_names_without_configured_model(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setenv("PRISM_AI_PROVIDER", "ollama")
+    monkeypatch.delenv("PRISM_OLLAMA_MODEL", raising=False)
+    selected: list[str] = []
+
+    async def fake_get(_self: httpx.AsyncClient, url: str, **_kwargs: object) -> httpx.Response:
+        assert url.endswith("/api/tags")
+        return httpx.Response(200, json={"models": [{"name": "qwen2.5:3b"}]}, request=httpx.Request("GET", url))
+
+    async def fake_post(_self: httpx.AsyncClient, url: str, json: dict[str, object], **_kwargs: object) -> httpx.Response:
+        selected.append(str(json["model"]))
+        return _model_response({"explanation": "Keep the source and review the change.", "clean_operation": {"operation": "drop_duplicates"}})
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+    monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
+    client = TestClient(create_app())
+    result = client.post("/api/v1/workspace-proposals", json={"kind": "clean", "dataset_id": _source(client), "intent": "Inspect duplicates"})
+    assert result.status_code == 200
+    assert result.json()["provider"] == "ollama"
+    assert selected == ["qwen2.5:3b"]
 
 
 def test_unavailable_model_retains_manual_path(monkeypatch: MonkeyPatch) -> None:
@@ -58,6 +87,40 @@ def test_model_clean_proposal_is_typed_and_previewed_without_applying(monkeypatc
     assert body["clean_preview"]["affected_rows"] == 1
     assert body["clean_preview"]["source_revision"] == 0
     assert client.get(f"/api/v1/overview/datasets/{dataset_id}/profile").json()["dataset"]["revision"] == 0
+
+
+def test_model_can_explain_without_inventing_a_clean_mutation(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setenv("PRISM_AI_PROVIDER", "ollama")
+    _mock_ollama(monkeypatch, lambda *_a, **_k: _model_response({
+        "explanation": "Review missing values first; no edit is ready yet.", "clean_operation": None,
+    }))
+    client = TestClient(create_app())
+    dataset_id = _source(client)
+    result = client.post("/api/v1/workspace-proposals", json={"kind": "clean", "dataset_id": dataset_id, "intent": "What should I review first?"})
+    assert result.status_code == 200
+    assert result.json()["provider"] == "ollama"
+    assert result.json()["clean_operation"] is None
+    assert result.json()["clean_preview"] is None
+    assert client.get(f"/api/v1/overview/datasets/{dataset_id}/profile").json()["dataset"]["revision"] == 0
+
+
+def test_model_explanation_contradicting_missing_source_values_is_not_served(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setenv("PRISM_AI_PROVIDER", "ollama")
+    _mock_ollama(monkeypatch, lambda *_a, **_k: _model_response({
+        "explanation": "There are no missing values to review.", "clean_operation": None,
+    }))
+    client = TestClient(create_app())
+    upload = client.post("/api/v1/overview/datasets", files={
+        "file": ("missing.csv", b"segment,revenue\nNorth,10\n,20\n", "text/csv"),
+    })
+    assert upload.status_code == 201
+    result = client.post("/api/v1/workspace-proposals", json={
+        "kind": "clean", "dataset_id": upload.json()["dataset_id"], "intent": "What should I review first?",
+    })
+    assert result.status_code == 200
+    assert result.json()["provider"] == "unavailable"
+    assert "contradicted the source profile" in result.json()["explanation"]
+    assert result.json()["clean_operation"] is None
 
 
 def test_model_sql_mutation_and_invalid_chart_fail_closed(monkeypatch: MonkeyPatch) -> None:

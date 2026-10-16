@@ -15,7 +15,7 @@
         "title": "Prism",
         "width": 1366,
         "height": 800,
-        "minWidth": 1024,
+        "minWidth": 400,
         "minHeight": 640,
         "resizable": true,
         "fullscreen": false

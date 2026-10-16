@@ -10,7 +10,9 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+import logging
 import os
+import re
 
 import httpx
 import sqlglot
@@ -36,6 +38,22 @@ from .overview import store as overview_store
 from .visualize import _aggregate, _facets, _provenance
 
 router = APIRouter(prefix="/api/v1/workspace-proposals", tags=["workspace-proposals"])
+logger = logging.getLogger(__name__)
+
+
+def _choose_installed_model(names: list[str]) -> str | None:
+    """Choose a small installed local model when no explicit model is set.
+
+    The desktop can detect Ollama itself while its old default model is not
+    installed. Selecting only from `/api/tags` avoids a misleading `ready`
+    badge followed by a model-not-found error on every Atlas request.
+    """
+    if not names:
+        return None
+    for preferred in ("llama3.2:3b", "qwen2.5:3b", "qwen3:4b-instruct-2507-q4_K_M", "ministral-3:3b", "phi4-mini:latest"):
+        if preferred in names:
+            return preferred
+    return names[0]
 
 
 def _unavailable(request: WorkspaceProposalRequest, reason: str, evidence: list[str]) -> WorkspaceProposalResponse:
@@ -109,7 +127,12 @@ async def propose(request: WorkspaceProposalRequest, http_request: Request) -> W
     shape = {
         "sql": 'Return only {"explanation":"brief reason","sql_draft":"SELECT segment, COUNT(*) AS count FROM data GROUP BY segment"}. Use table data and selected columns only.',
         "chart": 'Return only {"explanation":"brief reason","chart_spec":{"mark":"bar","intent":"comparison","dimension":"segment","measure":"revenue","aggregation":"sum","filters":{}}}. Choose actual source columns and a compatible mark.',
-        "clean": 'Return only {"explanation":"brief reason","clean_operation":{"operation":"drop_duplicates"}}. Other permitted operations require actual source columns and their typed parameters; never invent category values. A preview is required.',
+        "clean": ('Return only {"explanation":"brief reason","clean_operation":null} for a question that asks for explanation or has no safe, concrete edit. '
+                  'When the analyst explicitly asks for an edit, clean_operation may instead be {"operation":"drop_duplicates"} '
+                  'or {"operation":"trim_whitespace","column":"actual_column_name"}. '
+                  'For drop_duplicates use ONLY the operation key: a columns key is unsupported. '
+                  'For trim_whitespace use ONLY operation and column. Use an actual source column. '
+                  'Other typed operations require exact supported fields and actual source values; never invent category values. Every edit is only a preview.'),
     }[request.kind]
     focus = ""
     if request.selected_operation:
@@ -122,7 +145,7 @@ async def propose(request: WorkspaceProposalRequest, http_request: Request) -> W
         turns = "; ".join(f"Q: {entry.intent} A: {entry.explanation}" for entry in request.history)
         history_text = f" Earlier in this same conversation: {turns}."
     payload = {
-        "model": os.environ.get("PRISM_OLLAMA_MODEL", "llama3.2:3b"),
+        "model": os.environ.get("PRISM_OLLAMA_MODEL", ""),
         "stream": False,
         "format": "json",
         "options": {"temperature": 0, "num_predict": 600},
@@ -138,6 +161,14 @@ async def propose(request: WorkspaceProposalRequest, http_request: Request) -> W
         timeout = min(30.0, max(1.0, float(os.environ.get("PRISM_OLLAMA_TIMEOUT_SECONDS", "10"))))
         url = os.environ.get("PRISM_OLLAMA_BASE_URL", "http://127.0.0.1:11434").rstrip("/") + "/api/generate"
         async with httpx.AsyncClient(timeout=timeout) as async_client:
+            if not payload["model"]:
+                tags_response = await async_client.get(url.removesuffix("/api/generate") + "/api/tags")
+                tags_response.raise_for_status()
+                models = tags_response.json().get("models", [])
+                names = [item["name"] for item in models if isinstance(item, dict) and isinstance(item.get("name"), str)]
+                payload["model"] = _choose_installed_model(names)
+                if not payload["model"]:
+                    return _unavailable(request, "Ollama is running, but no local model is installed. Install a model or use the manual controls.", evidence)
             generate_task = asyncio.ensure_future(async_client.post(url, json=payload))
             # A real analyst can close the tab or navigate away while the model is
             # still "thinking" - poll for that instead of only awaiting the call,
@@ -162,6 +193,13 @@ async def propose(request: WorkspaceProposalRequest, http_request: Request) -> W
         if not isinstance(candidate, dict) or not isinstance(candidate.get("explanation"), str):
             raise ValueError("Model response did not contain a typed explanation.")
         explanation = candidate["explanation"][:500]
+        # This contradiction occurred in a real desktop Ollama run: the model
+        # said there were no missing values while its own source evidence said
+        # region was 12.5% missing. Do not serve that claim as an explanation.
+        if any(column.missing_pct > 0 for column in profile.columns) and re.search(
+            r"\b(?:no|zero)\s+missing\s+(?:values|data|cells)\b", explanation, re.IGNORECASE
+        ):
+            return _unavailable(request, "The local model contradicted the source profile. Inspect the source evidence or retry.", evidence)
         # The model call above can take seconds; a mutation applied while it was
         # "thinking" would otherwise go undetected by the single pre-call check
         # above, since the evidence shown to the model and returned to the
@@ -179,6 +217,8 @@ async def propose(request: WorkspaceProposalRequest, http_request: Request) -> W
                 detail=f"Dataset {request.dataset_id} changed while the model was responding (now revision {refreshed.dataset.revision}). Ask again against the current revision.",
             )
         if request.kind == "clean":
+            if candidate.get("clean_operation") is None:
+                return WorkspaceProposalResponse(kind=request.kind, provider="ollama", explanation=explanation, evidence=evidence)
             operation = CleanTransformationRequest.model_validate(candidate["clean_operation"])
             if operation.review_token is not None:
                 raise ValueError("Model output may not submit a review token.")
@@ -214,5 +254,11 @@ async def propose(request: WorkspaceProposalRequest, http_request: Request) -> W
         _read_only_local_sql(sql, set(source.frame.columns))
         return WorkspaceProposalResponse(kind=request.kind, provider="ollama", explanation=explanation, evidence=evidence,
                                          sql_draft=sql)
+    except httpx.HTTPStatusError as error:
+        logger.warning("local_model_http_failure status=%s", error.response.status_code)
+        if error.response.status_code == 404:
+            return _unavailable(request, "The selected local model is not installed in Ollama. Choose an installed model or use manual controls.", evidence)
+        return _unavailable(request, "The local model service could not complete this request. Retry or use manual controls.", evidence)
     except (httpx.HTTPError, ValueError, KeyError, TypeError, json.JSONDecodeError, ValidationError) as error:
-        return _unavailable(request, f"The local model proposal was unavailable or failed validation ({type(error).__name__}). Use manual controls.", evidence)
+        logger.warning("local_model_proposal_unusable reason=%s", type(error).__name__)
+        return _unavailable(request, "The local model response could not be used safely. Retry or use manual controls.", evidence)
