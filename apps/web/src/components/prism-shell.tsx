@@ -20,6 +20,7 @@ import { AtlasStatusBadge } from "./atlas-status-badge";
 import { AiProviderBadge } from "./ai-provider-badge";
 import { parseAtlasHistoryQuery, type AtlasHistoryQuery } from "../state/atlas-history-link";
 import { apiUrl } from "../config/api";
+import { isTauriRuntime } from "../config/runtime";
 import { EvolutionWorkspace } from "./evolution-workspace";
 import { migrationPresentation, phaseTwoMigrations, type InspectorObjectState, type ShellStatus, type WorkspaceTab } from "../state/shell-model";
 import { useLayoutState } from "../state/use-layout-state";
@@ -106,13 +107,16 @@ export function PrismShell() {
     const datasetId = initialDatasetId();
     if (datasetId) {
       setActiveDatasetId(datasetId);
-    } else {
-      // No explicit dataset in the URL - the normal desktop-app launch path,
-      // not a shared link. Restore the most recently active dataset from the
-      // server's own durable store (the same "latest" ordering SQL Lab's
-      // connection list and AI Analyst already resolve through) rather than
-      // leaving every workspace on an empty state after every restart, even
-      // though the dataset itself survived.
+    } else if (isTauriRuntime()) {
+      // No explicit dataset in the URL, and this is the real desktop shell, not
+      // a shared web link or a fresh browser visit - restore the most recently
+      // active dataset from the server's own durable store (the same "latest"
+      // ordering SQL Lab's connection list and AI Analyst already resolve
+      // through) rather than leaving every workspace on an empty state after
+      // every restart, even though the dataset itself survived. Scoped to the
+      // desktop runtime only: the plain web build has no "restart" concept, and
+      // every fresh browser tab (or e2e test) with no dataset_id must still see
+      // Overview's real empty/upload state, not someone else's last dataset.
       void fetch(apiUrl("/api/v1/overview/datasets"))
         .then((response) => (response.ok ? response.json() as Promise<{ dataset_id: string }[]> : []))
         .then((datasets) => { if (datasets.length) setActiveDatasetId(datasets[0]!.dataset_id); })
