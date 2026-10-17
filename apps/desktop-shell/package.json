@@ -2,5 +2,8 @@
   "name": "@prism/desktop-shell",
   "private": true,
   "version": "0.1.0",
-  "type": "module"
+  "type": "module",
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.11.4"
+  }
 }

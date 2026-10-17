@@ -15,6 +15,12 @@ export default tseslint.config(
       // `eslint apps packages` recurses into them and OOMs on their
       // minified single-line bundles.
       "**/.venv/**",
+      // Desktop build output: apps/web/out/ is the static export Tauri
+      // bundles, and src-tauri/target/ is Rust's build directory - neither
+      // is source, and target/ in particular gets linted as thousands of
+      // false-positive errors from bundled/generated JS if not excluded.
+      "apps/web/out/**",
+      "apps/desktop-shell/src-tauri/target/**",
       "apps/web/next-env.d.ts",
       "packages/api-contracts/typescript/src/generated.ts",
     ],

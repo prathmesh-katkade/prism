@@ -30,6 +30,8 @@ test("cancelling a full verification stops the server's own scan loop, not just 
   await expect(page.getByLabel("Central tabbed workspace").getByRole("heading", { name: "verify-cancellation.csv" })).toBeVisible();
 
   await page.getByRole("button", { name: /Clean native/i }).click();
+  // Pattern findings live in the (collapsed-by-default) Patterns disclosure.
+  await page.locator(".clean-disclosure summary").filter({ hasText: "Patterns" }).click();
   const findingButton = page.locator(".clean-issues .finding-list button").filter({ has: page.locator("strong", { hasText: /^invoice_id$/ }) }).first();
   await expect(findingButton).toBeVisible({ timeout: 15_000 });
   await findingButton.click();

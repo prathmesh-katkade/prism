@@ -7,6 +7,7 @@ describe("PRISM shell", () => {
   afterEach(() => {
     vi.restoreAllMocks();
     window.history.pushState({}, "", "/");
+    delete (window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
   });
 
   it("opens the universal command surface with the keyboard", async () => {
@@ -86,6 +87,62 @@ describe("PRISM shell", () => {
     fireEvent.click(screen.getAllByRole("button", { name: /Overview native/i })[0]!);
     await waitFor(() => expect(screen.getByRole("heading", { name: "sales.csv" })).toBeInTheDocument());
     expect(screen.queryByText("Start with the dataset, then follow the evidence.")).not.toBeInTheDocument();
+  });
+
+  it("restores the most recently active dataset on a real desktop restart (no dataset_id in the URL), not just within one session", async () => {
+    // A packaged-app restart is a fresh page load with no query string at
+    // all - the only way a dataset genuinely survives it is the server's
+    // own durable store, resolved through the same real GET /datasets this
+    // test mocks (store.list_current, already ordered most-recent-first).
+    // Scoped to the desktop runtime: see the plain-web test below for why a
+    // browser visit with no dataset_id must NOT do this.
+    (window as unknown as { __TAURI_INTERNALS__: unknown }).__TAURI_INTERNALS__ = {};
+    const dataset = { dataset_id: "ds_restored", revision: 1, source_name: "restored.csv", source_fingerprint: "b".repeat(64), row_count: 4, column_count: 2 };
+    const fetchMock = vi.fn(async (input: string | URL) => {
+      const path = String(input);
+      if (path.endsWith("/overview/datasets")) return json([dataset]);
+      if (path.endsWith("/state")) return json({ dataset, issues: [], history: [], health: { completeness: 30, consistency: 25, uniqueness: 15, validity: 15, outlier_burden: 15, total: 100 } });
+      if (path.includes("/rows")) return json({ dataset, offset: 0, limit: 20, total_rows: 4, rows: [], provenance: { source_fingerprint: dataset.source_fingerprint, dataset_revision: 1, parameters: {}, service_version: "x", computed_at: "2026-08-28T00:00:00Z" } });
+      if (path.includes("/profile")) return json({ columns: [] });
+      if (path.includes("/recipes")) return json([]);
+      return json({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<PrismShell />);
+    fireEvent.click(screen.getAllByRole("button", { name: /Clean native/i })[0]!);
+    await waitFor(() => expect(screen.queryByText("Load a dataset in Overview first.")).not.toBeInTheDocument());
+    expect(screen.getByText(/revision 1/)).toBeInTheDocument();
+  });
+
+  it("stays on the normal empty state when no dataset exists to restore", async () => {
+    (window as unknown as { __TAURI_INTERNALS__: unknown }).__TAURI_INTERNALS__ = {};
+    vi.stubGlobal("fetch", vi.fn(async (input: string | URL) => {
+      const path = String(input);
+      if (path.endsWith("/overview/datasets")) return json([]);
+      return json({});
+    }));
+    render(<PrismShell />);
+    fireEvent.click(screen.getAllByRole("button", { name: /Clean native/i })[0]!);
+    await waitFor(() => expect(screen.getByText("Load a dataset in Overview first.")).toBeInTheDocument());
+  });
+
+  it("does NOT auto-restore a dataset on a plain web visit with no dataset_id, even though one exists on the server", async () => {
+    // This is the critical difference from the desktop test above: a browser
+    // tab opened with no query string (a fresh visit, a shared machine, an
+    // e2e test's `page.goto("/")`) is not a "restart" and must not silently
+    // surface whatever dataset someone else last worked on. No
+    // __TAURI_INTERNALS__ here - this is the plain web build.
+    const fetchMock = vi.fn(async (input: string | URL) => {
+      const path = String(input);
+      if (path.endsWith("/overview/datasets")) return json([{ dataset_id: "ds_other_user", revision: 1, source_name: "someone-elses.csv", source_fingerprint: "c".repeat(64), row_count: 4, column_count: 2 }]);
+      return json({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<PrismShell />);
+    fireEvent.click(screen.getAllByRole("button", { name: /Overview native/i })[0]!);
+    expect(screen.getByText("Start with the dataset, then follow the evidence.")).toBeInTheDocument();
+    expect(fetchMock.mock.calls.some((call) => String(call[0]).endsWith("/overview/datasets"))).toBe(false);
   });
 
   // Phase 11C: `atlas_panel=history` is the new, explicit, additive query

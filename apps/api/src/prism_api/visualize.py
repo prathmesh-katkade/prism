@@ -11,6 +11,7 @@ would mislead (categorical overload, an empty/degenerate measure).
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
 
 import pandas as pd
@@ -51,6 +52,19 @@ def _column_types(frame: pd.DataFrame) -> dict[str, str]:
     return {column.name: column.semantic_type for column in columns}
 
 
+def _looks_like_identifier(name: str) -> bool:
+    """Keep identifier-like numeric columns out of *automatic* additive measures.
+
+    An analyst may still select one explicitly. This deliberately uses a narrow
+    name check: a numeric invoice number is not revenue, while `Quantity` and
+    `UnitPrice` remain available as meaningful measures.
+    """
+    normalized = re.sub(r"[^a-z0-9]", "", name.lower())
+    return normalized in {"id", "sku", "zip", "postcode", "barcode"} or normalized.endswith(
+        ("id", "code", "number", "num", "no", "key", "sku", "barcode", "postcode")
+    )
+
+
 def _require_column(frame: pd.DataFrame, column: str | None, role: str) -> str:
     if not column:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"A {role} column is required.")
@@ -88,8 +102,20 @@ def suggest(dataset_id: str, intent: VizIntent | None = None, dimension: str | N
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"Column {measure!r} is not in the active dataset.")
     if dimension is None:
         dimension = next((name for name, kind in types.items() if kind == "categorical"), None)
+        if dimension is None:
+            # A free-text field can still be a useful category when the
+            # profiler sees many distinct labels. Rendering already caps
+            # groups and discloses truncation; prefer it over treating a
+            # numeric identifier as a continuous X axis by default.
+            dimension = next(
+                (name for name, kind in types.items() if kind == "text" and not _looks_like_identifier(name)),
+                None,
+            )
     if measure is None:
-        measure = next((name for name, kind in types.items() if kind == "numeric" and name != dimension), None)
+        measure = next(
+            (name for name, kind in types.items() if kind == "numeric" and name != dimension and not _looks_like_identifier(name)),
+            None,
+        )
     dim_kind = types.get(dimension) if dimension else None
     resolved_intent = intent or (
         VizIntent.TREND if dim_kind == "datetime"

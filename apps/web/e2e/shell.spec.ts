@@ -125,13 +125,20 @@ test("native Clean workspace previews a proposed fix and applies it as a new, re
   await page.setInputFiles("#overview-upload", { name: "sales.csv", mimeType: "text/csv", buffer: Buffer.from("segment,revenue\na,10\n") });
   await expect(page.getByRole("heading", { name: "sales.csv" }).first()).toBeVisible();
   await page.getByRole("button", { name: /Clean native/i }).click();
-  await expect(page.getByRole("heading", { name: "1 found" })).toBeVisible();
+  // The Issues count lives in a <details> summary badge, not a heading -
+  // the disclosure is collapsed by default, so it must be opened before its
+  // finding button is interactable.
+  const issuesSummary = page.locator(".clean-disclosure summary").filter({ hasText: "Issues" });
+  await expect(issuesSummary).toContainText("1");
+  await issuesSummary.click();
   await page.getByRole("button", { name: /Dataset/ }).click();
   await expect(page.getByText(/affects/)).toBeVisible();
   await page.getByRole("button", { name: "Apply reviewed change" }).focus();
   await expect(page.getByRole("button", { name: "Apply reviewed change" })).toBeFocused();
   await page.getByRole("button", { name: "Apply reviewed change" }).click();
-  await expect(page.locator(".clean-preview header")).toContainText("revision 1");
+  // The dataset identity (row/column counts, revision) lives in its own
+  // full-width header above the three-pane layout, not inside .clean-preview.
+  await expect(page.locator(".clean-dataset-header")).toContainText("revision 1");
   // Scoped to Clean's own subtree: the shell chrome (tabs, rail, command palette) is covered by
   // the dedicated "native shell has no automated axe accessibility violations" baseline above.
   const violations = await page.addScriptTag({ path: "node_modules/axe-core/axe.min.js" }).then(() => page.evaluate(async () => (await (window as typeof window & { axe: { run(context: unknown): Promise<{ violations: unknown[] }> } }).axe.run(document.querySelector(".clean-workspace"))).violations));
