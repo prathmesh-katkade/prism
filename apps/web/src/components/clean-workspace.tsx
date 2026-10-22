@@ -6,6 +6,7 @@ import { apiUrl } from "../config/api";
 import type { InspectorObjectState } from "../state/shell-model";
 import { AtlasCharacter, type AtlasPose } from "./atlas-character";
 import { AtlasDockPanel } from "./atlas-dock-panel";
+import { PlanReviewScreen, needsClarification } from "./plan-review";
 
 type CleanUiState = "empty" | "loading" | "ready" | "error";
 const ROWS_PER_PAGE = 30;
@@ -16,7 +17,28 @@ function closeStepMenu(event: React.MouseEvent<HTMLButtonElement>) {
   menu?.querySelector("summary")?.focus();
 }
 
-const OPERATIONS: readonly { value: CleanOperation; label: string; needsColumn: boolean; help: string }[] = [
+/** Groups a column's own already-fetched distinct values by trimmed,
+ * case-insensitive spelling - real, deterministic text normalization over
+ * data PRISM already has, never a model call or a fabricated suggestion.
+ * The canonical spelling per group is whichever raw value has the most
+ * rows (ties broken alphabetically), an explainable, inspectable rule. */
+function suggestCategoryGroups(values: ReadonlyArray<{ value: string; count?: number }>): ReadonlyArray<{ canonical: string; variants: ReadonlyArray<{ value: string; count?: number }> }> {
+  const byNormalized = new Map<string, { value: string; count?: number }[]>();
+  for (const item of values) {
+    const key = item.value.trim().toLowerCase();
+    const bucket = byNormalized.get(key);
+    if (bucket) bucket.push(item); else byNormalized.set(key, [item]);
+  }
+  const groups: { canonical: string; variants: ReadonlyArray<{ value: string; count?: number }> }[] = [];
+  for (const variants of byNormalized.values()) {
+    if (variants.length < 2) continue;
+    const canonical = [...variants].sort((a, b) => (b.count ?? 0) - (a.count ?? 0) || a.value.localeCompare(b.value))[0]!.value;
+    groups.push({ canonical, variants });
+  }
+  return groups;
+}
+
+export const OPERATIONS: readonly { value: CleanOperation; label: string; needsColumn: boolean; help: string }[] = [
   { value: "drop_duplicates", label: "Drop duplicate rows", needsColumn: false, help: "Remove rows that exactly duplicate an earlier row." },
   { value: "drop_column", label: "Drop column", needsColumn: true, help: "Remove this column from the dataset entirely." },
   { value: "rename_column", label: "Rename column", needsColumn: true, help: "Give this column a new name." },
@@ -61,6 +83,21 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
   const [applying, setApplying] = useState(false);
   const applyInFlight = useRef(false);
   const previewRequestId = useRef(0);
+  // Set by loadRequestIntoForm just before a category_mapping operation/column
+  // change it triggers; consumed once by the column-values effect below so a
+  // reopened step's own real mapping survives that effect's reset-on-column-
+  // change, instead of every row briefly - then permanently, until edited -
+  // showing "Leave unchanged" while the preview above still reports the real
+  // affected-row count.
+  const pendingMappingRestore = useRef<Record<string, string> | null>(null);
+  // Set by the Atlas dock's onReview handler just before loadRequestIntoForm
+  // runs, from that proposal's own real response.explanation; consumed once
+  // by the very next addDraftStep so the plan-review screen can show a
+  // model-proposed step's actual stated reason instead of only the generic
+  // operation help text every manual step already falls back to.
+  const pendingStepReason = useRef<string | null>(null);
+  const [stepReasons, setStepReasons] = useState<Record<string, string>>({});
+  const [planReviewOpen, setPlanReviewOpen] = useState(false);
 
   const [manualOperation, setManualOperation] = useState<CleanOperation>("drop_duplicates");
   const [manualColumn, setManualColumn] = useState("");
@@ -99,6 +136,8 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
   const [draftError, setDraftError] = useState<string | null>(null);
   const [editingRecipeId, setEditingRecipeId] = useState<string | null>(null);
   const [editingStepIndex, setEditingStepIndex] = useState<number | null>(null);
+  const [approvingPlan, setApprovingPlan] = useState(false);
+  const [approvePlanError, setApprovePlanError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!datasetId || !draftSteps.length) { setDraftPreview(null); return; }
@@ -232,7 +271,14 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
   useEffect(() => {
     if (!datasetId || manualOperation !== "category_mapping" || !manualColumn) { setColumnValues(null); return; }
     let cancelled = false;
-    setCategoryMapping({}); setCategorySelected(new Set()); setCategoryTarget("");
+    // Reopening a draft/saved step (loadRequestIntoForm) just set categoryMapping
+    // from that step's own real request a moment ago - this effect's dependency
+    // array fires on the same operation/column transition and must not discard
+    // it back to {}. Only a column the analyst is choosing fresh (never routed
+    // through pendingMappingRestore) starts truly empty.
+    const restore = pendingMappingRestore.current;
+    pendingMappingRestore.current = null;
+    setCategoryMapping(restore ?? {}); setCategorySelected(new Set()); setCategoryTarget("");
     fetch(apiUrl(`/api/v1/clean/datasets/${datasetId}/columns/${encodeURIComponent(manualColumn)}/values`))
       .then((response) => (response.ok ? response.json() as Promise<ColumnValueCountsResponse> : null))
       .then((body) => { if (!cancelled) setColumnValues(body); })
@@ -406,12 +452,23 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
   }
 
   function addDraftStep(request: CleanTransformationRequest) {
-    setDraftSteps((current) => [...current, { step_id: `draft_${Date.now()}_${current.length}`, request, enabled: true }]);
+    const stepId = `draft_${Date.now()}_${draftSteps.length}`;
+    setDraftSteps((current) => [...current, { step_id: stepId, request, enabled: true }]);
     setRecipePreview(null);
     // The step just became real (it's in draftSteps now), so the inspector
     // should show its actual position immediately - not "unsaved" until an
     // unrelated re-click, and never a position number before this point.
     setEditingStepIndex(draftSteps.length);
+    // Atlas's own explanation for the proposal this step came from, if any -
+    // see pendingStepReason's declaration for why this is a one-shot ref, not
+    // a plain variable. A manually built step (never routed through Atlas's
+    // "Review in Step settings") leaves this unset; the plan-review screen
+    // falls back to the operation's own real, already-shown help text rather
+    // than inventing a reason.
+    if (pendingStepReason.current) {
+      setStepReasons((current) => ({ ...current, [stepId]: pendingStepReason.current! }));
+      pendingStepReason.current = null;
+    }
   }
 
   function editSavedRecipe(recipe: CleanRecipe) {
@@ -429,6 +486,7 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
    * silently stop matching the preview the moment anyone touches Preview
    * or Add step again. */
   function loadRequestIntoForm(request: CleanTransformationRequest) {
+    if (request.operation === "category_mapping") pendingMappingRestore.current = request.category_mapping ?? {};
     setManualOperation(request.operation); setManualColumn(request.column ?? "");
     setManualNewName(request.new_name ?? ""); setManualTargetType(request.target_type ?? "numeric");
     setManualDateFormat(request.date_format ?? ""); setManualNumberLocale(request.number_locale ?? "standard");
@@ -481,6 +539,45 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
       await refresh(datasetId);
     } catch (reason) { setRecipeError(reason instanceof Error ? reason.message : "Applying the recipe failed."); }
     finally { setApplyingRecipeId(null); }
+  }
+
+  function toggleDraftStepEnabled(index: number) {
+    setDraftSteps((current) => current.map((item, at) => at === index ? { ...item, enabled: !item.enabled } : item));
+  }
+
+  /** The plan review's one explicit approval. Deliberately reuses the exact
+   * recipe create → preview → apply chain the recipe pane's own named,
+   * saved recipes already run through (apply_recipe's atomic, transactional,
+   * revision-bound publication of every enabled step) rather than inventing
+   * a second apply path - an ad hoc, auto-named recipe is still a real one,
+   * with the same validation and provenance guarantees. */
+  async function approvePlan() {
+    if (!datasetId || !draftSteps.length) return;
+    setApprovingPlan(true); setApprovePlanError(null);
+    try {
+      const name = `Atlas plan — ${new Date().toISOString()}`;
+      const created = await fetch(apiUrl("/api/v1/clean/recipes"), {
+        method: "POST", headers: { "content-type": "application/json" },
+        // A step the plan-review screen shows as "excluded until you decide"
+        // (needsClarification) must never reach the backend as enabled just
+        // because its own, unrelated enabled flag still happens to be true -
+        // the same real condition PlanReviewScreen renders the forced-off
+        // toggle from, recomputed here rather than trusted secondhand from a
+        // view the approval itself doesn't read.
+        body: JSON.stringify({ name, steps: draftSteps.map(({ request, enabled }) => ({ request, enabled: enabled && !needsClarification(request) })) }),
+      });
+      if (!created.ok) throw new Error((await created.json() as { detail?: string }).detail ?? "Could not record this plan as a recipe.");
+      const recipe = await created.json() as CleanRecipe;
+      const previewed = await fetch(apiUrl(`/api/v1/clean/datasets/${datasetId}/recipes/${recipe.recipe_id}/preview`), { method: "POST" });
+      if (!previewed.ok) throw new Error((await previewed.json() as { detail?: string }).detail ?? "Could not re-review this plan before applying.");
+      const preview = await previewed.json() as CleanRecipePreviewResponse;
+      const applied = await fetch(apiUrl(`/api/v1/clean/datasets/${datasetId}/recipes/${recipe.recipe_id}/apply`), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ review_token: preview.review_token }) });
+      if (!applied.ok) throw new Error((await applied.json() as { detail?: string }).detail ?? "Applying this plan failed.");
+      setPlanReviewOpen(false); setDraftSteps([]); setDraftPreview(null); setStepReasons({});
+      setManualMode(false); setSelectedIssue(null); setPreview(null); setPendingRequest(null); setEditingStepIndex(null);
+      await refresh(datasetId);
+    } catch (reason) { setApprovePlanError(reason instanceof Error ? reason.message : "Applying this plan failed."); }
+    finally { setApprovingPlan(false); }
   }
 
   async function createValidationRule() {
@@ -815,6 +912,21 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
     </>;
   }
 
+  if (planReviewOpen) return <PlanReviewScreen
+    steps={draftSteps.map((step, index) => ({ step, index, affectedRows: draftPreview?.step_impacts[index] ?? null, reason: stepReasons[step.step_id] ?? null }))}
+    datasetName={clean.dataset.source_name}
+    revision={clean.dataset.revision}
+    rowCount={clean.dataset.row_count}
+    columnCount={clean.dataset.column_count}
+    columns={profile?.columns ?? []}
+    onToggleStep={toggleDraftStepEnabled}
+    onInspectStep={(index) => { setPlanReviewOpen(false); loadDraftStep(index); }}
+    onApprove={() => void approvePlan()}
+    onClose={() => setPlanReviewOpen(false)}
+    approving={approvingPlan}
+    approveError={approvePlanError}
+  />;
+
   return <article ref={gridRef} className="clean-workspace three-pane" style={{ "--clean-recipe-width": recipePaneWidth ? `${recipePaneWidth}px` : undefined, "--clean-inspector-width": inspectorPaneWidth ? `${inspectorPaneWidth}px` : undefined } as React.CSSProperties}>
     <header className="clean-dataset-header">
       <div><span className="eyebrow">Source: {clean.dataset.source_name}</span><h1>{preview?.operation === "category_mapping" ? "Review category mapping" : "Clean dataset"}</h1><p>{clean.dataset.row_count.toLocaleString()} rows · {clean.dataset.column_count} columns · revision {clean.dataset.revision}</p></div>
@@ -822,15 +934,12 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
           any time and never claims a later workspace is "done" - there is no
           dataset-wide notion of Clean/SQL/Visualize/Report completion to report
           honestly, only this revision's own applied-or-not state shown elsewhere. */}
-      <div className="clean-header-actions"><nav className="clean-workflow-strip" aria-label="Workflow">
-        <span className="is-current">Clean</span>
-        <span aria-hidden="true">→</span>
-        <button type="button" onClick={() => onOpenWorkflow("sql-lab")}>SQL Lab</button>
-        <span aria-hidden="true">→</span>
-        <button type="button" onClick={() => onOpenWorkflow("visualize")}>Visualize</button>
-        <span aria-hidden="true">→</span>
-        <button type="button" onClick={() => onOpenWorkflow("reports")}>Reports</button>
-      </nav><button type="button" className={`atlas-launcher ${inspectorTab === "atlas" ? "is-active" : ""}`} aria-controls="clean-atlas-panel" aria-pressed={inspectorTab === "atlas"} onClick={() => setInspectorTab("atlas")}><AtlasCharacter pose={atlasPose} size="small" /><span><strong>Atlas</strong><small>Ask about this step</small></span></button></div>
+      <div className="clean-header-actions"><nav className="clean-workflow-strip" aria-label="Workflow"><ol>
+        <li className="is-current"><span className="step-circle">1</span><span className="step-label">Clean</span></li>
+        <li><button type="button" onClick={() => onOpenWorkflow("sql-lab")}><span className="step-circle">2</span><span className="step-label">SQL Lab</span></button></li>
+        <li><button type="button" onClick={() => onOpenWorkflow("visualize")}><span className="step-circle">3</span><span className="step-label">Visualize</span></button></li>
+        <li><button type="button" onClick={() => onOpenWorkflow("reports")}><span className="step-circle">4</span><span className="step-label">Reports</span></button></li>
+      </ol></nav><button type="button" className={`atlas-launcher ${inspectorTab === "atlas" ? "is-active" : ""}`} aria-controls="clean-atlas-panel" aria-pressed={inspectorTab === "atlas"} onClick={() => setInspectorTab("atlas")}><AtlasCharacter pose={atlasPose} size="small" /><span><strong>Atlas</strong><small>Ask about this step</small></span></button></div>
     </header>
     <nav ref={recipePaneRef} className="clean-issues" aria-label="Data quality issue navigator and manual operation editor" tabIndex={0}>
       <div className="section-title"><div><span className="eyebrow">TRANSFORMATION RECIPE</span><h2>{clean.history.length || draftSteps.length || recipePreview || (preview && pendingRequest) ? `${clean.history.length + (recipePreview ? (recipes.find((recipe) => recipe.recipe_id === recipePreview.recipe_id)?.steps.length ?? 0) : draftSteps.length ? draftSteps.length : (preview && pendingRequest) ? 1 : 0)} step(s)` : "Empty"}</h2></div></div>
@@ -875,12 +984,31 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
       <div className="clean-recipe-actions">
         <button className={manualMode ? "is-selected" : "secondary"} onClick={startManualOperation}>+ Add step</button>
         <button className="secondary" disabled={!draftSteps.length && !manualBuild.request} title={!draftSteps.length && !manualBuild.request ? "Build at least one draft step first." : "Save the draft recipe"} onClick={() => editingRecipeId ? void saveAsRecipe(manualBuild.request ?? draftSteps[0]!.request) : setShowRecipeSave(true)}>{editingRecipeId ? "Save recipe changes" : "Save recipe"}</button>
+        {draftSteps.length > 1 ? <button type="button" className="secondary" onClick={() => setPlanReviewOpen(true)}>Review plan</button> : null}
       </div>
       {showRecipeSave && !editingRecipeId ? <form className="clean-recipe-save-form" onSubmit={(event) => { event.preventDefault(); if (manualBuild.request || draftSteps.length) void saveAsRecipe(manualBuild.request ?? draftSteps[0]!.request); }}>
         <label className="clean-recipe-name">Recipe name<input aria-label="Recipe name" autoFocus value={recipeName} onChange={(event) => setRecipeName(event.target.value)} placeholder="e.g. Standard monthly cleanup" /></label>
         <div><button type="submit">Save named recipe</button><button type="button" className="secondary" onClick={() => { setShowRecipeSave(false); setRecipeError(null); }}>Cancel</button></div>
       </form> : null}
       <p className="clean-recipe-tip">Disable a step to preview downstream changes without removing it.</p>
+
+      {manualOperation === "category_mapping" && manualMode && columnValues && !Object.keys(categoryMapping).length ? (() => {
+        const groups = suggestCategoryGroups(columnValues.values);
+        if (!groups.length) return null;
+        return <div className="clean-mapping-suggestion">
+          <span className="eyebrow">Suggested mapping <span className="health-pill">Rule-based</span></span>
+          <p>{groups.length} group{groups.length === 1 ? "" : "s"} found by matching trimmed, case-insensitive spelling. Review each proposed group.</p>
+          <ul>{groups.slice(0, 3).map((group) => <li key={group.canonical}>{group.variants.map((v) => v.value).join(", ")}<span aria-hidden="true">→</span><strong>{group.canonical}</strong></li>)}</ul>
+          {groups.length > 3 ? <small>+{groups.length - 3} more group{groups.length - 3 === 1 ? "" : "s"}</small> : null}
+          <button type="button" className="secondary" onClick={() => {
+            const next = { ...categoryMapping };
+            for (const group of groups) for (const variant of group.variants) if (variant.value !== group.canonical) next[variant.value] = group.canonical;
+            setCategoryMapping(next);
+            if (pendingRequest && pendingRequest.operation === "category_mapping") void previewOperation({ ...pendingRequest, category_mapping: next });
+            else invalidateManualPreview();
+          }}>Apply suggested grouping</button>
+        </div>;
+      })() : null}
 
       {manualOperation === "category_mapping" && Object.keys(categoryMapping).length ? <div className="clean-current-mapping">
         <span className="eyebrow">Current mapping</span>
@@ -1069,6 +1197,7 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
           onReview={(proposal) => {
             if (!proposal.clean_operation) return;
             setManualMode(true); setSelectedIssue(null); setEditingStepIndex(null); setInspectorTab("settings");
+            pendingStepReason.current = proposal.explanation;
             // Loads the form fields AND the preview from the same request,
             // so Step settings shows exactly what Atlas proposed, not
             // whatever the form last held - fixing a real gap where the

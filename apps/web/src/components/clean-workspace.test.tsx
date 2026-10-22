@@ -1044,6 +1044,103 @@ describe("Clean workspace", () => {
     await waitFor(() => expect(screen.getByText(/revision 1/)).toBeInTheDocument());
   });
 
+  it("keeps a draft category-mapping step's own mapping visible when it is reselected after viewing a different step", async () => {
+    const columnValues = { column: "region", total_distinct: 2, truncated: false, values: [{ value: "Bangalore", count: 8 }, { value: "BENGALURU", count: 3 }] };
+    const fetchMock = vi.fn(async (input: string | URL) => {
+      const path = String(input);
+      if (path.endsWith("/state")) return json({ dataset: dataset0, issues: [], history: [], health });
+      if (path.includes("/columns/region/values")) return json(columnValues);
+      if (path.includes("/rows")) return json(rowsPage);
+      if (path.includes("/profile")) return json({ columns: [{ name: "region", semantic_type: "categorical" }, { name: "notes", semantic_type: "text" }] });
+      if (path.includes("/recipes")) return json([]);
+      if (path.includes("/recipe-draft/preview")) return json({ source_revision: 0, source_fingerprint: dataset0.source_fingerprint, review_token: "draft_1", before_sample: [], after_sample: [], step_impacts: [11, 5], projected_health: health });
+      if (path.endsWith("/preview")) return json({ operation: "category_mapping", review_token: "review_mapping", source_revision: 0, affected_rows: 11, changed_rows_total: 11, exception_rows_total: 0, affected_columns: ["region"], before_sample: [], after_sample: [], warnings: [], projected_health: health });
+      return json({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText(/Rows 1–5 of 5/)).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "+ Add step" }));
+    fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "category_mapping" } });
+    fireEvent.change(screen.getByLabelText("Column"), { target: { value: "region" } });
+    const getChips = () => document.querySelector(".clean-value-chips")! as HTMLElement;
+    await waitFor(() => expect(within(getChips()).getByText("Bangalore")).toBeInTheDocument());
+    fireEvent.click(within(getChips()).getByText("Bangalore").closest("label")!.querySelector("input")!);
+    fireEvent.click(within(getChips()).getByText("BENGALURU").closest("label")!.querySelector("input")!);
+    fireEvent.change(screen.getByLabelText("Map selected values to"), { target: { value: "Bengaluru" } });
+    fireEvent.click(screen.getByRole("button", { name: "Assign mapping to selected" }));
+    expect(screen.getByLabelText("Proposed value for Bangalore")).toHaveValue("Bengaluru");
+    fireEvent.click(screen.getByRole("button", { name: "Add step to draft" }));
+
+    // Leave this step via a second, unrelated step - the real trigger: the
+    // column-values effect's dependency array fires again on the return trip.
+    fireEvent.click(screen.getByRole("button", { name: "+ Add step" }));
+    fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "trim_whitespace" } });
+    fireEvent.change(screen.getByLabelText("Column"), { target: { value: "notes" } });
+    await waitFor(() => expect(screen.getByLabelText("Column")).toHaveValue("notes"));
+
+    const stepButtons = Array.from(document.querySelectorAll(".clean-step-select"));
+    const mappingStepButton = stepButtons.find((button) => button.textContent?.includes("category mapping"))!;
+    fireEvent.click(mappingStepButton);
+    await waitFor(() => expect(screen.getByLabelText("Proposed value for Bangalore")).toHaveValue("Bengaluru"));
+    expect(screen.getByLabelText("Proposed value for BENGALURU")).toHaveValue("Bengaluru");
+    expect(screen.queryByText("No values mapped yet. Select source values in the inspector and assign a target to build the mapping here.")).not.toBeInTheDocument();
+  });
+
+  it("never applies a plan step the plan-review screen shows as needing clarification, even though its own enabled flag is still true", async () => {
+    let createdRecipeBody: { name: string; steps: { request: { operation: string; column?: string }; enabled: boolean }[] } | null = null;
+    const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path.endsWith("/state")) return json({ dataset: dataset0, issues: [], history: [], health });
+      if (path.includes("/rows")) return json(rowsPage);
+      if (path.includes("/profile")) return json({ columns: [{ name: "notes", semantic_type: "text" }, { name: "signup_date", semantic_type: "text" }] });
+      if (path.includes("/recipe-draft/preview")) return json({ source_revision: 0, source_fingerprint: dataset0.source_fingerprint, review_token: "draft_1", before_sample: [], after_sample: [], step_impacts: [2, 3], projected_health: health });
+      if (path.endsWith("/api/v1/clean/recipes") && init?.method === "POST") {
+        const parsed = JSON.parse(String(init.body)) as typeof createdRecipeBody & object;
+        createdRecipeBody = parsed;
+        return json({ recipe_id: "recipe_plan", name: parsed.name, version: 1, steps: [], created_at: "2026-08-28T00:00:00Z" }, 201);
+      }
+      if (path.includes("/recipes/recipe_plan/preview")) return json({ recipe_id: "recipe_plan", recipe_version: 1, source_revision: 0, source_fingerprint: dataset0.source_fingerprint, review_token: "plan_review_token", before_sample: [], after_sample: [], step_impacts: [2], projected_health: health });
+      if (path.includes("/recipes/recipe_plan/apply")) return json({ dataset: dataset1, recipe_id: "recipe_plan", recipe_version: 1, applied_steps: [], issues: [], health });
+      if (path.includes("/recipes")) return json([]);
+      return json({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText(/Rows 1–5 of 5/)).toBeInTheDocument());
+
+    // Step 1: an ordinary, safe draft step.
+    fireEvent.click(screen.getByRole("button", { name: "+ Add step" }));
+    fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "trim_whitespace" } });
+    fireEvent.change(screen.getByLabelText("Column"), { target: { value: "notes" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add step to draft" }));
+
+    // Step 2: a genuinely ambiguous date parse with no date_format - the one
+    // real condition PRISM's own backend already treats as needing an
+    // analyst decision (see clean.py's date-ambiguity check).
+    fireEvent.click(screen.getByRole("button", { name: "+ Add step" }));
+    fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "convert_type" } });
+    fireEvent.change(screen.getByLabelText("Column"), { target: { value: "signup_date" } });
+    fireEvent.change(screen.getByLabelText("Target type"), { target: { value: "datetime" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add step to draft" }));
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Review plan" })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Review plan" }));
+
+    await waitFor(() => expect(screen.getByText("Review Atlas's cleaning plan")).toBeInTheDocument());
+    expect(screen.getByText("Needs clarification")).toBeInTheDocument();
+    expect(screen.getByText(/Excluded until you decide/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Approve included steps" }));
+    await waitFor(() => expect(createdRecipeBody).not.toBeNull());
+    const steps = createdRecipeBody!.steps;
+    const trimStep = steps.find((step) => step.request.operation === "trim_whitespace")!;
+    const convertStep = steps.find((step) => step.request.operation === "convert_type")!;
+    expect(trimStep.enabled).toBe(true);
+    expect(convertStep.enabled).toBe(false); // the real, security-relevant assertion
+  });
+
   it("builds a duplicate-survivorship request from selected columns and a rule, with a concrete reason when a required field is missing", async () => {
     const fetchMock = vi.fn(async (input: string | URL) => {
       const path = String(input);
