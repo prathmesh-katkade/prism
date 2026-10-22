@@ -3,7 +3,171 @@
 One durable file, updated at every checkpoint rather than left to scatter
 across phase docs. Read this first in any new session.
 
-## Current continuation — 2026-10-17
+## Current continuation — 2026-10-22
+
+Claude resumed from pushed feature SHA `2a4afe9f4dc71ff9729c74ff123d763d72606206`
+(verified clean, CI green at that exact SHA) and remote main unchanged at
+`c9472ca822293e8767ec7d8dc617e8be964232d8`, per the Oct 22 delivery brief's
+Clean/Atlas visual-acceptance milestone (Oct 22-28). The current acceptance
+table is [`acceptance-20261022.md`](acceptance-20261022.md) - read that for
+the structured requirement-by-requirement status; this entry covers what
+happened and why, including two real bugs this round's own new feature work
+surfaced and fixed.
+
+**Reference composition finished this round** (all three concrete gaps named
+in `reference-implementation-spec-20261012.md` that were still open):
+1. Clean's header workflow strip is now a numbered circular stepper matching
+   references 05/06's geometry (current stage filled, connecting lines)
+   instead of the old flat pill row.
+2. A real "Suggested mapping" card in the recipe pane groups a category
+   column's own already-fetched distinct values by trimmed, case-insensitive
+   spelling - explicitly labeled "Rule-based", never claiming model
+   involvement - with "Apply suggested grouping", matching reference 05/06's
+   "Mapping proposal" card region.
+3. **New**: `plan-review.tsx` - the approved "Review Atlas's cleaning plan"
+   screen (reference #03). Every draft step gets a real why/example,
+   Deterministic-rule/Model-proposal and Preview-checked/Needs-clarification
+   tags, an Include toggle, real affected-row counts from the existing
+   `recipe-draft/preview` endpoint, a "what stays unchanged" summary from
+   real profile columns, and one explicit "Approve included steps" action.
+   Deliberately reuses the existing recipe create -> preview -> apply chain
+   verbatim (the same atomic, transactional, revision-bound publication every
+   saved recipe already goes through) - **no new backend endpoint**, per the
+   brief's own "inspect existing contracts first, reuse working capabilities"
+   instruction.
+
+**Two real bugs found and fixed, both via live verification against a real
+multi-step fixture (not assumed, not from code reading alone)** - each has a
+regression test confirmed to fail pre-fix and pass post-fix:
+
+1. **Reopening a draft category-mapping step lost its own mapping.** A
+   column-values-fetch effect reset `categoryMapping` to `{}` immediately
+   after `loadRequestIntoForm` had just restored it from the step's own real
+   request, whenever the operation/column transitioned back onto that step -
+   every row in the review table then showed "Leave unchanged"/"Preserved"
+   while the preview summary above still correctly reported the real
+   affected-row count, a direct, confusing contradiction. Fixed with a
+   one-shot ref (`pendingMappingRestore`) the effect consumes instead of
+   unconditionally resetting.
+2. **Critical: a plan-review step marked "Excluded until you decide" could
+   still be applied.** The plan-review screen visually forces a
+   needs-clarification step's Include toggle off (the same condition the
+   real backend's date-ambiguity check would flag), but `approvePlan()` sent
+   each step's raw, untouched `enabled` flag to the backend - so a genuinely
+   ambiguous date-convert step the screen showed as excluded was applied to
+   real data anyway on the first live run. Found the moment the real
+   `signup_date` column showed converted ISO timestamps after an "approval"
+   that should have excluded that exact step. Fixed by recomputing the same
+   `needsClarification` condition in `approvePlan()` before sending anything
+   to the backend. Reverified clean on a second real run after the fix
+   (`signup_date` stayed unconverted).
+
+**A third real bug, found only while verifying restart-recovery against the
+real packaged sidecar** (not a frontend bug - a backend data-integrity gap):
+`apply_recipe`'s atomic multi-step publish inserts/reactivates `_revisions`
+rows with direct SQL, bypassing `add_revision()` entirely - so those rows
+never got a `sequence` value, the real column this branch's earlier
+same-second-ordering fix added. `list_current()`/`latest()` (coalescing a
+NULL sequence to 0) ranked a dataset's plan-review-applied revision *below*
+its own earlier, singly-applied revision - `GET /overview/datasets` reported
+revision 1 for a dataset whose `/state` correctly showed revision 3. This is
+the exact ordering restart-recovery, SQL Lab's connection list, and AI
+Analyst all resolve "most recent" through, so every plan-review approval was
+silently making its own dataset look stale in every such listing. `get()`/
+profile were unaffected throughout (they order by revision alone). Fixed by
+having both the insert and reactivate branches call the store's own
+`_next_sequence()` under the same transaction, exactly like `add_revision()`
+already does. Reverified clean against the real rebuilt sidecar, including
+across a genuine restart (see below).
+
+**Real workflow proof** (against the real packaged sidecar, a real local
+Ollama instance, and a real multi-step fixture with whitespace variants, 10
+category spelling variants, 2 exact duplicate rows, and both ambiguous and
+unambiguous dates - expected outcomes recorded independently before testing
+and confirmed exactly: 5 whitespace-affected rows, 2 exact duplicates, 8
+mapped category labels across 4 groups):
+- Real Atlas explanation obtained (`qwen2.5:3b`, via the real Ollama
+  instance the packaged sidecar auto-configures), evidence disclosure
+  inspected. Multiple real attempts at a *structured* `clean_operation`
+  proposal (not just an explanation) were not reliably obtainable from the
+  models currently installed on this machine - some returned explanation-
+  only responses, others were correctly rejected by the existing model-
+  contradiction safety check (a different installed model than Oct 17's
+  session hallucinating "no missing values" against a real 8.3%-missing
+  column - the safety net generalizes across models, confirmed independently
+  this round). This is an honest finding about current local-model
+  reliability for structured output, not a regression - manual Step
+  Settings and the plan-review's own suggested-mapping card completed the
+  rest of the workflow on real data either way.
+- Plan built (trim whitespace -> applied; category mapping -> applied via
+  the new suggested-grouping card; convert_type on an ambiguous date ->
+  correctly excluded; deduplicate survivorship -> applied) and approved
+  through the real plan-review screen: revision 3, 10 rows (12 minus 2 exact
+  duplicates), region spellings standardized - all independently predicted
+  before testing and confirmed exact.
+- SQL Lab: real `GROUP BY region` query against revision 3 returned exactly
+  the predicted per-region counts.
+- Visualize: real deterministic `amount by region` chart (confirms the
+  identifier-exclusion fix from Oct 13 still holds against new installed-
+  model variance), real row-inspection on click (3 real contributing rows
+  for Bengaluru, matching source data exactly).
+- Reports: real chart saved with its explicit source revision/fingerprint
+  into a named report.
+- **Restart recovery**: real desktop-app restart (`CloseMainWindow`,
+  confirmed no orphan sidecar process afterward - both `app.exe` and the
+  sidecar exited together) against the final rebuilt binary. `GET
+  /overview/datasets` reported the identical dataset_id, revision (2),
+  fingerprint, and row_count (10) before and after the restart.
+
+**Known limitation, unchanged from every prior session**: raw UI automation
+into the actual packaged Tauri window still does not reliably land. Tried
+three different mechanisms this round (Win32 `mouse_event`, `SendInput`, and
+UI Automation `InvokePattern` by element name) - none clicked the sidebar
+reliably, and `InvokePattern` could not even find a "Clean"-named element in
+the webview's accessibility tree. Real native evidence this round is
+therefore: (a) genuine `PrintWindow`-based captures of the real packaged
+window at the reachable project-desk state, at 1586x992/1440x900/400x844,
+confirming the rebuilt binary launches and renders correctly; (b) the full
+interactive workflow and visual verification above, run through a browser
+instance pointed at the real packaged sidecar (matched origin, not a
+separate dev backend) serving the *identical* `next build
+--PRISM_BUILD_TARGET=desktop` static bundle Tauri itself serves - the same
+code path, exercised through the one automatable surface available.
+
+**Gates, all rerun fresh this round**: web lint/typecheck/a11y-baseline/149
+unit tests/production build all clean. Backend ruff, mypy (CI's exact
+`--follow-imports=skip --allow-subclassing-any --allow-untyped-decorators
+--no-warn-return-any` invocation, which avoids the pre-existing anyio/
+Python-3.9 environment mismatch the plain `mypy` invocation still hits),
+boundaries, contract-check, and local secrets scan all clean. CI's exact
+`phase-1-python` test selection (`tests/api tests/contracts tests/migration
+tests/overview tests/sql_lab`) is 778/778 passing against a fresh store -
+one test
+(`test_phase8c_lineage_traversal.py::test_ancestors_never_cross_into_a_different_fingerprint_sharing_the_same_revision_number`)
+fails only when rerun repeatedly against this local working directory's
+accumulated default SQLite file (confirmed via git-stash to fail identically
+with or without this round's changes, and to pass cleanly 26/26 against a
+fresh file) - a known pre-existing local-only artifact
+(`.prism/runtime/analytical-history.sqlite` defaults to a *persistent* file
+absent an explicit `PRISM_ANALYTICAL_HISTORY_DATABASE_URL`, documented
+already in this file's Oct 17 entry), not something CI's always-fresh
+checkout is subject to. Full live SQLite/MySQL e2e suites were not rerun
+locally this round given the time already spent on live verification above;
+rely on CI's `phase-4-live-e2e` for that gate at the exact pushed SHA.
+
+**Not attempted this round** (named explicitly, not silently skipped): the
+Atlas preview-check card's remaining pixel-level geometry match to reference
+#01 (the underlying real-predicate/coverage-percentage behavior was already
+correct going into this round); SQL Lab/Visualize's own remaining spec-sheet
+mismatches (join-evidence population, saved-view density) untouched this
+round, deferred to the Oct 29-Nov 4 milestone per the delivery brief's own
+phasing; light-theme and narrow-width captures of the *populated* Clean
+recipe/plan-review states in the real packaged window specifically (captured
+instead via the matched-bundle browser, per the native-automation limitation
+above). The separate Atlas desktop-assistant concept (#04) remains deferred
+by design, unchanged.
+
+## Historical continuation: 2026-10-17
 
 Claude resumed from pushed feature SHA `557cd37a13f5af04b7fdfe27d6ff2742f7715b1b`
 (Codex's prior continuation, both CI jobs and local gates green at that
