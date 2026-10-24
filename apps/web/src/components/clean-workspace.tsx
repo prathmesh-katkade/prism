@@ -1283,7 +1283,7 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
           {survivorshipRule === "max_by_column" ? <label>Highest-value column<input aria-label="Tiebreak column" list="clean-column-options" value={survivorshipTiebreak} onChange={(event) => { invalidateManualPreview(); setSurvivorshipTiebreak(event.target.value); }} placeholder="Search columns…" /></label> : null}
           <p className="clean-field-help">{survivorshipColumns.size ? `${survivorshipColumns.size} grouping column${survivorshipColumns.size === 1 ? "" : "s"} selected.` : "Choose grouping columns in the centre panel."} Edit in the centre panel.</p>
         </> : null}
-        <button disabled={!manualBuild.request} title={manualBuild.reason ?? undefined} onClick={() => manualBuild.request && void previewOperation(manualBuild.request)}>{preview || manualPreviewStale ? "Recompute preview" : "Preview"}</button>
+        <button className="secondary" disabled={!manualBuild.request} title={manualBuild.reason ?? undefined} onClick={() => manualBuild.request && void previewOperation(manualBuild.request)}>{preview || manualPreviewStale ? "Recompute preview" : "Preview"}</button>
         {preview ? <p className="quiet-note is-good">Preview is up to date with revision {clean.dataset.revision}.</p> : manualPreviewStale ? <p className="quiet-note is-amber">Preview is stale — recompute before applying.</p> : null}
         {manualBuild.reason ? <p className="quiet-note">{manualBuild.reason}</p> : null}
       </div>

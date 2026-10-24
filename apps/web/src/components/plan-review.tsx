@@ -159,7 +159,7 @@ export function PlanReviewScreen({
     <footer className="plan-review-footer">
       <span className="quiet-note">{included.length} included step{included.length === 1 ? "" : "s"} · {excluded.length + needsInput.length} excluded · Revision {revision}</span>
       <button type="button" className="secondary" onClick={onClose}>Back to preview</button>
-      <button type="button" disabled={!included.length || approving} onClick={onApprove}>{approving ? "Applying…" : "Approve included steps"}</button>
+      <button type="button" className="btn-primary" disabled={!included.length || approving} onClick={onApprove}>{approving ? "Applying…" : "Approve included steps"}</button>
     </footer>
   </article>;
 }

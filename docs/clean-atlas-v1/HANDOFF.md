@@ -3,6 +3,27 @@
 One durable file, updated at every checkpoint rather than left to scatter
 across phase docs. Read this first in any new session.
 
+## Current continuation — 2026-10-25
+
+Focused visual-acceptance pass against the approved references (05, 01, 06,
+and 03's composition only - its mascot is superseded). Full detail, evidence
+paths, and an honest "what remains open" list are in
+[`acceptance-20261025.md`](acceptance-20261025.md) - read that first, this is
+a pointer. In short: found and fixed three real instances of the exact
+"white-primary"/unstyled-button anti-pattern the brief named (one of them -
+Plan review's "Approve included steps" - had *no* styling at all, the
+browser's own default button bevel), all backed by `getComputedStyle()`
+evidence rather than visual guessing (two other buttons that looked wrong in
+a screenshot thumbnail turned out, on direct inspection, to already be
+correct - reported, not hidden). Partway through, Claude Code's own
+memory-pressure guard killed the dev server; per its explicit instruction it
+was not restarted, so the step-marker composition gap (circle + connecting
+line vs. the current flat colour bar) and an after-state screenshot are
+honestly left open rather than guessed at blind. Rebuilt the desktop app and
+ran MySQL parity against a fresh disposable instance (31/31) independent of
+the dev server; re-confirmed and formalized the controlled baseline for the
+two full-suite pytest failures (1390/1390 clean with it).
+
 ## Current continuation — 2026-10-24
 
 Claude (this session) took over from Codex, who left six tracked source/test

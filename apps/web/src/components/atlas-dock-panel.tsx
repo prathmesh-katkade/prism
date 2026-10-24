@@ -363,7 +363,7 @@ export function AtlasDockPanel({
                 {turn.selectedChoice && preview.warnings?.length ? <ul aria-label="Conversion warnings">{preview.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul> : null}
               </div>;
             })() : null}
-            {!stale && turn.response.provider === "ollama" && turn.response.clean_operation && (!turn.response.clarification || turn.selectedChoice) ? <button type="button" onClick={() => onReview(turn.response!)}>Review in Step settings</button> : null}
+            {!stale && turn.response.provider === "ollama" && turn.response.clean_operation && (!turn.response.clarification || turn.selectedChoice) ? <button type="button" className="secondary" onClick={() => onReview(turn.response!)}>Review in Step settings</button> : null}
           </div> : null}
         </li>;
       })}

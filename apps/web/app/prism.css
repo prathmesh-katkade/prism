@@ -17,6 +17,19 @@
   --disabled-text:#817C6F;
   --serif: Georgia, "Times New Roman", serif; --sans: Inter, ui-sans-serif, system-ui, sans-serif; --mono: "SFMono-Regular", Consolas, monospace; color-scheme:dark;
 }
+/* Shared button system - Clean, Atlas dock, Plan review. One brass-filled
+   primary treatment for true commit actions (reusing --accent-hover/--accent/
+   --accent-pressed exactly as .clean-apply-bar button already proved out),
+   so every primary action across these three surfaces looks and behaves
+   identically. Supporting/secondary actions use the existing app-wide
+   .secondary class (transparent, bordered) rather than a second new class -
+   never leave a button with neither, which falls back to the browser's own
+   unstyled appearance. */
+.btn-primary { min-height:34px;padding:9px 16px;border:1px solid var(--accent);border-radius:5px;background:linear-gradient(180deg,var(--accent-hover),var(--accent));color:#1C1A16;font:650 13px var(--sans);cursor:pointer;white-space:nowrap;box-shadow:inset 0 1px 0 rgba(255,255,255,.22); }
+.btn-primary:hover:not(:disabled) { background:linear-gradient(180deg,var(--accent-hover),var(--accent-hover)); }
+.btn-primary:active:not(:disabled) { background:var(--accent-pressed);box-shadow:inset 0 1px 3px rgba(0,0,0,.3); }
+.btn-primary:disabled { background:var(--surface-muted);border-color:var(--line);color:var(--disabled-text);box-shadow:none;cursor:not-allowed; }
+.btn-primary:focus-visible { outline:3px solid var(--focus);outline-offset:2px; }
 .shell-body.has-local-inspector { grid-template-columns:var(--rail-size) minmax(0,1fr); }
 .shell-body.has-local-inspector > .resize-handle,.shell-body.has-local-inspector > .resize-spacer { display:none; }
 .shell-body.has-local-inspector > .workspace-area { grid-column:2; }
