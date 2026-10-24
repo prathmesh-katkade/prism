@@ -71,6 +71,10 @@ test("pattern decisions and a saved validation rule survive a fresh API process"
   await page.setInputFiles("#overview-upload", { name: "restart-check.csv", mimeType: "text/csv", buffer: Buffer.from(CSV) });
   await expect(page.getByLabel("Central tabbed workspace").getByRole("heading", { name: "restart-check.csv" })).toBeVisible();
   await page.getByRole("button", { name: /Clean native/i }).click();
+  const validationSummary = page.locator(".clean-disclosure > summary").filter({ hasText: "Validation" });
+  if (!(await validationSummary.locator("..").evaluate((element) => (element as HTMLDetailsElement).open))) {
+    await validationSummary.click();
+  }
   await expect(page.getByText("Restart-proof invoice format")).toBeVisible({ timeout: 10_000 });
   const [compatibleResponse] = await Promise.all([
     page.waitForResponse((response) => response.url().endsWith(`/validation-rules/${restartRule!.rule_id}/run`) && response.status() === 200),

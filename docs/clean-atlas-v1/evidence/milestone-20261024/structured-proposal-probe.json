@@ -1,0 +1,92 @@
+{
+  "source": {
+    "dataset_id": "ds_c0cfee05926c426b9a92043b04954029",
+    "revision": 0,
+    "source_name": "claude-fixture.csv",
+    "source_fingerprint": "add82f380f2406c2683f671e60c93ac7c3fe9c64d6b5e4643ee5b91970b3ba70",
+    "row_count": 6,
+    "column_count": 4
+  },
+  "results": [
+    {
+      "intent": "Explain what quality issues this dataset has.",
+      "http": 200,
+      "provider": "ollama",
+      "model": "qwen2.5:3b",
+      "operation": null,
+      "column": null,
+      "mapping": null,
+      "date_format": null,
+      "clarification": false,
+      "affected_rows": null,
+      "explanation": "The dataset appears to be in a good initial state with no missing values for the columns `customer_id`, `region`, and `signup_date`. The `amount` column is numeric and also does not have any missing values. However, without additional context or analysis, it's not possible to determine the quality of the data in terms of data types, consistency, outliers, or any other specific issues. The dataset is clean in terms of missing values, but further checks such as data type consistency, range checks,"
+    },
+    {
+      "intent": "Propose dropping exact duplicate rows. Preview only.",
+      "http": 200,
+      "provider": "ollama",
+      "model": "qwen2.5:3b",
+      "operation": "drop_duplicates",
+      "column": null,
+      "mapping": null,
+      "date_format": null,
+      "clarification": false,
+      "affected_rows": 1,
+      "explanation": "Previewing the proposed drop_duplicates operation on the dataset."
+    },
+    {
+      "intent": "Propose trimming whitespace from region. Preview only.",
+      "http": 200,
+      "provider": "ollama",
+      "model": "qwen2.5:3b",
+      "operation": "trim_whitespace",
+      "column": "region",
+      "mapping": null,
+      "date_format": null,
+      "clarification": false,
+      "affected_rows": 4,
+      "explanation": "Preview of trimming whitespace from the region column."
+    },
+    {
+      "intent": "Propose mapping BENGALURU to Bengaluru in region. Preview only.",
+      "http": 200,
+      "provider": "ollama",
+      "model": "qwen2.5:3b",
+      "operation": "category_mapping",
+      "column": "region",
+      "mapping": {
+        "BENGALURU": "Bengaluru"
+      },
+      "date_format": null,
+      "clarification": false,
+      "affected_rows": 1,
+      "explanation": "Proposing to map the value 'BENGALURU' to 'Bengaluru' in the 'region' column."
+    },
+    {
+      "intent": "Convert signup_date to datetime; the dates are ambiguous, so ask which date order to use. Preview only.",
+      "http": 200,
+      "provider": "ollama",
+      "model": "qwen2.5:3b",
+      "operation": "convert_type",
+      "column": "signup_date",
+      "mapping": null,
+      "date_format": null,
+      "clarification": true,
+      "affected_rows": 6,
+      "explanation": "The analyst intent is to convert the `signup_date` column to datetime. However, the dates in this column are ambiguous and the analyst needs to specify the date order (ascending or descending). This is a preview of the conversion operation."
+    },
+    {
+      "intent": "Propose mapping a region value that does not exist in the data, like Nroth to North, and see what happens.",
+      "http": 200,
+      "provider": "unavailable",
+      "model": null,
+      "operation": null,
+      "column": null,
+      "mapping": null,
+      "date_format": null,
+      "clarification": false,
+      "affected_rows": null,
+      "explanation": "The local model response could not be used safely. Retry or use manual controls."
+    }
+  ]
+}

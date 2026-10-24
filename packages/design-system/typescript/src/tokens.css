@@ -1,9 +1,18 @@
 :root {
-  --prism-canvas:#10100f; --prism-surface:#171715; --prism-raised:#20201e;
-  --prism-text:#f2f1eb; --prism-muted:#aaa89c; --prism-border:#3c3b35;
-  --prism-focus:#84c7ff; --prism-selection:#e3b455;
-  --prism-completed:#8bc19f; --prism-blocked:#e78175;
-  --prism-running:#e3b455; --prism-recorded:#84c7ff;
+  /* Palette A: Charcoal & Brass - approved dark foundation (canvas/panel/
+     raised/border/text/secondary/brass/selected-bg are the owner's exact
+     approved hex values). Status colors (good/amber/danger) are adjusted
+     from the palette study's swatch toward the same hue direction but
+     verified to clear 4.5:1 text contrast on panel/raised - the swatch
+     approved color DIRECTION only, not exact implementation hex. */
+  --prism-canvas:#141310; --prism-surface:#1C1A16; --prism-raised:#25221C;
+  --prism-table-header:#2A271F; --prism-border:#423B2D; --prism-border-soft:#302C22;
+  --prism-text:#EEE9DC; --prism-muted:#B8B09F; --prism-faint:#8C8575;
+  --prism-selection:#D6AE50; --prism-selection-hover:#DBB865; --prism-selection-pressed:#B89645;
+  --prism-selected-bg:#3B301A;
+  --prism-focus:#7FB2E8; --prism-blue:#6FA3D8;
+  --prism-completed:#739269; --prism-blocked:#BA8181; --prism-running:#B58B3C; --prism-recorded:#6FA3D8;
+  --prism-disabled-text:#817C6F;
   --prism-font-sans:ui-sans-serif,system-ui,"Segoe UI",Arial,sans-serif;
   --prism-font-mono:Consolas,"Cascadia Mono",monospace;
   --prism-space-1:4px; --prism-space-2:8px; --prism-space-3:12px;
@@ -14,21 +23,17 @@
   --prism-motion-feedback:120ms; --prism-motion-handoff:260ms;
 }
 .theme-light {
-  --prism-canvas:#f5f4ef; --prism-surface:#fcfbf7; --prism-raised:#fffefa;
-  --prism-text:#1d1d1a; --prism-muted:#68665e; --prism-border:#ccc9bd;
-  --prism-focus:#0768aa; --prism-selection:#966f1c;
-  --prism-completed:#30754d; --prism-blocked:#ac3d37;
-  --prism-running:#966f1c; --prism-recorded:#0768aa;
-}
-.prism-shell:has(.shell-body.has-local-inspector) {
-  --prism-canvas:#101315; --prism-surface:#15191b; --prism-raised:#1c2225;
-  --prism-text:#edf2f4; --prism-muted:#b6c2c9; --prism-border:#30393e;
-  --prism-selection:#efbd4e; --prism-completed:#72cb8a;
-}
-.prism-shell.theme-light:has(.shell-body.has-local-inspector) {
-  --prism-canvas:#f6f7f6; --prism-surface:#fff; --prism-raised:#f2f4f4;
-  --prism-text:#17232a; --prism-muted:#40525b; --prism-border:#c8d0d3;
-  --prism-selection:#865d00; --prism-completed:#247544;
+  /* Neutral warm counterpart, not an inversion of the dark foundation -
+     shown separately for review; the owner's approval of Palette A's dark
+     foundation does not itself approve this light derivation. */
+  --prism-canvas:#FAF7F0; --prism-surface:#FFFFFF; --prism-raised:#F5F1E8;
+  --prism-table-header:#F0EBE0; --prism-border:#DDD4C0; --prism-border-soft:#EAE3D2;
+  --prism-text:#1E1B14; --prism-muted:#5C5444; --prism-faint:#7A7262;
+  --prism-selection:#8A6016; --prism-selection-hover:#9C6F1E; --prism-selection-pressed:#6E4C10;
+  --prism-selected-bg:#F3E6C6;
+  --prism-focus:#1D6FD6; --prism-blue:#1D6FD6;
+  --prism-completed:#3F6B35; --prism-blocked:#8C3A33; --prism-running:#8A6416; --prism-recorded:#1D6FD6;
+  --prism-disabled-text:#9A917E;
 }
 @media (prefers-reduced-motion:reduce) {
   :root { --prism-motion-feedback:0ms; --prism-motion-handoff:0ms; }

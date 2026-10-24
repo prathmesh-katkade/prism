@@ -850,12 +850,21 @@ def apply_recipe(dataset_id: str, recipe_id: str, request: CleanRecipeApplyReque
                         row_count=after.dataset.row_count, column_count=after.dataset.column_count,
                         frame_json=dataset_store._frame_json(after.frame), is_active=True,
                         activated_at=datetime.now(timezone.utc),
+                        # Without this, list_current()/latest() (coalescing a
+                        # NULL sequence to 0) rank every recipe-applied
+                        # revision below any dataset's own single-operation
+                        # history, however recent - the exact cross-dataset
+                        # recency tiebreaker this column exists to provide,
+                        # silently broken for the one apply path that skips
+                        # add_revision() entirely for its atomic multi-step
+                        # publish.
+                        sequence=dataset_store._next_sequence(connection),
                     ))
                 else:
                     connection.execute(update(_revisions).where(and_(
                         _revisions.c.dataset_id == dataset_id, _revisions.c.revision == after.dataset.revision,
                         _revisions.c.source_fingerprint == after.source_fingerprint,
-                    )).values(is_active=True, activated_at=datetime.now(timezone.utc)))
+                    )).values(is_active=True, activated_at=datetime.now(timezone.utc), sequence=dataset_store._next_sequence(connection)))
                 active = connection.execute(select(func.count()).select_from(_revisions).where(and_(
                     _revisions.c.dataset_id == dataset_id, _revisions.c.revision == after.dataset.revision,
                     _revisions.c.is_active.is_(True),

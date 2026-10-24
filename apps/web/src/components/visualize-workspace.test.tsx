@@ -167,6 +167,19 @@ function json(body: unknown, status = 200): Response {
 }
 
 describe("ChartCanvas", () => {
+  it("shows category labels, values and numeric ticks on a vertical bar chart", () => {
+    const data = [{ label: "Bengaluru", value: 5700 }, { label: "Mumbai", value: 2000 }];
+    const { container } = render(<ChartCanvas mark="bar" data={data} />);
+    const labels = Array.from(container.querySelectorAll("text.viz-category-label"), (node) => node.textContent);
+    const values = Array.from(container.querySelectorAll("text.viz-value-label"), (node) => node.textContent);
+    const ticks = Array.from(container.querySelectorAll("text.viz-tick-label"), (node) => node.textContent);
+    expect(labels).toEqual(["Bengaluru", "Mumbai"]);
+    expect(values).toContain("5,700");
+    expect(values).toContain("2,000");
+    expect(ticks).toHaveLength(3);
+    expect(ticks).toContain("0");
+  });
+
   it("positions scatter points by their numeric x value, not by array index", () => {
     // Irregularly spaced x values: an index-based x (the original bug) would space
     // these evenly regardless of these numbers, which is exactly what this catches.

@@ -1,0 +1,46 @@
+# Clean + Atlas visual-acceptance pass — 2026-10-25
+
+Supersedes `acceptance-20261024.md` as the live status; that file remains as history, not re-edited. This round is a focused visual-acceptance pass against `references/05`, `references/01`, `references/06`, and `references/03` (composition only, its mascot superseded), not a feature round.
+
+Starting checkpoint: `365d9d8a0ef984da42220ab29f0882d0e8760ab8` (verified CI-green, remote main unchanged at `c9472ca`). This document is **not claiming visual acceptance** - see "What remains open" below. No merge or tag performed.
+
+## Comparison method
+
+A disposable, reproducible populated state was built directly in the running app (not assumed): a fresh fixture (`region` with case/whitespace variants, one exact duplicate row, ambiguous dates), four real recipe steps matching the reference's exact composition - 01 Trim whitespace (**Applied**), 02 Category mapping (**Review**, selected, 3 real affected rows, 8 real exceptions), 03 Convert type (**Draft**, not previewed), 04 Resolve duplicates (**Draft**, not previewed) - captured at the reference's own 1586x992 dimensions, dark theme. Every claim below is backed by either a direct pixel/computed-style check or an explicit screenshot crop, not visual impression alone; two initial visual reads of thumbnail crops were independently re-checked against `getComputedStyle()` and both turned out to be false positives (reported as such, not silently dropped - see "False positives ruled out").
+
+Evidence: `evidence/milestone-20261025/clean-populated-before-dark-1586x992.png` (current, before this round's fixes), `recipe-panel-{current,reference}-crop.png`, `inspector-{current,reference}-crop.png`.
+
+## Found and fixed this round (evidence-backed, not visual guessing)
+
+Audited every visible button's `getComputedStyle()` rather than eyeballing screenshots, after two manual visual reads were proven wrong by direct pixel sampling (see below). This surfaced three real instances of exactly the anti-pattern the brief named - a button left with no `.secondary`/primary class at all, falling back to either the browser's own unstyled default or an accidental `var(--text)`-filled "white button":
+
+| Button | Before | Root cause | Fix |
+|---|---|---|---|
+| Plan review's **"Approve included steps"** | `border: 2px outset rgb(255,255,255)` - the literal, unstyled Windows/Chrome default button bevel; no custom styling at all | No `className` in `plan-review.tsx`; `.plan-review-footer` only ever styled its own `<span>`, never its buttons | New shared `.btn-primary` class (prism.css) - the same brass gradient/hover/active/disabled treatment `.clean-apply-bar button` already proved out, reused rather than re-invented |
+| Clean's manual-step **"Preview"/"Recompute preview"** | `background: rgb(238,233,220)` (`var(--text)`), `color: rgb(20,19,16)` (`var(--canvas)`) - a bright near-white fill with dark text, directly contradicting the brass-primary/charcoal-secondary references | No `className`; `.clean-manual-form button` has no scoped default | `className="secondary"` (reuses the existing, already-correct transparent/bordered treatment every other button in this exact form already uses) |
+| Atlas dock's **"Review in Step settings"** | Same `var(--text)`-filled white button | `.atlas-dock-message > button:not(.secondary)` explicitly sets `background:var(--text)` | `className="secondary"`, matching reference 01's own bordered "Inspect source values" button for the equivalent handoff action |
+
+All three fixes are one-line `className` additions (or one new, small, fully-stated CSS class) - no framework change, no unrelated restyling. `apps/web/app/prism.css`, `apps/web/src/components/{atlas-dock-panel,clean-workspace,plan-review}.tsx`.
+
+### False positives ruled out (reported, not silently dropped)
+
+Two buttons that *looked* white-filled in a screenshot crop turned out to be correctly styled on direct inspection - recorded here so this round's "found 3, fixed 3" isn't mistaken for "only 3 were checked":
+- "Inspect exceptions" (Clean inspector): visually read as a solid white rectangle in a thumbnail crop; `getComputedStyle()` showed `background: rgba(0,0,0,0)` (fully transparent) and pixel-sampling the button's own background area (not its bold centred text, which was what the thumbnail crop actually showed) confirmed the surrounding card's real dark fill. Already correctly `className="secondary"`.
+- "+ Add step" (Clean recipe panel) when active: visually read as brass-filled; computed style showed `background: rgba(0,0,0,0)` with amber text/border only (`.is-selected` rule), matching the reference's own equal-weight, non-primary treatment for this button - no fix needed.
+
+## What remains open (not done this round - stated plainly, not glossed over)
+
+- **Recipe-step status markers.** The reference (05/03) draws each step's status as a small circle (✓ filled green / ● filled amber / ○ hollow) connected by a vertical line running down the step list. The current implementation (`clean-step-unified li > i`) is a flat 4px colour bar with no circle or connecting line - see `recipe-panel-{current,reference}-crop.png` for the direct side-by-side. This is a real, specified gap. **Deliberately not implemented blind this round**: the system's background-task memory-pressure guard killed the dev server mid-session (see below), and this change needs live visual iteration (grid-column widths, circle/line pixel alignment) that can't be safely done from source reading alone. Fixing a core, load-bearing list without the ability to look at it risks landing something worse than the current, working (if plainer) treatment.
+- **No after-state screenshot.** The three button fixes above are backed by hard before-state evidence (`getComputedStyle()` readings quoted above) and the app builds/typechecks/lints/tests clean with them applied, but there is no post-fix screenshot this round, for the same dev-server reason. The fixes are small, mechanical, and reuse proven existing CSS (not new, unverified styling), which is why they were still applied rather than held back - but this is not a substitute for looking at the result, and that look is still owed.
+- Everything listed as open in `acceptance-20261024.md` (native WebDriver automation, etc.) remains open; nothing regressed it.
+
+## External blocker this round
+
+Partway through this pass, Claude Code's own background-task memory-pressure guard killed the `next dev` server (task `bnbbbfxgy`) because system memory was critically low - stated explicitly as "not a failure of the command" and "do not start it again on your own, even if the work seems to need it." That instruction was followed: the dev server was not restarted, and the remaining visual-comparison work that depended on it (after-screenshots, the step-marker composition change, dark/light + 400px + keyboard/overflow/empty/loading/error state sweeps) was not attempted blind. Needs either the user's go-ahead to restart the dev server, or more free memory.
+
+## Done this round independent of the dev server
+
+- **Desktop rebuild, from today's source**: sidecar (`apps/api/build_sidecar.py`, 212 MB) and `apps/desktop-shell` (`npx tauri build --no-bundle`) both rebuilt clean. The *previous* session's `app.exe`/`prism-api.exe` processes were holding the output files locked (`Os { code: 5, PermissionDenied }` on the first build attempt) and were stopped first - itself a real, necessary step, not a side effect to gloss over. The new `app.exe` is running (fresh PID, isolated `PRISM_ANALYTICAL_HISTORY_DATABASE_URL`/`PRISM_SQL_LAB_DATABASE_URL` under `.prism/native-verify-20261025/`), its sidecar confirmed alive and responding (`GET /api/v1/overview/datasets` → `[]`, correctly empty against the fresh isolated store) via its process tree and a direct HTTP check - not full interactive native verification (still no WebDriver), but real confirmation it's the rebuilt binary and it works, not an assumption.
+- **MySQL parity with isolated storage**: a disposable local MySQL 8.4 instance was initialized fresh (own datadir under `.prism/mysql-disposable-20261025-0001/`, port 3310, confirmed via `SELECT @@port, @@datadir` before touching it - never the machine's any other MySQL). CI's exact `phase-4-live-e2e` pytest selection (`tests/sql_lab/test_mysql_connector_parity.py tests/api/test_durable_registry.py tests/api/test_atlas_promotion.py`), with `PRISM_ANALYTICAL_HISTORY_DATABASE_URL` also pointed at this real MySQL (not SQLite) exactly as CI does: **31/31 passed**. Shut down afterward to free memory.
+- **The two full-suite Python failures from `acceptance-20261024.md`**: re-confirmed root cause (shared, un-isolated `analytical-history.sqlite` default store) and established the controlled baseline explicitly rather than leaving it as a one-off observation - clearing `.prism/runtime/analytical-history.sqlite`/`sql-lab.sqlite` before a full-suite run is now the documented, repeatable procedure. Re-ran clean: **1390 passed, 7 skipped, 0 failed**, twice.
+- **Full gate suite, fresh, after the button-system fixes**: web lint (0 warnings), typecheck, a11y baseline, 149/149 unit tests (19 files), production build; ruff, mypy (CI's exact flags), boundaries, `contract:check`, local secrets scan - all clean.

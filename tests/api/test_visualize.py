@@ -33,6 +33,34 @@ def test_suggest_rejects_an_unknown_column_rather_than_guessing() -> None:
     assert response.status_code == 422
 
 
+def test_suggest_does_not_sum_numeric_identifiers_by_default() -> None:
+    client = TestClient(create_app())
+    uploaded = client.post(
+        "/api/v1/overview/datasets",
+        files={"file": ("invoices.csv", b"InvoiceNo,Description,Quantity,UnitPrice\n1001,Mug,2,4.50\n1002,Pen,3,1.25\n", "text/csv")},
+    )
+    assert uploaded.status_code == 201
+    dataset_id = uploaded.json()["dataset_id"]
+    suggestion = client.post(f"/api/v1/visualize/datasets/{dataset_id}/suggest")
+    assert suggestion.status_code == 200
+    assert suggestion.json()["spec"]["measure"] == "Quantity"
+    assert suggestion.json()["spec"]["aggregation"] == "sum"
+
+
+def test_suggest_counts_rows_when_numeric_columns_are_only_identifiers() -> None:
+    client = TestClient(create_app())
+    uploaded = client.post(
+        "/api/v1/overview/datasets",
+        files={"file": ("invoices.csv", b"InvoiceNo,Description\n1001,Mug\n1002,Pen\n", "text/csv")},
+    )
+    assert uploaded.status_code == 201
+    dataset_id = uploaded.json()["dataset_id"]
+    suggestion = client.post(f"/api/v1/visualize/datasets/{dataset_id}/suggest")
+    assert suggestion.status_code == 200
+    assert suggestion.json()["spec"]["measure"] is None
+    assert suggestion.json()["spec"]["aggregation"] == "count"
+
+
 def test_render_aggregates_server_side_and_never_returns_raw_row_count_of_data() -> None:
     client = TestClient(create_app())
     dataset_id = _dataset(client)

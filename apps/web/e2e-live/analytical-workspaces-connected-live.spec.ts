@@ -42,21 +42,31 @@ test("real Clean to SQL to Visualize to Report flow keeps source versions explic
   const datasetId = (await upload.json() as { dataset_id: string }).dataset_id;
 
   await page.getByRole("button", { name: /Clean native/i }).click();
+  // The duplicate-rows issue (no column) lives in the (collapsed-by-default) Issues disclosure.
+  await page.locator(".clean-disclosure summary").filter({ hasText: "Issues" }).click();
   await page.getByRole("button", { name: /Dataset/ }).click();
   await expect(page.getByRole("tab", { name: /Affected rows/ })).toBeVisible();
   await capture(page, "clean-review");
   await page.getByRole("button", { name: "Discard preview" }).click();
-  await page.getByRole("button", { name: "+ New manual operation" }).click();
+  await page.getByRole("button", { name: "+ Add step" }).click();
   await page.getByLabel("Operation", { exact: true }).selectOption("drop_duplicates");
   await page.getByRole("button", { name: "Add step to draft" }).click();
-  await expect(page.getByLabel("Recipe draft editor")).toContainText("01");
+  await expect(page.getByLabel("Data quality issue navigator and manual operation editor")).toContainText("01");
+  // Per-step actions (Disable/Enable/Move/Remove) live in a (collapsed-by-default) <details> "more actions" menu.
+  await page.getByLabel("More actions for step 1").click();
   await page.getByRole("button", { name: "Disable step 1" }).click();
-  await expect(page.getByLabel("Recipe draft editor")).toContainText("disabled");
+  await expect(page.getByLabel("Data quality issue navigator and manual operation editor")).toContainText("Disabled");
+  await page.getByLabel("More actions for step 1").click();
   await page.getByRole("button", { name: "Enable step 1" }).click();
-  await expect(page.getByLabel("Recipe draft editor")).toContainText("Downstream preview recomputed");
+  await expect(page.getByLabel("Data quality issue navigator and manual operation editor")).toContainText("Downstream preview recomputed");
+  await page.getByRole("button", { name: "Save recipe", exact: true }).click();
   await page.getByLabel("Recipe name").fill("Business duplicate review");
-  await page.getByRole("button", { name: "Save as recipe" }).click();
+  await page.getByRole("button", { name: "Save named recipe" }).click();
+  // Saved recipes is a collapsed-by-default <details> like every other left-panel
+  // section now (it no longer auto-opens just because a recipe exists).
+  await page.locator(".clean-disclosure > summary").filter({ hasText: "Saved recipes" }).click();
   const savedRecipe = page.locator(".clean-recipe-list > li").filter({ hasText: "Business duplicate review" });
+  await expect(savedRecipe).toBeVisible();
   await savedRecipe.getByRole("button", { name: "Preview", exact: true }).click();
   await expect(savedRecipe).toContainText("Reviewed revision 0");
   await capture(page, "clean-recipe");
