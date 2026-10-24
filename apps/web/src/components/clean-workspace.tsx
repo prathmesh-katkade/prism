@@ -465,8 +465,13 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
     // "Review in Step settings") leaves this unset; the plan-review screen
     // falls back to the operation's own real, already-shown help text rather
     // than inventing a reason.
-    if (pendingStepReason.current) {
-      setStepReasons((current) => ({ ...current, [stepId]: pendingStepReason.current! }));
+    // Captured into a local before clearing the ref: the updater below runs
+    // after React finishes this batch, by which point `.current = null` would
+    // already have landed, silently dropping every model-proposed step's
+    // reason and making it indistinguishable from a manually built one.
+    const reason = pendingStepReason.current;
+    if (reason) {
+      setStepReasons((current) => ({ ...current, [stepId]: reason }));
       pendingStepReason.current = null;
     }
   }

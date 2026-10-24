@@ -642,6 +642,50 @@ describe("Clean workspace", () => {
     expect(screen.getByLabelText("Column")).toHaveValue("region");
   });
 
+  it("tags a step added from an Atlas proposal as a model proposal in plan review, distinct from a manually built step", async () => {
+    const columnValues = { column: "region", total_distinct: 2, truncated: false, values: [{ value: "Bangalore", count: 8 }, { value: "BENGALURU", count: 3 }] };
+    const fetchMock = vi.fn(async (input: string | URL) => {
+      const path = String(input);
+      if (path.endsWith("/state")) return json({ dataset: dataset0, issues: [], history: [], health });
+      if (path.includes("/columns/region/values")) return json(columnValues);
+      if (path.includes("/rows")) return json(rowsPage);
+      if (path.includes("/profile")) return json({ columns: [{ name: "notes", semantic_type: "text" }, { name: "region", semantic_type: "text" }] });
+      if (path.includes("/recipe-draft/preview")) return json({ source_revision: 0, source_fingerprint: dataset0.source_fingerprint, review_token: "draft_1", before_sample: [], after_sample: [], step_impacts: [1, 1], projected_health: health });
+      if (path.includes("/recipes")) return json([]);
+      if (path.endsWith("/workspace-proposals")) {
+        return json({ provider: "ollama", explanation: "Standardising region spellings groups near-duplicates.", evidence: [], clean_operation: { operation: "category_mapping", column: "region", category_mapping: { Bangalore: "Bengaluru" } } });
+      }
+      if (path.endsWith("/preview")) return json({ operation: "category_mapping", review_token: "r1", source_revision: 0, affected_rows: 1, changed_rows_total: 1, exception_rows_total: 0, affected_columns: ["region"], before_sample: [], after_sample: [], warnings: [], projected_health: health });
+      return json({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText(/Rows 1–5 of 5/)).toBeInTheDocument());
+
+    // Step 1: handed off from a real Atlas proposal.
+    fireEvent.click(screen.getByRole("tab", { name: /Atlas/ }));
+    fireEvent.change(screen.getByLabelText("Ask Atlas"), { target: { value: "What about region spellings?" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ask Atlas" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Review in Step settings" })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Review in Step settings" }));
+    await waitFor(() => expect(screen.getByLabelText("Operation")).toHaveValue("category_mapping"));
+    fireEvent.click(screen.getByRole("button", { name: "Add step to draft" }));
+
+    // Step 2: an ordinary manual step, never routed through Atlas.
+    fireEvent.click(screen.getByRole("button", { name: "+ Add step" }));
+    fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "trim_whitespace" } });
+    fireEvent.change(screen.getByLabelText("Column"), { target: { value: "notes" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add step to draft" }));
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Review plan" })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Review plan" }));
+
+    await waitFor(() => expect(screen.getByText("Review Atlas's cleaning plan")).toBeInTheDocument());
+    expect(screen.getByText("Model proposal")).toBeInTheDocument();
+    expect(screen.getByText("Standardising region spellings groups near-duplicates.")).toBeInTheDocument();
+    expect(screen.getByText("Deterministic rule")).toBeInTheDocument();
+  });
+
   it("keeps a multi-turn Atlas conversation across tab switches, shows the real deterministic preview distinctly from the model's text, and marks a turn stale once the dataset revision moves past it", async () => {
     let applied = false;
     const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
