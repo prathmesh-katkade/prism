@@ -3,6 +3,138 @@
 One durable file, updated at every checkpoint rather than left to scatter
 across phase docs. Read this first in any new session.
 
+## Current continuation — 2026-10-24
+
+Claude (this session) took over from Codex, who left six tracked source/test
+files with intentional, uncommitted continuation work on top of the pushed
+`5021448` checkpoint (verified clean, CI green at that SHA; remote main
+unchanged at `c9472ca`). The current acceptance table is
+[`acceptance-20261024.md`](acceptance-20261024.md). Ending checkpoint:
+`bcb1aad87734e479e238f69e970d830fcadd3ef6`, pushed.
+
+**Reviewed and landed the six Codex files** (schema-constrained `clean`
+proposal responses with an explicit 4-shape `anyOf` and `additionalProperties:
+false`; server-side rejection of a model-chosen ambiguous `date_format` and of
+a `category_mapping` inventing a source value; the SQLGlot-dialect
+sidecar-packaging fix; the plan-review left-rail stepper; Saved-recipes
+collapsed-by-default). Found and fixed one regression before landing: the
+Saved-recipes auto-open removal broke a real e2e-live assertion in
+`analytical-workspaces-connected-live.spec.ts` that expected the just-saved
+recipe visible with no disclosure-opening step. This batch of work was
+committed as `a269938` earlier in this session.
+
+**One real bug found and fixed this round, via live verification against the
+rebuilt desktop app** (not assumed, not from code reading alone): the
+left-rail's own "Model proposal" vs. "Deterministic rule" tag — the exact
+distinction this brief's work order requires — never actually fired.
+`addDraftStep` read `pendingStepReason.current` *inside* the `setStepReasons`
+updater function; React invokes that updater after the synchronous
+`pendingStepReason.current = null` on the next line had already run, so the
+ref was always null by the time it was read, and every step (Atlas-proposed
+or hand-built) landed in plan review tagged "Deterministic rule". Found by
+building a step from a real Atlas proposal, opening Plan Review, and seeing
+the wrong tag; confirmed the exact mechanism with a temporary debug trace
+(`console.log` in both `onReview` and `addDraftStep`, later removed) showing
+`pendingStepReason.current` held the real explanation text at the moment
+`addDraftStep` ran but `stepReasons` ended up storing `null` for that step
+anyway. Fixed by capturing the ref into a local (`const reason =
+pendingStepReason.current`) before clearing it. Reverified clean on a second,
+isolated repro (a fresh page load, a fresh Atlas proposal, immediately into
+Plan Review) and added a regression test
+(`clean-workspace.test.tsx`: "tags a step added from an Atlas proposal as a
+model proposal in plan review, distinct from a manually built step").
+
+**Structured proposal verification**: six real requests against the real
+local Ollama instance (`qwen2.5:3b`), covering explanation-only (1), valid
+structured proposals (3: drop_duplicates, trim_whitespace, category_mapping),
+a correctly-triggered clarification (1: ambiguous `signup_date`), and a
+correct rejection (1: mapping an invented "Nroth" value - the server
+returned `provider: "unavailable"`, confirming the live validation fires
+against a real model's actual output, not just the unit-test fixtures). No
+truncated response was observed. Recorded in
+`evidence/milestone-20261024/structured-proposal-probe.json`.
+
+**Packaged SQL join inspection, confirmed in the frozen sidecar**: a real
+two-source `localjoin:` query (`INNER JOIN ... ON data.region = joined.region`)
+against a 12-row dataset and a 5-row lookup table returned exactly 4 matched
+rows, 8 unmatched left, 2 unmatched right - predicted independently before
+running the query and confirmed exact. `unsupported_notes: []` in the real
+response confirms the SQLGlot-dialect packaging fix holds in the actual
+frozen binary, not just the dev environment. Recorded in
+`evidence/milestone-20261024/packaged-sql-join-evidence.json`.
+
+**Full connected release-proof chain**, in the real app against its real
+packaged sidecar (`fixture.csv`, revision 0 -> 2): asked Atlas a real
+question, got a real structured category-mapping proposal, inspected its
+evidence disclosure, handed it off to Step settings, added it as step 1
+(model-authored); built step 2 by hand (trim whitespace, deterministic);
+opened Plan Review and confirmed the "Model proposal"/"Deterministic rule"
+distinction rendered correctly (the bug above, now fixed); approved both
+steps atomically to revision 2; ran the default SQL Lab query against
+revision 2 (12/12 rows, cleaned region values); opened Visualize
+(`amount by region`, correct auto-measure selection on the numeric `amount`
+field rather than an identifier column); split into small multiples by
+`customer_id` and drilled into one panel's contributing rows (2 rows for
+`customer_id = C1001, region = Bengaluru`, matching the known duplicate-row
+fixture exactly); hand-verified the chart's own aggregation
+(Bengaluru sum = 120.5 + 80 + 95.25 + 120.5 = 416.25, matched exactly); saved
+the chart with its explicit source revision/fingerprint; created a named
+report, added the saved chart, and added an explanatory note. Separately,
+earlier in the same session, a deliberately ambiguous manually-built
+`convert_type` step (no `date_format`) was confirmed to still show "Needs
+clarification"/"Excluded until you decide" in Plan Review - the Oct 22
+clarification-exclusion fix still holds against this round's rebuilt app and
+the new left-rail.
+
+**Native verification**: the rebuilt desktop app (`app.exe`) was running
+throughout, with its real packaged sidecar (`prism-api.exe`) as a confirmed
+child process (`Get-CimInstance Win32_Process`). Evaluated Tauri's documented
+Windows WebDriver route per the brief's instruction: `tauri-driver.exe` is
+installed (`C:\Users\Admin\.cargo\bin\tauri-driver.exe`), but the WebDriver
+backend it wraps on Windows, `msedgedriver.exe` matching the installed
+WebView2 runtime (155.0.4283.62), is not present and would need to be
+downloaded from Microsoft - not done autonomously, since fetching and
+executing a new binary requires the owner's explicit confirmation. Raw
+native-window UI automation therefore remains unverified this round; the
+release-proof chain above used the established matched-origin browser method
+(the identical frontend bundle against the same real sidecar) instead.
+
+**Gates, full required set**: web lint (0 warnings), typecheck, a11y
+baseline, 149 unit tests across 19 files, and the production build all
+clean. Backend ruff and mypy (CI's exact `phase-1-python` flags), boundaries,
+`contract:check`, and the local secrets scan all clean. CI-selected pytest
+(`tests/api tests/contracts tests/migration tests/overview tests/sql_lab`,
+the exact `.github/workflows/ci.yml` invocation) against a cleared runtime
+store: 780 passed, 7 skipped, 0 failed. Full repo pytest (`tests/`): 1388
+passed, 7 skipped, **2 failed** -
+`test_atlas_combined_sft_dataset.py::test_combined_sft_dataset_route_includes_synthetic_teacher_end_to_end`
+and
+`test_phase8c_lineage_traversal.py::test_ancestors_never_cross_into_a_different_fingerprint_sharing_the_same_revision_number`.
+Investigated rather than dismissed: both tests import the real, module-level
+`prism_api.analytical_objects.registry` singleton directly rather than
+through an isolated per-test database, so when no
+`PRISM_ANALYTICAL_HISTORY_DATABASE_URL` override is set they fall back to a
+shared, persistent on-disk default (`.prism/runtime/analytical-history.sqlite`,
+gitignored, accumulated across many past local sessions) and register
+literal, non-unique IDs (`fp_child`, `ds_fp_test`) against it - a second run,
+or a run where some other test touches those same IDs first, collides.
+Confirmed via `git diff` against this round's verified starting point that
+neither implicated file has changed, so this is pre-existing and not a
+regression from any reviewed or authored work this round; confirmed CI itself
+never hits it, since CI's own pytest invocation is scoped to exactly the five
+directories verified clean above. Not fixed in code (an isolation fix for
+these two tests is a separate, unscoped change); the local runtime store was
+cleared to get a true reading rather than relabelling the finding as flaky.
+MySQL live-parity suite skipped (no disposable MySQL instance running this
+session); the SQLite path is exercised throughout the rest of the suite.
+
+Desktop app `app.exe` left running for owner inspection (packaged sidecar
+`prism-api.exe` as its child process). Pushed to
+`prism/clean-pattern-review-v1` as `bcb1aad`; PR #18 (open, targeting `main`)
+picked up a fresh CI run on push - check its result before merging or
+tagging. No merge or tag performed this round, per the brief's explicit
+instruction to wait for owner visual acceptance.
+
 ## Current continuation — 2026-10-22
 
 Claude resumed from pushed feature SHA `2a4afe9f4dc71ff9729c74ff123d763d72606206`
