@@ -41,6 +41,45 @@ router = APIRouter(prefix="/api/v1/workspace-proposals", tags=["workspace-propos
 logger = logging.getLogger(__name__)
 
 
+def _clean_output_schema() -> dict[str, object]:
+    """Constrain Ollama's clean output without granting it review authority.
+
+    JSON mode alone only guarantees valid JSON. The local model can omit the
+    requested operation or invent field names, so use Ollama's supported
+    JSON-schema format and still validate/preview the result below.
+    """
+    def operation(name: CleanOperation, fields: dict[str, object], required: list[str]) -> dict[str, object]:
+        return {
+            "type": "object",
+            "properties": {"operation": {"type": "string", "enum": [name.value]}, **fields},
+            "required": ["operation", *required],
+            "additionalProperties": False,
+        }
+
+    column: dict[str, object] = {"column": {"type": "string"}}
+    return {
+        "type": "object",
+        "properties": {
+            "explanation": {"type": "string"},
+            "clean_operation": {"anyOf": [
+                {"type": "null"},
+                operation(CleanOperation.DROP_DUPLICATES, {}, []),
+                operation(CleanOperation.TRIM_WHITESPACE, column, ["column"]),
+                operation(CleanOperation.CATEGORY_MAPPING, {
+                    **column,
+                    "category_mapping": {"type": "object", "additionalProperties": {"type": "string"}},
+                }, ["column", "category_mapping"]),
+                operation(CleanOperation.CONVERT_TYPE, {
+                    **column,
+                    "target_type": {"type": "string", "enum": ["numeric", "text", "datetime", "boolean"]},
+                }, ["column", "target_type"]),
+            ]},
+        },
+        "required": ["explanation", "clean_operation"],
+        "additionalProperties": False,
+    }
+
+
 def _choose_installed_model(names: list[str]) -> str | None:
     """Choose a small installed local model when no explicit model is set.
 
@@ -127,12 +166,12 @@ async def propose(request: WorkspaceProposalRequest, http_request: Request) -> W
     shape = {
         "sql": 'Return only {"explanation":"brief reason","sql_draft":"SELECT segment, COUNT(*) AS count FROM data GROUP BY segment"}. Use table data and selected columns only.',
         "chart": 'Return only {"explanation":"brief reason","chart_spec":{"mark":"bar","intent":"comparison","dimension":"segment","measure":"revenue","aggregation":"sum","filters":{}}}. Choose actual source columns and a compatible mark.',
-        "clean": ('Return only {"explanation":"brief reason","clean_operation":null} for a question that asks for explanation or has no safe, concrete edit. '
-                  'When the analyst explicitly asks for an edit, clean_operation may instead be {"operation":"drop_duplicates"} '
-                  'or {"operation":"trim_whitespace","column":"actual_column_name"}. '
-                  'For drop_duplicates use ONLY the operation key: a columns key is unsupported. '
-                  'For trim_whitespace use ONLY operation and column. Use an actual source column. '
-                  'Other typed operations require exact supported fields and actual source values; never invent category values. Every edit is only a preview.'),
+        "clean": ('Return an explanation and clean_operation:null for explanation-only requests or unsupported edits. '
+                  'For an explicit edit, the supported proposal operations are drop_duplicates, trim_whitespace, '
+                  'category_mapping and convert_type. Use the required fields in the response schema. '
+                  'For category_mapping use only literal source values in the named column; never invent values. '
+                  'For date conversion never guess date_format: omit it so PRISM can ask the analyst. '
+                  'Every proposed edit is only a preview.'),
     }[request.kind]
     focus = ""
     if request.selected_operation:
@@ -147,7 +186,7 @@ async def propose(request: WorkspaceProposalRequest, http_request: Request) -> W
     payload = {
         "model": os.environ.get("PRISM_OLLAMA_MODEL", ""),
         "stream": False,
-        "format": "json",
+        "format": _clean_output_schema() if request.kind == "clean" else "json",
         "options": {"temperature": 0, "num_predict": 600},
         "prompt": (
             "Return one JSON object. " + shape + " "
@@ -222,6 +261,14 @@ async def propose(request: WorkspaceProposalRequest, http_request: Request) -> W
             operation = CleanTransformationRequest.model_validate(candidate["clean_operation"])
             if operation.review_token is not None:
                 raise ValueError("Model output may not submit a review token.")
+            if operation.operation is CleanOperation.CONVERT_TYPE and operation.target_type == "datetime" and operation.date_format:
+                raise ValueError("Model output may not decide an ambiguous date format.")
+            if operation.operation is CleanOperation.CATEGORY_MAPPING:
+                if not operation.column or operation.column not in source.frame.columns or not operation.category_mapping:
+                    raise ValueError("Model mapping needs a source column and literal source values.")
+                actual_values = set(source.frame[operation.column].dropna().astype(str))
+                if not set(operation.category_mapping).issubset(actual_values):
+                    raise ValueError("Model mapping contains values absent from the source column.")
             try:
                 preview = preview_transformation(request.dataset_id, operation)
             except HTTPException as error:

@@ -80,6 +80,9 @@ def run_pyinstaller() -> Path:
         "--collect-submodules", "sklearn",
         "--collect-submodules", "scipy",
         "--collect-submodules", "statsmodels",
+        # SQLGlot loads dialects dynamically. DuckDB queries can run in the
+        # frozen sidecar while join inspection fails unless these are bundled.
+        "--collect-submodules", "sqlglot.dialects",
         "--exclude-module", "numba.tests",
         "--exclude-module", "llvmlite.tests",
         "--hidden-import", "pymysql",

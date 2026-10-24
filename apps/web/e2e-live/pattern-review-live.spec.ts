@@ -105,7 +105,8 @@ test("Pattern Review: discover, inspect evidence, accept a family, extract, and 
   await familyItem.getByRole("checkbox").check();
   await page.getByRole("textbox", { name: "Pattern validation rule name" }).fill("Invoice ID format");
   await page.getByRole("button", { name: "Save selected families as a validation rule" }).click();
-  // The Validation disclosure never auto-opens (unlike Saved recipes), so open it explicitly.
+  // Every left-panel disclosure (including Saved recipes, now) is collapsed by
+  // default, so open Validation explicitly rather than assuming it's visible.
   await openDisclosure(page, "Validation");
   await expect(page.getByText("Invoice ID format")).toBeVisible({ timeout: 10_000 });
   await capture(page, "saved-rule");

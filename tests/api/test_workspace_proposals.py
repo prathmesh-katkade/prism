@@ -73,6 +73,34 @@ def test_unavailable_model_retains_manual_path(monkeypatch: MonkeyPatch) -> None
     assert "manual" in result.json()["explanation"]
 
 
+def test_model_mapping_cannot_invent_a_source_value(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setenv("PRISM_AI_PROVIDER", "ollama")
+    client = TestClient(create_app())
+    dataset_id = _source(client)
+    _mock_ollama(monkeypatch, lambda *_a, **_k: _model_response({
+        "explanation": "Map a source spelling.",
+        "clean_operation": {"operation": "category_mapping", "column": "segment", "category_mapping": {"Nroth": "North"}},
+    }))
+    result = client.post("/api/v1/workspace-proposals", json={"kind": "clean", "dataset_id": dataset_id, "intent": "Map Nroth"})
+    assert result.status_code == 200
+    assert result.json()["provider"] == "unavailable"
+    assert result.json()["clean_operation"] is None
+
+
+def test_model_cannot_choose_ambiguous_date_order(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setenv("PRISM_AI_PROVIDER", "ollama")
+    client = TestClient(create_app())
+    dataset_id = _source(client)
+    _mock_ollama(monkeypatch, lambda *_a, **_k: _model_response({
+        "explanation": "Convert ambiguous dates.",
+        "clean_operation": {"operation": "convert_type", "column": "segment", "target_type": "datetime", "date_format": "%m/%d/%Y"},
+    }))
+    result = client.post("/api/v1/workspace-proposals", json={"kind": "clean", "dataset_id": dataset_id, "intent": "Parse dates"})
+    assert result.status_code == 200
+    assert result.json()["provider"] == "unavailable"
+    assert result.json()["clean_operation"] is None
+
+
 def test_model_clean_proposal_is_typed_and_previewed_without_applying(monkeypatch: MonkeyPatch) -> None:
     monkeypatch.setenv("PRISM_AI_PROVIDER", "ollama")
     _mock_ollama(monkeypatch, lambda *_a, **_k: _model_response({
@@ -339,6 +367,13 @@ def test_selected_operation_column_and_history_reach_the_model_prompt(monkeypatc
     })
     assert result.status_code == 200
     prompt = str(captured["prompt"])
+    schema = captured["format"]
+    assert isinstance(schema, dict)
+    assert schema["required"] == ["explanation", "clean_operation"]
+    operation_schemas = schema["properties"]["clean_operation"]["anyOf"][1:]
+    assert any("category_mapping" in item["properties"] for item in operation_schemas)
+    assert all("review_token" not in item["properties"] for item in operation_schemas)
+    assert all("date_format" not in item["properties"] for item in operation_schemas)
     assert "category_mapping" in prompt
     assert "segment" in prompt
     assert "Normalize North" in prompt

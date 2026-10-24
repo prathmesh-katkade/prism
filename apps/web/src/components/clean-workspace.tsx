@@ -990,7 +990,7 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
         <label className="clean-recipe-name">Recipe name<input aria-label="Recipe name" autoFocus value={recipeName} onChange={(event) => setRecipeName(event.target.value)} placeholder="e.g. Standard monthly cleanup" /></label>
         <div><button type="submit">Save named recipe</button><button type="button" className="secondary" onClick={() => { setShowRecipeSave(false); setRecipeError(null); }}>Cancel</button></div>
       </form> : null}
-      <p className="clean-recipe-tip">Disable a step to preview downstream changes without removing it.</p>
+      {draftSteps.length ? <p className="clean-recipe-tip">Disable a step to preview downstream changes without removing it.</p> : null}
 
       {manualOperation === "category_mapping" && manualMode && columnValues && !Object.keys(categoryMapping).length ? (() => {
         const groups = suggestCategoryGroups(columnValues.values);
@@ -1021,7 +1021,7 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
         <p>No values mapped yet. Select source values in the inspector and assign a target to build the mapping here.</p>
       </div> : null}
 
-      <details className="clean-disclosure" open={recipes.length > 0 || Boolean(recipeError)}>
+      <details className="clean-disclosure">
         <summary>Saved recipes <span className="health-pill">{recipes.length}</span></summary>
         {recipes.length ? <ul className="clean-recipe-list">{recipes.map((recipe) => {
         const enabledCount = recipe.steps.filter((step) => step.enabled).length;
@@ -1032,8 +1032,8 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
           {recipePreview?.recipe_id === recipe.recipe_id ? <div className="clean-recipe-review"><small>Reviewed revision {recipePreview.source_revision} · {recipePreview.step_impacts.join(" / ")} affected row(s) by step</small><button disabled={applyingRecipeId === recipe.recipe_id} onClick={() => void applyRecipe(recipe)}>{applyingRecipeId === recipe.recipe_id ? "Applying…" : "Apply reviewed recipe"}</button><button className="secondary" onClick={() => setRecipePreview(null)}>Discard</button></div> : null}
         </li>;
       })}</ul> : <p className="quiet-note">Build an operation in the inspector and save it as a recipe to reuse it later, or on another dataset with the same schema.</p>}
-        {recipeError ? <p className="query-error" role="alert">{recipeError}</p> : null}
       </details>
+      {recipeError ? <p className="query-error" role="alert">{recipeError}</p> : null}
 
       <details className="clean-disclosure">
         <summary>Issues <span className={`health-pill ${clean.health.total >= 80 ? "good" : clean.health.total >= 60 ? "warn" : "risk"}`}>{clean.issues.length ? clean.issues.length : clean.health.total + "/100"}</span></summary>

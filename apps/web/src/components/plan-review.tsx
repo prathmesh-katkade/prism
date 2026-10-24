@@ -85,6 +85,15 @@ export function PlanReviewScreen({
       <button type="button" className="secondary" onClick={onClose}>Back to preview</button>
     </header>
     <div className="plan-review-body">
+      <aside className="plan-review-rail" aria-label="Cleaning plan progress">
+        <ol>
+          <li className="is-complete"><span>1</span><div><strong>Inspect data</strong><small>{rowCount.toLocaleString()} rows · {columnCount} columns</small></div></li>
+          <li className={steps.length ? "is-complete" : ""}><span>2</span><div><strong>Draft recipe</strong><small>{steps.length} step{steps.length === 1 ? "" : "s"} prepared for review</small></div></li>
+          <li className="is-current" aria-current="step"><span>3</span><div><strong>Review decisions</strong><small>{included.length} included · {excluded.length + needsInput.length} excluded</small></div></li>
+          <li><span>4</span><div><strong>Apply changes</strong><small>Pending explicit approval</small></div></li>
+        </ol>
+        <div className="plan-review-context"><span className="eyebrow">Context</span><p>{datasetName}</p><small>Revision {revision} · {rowCount.toLocaleString()} source rows</small></div>
+      </aside>
       <ol className="plan-review-steps">
         {decided.map((entry) => {
           const spec = OPERATIONS.find((item) => item.value === entry.step.request.operation);
@@ -92,11 +101,15 @@ export function PlanReviewScreen({
           const isModelProposed = Boolean(entry.reason);
           return <li key={entry.step.step_id} className={entry.blocked ? "is-blocked" : entry.step.enabled ? "is-included" : "is-excluded"}>
             <div className="plan-step-head">
-              <span className="plan-step-number">{entry.index + 1}</span>
-              <h2>{spec?.label ?? entry.step.request.operation.replaceAll("_", " ")}</h2>
-              <span className={`health-pill ${isModelProposed ? "info" : ""}`}>{isModelProposed ? "Model proposal" : "Deterministic rule"}</span>
-              {entry.affectedRows !== null ? <span className="health-pill good">Preview checked</span> : null}
-              {entry.blocked ? <span className="health-pill risk">Needs clarification</span> : null}
+              <div className="plan-step-identity">
+                <span className="plan-step-number">{entry.index + 1}</span>
+                <h2>{spec?.label ?? entry.step.request.operation.replaceAll("_", " ")}</h2>
+              </div>
+              <div className="plan-step-tags">
+                <span className={`health-pill ${isModelProposed ? "info" : ""}`}>{isModelProposed ? "Model proposal" : "Deterministic rule"}</span>
+                {entry.affectedRows !== null ? <span className="health-pill good">Preview checked</span> : null}
+                {entry.blocked ? <span className="health-pill risk">Needs clarification</span> : null}
+              </div>
               <label className="clean-switch-row plan-step-include">
                 <span>Include</span>
                 <input type="checkbox" role="switch" aria-checked={entry.step.enabled && !entry.blocked} checked={entry.step.enabled && !entry.blocked} disabled={entry.blocked} onChange={() => onToggleStep(entry.index)} />

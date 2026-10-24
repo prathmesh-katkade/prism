@@ -62,6 +62,9 @@ test("real Clean to SQL to Visualize to Report flow keeps source versions explic
   await page.getByRole("button", { name: "Save recipe", exact: true }).click();
   await page.getByLabel("Recipe name").fill("Business duplicate review");
   await page.getByRole("button", { name: "Save named recipe" }).click();
+  // Saved recipes is a collapsed-by-default <details> like every other left-panel
+  // section now (it no longer auto-opens just because a recipe exists).
+  await page.locator(".clean-disclosure > summary").filter({ hasText: "Saved recipes" }).click();
   const savedRecipe = page.locator(".clean-recipe-list > li").filter({ hasText: "Business duplicate review" });
   await expect(savedRecipe).toBeVisible();
   await savedRecipe.getByRole("button", { name: "Preview", exact: true }).click();
