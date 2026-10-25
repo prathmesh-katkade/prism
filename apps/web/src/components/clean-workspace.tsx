@@ -6,6 +6,7 @@ import { apiUrl } from "../config/api";
 import type { InspectorObjectState } from "../state/shell-model";
 import { AtlasCharacter, type AtlasPose } from "./atlas-character";
 import { AtlasDockPanel } from "./atlas-dock-panel";
+import { Icon } from "./icons";
 import { PlanReviewScreen, needsClarification } from "./plan-review";
 
 type CleanUiState = "empty" | "loading" | "ready" | "error";
@@ -947,7 +948,7 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
       </ol></nav><button type="button" className={`atlas-launcher ${inspectorTab === "atlas" ? "is-active" : ""}`} aria-controls="clean-atlas-panel" aria-pressed={inspectorTab === "atlas"} onClick={() => setInspectorTab("atlas")}><AtlasCharacter pose={atlasPose} size="small" /><span><strong>Atlas</strong><small>Ask about this step</small></span></button></div>
     </header>
     <nav ref={recipePaneRef} className="clean-issues" aria-label="Data quality issue navigator and manual operation editor" tabIndex={0}>
-      <div className="section-title"><div><span className="eyebrow">TRANSFORMATION RECIPE</span><h2>{clean.history.length || draftSteps.length || recipePreview || (preview && pendingRequest) ? `${clean.history.length + (recipePreview ? (recipes.find((recipe) => recipe.recipe_id === recipePreview.recipe_id)?.steps.length ?? 0) : draftSteps.length ? draftSteps.length : (preview && pendingRequest) ? 1 : 0)} step(s)` : "Empty"}</h2></div></div>
+      <div className="section-title"><div><h2>Transformation recipe</h2><p className="clean-recipe-subtitle">{clean.history.length || draftSteps.length || recipePreview || (preview && pendingRequest) ? `${clean.history.length + (recipePreview ? (recipes.find((recipe) => recipe.recipe_id === recipePreview.recipe_id)?.steps.length ?? 0) : draftSteps.length ? draftSteps.length : (preview && pendingRequest) ? 1 : 0)} step(s)` : "Empty"}</p></div></div>
       <ol className="clean-recipe-unified" aria-label="Unified transformation recipe">
         {clean.history.map((item, index) => <li key={item.transformation_id} className="is-applied">
           <i aria-hidden="true" /><span className="clean-step-number">{String(index + 1).padStart(2, "0")}</span>
@@ -1322,15 +1323,25 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
         const previewPending = Boolean(preview && pendingRequest);
         const blockedReason = previewPending ? "Apply or discard this preview first." : null;
         return <div className="inspector-actions clean-next-workspace"><span className="eyebrow">NEXT WORKSPACE</span>
-          <button type="button" className="clean-handoff-row secondary" disabled={previewPending} title={blockedReason ?? undefined} onClick={() => onOpenWorkflow("sql-lab")}><span aria-hidden="true">→</span>Use this revision in SQL Lab</button>
-          {blockedReason ? <small className="clean-handoff-reason">{blockedReason}</small> : null}
-          <button type="button" className="clean-handoff-row secondary" disabled={previewPending} title={blockedReason ?? undefined} onClick={() => onOpenWorkflow("visualize")}><span aria-hidden="true">→</span>Visualize this revision</button>
-          {blockedReason ? <small className="clean-handoff-reason">{blockedReason}</small> : null}
+          <button type="button" className="clean-handoff-row secondary" disabled={previewPending} title={blockedReason ?? undefined} onClick={() => onOpenWorkflow("sql-lab")}>
+            <Icon name="database" className="clean-handoff-icon" />
+            <span className="clean-handoff-copy"><strong>Use this revision in SQL Lab</strong><small>{blockedReason ?? "Query this revision directly."}</small></span>
+            <Icon name="arrow" className="clean-handoff-chevron" />
+          </button>
+          <button type="button" className="clean-handoff-row secondary" disabled={previewPending} title={blockedReason ?? undefined} onClick={() => onOpenWorkflow("visualize")}>
+            <Icon name="layers" className="clean-handoff-icon" />
+            <span className="clean-handoff-copy"><strong>Visualize this revision</strong><small>{blockedReason ?? "Chart this revision's data."}</small></span>
+            <Icon name="arrow" className="clean-handoff-chevron" />
+          </button>
         </div>;
       })()}
       <div className="inspector-actions clean-report-context"><span className="eyebrow">REPORT CONTEXT</span>
         <p className="quiet-note">No report linked.</p>
-        <button type="button" className="secondary" onClick={() => onOpenWorkflow("reports")}>Open Reports</button>
+        <button type="button" className="clean-handoff-row secondary" onClick={() => onOpenWorkflow("reports")}>
+          <Icon name="panel" className="clean-handoff-icon" />
+          <span className="clean-handoff-copy"><strong>Open Reports</strong><small>Link this transformation to a saved report.</small></span>
+          <Icon name="arrow" className="clean-handoff-chevron" />
+        </button>
       </div>
       </div>
     </aside>
