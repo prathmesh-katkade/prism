@@ -1069,7 +1069,7 @@ describe("Clean workspace", () => {
     // in the right panel, and impact/review now sit before the step-commit
     // action, not after it.
     await waitFor(() => expect(document.querySelector(".clean-centre-editor")).not.toBeInTheDocument());
-    const impactEl = screen.getByText("Impact");
+    const impactEl = screen.getByText("Impact in this revision");
     const reviewEl = screen.getByText("Unmatched values preserved");
     expect(screen.getByText(/unmatched row stays unchanged/)).toBeInTheDocument();
     expect(screen.getByText("unmatched rows")).toBeInTheDocument();

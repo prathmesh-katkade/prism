@@ -354,6 +354,7 @@ export function AtlasDockPanel({
                 <section className="atlas-dock-preview-checks" aria-label="Preview checks">
                   <header><span>Preview checks</span><strong>{checks.filter((check) => check.clear).length} / {checks.length} clear</strong></header>
                   <small>Measured checks, not model confidence.</small>
+                  <div className="atlas-dock-check-meter" aria-hidden="true">{checks.map((check) => <span key={check.label} className={check.clear ? "is-good" : "is-amber"} />)}</div>
                   <ul>{checks.map((check) => <li key={check.label} className={check.clear ? "is-good" : "is-amber"}><span aria-hidden="true">{check.clear ? "✓" : "!"}</span><span>{check.label}</span><small>{check.detail}</small></li>)}</ul>
                 </section>
                 {exceptionRows > 0 && !turn.response?.clarification ? <div className="atlas-dock-ambiguity">
@@ -370,7 +371,7 @@ export function AtlasDockPanel({
     </ol> : null}
     <form className="atlas-dock-input" onSubmit={(event) => { event.preventDefault(); void ask(intent); }}>
       <label>Ask Atlas<textarea value={intent} onChange={(event) => setIntent(event.target.value)} maxLength={500} placeholder="e.g. Standardize region labels" disabled={Boolean(pending)} /></label>
-      <button type="submit" disabled={!datasetId || Boolean(pending) || intent.trim().length < 3}>{pending ? "Checking local model…" : "Ask Atlas"}</button>
+      <button type="submit" className="btn-primary" disabled={!datasetId || Boolean(pending) || intent.trim().length < 3}>{pending ? "Checking local model…" : "Ask Atlas"}</button>
     </form>
     {!datasetId ? <p className="quiet-note">Load a dataset to ask Atlas about it.</p> : null}
   </div>;

@@ -3,7 +3,43 @@
 One durable file, updated at every checkpoint rather than left to scatter
 across phase docs. Read this first in any new session.
 
-## Current continuation — 2026-10-25
+## Current continuation — 2026-10-27
+
+Took over an interrupted session's own intentional uncommitted work (CSS/TSX
+already mid-edit; a single-job `npx tauri build --no-bundle` that had, in
+fact, already finished by the time this session started — see
+[`acceptance-20261027.md`](acceptance-20261027.md) for the detail). Full
+findings, fixes and verification are in that file — this entry is a pointer
+plus the two things most worth knowing before picking this up again:
+
+1. **Root cause of the recurring "secondary button has no complete
+   treatment" symptom, finally found**: a bare, unscoped `.secondary {
+   ...!important }` rule meant only for the Overview workspace (every
+   sibling rule in its source block is `.overview-*`-scoped; this one rule
+   was missing its prefix) was overriding every other workspace's own
+   `.secondary` styling via `!important`, regardless of selector
+   specificity. Fixed by removing the `!important` (not adding another
+   override) and auditing/patching the small number of other
+   workspace-scoped rules that would have newly out-specified the bare
+   default once that `!important` was gone.
+2. **Native WebDriver automation worked, for the first time this project has
+   ever recorded.** `tauri-driver` + a matching `msedgedriver` were both
+   already present in `.prism/native-driver/` this round (not newly
+   installed) — every prior continuation back to 2026-10-12 lists raw
+   native-window automation as a known, unresolved limitation. This round, a
+   real WebDriver session against the packaged `app.exe` drove real clicks
+   (tab navigation, operation/column selection, "Apply suggested grouping",
+   "Preview") and captured real native-rendered screenshots via the
+   WebDriver `/screenshot` endpoint — not a browser, not `PrintWindow` alone.
+   The one piece that didn't land: the dataset-upload control opens a native
+   OS file picker, which standard WebDriver file-input tricks can't reach;
+   the comparison dataset was seeded through the sidecar's own upload
+   endpoint instead and picked up by the frontend's existing
+   most-recent-dataset fallback. If a future round needs to drive the
+   upload itself natively, this is the one remaining gap, not the whole
+   automation story.
+
+## Historical continuation — 2026-10-25
 
 Focused visual-acceptance pass against the approved references (05, 01, 06,
 and 03's composition only - its mascot is superseded). Full detail, evidence

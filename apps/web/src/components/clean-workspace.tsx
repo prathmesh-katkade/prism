@@ -845,7 +845,7 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
   // matching the loading branch forever and the error (with its retry
   // control) would never be reachable.
   if (state === "error") return <section className="overview-state error-state" role="alert"><h2>Clean could not load this dataset.</h2><p>{error}</p><button onClick={() => datasetId && void refresh(datasetId)}>Retry</button></section>;
-  if (state === "loading" || !clean) return <section className="overview-state loading-state" aria-live="polite"><span className="loading-bar" /><h2>Scanning for quality issues</h2><p>Reusing Overview's own deterministic profile — nothing is recomputed twice.</p></section>;
+  if (state === "loading" || !clean) return <section className="overview-state loading-state" aria-live="polite"><span className="loading-bar" /><h2>Scanning for quality issues</h2><p>Loading the dataset profile and checking for quality issues. Larger datasets may take longer.</p></section>;
 
   const manualBuild = manualMode ? buildManualRequest() : { request: null, reason: null };
   const manualSpec = OPERATIONS.find((item) => item.value === manualOperation);
@@ -985,7 +985,7 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
         </li> : null}
       </ol>
       {!clean.history.length && !draftSteps.length && !recipePreview && !(preview && pendingRequest) ? <p className="quiet-note">No steps yet. Select an issue, or start a manual operation below, to build this dataset's recipe.</p> : null}
-      {draftError ? <p role="alert" className="query-error">{draftError}</p> : draftSteps.length && draftPreview ? <p className="quiet-note">Downstream preview recomputed from revision {draftPreview.source_revision}. Projected health {draftPreview.projected_health.total}/100.</p> : null}
+      {draftError ? <p role="alert" className="query-error">{draftError}</p> : draftSteps.length && draftPreview ? <p className="quiet-note clean-recipe-note">Downstream preview recomputed from revision {draftPreview.source_revision}. Projected health {draftPreview.projected_health.total}/100.</p> : null}
 
       <div className="clean-recipe-actions">
         <button className={manualMode ? "is-selected" : "secondary"} onClick={startManualOperation}>+ Add step</button>
@@ -1021,7 +1021,7 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
         <p>{Object.keys(categoryMapping).length} source value{Object.keys(categoryMapping).length === 1 ? "" : "s"} mapped to {new Set(Object.values(categoryMapping)).size} target{new Set(Object.values(categoryMapping)).size === 1 ? "" : "s"}.</p>
         <ul>{Object.entries(categoryMapping).slice(0, 5).map(([source, target]) => <li key={source}><code>{source}</code><span aria-hidden="true">→</span><code>{target}</code></li>)}</ul>
         {Object.keys(categoryMapping).length > 5 ? <small>+{Object.keys(categoryMapping).length - 5} more</small> : null}
-        <button type="button" className="secondary" onClick={() => { setManualMode(true); setSelectedIssue(null); setSelectedFinding(null); }}>Review full mapping</button>
+        <button type="button" className="secondary" onClick={() => { setManualMode(true); setSelectedIssue(null); setSelectedFinding(null); }}><Icon name="layers" className="clean-action-icon" />Review full mapping</button>
       </div> : manualOperation === "category_mapping" && manualMode ? <div className="clean-current-mapping is-empty">
         <span className="eyebrow">Current mapping</span>
         <p>No values mapped yet. Select source values in the inspector and assign a target to build the mapping here.</p>
@@ -1255,7 +1255,7 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
         {pendingRequest ? <p className="quiet-note">Review the affected rows and exceptions, then use the actions below the review.</p> : <p className="quiet-note">Atlas proposes a fix automatically when a safe deterministic one exists; otherwise this needs analyst judgment.</p>}
       </> : manualMode ? <>
         <div className="inspector-heading"><div><span className="eyebrow">{manualStepNumber ? `STEP ${manualStepNumber}` : "NEW STEP · UNSAVED"}</span><h2>{manualSpec?.label ?? manualOperation.replaceAll("_", " ")}</h2></div></div>
-        <div className="clean-manual-form">
+        <div className="clean-manual-form clean-step-form">
         <label>Operation<select aria-label="Operation" value={manualOperation} onChange={(event) => { invalidateManualPreview(); setManualOperation(event.target.value as CleanOperation); }}>{OPERATIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
         {manualSpec?.help ? <p className="clean-field-help">{manualSpec.help}</p> : null}
         {manualSpec?.needsColumn ? <label>Column{(() => { const type = profile?.columns?.find((c) => c.name === manualColumn)?.semantic_type; return type ? ` · ${manualColumn} (${type})` : ""; })()}
@@ -1295,14 +1295,14 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
         const preservesUnmatched = pendingRequest.operation === "category_mapping" && pendingRequest.preserve_unmatched !== false;
         return <>
           <div className="clean-inspector-impact">
-            <span className="eyebrow">Impact</span>
+            <span className="eyebrow">Impact in this revision</span>
             <div><strong>{affected.toLocaleString()}</strong><span>affected row{affected === 1 ? "" : "s"}</span></div>
             {exceptions > 0 ? <div><strong className="is-amber">{exceptions.toLocaleString()}</strong><span>{preservesUnmatched ? "unmatched" : "exception"} row{exceptions === 1 ? "" : "s"}</span></div> : null}
           </div>
           <div className="clean-review-card">
             <strong>{exceptions > 0 ? preservesUnmatched ? "Unmatched values preserved" : "Inspect exceptions" : "Ready to apply"}</strong>
             <p>{exceptions > 0 ? preservesUnmatched ? `${exceptions.toLocaleString()} unmatched row${exceptions === 1 ? " stays" : "s stay"} unchanged. Inspect them to confirm this is intended.` : `${exceptions.toLocaleString()} exception row${exceptions === 1 ? "" : "s"} to inspect before applying.` : "Nothing further to resolve for this preview."}</p>
-            {exceptions > 0 ? <button type="button" className="secondary" onClick={() => setReviewRowsView("exceptions")}>Inspect exceptions</button> : null}
+            {exceptions > 0 ? <button type="button" className="secondary" onClick={() => setReviewRowsView("exceptions")}><Icon name="alert" className="clean-action-icon" />Inspect exceptions</button> : null}
           </div>
           <div className="clean-preview-checks" aria-label="Preview checks">
             <span className="eyebrow">PREVIEW CHECKS</span>
