@@ -11,6 +11,18 @@ const CSV = [
   "ZZZZZZ,abc,malformed id and unit",
 ].join("\n") + "\n";
 
+/** Every left-panel section (Issues, Patterns, Validation, ...) is a
+ * collapsed-by-default <details> - its summary badge is always real and
+ * visible, but a button inside only becomes interactable once opened. */
+async function openDisclosure(page: Page, summaryText: string) {
+  // ">" restricts to the section's own summary - some sections (e.g. Validation)
+  // nest a second, unrelated <details> (its "Add validation rule" editor) inside
+  // them, whose summary would otherwise also match a loose descendant selector.
+  const summary = page.locator(".clean-disclosure > summary").filter({ hasText: summaryText });
+  const isOpen = await summary.locator("..").evaluate((el) => (el as HTMLDetailsElement).open);
+  if (!isOpen) await summary.click();
+}
+
 async function capture(page: Page, name: string) {
   const directory = path.resolve("docs/clean-pattern-review-v1/screenshots");
   mkdirSync(directory, { recursive: true });
@@ -38,11 +50,17 @@ test("Pattern Review: discover, inspect evidence, accept a family, extract, and 
   expect(upload.ok()).toBe(true);
 
   await page.getByRole("button", { name: /Clean native/i }).click();
-  await expect(page.getByRole("heading", { name: "No issues detected" })).toBeVisible(); // this fixture has no missing/duplicate/outlier data by design
+  // The Issues count lives in a <details> summary badge, not a heading; with
+  // no issues it shows the health score (e.g. "100/100") rather than a
+  // literal "no issues" message - this fixture has no missing/duplicate/
+  // outlier data by design, so the badge must show a score, not a count.
+  await expect(page.locator(".clean-disclosure summary").filter({ hasText: "Issues" })).toContainText("/100");
 
-  // Ranked shortlist: discovery runs automatically and surfaces the invoice_id finding.
+  // Ranked shortlist: discovery runs automatically and surfaces the invoice_id finding,
+  // under the (collapsed-by-default) Patterns disclosure, not Issues.
   // An exact match on the column name (not a substring) matters once extraction adds
   // invoice_id_part1/part2 columns later in this test - those would also match "invoice_id".
+  await openDisclosure(page, "Patterns");
   const findingButton = page.locator(".clean-issues .finding-list button").filter({ has: page.locator("strong", { hasText: /^invoice_id$/ }) }).first();
   await expect(findingButton).toBeVisible({ timeout: 15_000 });
   await capture(page, "shortlist");
@@ -73,7 +91,7 @@ test("Pattern Review: discover, inspect evidence, accept a family, extract, and 
   const applyButton = page.getByRole("button", { name: "Apply reviewed change" });
   await expect(applyButton).toBeEnabled();
   await applyButton.click();
-  await expect(page.locator(".clean-preview header")).toContainText("revision 1", { timeout: 10_000 });
+  await expect(page.locator(".clean-dataset-header")).toContainText("revision 1", { timeout: 10_000 });
 
   await page.getByRole("button", { name: /Overview native/i }).click();
   await page.locator(".column-card", { hasText: "invoice_id_part2" }).click();
@@ -82,10 +100,14 @@ test("Pattern Review: discover, inspect evidence, accept a family, extract, and 
 
   // Save the accepted family as a reusable validation rule and confirm it shows under Validation.
   await page.getByRole("button", { name: /Clean native/i }).click();
+  await openDisclosure(page, "Patterns");
   await findingButton.click();
   await familyItem.getByRole("checkbox").check();
   await page.getByRole("textbox", { name: "Pattern validation rule name" }).fill("Invoice ID format");
   await page.getByRole("button", { name: "Save selected families as a validation rule" }).click();
+  // Every left-panel disclosure (including Saved recipes, now) is collapsed by
+  // default, so open Validation explicitly rather than assuming it's visible.
+  await openDisclosure(page, "Validation");
   await expect(page.getByText("Invoice ID format")).toBeVisible({ timeout: 10_000 });
   await capture(page, "saved-rule");
 });
@@ -97,6 +119,7 @@ test("Pattern Review: ignore and suppress are distinct from accept, and suppress
   await expect(page.getByLabel("Central tabbed workspace").getByRole("heading", { name: "pattern-review-2.csv" })).toBeVisible();
 
   await page.getByRole("button", { name: /Clean native/i }).click();
+  await openDisclosure(page, "Patterns");
   const findingButton = page.locator(".clean-issues .finding-list button", { hasText: "invoice_id" }).first();
   await expect(findingButton).toBeVisible({ timeout: 15_000 });
   await findingButton.click();

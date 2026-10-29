@@ -1,5 +1,5 @@
 ﻿import React from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { CleanWorkspace } from "./clean-workspace";
 
@@ -10,9 +10,29 @@ const health = { completeness: 30, consistency: 25, uniqueness: 12, validity: 15
 const provenance = { source_fingerprint: dataset0.source_fingerprint, dataset_revision: 0, parameters: {}, service_version: "x", computed_at: "2026-08-28T00:00:00Z" };
 const rowsPage = { dataset: dataset0, offset: 0, limit: 30, total_rows: dataset0.row_count, rows: [{ segment: "a" }, { segment: "b" }], provenance };
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => { vi.restoreAllMocks(); window.localStorage.clear(); });
 
 describe("Clean workspace", () => {
+  it("opens Atlas from the header and resizes both Clean panes by keyboard", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: string | URL) => {
+      const path = String(input);
+      if (path.endsWith("/state")) return json({ dataset: dataset0, issues: [], history: [], health });
+      if (path.includes("/rows")) return json(rowsPage);
+      if (path.includes("/profile")) return json({ columns: [] });
+      if (path.includes("/recipes")) return json([]);
+      return json({});
+    }));
+    render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText(/Rows 1–5 of 5/)).toBeInTheDocument());
+    const launcher = screen.getByRole("button", { name: /Atlas Ask about this step/ });
+    fireEvent.click(launcher);
+    expect(launcher).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("tabpanel", { name: "Atlas assistant" })).toBeVisible();
+    fireEvent.keyDown(screen.getByRole("separator", { name: "Resize recipe panel" }), { key: "ArrowRight" });
+    fireEvent.keyDown(screen.getByRole("separator", { name: "Resize inspector panel" }), { key: "ArrowLeft" });
+    expect(document.querySelector(".clean-workspace")).toHaveStyle({ "--clean-recipe-width": "270px", "--clean-inspector-width": "270px" });
+  });
+
   it("prompts to load a dataset first when none is active", () => {
     render(<CleanWorkspace datasetId={undefined} onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
     expect(screen.getByText("Load a dataset in Overview first.")).toBeInTheDocument();
@@ -36,7 +56,7 @@ describe("Clean workspace", () => {
 
     render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
 
-    await waitFor(() => expect(screen.getByText("1 found")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole("button", { name: /Dataset[\s\S]*exact duplicates/ })).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /Dataset[\s\S]*exact duplicates/ }));
 
     await waitFor(() => expect(screen.getByText(/affects/)).toBeInTheDocument());
@@ -46,7 +66,7 @@ describe("Clean workspace", () => {
     fireEvent.click(screen.getByRole("button", { name: /Apply reviewed change|Applying/ }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/apply"), expect.objectContaining({ method: "POST" })));
     expect(fetchMock.mock.calls.filter(([input]) => String(input).endsWith("/apply"))).toHaveLength(1);
-    await waitFor(() => expect(screen.getByText(/revision 1/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("4 rows · 3 columns · revision 1")).toBeInTheDocument());
   });
 
   it("shows the error state with a retry control, never an indefinite loading spinner, when the initial load fails", async () => {
@@ -91,7 +111,7 @@ describe("Clean workspace", () => {
     render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
 
     await waitFor(() => expect(screen.getByText(/Rows 1–5 of 5/)).toBeInTheDocument());
-    fireEvent.click(screen.getByRole("button", { name: "+ New manual operation" }));
+    fireEvent.click(screen.getByRole("button", { name: "+ Add step" }));
 
     fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "drop_column" } });
     expect(screen.getByRole("button", { name: "Preview" })).toBeDisabled(); // no column chosen yet — a concrete, visible reason, not a silent no-op
@@ -106,7 +126,705 @@ describe("Clean workspace", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Apply reviewed change" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/apply"), expect.objectContaining({ method: "POST" })));
-    await waitFor(() => expect(screen.getByText(/revision 1/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("4 rows · 3 columns · revision 1")).toBeInTheDocument());
+  });
+
+  it("marks a preview stale the instant a parameter changes, and hides the stale Apply bar until it is recomputed", async () => {
+    const fetchMock = vi.fn(async (input: string | URL) => {
+      const path = String(input);
+      if (path.endsWith("/state")) return json({ dataset: dataset0, issues: [], history: [], health });
+      if (path.includes("/rows")) return json(rowsPage);
+      if (path.includes("/profile")) return json({ columns: [{ name: "notes", semantic_type: "text" }, { name: "region", semantic_type: "text" }] });
+      if (path.includes("/recipes")) return json([]);
+      if (path.endsWith("/preview")) return json({ operation: "drop_column", review_token: "review_manual", source_revision: 0, affected_rows: 5, affected_columns: ["notes"], before_sample: [{ notes: "x" }], after_sample: [{}], warnings: [], projected_health: health });
+      return json({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
+
+    await waitFor(() => expect(screen.getByText(/Rows 1–5 of 5/)).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "+ Add step" }));
+    fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "drop_column" } });
+    fireEvent.change(screen.getByLabelText("Column"), { target: { value: "notes" } });
+    fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Apply reviewed change" })).toBeInTheDocument());
+    expect(screen.getByText(/Preview is up to date with revision/)).toBeInTheDocument();
+
+    // Changing a parameter after a preview exists must invalidate it
+    // immediately - the apply bar (which only renders while a preview is
+    // live) must disappear rather than stay keyed to a build that no longer
+    // matches the form, and the inspector must say so plainly.
+    fireEvent.change(screen.getByLabelText("Column"), { target: { value: "region" } });
+    expect(screen.queryByRole("button", { name: "Apply reviewed change" })).not.toBeInTheDocument();
+    expect(screen.getByText("Preview is stale — recompute before applying.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Recompute preview" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Recompute preview" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Apply reviewed change" })).toBeInTheDocument());
+    expect(screen.queryByText("Preview is stale — recompute before applying.")).not.toBeInTheDocument();
+  });
+
+  it("synchronizes step selection across panes: picking a different draft step refreshes its own real preview in the centre panel", async () => {
+    const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path.endsWith("/state")) return json({ dataset: dataset0, issues: [], history: [], health });
+      if (path.includes("/rows")) return json(rowsPage);
+      if (path.includes("/profile")) return json({ columns: [{ name: "notes", semantic_type: "text" }, { name: "region", semantic_type: "text" }] });
+      if (path.includes("/recipes")) return json([]);
+      if (path.includes("/recipe-draft/preview")) return json({ source_revision: 0, source_fingerprint: dataset0.source_fingerprint, review_token: "draft_1", before_sample: [], after_sample: [], step_impacts: [5, 2], projected_health: health });
+      if (path.endsWith("/preview")) {
+        const body = JSON.parse(String(init?.body ?? "{}"));
+        return json({ operation: body.operation, review_token: `review_${body.column}`, source_revision: 0, affected_rows: body.column === "notes" ? 5 : 2, affected_columns: [body.column], before_sample: [], after_sample: [], warnings: [], projected_health: health });
+      }
+      return json({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText(/Rows 1–5 of 5/)).toBeInTheDocument());
+
+    // Two draft steps on different columns.
+    fireEvent.click(screen.getByRole("button", { name: "+ Add step" }));
+    fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "drop_column" } });
+    fireEvent.change(screen.getByLabelText("Column"), { target: { value: "notes" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add step to draft" }));
+
+    // Once the downstream draft preview has landed, starting a different
+    // kind of step must still expose that step's centre editor. The draft
+    // summary must not cover the mapping controls for a new step.
+    await waitFor(() => expect(screen.getByText(/Draft recipe recalculated against revision/)).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "+ Add step" }));
+    fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "category_mapping" } });
+    fireEvent.change(screen.getByLabelText("Column"), { target: { value: "region" } });
+    expect(screen.getByRole("heading", { name: "Map source values to targets" })).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "drop_column" } });
+    fireEvent.change(screen.getByLabelText("Column"), { target: { value: "region" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add step to draft" }));
+
+    const steps = document.querySelectorAll(".clean-recipe-unified > li");
+    expect(steps).toHaveLength(2);
+
+    // Selecting step 1 (notes) must load step 1's own real preview into the
+    // centre panel (5 affected rows) - not leave it on whatever (if
+    // anything) was last shown there.
+    fireEvent.click(within(steps[0] as HTMLElement).getByRole("button", { name: /drop column/i }));
+    await waitFor(() => expect(document.querySelector(".clean-preview .clean-impact-summary")?.textContent).toContain("5"));
+    expect(within(steps[0] as HTMLElement).getByText("Review")).toBeInTheDocument();
+    expect(within(steps[1] as HTMLElement).getByText("Draft")).toBeInTheDocument();
+
+    // Selecting step 2 (region) must replace it with step 2's own real data
+    // (2 affected rows), not leave step 1's stale numbers showing.
+    fireEvent.click(within(steps[1] as HTMLElement).getByRole("button", { name: /drop column/i }));
+    await waitFor(() => expect(document.querySelector(".clean-preview .clean-impact-summary")?.textContent).toContain("2"));
+    expect(document.querySelector(".clean-preview .clean-impact-summary")?.textContent).not.toContain("5");
+    expect(within(steps[0] as HTMLElement).getByText("Draft")).toBeInTheDocument();
+    expect(within(steps[1] as HTMLElement).getByText("Review")).toBeInTheDocument();
+  });
+
+  it("survives a real restart: a finished Atlas turn reappears after remounting, and one still pending when the app closed comes back marked interrupted, not falsely still loading", async () => {
+    let resolveSecond: ((value: Response) => void) | null = null;
+    const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path.endsWith("/state")) return json({ dataset: dataset0, issues: [], history: [], health });
+      if (path.includes("/rows")) return json(rowsPage);
+      if (path.includes("/profile")) return json({ columns: [] });
+      if (path.includes("/recipes")) return json([]);
+      if (path.endsWith("/workspace-proposals")) {
+        const body = JSON.parse(String(init?.body ?? "{}"));
+        if (body.intent === "first question") return json({ provider: "ollama", explanation: "First answer, persisted.", evidence: [], clean_operation: { operation: "drop_duplicates" } });
+        return new Promise<Response>((resolve) => { resolveSecond = resolve; });
+      }
+      return json({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const first = render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText(/Rows 1–5 of 5/)).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("tab", { name: /Atlas/ }));
+    fireEvent.change(screen.getByLabelText("Ask Atlas"), { target: { value: "first question" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ask Atlas" }));
+    await waitFor(() => expect(screen.getByText("First answer, persisted.")).toBeInTheDocument());
+
+    // A second question is asked but never gets a reply before "the app
+    // closes" (the component unmounts while it's still pending).
+    fireEvent.change(screen.getByLabelText("Ask Atlas"), { target: { value: "second question, interrupted" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ask Atlas" }));
+    await waitFor(() => expect(resolveSecond).not.toBeNull());
+    first.unmount();
+
+    // A fresh mount - the real stand-in for an app restart, since this
+    // conversation is persisted to this browser's own localStorage, not
+    // component state that dies with the old page.
+    render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText(/Rows 1–5 of 5/)).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("tab", { name: /Atlas/ }));
+    expect(screen.getByText("First answer, persisted.")).toBeInTheDocument();
+    expect(screen.getByText("second question, interrupted")).toBeInTheDocument();
+    expect(screen.getByText(/still waiting on a reply when the app last closed/)).toBeInTheDocument();
+  });
+
+  it("sends the actual operation parameters to Atlas, not just the operation name and column", async () => {
+    let captured: Record<string, unknown> | null = null;
+    const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path.endsWith("/state")) return json({ dataset: dataset0, issues: [], history: [], health });
+      if (path.includes("/rows")) return json(rowsPage);
+      if (path.includes("/profile")) return json({ columns: [{ name: "revenue", semantic_type: "numeric" }] });
+      if (path.includes("/recipes")) return json([]);
+      if (path.endsWith("/workspace-proposals")) {
+        captured = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+        return json({ provider: "ollama", explanation: "Ok.", evidence: [] });
+      }
+      return json({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText(/Rows 1–5 of 5/)).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "+ Add step" }));
+    fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "fill_missing" } });
+    fireEvent.change(screen.getByLabelText("Column"), { target: { value: "revenue" } });
+    fireEvent.change(screen.getByLabelText("Fill strategy"), { target: { value: "constant" } });
+    fireEvent.change(screen.getByLabelText("Constant fill value"), { target: { value: "N/A" } });
+
+    fireEvent.click(screen.getByRole("tab", { name: /Atlas/ }));
+    fireEvent.change(screen.getByLabelText("Ask Atlas"), { target: { value: "is this reasonable?" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ask Atlas" }));
+    await waitFor(() => expect(captured).not.toBeNull());
+
+    expect(captured!.selected_operation).toBe("fill_missing");
+    expect(captured!.selected_column).toBe("revenue");
+    expect(captured!.selected_parameters).toMatchObject({ fill_strategy: "constant", fill_value: "N/A" });
+    expect(captured!.selected_parameters).not.toHaveProperty("operation"); // already sent as selected_operation - not duplicated
+    expect(captured!.selected_parameters).not.toHaveProperty("column"); // already sent as selected_column - not duplicated
+  });
+
+  it("excludes a stale turn's explanation from the history sent with a new question", async () => {
+    let secondBody: Record<string, unknown> | null = null;
+    let applied = false;
+    const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path.endsWith("/state")) return applied ? json({ dataset: dataset1, issues: [], history: [{ transformation_id: "t1", operation: "drop_duplicates", column: null, parameters: {}, affected_rows: 1, affected_columns: [], source_revision: 0, resulting_revision: 1, source_fingerprint: dataset0.source_fingerprint, resulting_fingerprint: "b".repeat(64), reversible: true, created_at: "2026-08-28T00:00:00Z" }], health }) : json({ dataset: dataset0, issues: [], history: [], health });
+      if (path.includes("/rows")) return json(rowsPage);
+      if (path.includes("/profile")) return json({ columns: [] });
+      if (path.includes("/recipes")) return json([]);
+      if (path.endsWith("/preview")) return json({ operation: "drop_duplicates", review_token: "r1", source_revision: 0, affected_rows: 1, affected_columns: [], before_sample: [], after_sample: [], warnings: [], projected_health: health });
+      if (path.endsWith("/apply")) { applied = true; return json({ dataset: dataset1, transformation: { transformation_id: "t1", operation: "drop_duplicates", column: null, parameters: {}, affected_rows: 1, affected_columns: [], source_revision: 0, resulting_revision: 1, source_fingerprint: dataset0.source_fingerprint, resulting_fingerprint: "b".repeat(64), reversible: true, created_at: "2026-08-28T00:00:00Z" }, issues: [], health }, 201); }
+      if (path.endsWith("/workspace-proposals")) {
+        const body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+        if (body.intent === "first question") return json({ provider: "ollama", explanation: "First answer, at revision 0.", evidence: [] });
+        secondBody = body;
+        return json({ provider: "ollama", explanation: "Second answer.", evidence: [] });
+      }
+      return json({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText(/Rows 1–5 of 5/)).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("tab", { name: /Atlas/ }));
+    fireEvent.change(screen.getByLabelText("Ask Atlas"), { target: { value: "first question" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ask Atlas" }));
+    await waitFor(() => expect(screen.getByText("First answer, at revision 0.")).toBeInTheDocument());
+
+    // Apply a real change elsewhere, moving the dataset to revision 1 - the
+    // first turn (asked about revision 0) is now stale.
+    fireEvent.click(screen.getByRole("tab", { name: "Step settings" }));
+    fireEvent.click(screen.getByRole("button", { name: "+ Add step" }));
+    fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "drop_duplicates" } });
+    fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Apply reviewed change" })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Apply reviewed change" }));
+    await waitFor(() => expect(screen.getByText("4 rows · 3 columns · revision 1")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("tab", { name: /Atlas/ }));
+    fireEvent.change(screen.getByLabelText("Ask Atlas"), { target: { value: "second question" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ask Atlas" }));
+    // Wait for the full round trip to settle (not just that the request was
+    // sent) so this test's own state updates and persistence effect are
+    // fully flushed before it ends - otherwise a dangling async write can
+    // land during a LATER test instead, after this one already cleared
+    // storage, corrupting that test's own assertions.
+    await waitFor(() => expect(screen.getByText("Second answer.")).toBeInTheDocument());
+
+    // The stale (revision-0) turn's explanation must not be sent as if it
+    // were still a current fact about this (now revision-1) dataset.
+    expect(secondBody!.history).toBeUndefined();
+  });
+
+  it("never overwrites one dataset's stored Atlas conversation with another's when switching between them", async () => {
+    // ds_2 already has its own, distinct persisted conversation from a prior
+    // session - simulating exactly what loadStoredTurns would have written
+    // for it earlier, independent of whatever happens to ds_1 in this test.
+    window.localStorage.setItem("atlas-dock:ds_2", JSON.stringify([
+      { id: "turn_old", intent: "ds_2's own earlier question", revision: 0, status: "done", response: { kind: "clean", provider: "ollama", explanation: "ds_2's own earlier answer.", evidence: [] } },
+    ]));
+    const fetchMock = vi.fn(async (input: string | URL) => {
+      const path = String(input);
+      if (path.endsWith("/state")) return json({ dataset: dataset0, issues: [], history: [], health });
+      if (path.includes("/rows")) return json(rowsPage);
+      if (path.includes("/profile")) return json({ columns: [] });
+      if (path.includes("/recipes")) return json([]);
+      if (path.endsWith("/workspace-proposals")) return json({ provider: "ollama", explanation: "ds_1's real answer.", evidence: [], clean_operation: { operation: "drop_duplicates" } });
+      return json({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { rerender } = render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText(/Rows 1–5 of 5/)).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("tab", { name: /Atlas/ }));
+    fireEvent.change(screen.getByLabelText("Ask Atlas"), { target: { value: "ds_1's own question" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ask Atlas" }));
+    await waitFor(() => expect(screen.getByText("ds_1's real answer.")).toBeInTheDocument());
+
+    // Switch to ds_2. Its own stored conversation must load untouched - not
+    // ds_1's, and ds_2's OWN storage slot must still hold its OWN data, not
+    // get silently overwritten by the effects pass that handles this switch.
+    rerender(<CleanWorkspace datasetId="ds_2" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText(/Rows 1–5 of 5/)).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("tab", { name: /Atlas/ }));
+    expect(screen.getByText("ds_2's own earlier answer.")).toBeInTheDocument();
+    expect(screen.queryByText("ds_1's real answer.")).not.toBeInTheDocument();
+
+    const ds2Stored = JSON.parse(window.localStorage.getItem("atlas-dock:ds_2") ?? "[]") as Array<{ intent: string }>;
+    expect(ds2Stored.map((turn) => turn.intent)).toEqual(["ds_2's own earlier question"]);
+    const ds1Stored = JSON.parse(window.localStorage.getItem("atlas-dock:ds_1") ?? "[]") as Array<{ intent: string }>;
+    expect(ds1Stored.map((turn) => turn.intent)).toEqual(["ds_1's own question"]);
+  });
+
+  it("drops a corrupt stored conversation instead of crashing or rendering garbage", async () => {
+    window.localStorage.setItem("atlas-dock:ds_1", JSON.stringify([
+      { id: "turn_ok", intent: "a valid prior turn", revision: 0, status: "done", response: { kind: "clean", provider: "ollama", explanation: "a valid answer.", evidence: [] } },
+      { id: "turn_bad" }, // missing intent/revision/status entirely
+      "not even an object",
+      { id: "turn_bad_status", intent: "x", revision: 0, status: "not-a-real-status" },
+      null,
+    ]));
+    const fetchMock = vi.fn(async (input: string | URL) => {
+      const path = String(input);
+      if (path.endsWith("/state")) return json({ dataset: dataset0, issues: [], history: [], health });
+      if (path.includes("/rows")) return json(rowsPage);
+      if (path.includes("/profile")) return json({ columns: [] });
+      if (path.includes("/recipes")) return json([]);
+      return json({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText(/Rows 1–5 of 5/)).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("tab", { name: /Atlas/ }));
+    expect(screen.getByText("a valid answer.")).toBeInTheDocument(); // the one real turn still renders
+    expect(document.querySelectorAll(".atlas-dock-turns > li").length).toBe(1); // the four corrupt entries were dropped, not rendered as broken turns
+  });
+
+  it("clears a stored conversation through a visible control, both on screen and in storage", async () => {
+    window.localStorage.setItem("atlas-dock:ds_1", JSON.stringify([
+      { id: "turn_1", intent: "a question to clear", revision: 0, status: "done", response: { kind: "clean", provider: "ollama", explanation: "an answer to clear.", evidence: [] } },
+    ]));
+    const fetchMock = vi.fn(async (input: string | URL) => {
+      const path = String(input);
+      if (path.endsWith("/state")) return json({ dataset: dataset0, issues: [], history: [], health });
+      if (path.includes("/rows")) return json(rowsPage);
+      if (path.includes("/profile")) return json({ columns: [] });
+      if (path.includes("/recipes")) return json([]);
+      return json({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText(/Rows 1–5 of 5/)).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("tab", { name: /Atlas/ }));
+    expect(screen.getByText("an answer to clear.")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Clear conversation" }));
+    expect(screen.queryByText("an answer to clear.")).not.toBeInTheDocument();
+    // The turns-changed save effect legitimately re-persists the now-empty
+    // state right after clearConversation() removes the key outright - "[]"
+    // and an absent key restore identically via loadStoredTurns, so either
+    // is correct; what matters is the cleared turn itself is gone from storage.
+    const stored = JSON.parse(window.localStorage.getItem("atlas-dock:ds_1") ?? "[]") as unknown[];
+    expect(stored).toEqual([]);
+  });
+
+  it("docks a real Atlas panel with honest context chips and a working starter question, and switching to it never loses the selected step", async () => {
+    const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path.endsWith("/state")) return json({ dataset: dataset0, issues: [], history: [], health });
+      if (path.includes("/rows")) return json(rowsPage);
+      if (path.includes("/profile")) return json({ columns: [{ name: "notes", semantic_type: "text" }] });
+      if (path.includes("/recipes")) return json([]);
+      if (path.endsWith("/workspace-proposals")) {
+        const body = JSON.parse(String(init?.body ?? "{}"));
+        // The step currently being built (trim_whitespace on notes) and the
+        // dataset's own current revision are real context Atlas needs to
+        // answer about the right thing, and to be rejected if it's since
+        // gone stale - not omitted from the request.
+        expect(body).toEqual({ kind: "clean", dataset_id: "ds_1", intent: "Explain the current step", expected_revision: 0, selected_operation: "trim_whitespace", selected_column: "notes" });
+        return json({ provider: "ollama", explanation: "Trimming whitespace prevents duplicate-looking labels.", evidence: ["region: 'Bengaluru ' vs 'Bengaluru'"], clean_operation: { operation: "trim_whitespace", column: "notes" } });
+      }
+      return json({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText(/Rows 1–5 of 5/)).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "+ Add step" }));
+    fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "trim_whitespace" } });
+    fireEvent.change(screen.getByLabelText("Column"), { target: { value: "notes" } });
+
+    fireEvent.click(screen.getByRole("tab", { name: /Atlas/ }));
+    // Real, honest context - the dataset's own name/revision and the step
+    // actually being built, not invented counts.
+    expect(within(document.querySelector(".atlas-dock-chips")!).getByText("sales.csv")).toBeInTheDocument();
+    expect(within(document.querySelector(".atlas-dock-chips")!).getByText("Revision 0")).toBeInTheDocument();
+    expect(within(document.querySelector(".atlas-dock-chips")!).getByText("notes")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Explain the current step" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/workspace-proposals"), expect.objectContaining({ method: "POST" })));
+    await waitFor(() => expect(screen.getByText("Trimming whitespace prevents duplicate-looking labels.")).toBeInTheDocument());
+
+    // Switching back to Step settings must still show the same step being
+    // built (notes), not a reset form - the tab switch never touched the
+    // underlying selection state.
+    fireEvent.click(screen.getByRole("tab", { name: "Step settings" }));
+    expect(screen.getByLabelText("Column")).toHaveValue("notes");
+  });
+
+  it("ignores a late-arriving preview response from an earlier request once a newer one has been issued", async () => {
+    const resolvers: Record<string, (value: Response) => void> = {};
+    const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path.endsWith("/state")) return json({ dataset: dataset0, issues: [], history: [], health });
+      if (path.includes("/rows")) return json(rowsPage);
+      if (path.includes("/profile")) return json({ columns: [{ name: "notes", semantic_type: "text" }, { name: "region", semantic_type: "text" }] });
+      if (path.includes("/recipes")) return json([]);
+      if (path.endsWith("/preview")) {
+        const body = JSON.parse(String(init?.body ?? "{}"));
+        // Each column's response only settles when the test explicitly
+        // releases it below - this is what lets the test force the earlier
+        // request (notes) to resolve *after* the later one (region).
+        return new Promise<Response>((resolve) => { resolvers[body.column] = resolve; });
+      }
+      return json({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText(/Rows 1–5 of 5/)).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "+ Add step" }));
+    fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "trim_whitespace" } });
+    fireEvent.change(screen.getByLabelText("Column"), { target: { value: "notes" } });
+    fireEvent.click(screen.getByRole("button", { name: "Preview" })); // request 1: notes
+    await waitFor(() => expect(resolvers.notes).toBeDefined());
+
+    fireEvent.change(screen.getByLabelText("Column"), { target: { value: "region" } });
+    // Still reads "Preview", not "Recompute preview" - the first request
+    // never resolved, so there was never a completed preview to go stale.
+    fireEvent.click(screen.getByRole("button", { name: "Preview" })); // request 2: region
+    await waitFor(() => expect(resolvers.region).toBeDefined());
+
+    // The newer request (region) resolves first.
+    resolvers.region!(await json({ operation: "trim_whitespace", review_token: "r_region", source_revision: 0, affected_rows: 9, affected_columns: ["region"], before_sample: [], after_sample: [], warnings: [], projected_health: health }));
+    await waitFor(() => expect(document.querySelector(".clean-impact-summary")?.textContent).toContain("9"));
+
+    // The older request (notes) resolves late, after the newer one already
+    // rendered - it must be ignored, not overwrite the current (region)
+    // preview with stale (notes) data.
+    resolvers.notes!(await json({ operation: "trim_whitespace", review_token: "r_notes", source_revision: 0, affected_rows: 1, affected_columns: ["notes"], before_sample: [], after_sample: [], warnings: [], projected_health: health }));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(document.querySelector(".clean-impact-summary")?.textContent).toContain("9");
+    expect(document.querySelector(".clean-impact-summary")?.textContent).not.toContain("1");
+  });
+
+  it("invalidates a pending preview request the instant a parameter is edited, even with no second Preview click", async () => {
+    let resolveNotes: ((value: Response) => void) | null = null;
+    const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path.endsWith("/state")) return json({ dataset: dataset0, issues: [], history: [], health });
+      if (path.includes("/rows")) return json(rowsPage);
+      if (path.includes("/profile")) return json({ columns: [{ name: "notes", semantic_type: "text" }, { name: "region", semantic_type: "text" }] });
+      if (path.includes("/recipes")) return json([]);
+      if (path.endsWith("/preview")) {
+        const body = JSON.parse(String(init?.body ?? "{}"));
+        if (body.column !== "notes") throw new Error("only the notes request is expected in this test");
+        return new Promise<Response>((resolve) => { resolveNotes = resolve; });
+      }
+      return json({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText(/Rows 1–5 of 5/)).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "+ Add step" }));
+    fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "trim_whitespace" } });
+    fireEvent.change(screen.getByLabelText("Column"), { target: { value: "notes" } });
+    fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+    await waitFor(() => expect(resolveNotes).not.toBeNull());
+
+    // The analyst changes the column before the in-flight request for the
+    // OLD column ever resolved - no second Preview click, just the edit
+    // itself. That alone must be what invalidates the pending request.
+    fireEvent.change(screen.getByLabelText("Column"), { target: { value: "region" } });
+
+    // The stale request for "notes" now resolves. Without the fix, nothing
+    // told previewOperation anything had changed, so this would land and
+    // show a 1-affected-row preview next to a form that now reads "region".
+    resolveNotes!(await json({ operation: "trim_whitespace", review_token: "r_notes", source_revision: 0, affected_rows: 1, affected_columns: ["notes"], before_sample: [], after_sample: [], warnings: [], projected_health: health }));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(document.querySelector(".clean-impact-summary")).toBeNull();
+    expect(screen.getByRole("button", { name: "Preview" })).toBeInTheDocument(); // not "Recompute preview" - there is no live preview to call stale
+  });
+
+  it("invalidates a pending preview request when the dataset is switched before it resolves", async () => {
+    let resolvePreview: ((value: Response) => void) | null = null;
+    const fetchMock = vi.fn(async (input: string | URL) => {
+      const path = String(input);
+      if (path.endsWith("/state")) return json({ dataset: dataset0, issues: [], history: [], health });
+      if (path.includes("/rows")) return json(rowsPage);
+      if (path.includes("/profile")) return json({ columns: [{ name: "notes", semantic_type: "text" }] });
+      if (path.includes("/recipes")) return json([]);
+      if (path.endsWith("/preview")) return new Promise<Response>((resolve) => { resolvePreview = resolve; });
+      return json({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { rerender } = render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText(/Rows 1–5 of 5/)).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "+ Add step" }));
+    fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "trim_whitespace" } });
+    fireEvent.change(screen.getByLabelText("Column"), { target: { value: "notes" } });
+    fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+    await waitFor(() => expect(resolvePreview).not.toBeNull());
+
+    // The analyst switches to a different dataset before the request for
+    // the PREVIOUS one resolves.
+    rerender(<CleanWorkspace datasetId="ds_2" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText(/Rows 1–5 of 5/)).toBeInTheDocument());
+
+    // The stale request now resolves. It describes ds_1, which is no longer
+    // the dataset on screen - it must not render as this dataset's preview.
+    resolvePreview!(await json({ operation: "trim_whitespace", review_token: "r_stale", source_revision: 0, affected_rows: 1, affected_columns: ["notes"], before_sample: [], after_sample: [], warnings: [], projected_health: health }));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(document.querySelector(".clean-impact-summary")).toBeNull();
+  });
+
+  it("loads the form fields a proposal describes, not just its preview, when handed off to Step settings", async () => {
+    const fetchMock = vi.fn(async (input: string | URL) => {
+      const path = String(input);
+      if (path.endsWith("/state")) return json({ dataset: dataset0, issues: [], history: [], health });
+      if (path.includes("/rows")) return json(rowsPage);
+      if (path.includes("/profile")) return json({ columns: [{ name: "notes", semantic_type: "text" }, { name: "region", semantic_type: "text" }] });
+      if (path.includes("/recipes")) return json([]);
+      if (path.endsWith("/workspace-proposals")) {
+        return json({ provider: "ollama", explanation: "Standardising region spellings groups near-duplicates.", evidence: [], clean_operation: { operation: "category_mapping", column: "region", category_mapping: { Bangalore: "Bengaluru" } } });
+      }
+      if (path.endsWith("/preview")) return json({ operation: "category_mapping", review_token: "r1", source_revision: 0, affected_rows: 1, changed_rows_total: 1, exception_rows_total: 0, affected_columns: ["region"], before_sample: [], after_sample: [], warnings: [], projected_health: health });
+      return json({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText(/Rows 1–5 of 5/)).toBeInTheDocument());
+
+    // Start building a *different* operation on a *different* column first,
+    // so the bug this guards against (preview matching the proposal while
+    // the editable fields silently kept showing the old build) would be
+    // visible if it regressed.
+    fireEvent.click(screen.getByRole("button", { name: "+ Add step" }));
+    fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "trim_whitespace" } });
+    fireEvent.change(screen.getByLabelText("Column"), { target: { value: "notes" } });
+
+    fireEvent.click(screen.getByRole("tab", { name: /Atlas/ }));
+    fireEvent.change(screen.getByLabelText("Ask Atlas"), { target: { value: "What about region spellings?" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ask Atlas" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Review in Step settings" })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Review in Step settings" }));
+
+    // Step settings must now show the proposal's own operation and column -
+    // category_mapping on region - not the trim_whitespace/notes build that
+    // was there before asking Atlas.
+    await waitFor(() => expect(screen.getByLabelText("Operation")).toHaveValue("category_mapping"));
+    expect(screen.getByLabelText("Column")).toHaveValue("region");
+  });
+
+  it("tags a step added from an Atlas proposal as a model proposal in plan review, distinct from a manually built step", async () => {
+    const columnValues = { column: "region", total_distinct: 2, truncated: false, values: [{ value: "Bangalore", count: 8 }, { value: "BENGALURU", count: 3 }] };
+    const fetchMock = vi.fn(async (input: string | URL) => {
+      const path = String(input);
+      if (path.endsWith("/state")) return json({ dataset: dataset0, issues: [], history: [], health });
+      if (path.includes("/columns/region/values")) return json(columnValues);
+      if (path.includes("/rows")) return json(rowsPage);
+      if (path.includes("/profile")) return json({ columns: [{ name: "notes", semantic_type: "text" }, { name: "region", semantic_type: "text" }] });
+      if (path.includes("/recipe-draft/preview")) return json({ source_revision: 0, source_fingerprint: dataset0.source_fingerprint, review_token: "draft_1", before_sample: [], after_sample: [], step_impacts: [1, 1], projected_health: health });
+      if (path.includes("/recipes")) return json([]);
+      if (path.endsWith("/workspace-proposals")) {
+        return json({ provider: "ollama", explanation: "Standardising region spellings groups near-duplicates.", evidence: [], clean_operation: { operation: "category_mapping", column: "region", category_mapping: { Bangalore: "Bengaluru" } } });
+      }
+      if (path.endsWith("/preview")) return json({ operation: "category_mapping", review_token: "r1", source_revision: 0, affected_rows: 1, changed_rows_total: 1, exception_rows_total: 0, affected_columns: ["region"], before_sample: [], after_sample: [], warnings: [], projected_health: health });
+      return json({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText(/Rows 1–5 of 5/)).toBeInTheDocument());
+
+    // Step 1: handed off from a real Atlas proposal.
+    fireEvent.click(screen.getByRole("tab", { name: /Atlas/ }));
+    fireEvent.change(screen.getByLabelText("Ask Atlas"), { target: { value: "What about region spellings?" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ask Atlas" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Review in Step settings" })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Review in Step settings" }));
+    await waitFor(() => expect(screen.getByLabelText("Operation")).toHaveValue("category_mapping"));
+    fireEvent.click(screen.getByRole("button", { name: "Add step to draft" }));
+
+    // Step 2: an ordinary manual step, never routed through Atlas.
+    fireEvent.click(screen.getByRole("button", { name: "+ Add step" }));
+    fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "trim_whitespace" } });
+    fireEvent.change(screen.getByLabelText("Column"), { target: { value: "notes" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add step to draft" }));
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Review plan" })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Review plan" }));
+
+    await waitFor(() => expect(screen.getByText("Review Atlas's cleaning plan")).toBeInTheDocument());
+    expect(screen.getByText("Model proposal")).toBeInTheDocument();
+    expect(screen.getByText("Standardising region spellings groups near-duplicates.")).toBeInTheDocument();
+    expect(screen.getByText("Deterministic rule")).toBeInTheDocument();
+  });
+
+  it("keeps a multi-turn Atlas conversation across tab switches, shows the real deterministic preview distinctly from the model's text, and marks a turn stale once the dataset revision moves past it", async () => {
+    let applied = false;
+    const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path.endsWith("/state")) return applied ? json({ dataset: dataset1, issues: [], history: [{ transformation_id: "t1", operation: "trim_whitespace", column: "notes", parameters: {}, affected_rows: 1, affected_columns: ["notes"], source_revision: 0, resulting_revision: 1, source_fingerprint: dataset0.source_fingerprint, resulting_fingerprint: "b".repeat(64), reversible: true, created_at: "2026-08-28T00:00:00Z" }], health }) : json({ dataset: dataset0, issues: [], history: [], health });
+      if (path.includes("/rows")) return json(rowsPage);
+      if (path.includes("/profile")) return json({ columns: [{ name: "notes", semantic_type: "text" }] });
+      if (path.includes("/recipes")) return json([]);
+      if (path.endsWith("/preview")) return json({ operation: "trim_whitespace", review_token: "review_manual", source_revision: 0, affected_rows: 1, affected_columns: ["notes"], before_sample: [], after_sample: [], warnings: [], projected_health: health });
+      if (path.endsWith("/apply")) { applied = true; return json({ dataset: dataset1, transformation: { transformation_id: "t1", operation: "trim_whitespace", column: "notes", parameters: {}, affected_rows: 1, affected_columns: ["notes"], source_revision: 0, resulting_revision: 1, source_fingerprint: dataset0.source_fingerprint, resulting_fingerprint: "b".repeat(64), reversible: true, created_at: "2026-08-28T00:00:00Z" }, issues: [], health }, 201); }
+      if (path.endsWith("/workspace-proposals")) {
+        const body = JSON.parse(String(init?.body ?? "{}"));
+        if (body.intent === "first question") return json({ provider: "ollama", explanation: "First explanation.", evidence: [], clean_operation: { operation: "trim_whitespace", column: "notes" }, clean_preview: { operation: "trim_whitespace", review_token: "r1", source_revision: 0, affected_rows: 3, changed_rows_total: 3, exception_rows_total: 2, affected_columns: ["notes"], before_sample: [], after_sample: [], warnings: [], projected_health: health } });
+        return json({ provider: "ollama", explanation: "Second explanation.", evidence: [], clean_operation: { operation: "trim_whitespace", column: "notes" } });
+      }
+      return json({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText(/Rows 1–5 of 5/)).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("tab", { name: /Atlas/ }));
+    fireEvent.change(screen.getByLabelText("Ask Atlas"), { target: { value: "first question" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ask Atlas" }));
+    await waitFor(() => expect(screen.getByText("First explanation.")).toBeInTheDocument());
+
+    // The real, deterministically computed preview (from the same preview
+    // engine manual operations use) is shown distinctly from the model's
+    // own prose - never presented as if the model computed it.
+    const computed = document.querySelector(".atlas-dock-computed")! as HTMLElement;
+    expect(within(computed).getByText("PRISM computed this deterministically")).toBeInTheDocument();
+    expect(computed.querySelector(":scope > p")).toHaveTextContent("3 rows would change");
+    expect(computed.querySelector(".atlas-dock-ambiguity")).toHaveTextContent("2 rows didn't match");
+
+    // A second question in the same session is a new turn, not a replacement.
+    fireEvent.change(screen.getByLabelText("Ask Atlas"), { target: { value: "second question" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ask Atlas" }));
+    await waitFor(() => expect(screen.getByText("Second explanation.")).toBeInTheDocument());
+    expect(screen.getByText("First explanation.")).toBeInTheDocument(); // still there, not discarded
+
+    // Switching tabs away and back must not drop the conversation - the
+    // dock stays mounted (hidden, not unmounted) specifically for this.
+    fireEvent.click(screen.getByRole("tab", { name: "Step settings" }));
+    fireEvent.click(screen.getByRole("tab", { name: /Atlas/ }));
+    expect(screen.getByText("First explanation.")).toBeInTheDocument();
+    expect(screen.getByText("Second explanation.")).toBeInTheDocument();
+
+    // Applying a step elsewhere moves the dataset to revision 1. Both turns
+    // were asked against revision 0 - they must now read as stale rather
+    // than silently looking current.
+    fireEvent.click(screen.getByRole("tab", { name: "Step settings" }));
+    fireEvent.click(screen.getByRole("button", { name: "+ Add step" }));
+    fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "trim_whitespace" } });
+    fireEvent.change(screen.getByLabelText("Column"), { target: { value: "notes" } });
+    fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Apply reviewed change" })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Apply reviewed change" }));
+    await waitFor(() => expect(screen.getByText("4 rows · 3 columns · revision 1")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("tab", { name: /Atlas/ }));
+    const staleNotes = document.querySelectorAll(".atlas-dock-stale-note");
+    expect(staleNotes.length).toBe(2);
+    expect(staleNotes[0]!.textContent).toMatch(/revision 0.*now at revision 1/);
+  });
+
+  it("describes Atlas's exception count as rows, with distinct values called out separately, not conflated", async () => {
+    const fetchMock = vi.fn(async (input: string | URL) => {
+      const path = String(input);
+      if (path.endsWith("/state")) return json({ dataset: dataset0, issues: [], history: [], health });
+      if (path.includes("/rows")) return json(rowsPage);
+      if (path.includes("/profile")) return json({ columns: [] });
+      if (path.includes("/recipes")) return json([]);
+      if (path.endsWith("/workspace-proposals")) return json({
+        provider: "ollama", explanation: "Map the regions.", evidence: [],
+        clean_operation: { operation: "category_mapping", column: "region" },
+        clean_preview: {
+          operation: "category_mapping", review_token: "r1", source_revision: 0, affected_rows: 10, changed_rows_total: 10,
+          exception_rows_total: 4, unresolved_values: ["Mumbai", "Pune"], // 4 exception rows, but only 2 distinct unresolved values
+          affected_columns: ["region"], before_sample: [], after_sample: [], warnings: [], projected_health: health,
+        },
+      });
+      return json({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText(/Rows 1–5 of 5/)).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("tab", { name: /Atlas/ }));
+    fireEvent.change(screen.getByLabelText("Ask Atlas"), { target: { value: "map the regions" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ask Atlas" }));
+
+    const ambiguity = await screen.findByText(/didn't match anything/);
+    // The row count (4) must read as rows, not values - and the distinct
+    // value count (2) must appear separately, not merged into one number.
+    expect(ambiguity.textContent).toMatch(/4 rows didn't match anything in this proposal \(2 distinct values\)/);
+    expect(screen.getByRole("button", { name: "Ask Atlas how to handle them" })).toBeInTheDocument();
+  });
+
+  it("lets an in-flight Atlas request be genuinely cancelled, not just visually hidden", async () => {
+    const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path.endsWith("/state")) return json({ dataset: dataset0, issues: [], history: [], health });
+      if (path.includes("/rows")) return json(rowsPage);
+      if (path.includes("/profile")) return json({ columns: [] });
+      if (path.includes("/recipes")) return json([]);
+      if (path.endsWith("/workspace-proposals")) {
+        // Never resolves on its own - mirrors what a real fetch does: it
+        // settles only if the server responds, or if its own AbortSignal
+        // fires. Rejecting here specifically when the signal aborts is what
+        // makes this test prove the component's AbortController actually
+        // tore down the request, not just hid its UI.
+        return new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")));
+        });
+      }
+      return json({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText(/Rows 1–5 of 5/)).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("tab", { name: /Atlas/ }));
+    fireEvent.change(screen.getByLabelText("Ask Atlas"), { target: { value: "a slow question" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ask Atlas" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    // Honest about what cancelling a browser fetch does and doesn't prove:
+    // it stops this client from waiting, and PRISM also closes its own
+    // connection to the model server (a real signal that server can act on),
+    // but neither guarantees the model's own in-flight computation stopped.
+    await waitFor(() => expect(screen.getByText(/Stopped waiting/)).toBeInTheDocument());
+    expect(screen.getByText(/isn't guaranteed/)).toBeInTheDocument();
+
+    // The request's own AbortSignal actually fired - this is real
+    // cancellation of the in-flight fetch, not just hiding a spinner while
+    // the request silently completes in the background.
+    const [, init] = fetchMock.mock.calls.find(([url]) => String(url).includes("/workspace-proposals"))!;
+    expect((init as RequestInit).signal?.aborted).toBe(true);
   });
 
   it("switches the inspector away from a selected pattern finding when starting a manual operation or selecting an issue, instead of leaving it stuck on the old finding", async () => {
@@ -129,8 +847,8 @@ describe("Clean workspace", () => {
     fireEvent.click(screen.getByRole("button", { name: /invoice_id[\s\S]*identifier structure/ }));
     await waitFor(() => expect(screen.getByText("PATTERN REVIEW")).toBeInTheDocument());
 
-    fireEvent.click(screen.getByRole("button", { name: "+ New manual operation" }));
-    expect(screen.getByText("MANUAL OPERATION")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "+ Add step" }));
+    expect(screen.getByText("NEW STEP · UNSAVED")).toBeInTheDocument();
     expect(screen.queryByText("PATTERN REVIEW")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Operation")).toBeInTheDocument();
 
@@ -162,16 +880,18 @@ describe("Clean workspace", () => {
     vi.stubGlobal("fetch", fetchMock);
     render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
 
-    await waitFor(() => expect(screen.getByText("None saved yet")).toBeInTheDocument());
-    fireEvent.click(screen.getByRole("button", { name: "+ New manual operation" }));
+    await waitFor(() => expect(screen.getByText(/Saved recipes/)).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "+ Add step" }));
     fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "drop_duplicates" } });
 
-    fireEvent.click(screen.getByRole("button", { name: "Save as recipe" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save recipe" }));
+    expect(screen.getByLabelText("Recipe name")).toHaveFocus();
+    fireEvent.click(screen.getByRole("button", { name: "Save named recipe" }));
     await waitFor(() => expect(screen.getByText("Name the recipe before saving it.")).toBeInTheDocument()); // a visible, concrete reason, not a silent no-op
     expect(fetchMock).not.toHaveBeenCalledWith(expect.stringContaining("/recipes"), expect.objectContaining({ method: "POST" }));
 
     fireEvent.change(screen.getByLabelText("Recipe name"), { target: { value: "Drop duplicates nightly" } });
-    fireEvent.click(screen.getByRole("button", { name: "Save as recipe" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save named recipe" }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/recipes"), expect.objectContaining({ method: "POST", body: JSON.stringify({ name: "Drop duplicates nightly", steps: [{ request: { operation: "drop_duplicates" }, enabled: true }] }) })));
     await waitFor(() => expect(screen.getByText("Drop duplicates nightly")).toBeInTheDocument());
@@ -184,6 +904,93 @@ describe("Clean workspace", () => {
     fireEvent.click(screen.getByRole("button", { name: "Apply reviewed recipe" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/recipes/recipe_1/apply"), expect.objectContaining({ method: "POST" })));
     await waitFor(() => expect(screen.getByText(/revision 1/)).toBeInTheDocument());
+  });
+
+  it("never labels a previewable-but-unsaved step with a position number it doesn't actually occupy in the recipe", async () => {
+    const applied = { transformation_id: "t1", operation: "trim_whitespace", column: "region", parameters: {}, affected_rows: 0, affected_columns: [], source_revision: 0, resulting_revision: 1, source_fingerprint: dataset0.source_fingerprint, resulting_fingerprint: "f".repeat(64), reversible: true, created_at: "2026-08-28T00:00:00Z" };
+    const fetchMock = vi.fn(async (input: string | URL) => {
+      const path = String(input);
+      if (path.endsWith("/state")) return json({ dataset: dataset1, issues: [], history: [applied], health });
+      if (path.includes("/rows")) return json(rowsPage);
+      if (path.includes("/profile")) return json({ columns: [{ name: "region", semantic_type: "text" }] });
+      if (path.includes("/recipes")) return json([]);
+      if (path.includes("/recipe-draft/preview")) return json({ source_revision: 1, source_fingerprint: dataset1.source_fingerprint, review_token: "draft_1", before_sample: [], after_sample: [], step_impacts: [0], projected_health: health });
+      return json({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText(/Rows 1–5 of 5/)).toBeInTheDocument());
+
+    // One real applied step already occupies position 1 in the recipe.
+    fireEvent.click(screen.getByRole("button", { name: "+ Add step" }));
+    fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "drop_duplicates" } });
+    // drop_duplicates needs no column, so this is previewable immediately -
+    // but it has never been added to the draft, so it occupies no real
+    // position yet. The owner's report was exactly this: an unsaved,
+    // previewable step labeled "STEP 3" as if the recipe already had it.
+    expect(screen.getByText("NEW STEP · UNSAVED")).toBeInTheDocument();
+    expect(screen.queryByText(/^STEP \d/)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Preview" })).not.toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Add step to draft" }));
+    // Only after it's actually added does it get a real, numbered position.
+    await waitFor(() => expect(screen.getByText("STEP 2")).toBeInTheDocument());
+  });
+
+  it("selects a draft recipe step for editing, reflects it in the inspector and the row, and reorders/disables/removes through the overflow menu", async () => {
+    const fetchMock = vi.fn(async (input: string | URL) => {
+      const path = String(input);
+      if (path.endsWith("/state")) return json({ dataset: dataset0, issues: [], history: [], health });
+      if (path.includes("/rows")) return json(rowsPage);
+      if (path.includes("/profile")) return json({ columns: [{ name: "notes", semantic_type: "text" }, { name: "region", semantic_type: "text" }] });
+      if (path.includes("/recipes")) return json([]);
+      return json({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText(/Rows 1–5 of 5/)).toBeInTheDocument());
+
+    // Build two draft steps: drop_column(notes), then trim_whitespace(region).
+    fireEvent.click(screen.getByRole("button", { name: "+ Add step" }));
+    fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "drop_column" } });
+    fireEvent.change(screen.getByLabelText("Column"), { target: { value: "notes" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add step to draft" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "+ Add step" }));
+    fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "trim_whitespace" } });
+    fireEvent.change(screen.getByLabelText("Column"), { target: { value: "region" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add step to draft" }));
+
+    const steps = document.querySelectorAll(".clean-recipe-unified > li");
+    expect(steps).toHaveLength(2);
+    expect(steps[0]).not.toHaveClass("is-selected");
+
+    // Selecting the first row must load it into the inspector (real selection, not decorative).
+    fireEvent.click(within(steps[0] as HTMLElement).getByRole("button", { name: /drop column/i }));
+    expect(steps[0]).toHaveClass("is-selected");
+    expect(screen.getByText("STEP 1")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Update step 1" })).toBeInTheDocument();
+
+    // The overflow menu exposes move/disable/remove without a permanent five-button row.
+    // jsdom doesn't run <details>'s native toggle-on-summary-click default action, so the
+    // open state is set directly here - a real browser (and the packaged desktop WebView2)
+    // does this natively; this only works around jsdom's gap in simulating it.
+    const openStepMenu = (row: Element) => { (row.querySelector(".clean-step-menu") as HTMLDetailsElement).open = true; };
+    openStepMenu(steps[0]!);
+    fireEvent.click(within(steps[0] as HTMLElement).getByRole("button", { name: /move step 1 down/i }));
+    expect((steps[0]!.querySelector(".clean-step-menu") as HTMLDetailsElement).open).toBe(false);
+    const reordered = document.querySelectorAll(".clean-recipe-unified > li");
+    expect(within(reordered[0] as HTMLElement).getByText(/trim whitespace/i)).toBeInTheDocument();
+    expect(within(reordered[1] as HTMLElement).getByText(/drop column/i)).toBeInTheDocument();
+
+    openStepMenu(reordered[1]!);
+    fireEvent.click(within(reordered[1] as HTMLElement).getByRole("button", { name: /disable step 2/i }));
+    expect((reordered[1]!.querySelector(".clean-step-menu") as HTMLDetailsElement).open).toBe(false);
+    expect(within(reordered[1] as HTMLElement).getByText("Disabled")).toBeInTheDocument();
+
+    openStepMenu(reordered[1]!);
+    fireEvent.click(within(reordered[1] as HTMLElement).getByRole("button", { name: /remove step 2/i }));
+    expect(document.querySelectorAll(".clean-recipe-unified > li")).toHaveLength(1);
   });
 
   it("surfaces the specific schema-mismatch reason when a recipe no longer matches the dataset, without pretending it applied", async () => {
@@ -225,21 +1032,29 @@ describe("Clean workspace", () => {
     render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
 
     await waitFor(() => expect(screen.getByText(/Rows 1–5 of 5/)).toBeInTheDocument());
-    fireEvent.click(screen.getByRole("button", { name: "+ New manual operation" }));
+    fireEvent.click(screen.getByRole("button", { name: "+ Add step" }));
     fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "category_mapping" } });
     fireEvent.change(screen.getByLabelText("Column"), { target: { value: "region" } });
 
-    await waitFor(() => expect(screen.getByText("Bangalore")).toBeInTheDocument());
-    expect(screen.getByText("BENGALURU")).toBeInTheDocument();
+    // The unified mapping table shows both the bulk-select chips and the
+    // per-row editable table together - scope queries to the chips for the
+    // bulk-select interaction and to the table for the row-level result.
+    const getChips = () => document.querySelector(".clean-value-chips")! as HTMLElement;
+    await waitFor(() => expect(within(getChips()).getByText("Bangalore")).toBeInTheDocument());
+    const chips = getChips();
+    expect(within(chips).getByText("BENGALURU")).toBeInTheDocument();
 
-    const bangaloreCheckbox = screen.getByText("Bangalore").closest("label")!.querySelector("input")!;
-    const bengaluruVariantCheckbox = screen.getByText("BENGALURU").closest("label")!.querySelector("input")!;
+    const bangaloreCheckbox = within(chips).getByText("Bangalore").closest("label")!.querySelector("input")!;
+    const bengaluruVariantCheckbox = within(chips).getByText("BENGALURU").closest("label")!.querySelector("input")!;
     fireEvent.click(bangaloreCheckbox);
     fireEvent.click(bengaluruVariantCheckbox);
     fireEvent.change(screen.getByLabelText("Map selected values to"), { target: { value: "Bengaluru" } });
-    fireEvent.click(screen.getByRole("button", { name: "Assign mapping" }));
+    fireEvent.click(screen.getByRole("button", { name: "Assign mapping to selected" }));
 
-    expect(screen.getAllByText("Bengaluru", { selector: "code" })).toHaveLength(2); // one mapping-summary row per assigned source value
+    // Assigning in bulk updates both mapped rows in the same table a
+    // single-row edit would use - one real surface, not two.
+    expect(screen.getByLabelText("Proposed value for Bangalore")).toHaveValue("Bengaluru");
+    expect(screen.getByLabelText("Proposed value for BENGALURU")).toHaveValue("Bengaluru");
     fireEvent.click(screen.getByRole("button", { name: "Preview" }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/preview"), expect.objectContaining({ method: "POST" })));
@@ -248,12 +1063,126 @@ describe("Clean workspace", () => {
     const sentBody = JSON.parse(String((previewCall![1] as RequestInit).body));
     expect(sentBody.category_mapping).toEqual({ Bangalore: "Bengaluru", BENGALURU: "Bengaluru" });
 
+    // Once a preview exists, the centre panel switches from the value-chip
+    // editor to the inline-editable review table (mapping editing stays in
+    // the centre either way) - it no longer pushes impact/review off screen
+    // in the right panel, and impact/review now sit before the step-commit
+    // action, not after it.
+    await waitFor(() => expect(document.querySelector(".clean-centre-editor")).not.toBeInTheDocument());
+    const impactEl = screen.getByText("Impact in this revision");
+    const reviewEl = screen.getByText("Unmatched values preserved");
+    expect(screen.getByText(/unmatched row stays unchanged/)).toBeInTheDocument();
+    expect(screen.getByText("unmatched rows")).toBeInTheDocument();
+    expect(screen.getByLabelText("Proposed value for Mumbai")).toHaveAttribute("placeholder", "Leave unchanged");
+    expect(screen.getByLabelText("Proposed value for Mumbai").closest("tr")).toHaveTextContent("Preserved");
+    const addStepButton = screen.getByRole("button", { name: "Add step to draft" });
+    expect(impactEl.compareDocumentPosition(addStepButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(reviewEl.compareDocumentPosition(addStepButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
     fireEvent.click(screen.getByRole("tab", { name: "Exceptions (1)" }));
-    await waitFor(() => expect(screen.getByText(/1 distinct unresolved value/)).toBeInTheDocument());
-    expect(screen.getAllByText(/Mumbai/, { selector: "code" }).length).toBeGreaterThan(0); // source row and unresolved value remain inspectable
+    await waitFor(() => expect(screen.getByText(/1 distinct unmapped value/)).toBeInTheDocument());
+    expect(screen.getAllByText(/Mumbai/, { selector: "code" }).length).toBeGreaterThan(0); // source row and preserved value remain inspectable
+    expect(screen.getByText("preserved", { selector: ".health-pill" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Apply reviewed change" }));
     await waitFor(() => expect(screen.getByText(/revision 1/)).toBeInTheDocument());
+  });
+
+  it("keeps a draft category-mapping step's own mapping visible when it is reselected after viewing a different step", async () => {
+    const columnValues = { column: "region", total_distinct: 2, truncated: false, values: [{ value: "Bangalore", count: 8 }, { value: "BENGALURU", count: 3 }] };
+    const fetchMock = vi.fn(async (input: string | URL) => {
+      const path = String(input);
+      if (path.endsWith("/state")) return json({ dataset: dataset0, issues: [], history: [], health });
+      if (path.includes("/columns/region/values")) return json(columnValues);
+      if (path.includes("/rows")) return json(rowsPage);
+      if (path.includes("/profile")) return json({ columns: [{ name: "region", semantic_type: "categorical" }, { name: "notes", semantic_type: "text" }] });
+      if (path.includes("/recipes")) return json([]);
+      if (path.includes("/recipe-draft/preview")) return json({ source_revision: 0, source_fingerprint: dataset0.source_fingerprint, review_token: "draft_1", before_sample: [], after_sample: [], step_impacts: [11, 5], projected_health: health });
+      if (path.endsWith("/preview")) return json({ operation: "category_mapping", review_token: "review_mapping", source_revision: 0, affected_rows: 11, changed_rows_total: 11, exception_rows_total: 0, affected_columns: ["region"], before_sample: [], after_sample: [], warnings: [], projected_health: health });
+      return json({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText(/Rows 1–5 of 5/)).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "+ Add step" }));
+    fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "category_mapping" } });
+    fireEvent.change(screen.getByLabelText("Column"), { target: { value: "region" } });
+    const getChips = () => document.querySelector(".clean-value-chips")! as HTMLElement;
+    await waitFor(() => expect(within(getChips()).getByText("Bangalore")).toBeInTheDocument());
+    fireEvent.click(within(getChips()).getByText("Bangalore").closest("label")!.querySelector("input")!);
+    fireEvent.click(within(getChips()).getByText("BENGALURU").closest("label")!.querySelector("input")!);
+    fireEvent.change(screen.getByLabelText("Map selected values to"), { target: { value: "Bengaluru" } });
+    fireEvent.click(screen.getByRole("button", { name: "Assign mapping to selected" }));
+    expect(screen.getByLabelText("Proposed value for Bangalore")).toHaveValue("Bengaluru");
+    fireEvent.click(screen.getByRole("button", { name: "Add step to draft" }));
+
+    // Leave this step via a second, unrelated step - the real trigger: the
+    // column-values effect's dependency array fires again on the return trip.
+    fireEvent.click(screen.getByRole("button", { name: "+ Add step" }));
+    fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "trim_whitespace" } });
+    fireEvent.change(screen.getByLabelText("Column"), { target: { value: "notes" } });
+    await waitFor(() => expect(screen.getByLabelText("Column")).toHaveValue("notes"));
+
+    const stepButtons = Array.from(document.querySelectorAll(".clean-step-select"));
+    const mappingStepButton = stepButtons.find((button) => button.textContent?.includes("category mapping"))!;
+    fireEvent.click(mappingStepButton);
+    await waitFor(() => expect(screen.getByLabelText("Proposed value for Bangalore")).toHaveValue("Bengaluru"));
+    expect(screen.getByLabelText("Proposed value for BENGALURU")).toHaveValue("Bengaluru");
+    expect(screen.queryByText("No values mapped yet. Select source values in the inspector and assign a target to build the mapping here.")).not.toBeInTheDocument();
+  });
+
+  it("never applies a plan step the plan-review screen shows as needing clarification, even though its own enabled flag is still true", async () => {
+    let createdRecipeBody: { name: string; steps: { request: { operation: string; column?: string }; enabled: boolean }[] } | null = null;
+    const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path.endsWith("/state")) return json({ dataset: dataset0, issues: [], history: [], health });
+      if (path.includes("/rows")) return json(rowsPage);
+      if (path.includes("/profile")) return json({ columns: [{ name: "notes", semantic_type: "text" }, { name: "signup_date", semantic_type: "text" }] });
+      if (path.includes("/recipe-draft/preview")) return json({ source_revision: 0, source_fingerprint: dataset0.source_fingerprint, review_token: "draft_1", before_sample: [], after_sample: [], step_impacts: [2, 3], projected_health: health });
+      if (path.endsWith("/api/v1/clean/recipes") && init?.method === "POST") {
+        const parsed = JSON.parse(String(init.body)) as typeof createdRecipeBody & object;
+        createdRecipeBody = parsed;
+        return json({ recipe_id: "recipe_plan", name: parsed.name, version: 1, steps: [], created_at: "2026-08-28T00:00:00Z" }, 201);
+      }
+      if (path.includes("/recipes/recipe_plan/preview")) return json({ recipe_id: "recipe_plan", recipe_version: 1, source_revision: 0, source_fingerprint: dataset0.source_fingerprint, review_token: "plan_review_token", before_sample: [], after_sample: [], step_impacts: [2], projected_health: health });
+      if (path.includes("/recipes/recipe_plan/apply")) return json({ dataset: dataset1, recipe_id: "recipe_plan", recipe_version: 1, applied_steps: [], issues: [], health });
+      if (path.includes("/recipes")) return json([]);
+      return json({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText(/Rows 1–5 of 5/)).toBeInTheDocument());
+
+    // Step 1: an ordinary, safe draft step.
+    fireEvent.click(screen.getByRole("button", { name: "+ Add step" }));
+    fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "trim_whitespace" } });
+    fireEvent.change(screen.getByLabelText("Column"), { target: { value: "notes" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add step to draft" }));
+
+    // Step 2: a genuinely ambiguous date parse with no date_format - the one
+    // real condition PRISM's own backend already treats as needing an
+    // analyst decision (see clean.py's date-ambiguity check).
+    fireEvent.click(screen.getByRole("button", { name: "+ Add step" }));
+    fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "convert_type" } });
+    fireEvent.change(screen.getByLabelText("Column"), { target: { value: "signup_date" } });
+    fireEvent.change(screen.getByLabelText("Target type"), { target: { value: "datetime" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add step to draft" }));
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Review plan" })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Review plan" }));
+
+    await waitFor(() => expect(screen.getByText("Review Atlas's cleaning plan")).toBeInTheDocument());
+    expect(screen.getByText("Needs clarification")).toBeInTheDocument();
+    expect(screen.getByText(/Excluded until you decide/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Approve included steps" }));
+    await waitFor(() => expect(createdRecipeBody).not.toBeNull());
+    const steps = createdRecipeBody!.steps;
+    const trimStep = steps.find((step) => step.request.operation === "trim_whitespace")!;
+    const convertStep = steps.find((step) => step.request.operation === "convert_type")!;
+    expect(trimStep.enabled).toBe(true);
+    expect(convertStep.enabled).toBe(false); // the real, security-relevant assertion
   });
 
   it("builds a duplicate-survivorship request from selected columns and a rule, with a concrete reason when a required field is missing", async () => {
@@ -269,13 +1198,13 @@ describe("Clean workspace", () => {
     render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
 
     await waitFor(() => expect(screen.getByText(/Rows 1–5 of 5/)).toBeInTheDocument());
-    fireEvent.click(screen.getByRole("button", { name: "+ New manual operation" }));
+    fireEvent.click(screen.getByRole("button", { name: "+ Add step" }));
     fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "deduplicate_survivorship" } });
 
     expect(screen.getByRole("button", { name: "Preview" })).toBeDisabled();
     expect(screen.getByText("Choose at least one column to group duplicates by.")).toBeInTheDocument();
 
-    const survivorshipColumnList = document.querySelector(".clean-survivorship")!;
+    const survivorshipColumnList = document.querySelector(".clean-centre-editor")!;
     fireEvent.click(Array.from(survivorshipColumnList.querySelectorAll("label")).find((label) => label.textContent?.includes("customer_id"))!.querySelector("input")!);
     fireEvent.change(screen.getByLabelText("Survivorship rule"), { target: { value: "max_by_column" } });
     expect(screen.getByText("Choose a column to keep the highest value from.")).toBeInTheDocument();
@@ -301,7 +1230,7 @@ describe("Clean workspace", () => {
     vi.stubGlobal("fetch", fetchMock);
     render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
 
-    await waitFor(() => expect(screen.getByText("No rules saved")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("No validation rules yet.")).toBeInTheDocument());
     fireEvent.click(screen.getByText("Add validation rule"));
     fireEvent.change(screen.getByLabelText("Validation rule name"), { target: { value: "Unique customers" } });
     fireEvent.change(screen.getByLabelText("Validation rule column"), { target: { value: "customer_id" } });
@@ -328,7 +1257,7 @@ describe("Clean workspace", () => {
     vi.stubGlobal("fetch", fetchMock);
     render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
 
-    await waitFor(() => expect(screen.getByText("No rules saved")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("No validation rules yet.")).toBeInTheDocument());
     fireEvent.click(screen.getByText("Add validation rule"));
     fireEvent.click(screen.getByRole("button", { name: "Save rule" }));
     await waitFor(() => expect(screen.getByText("Name the rule before saving it.")).toBeInTheDocument());

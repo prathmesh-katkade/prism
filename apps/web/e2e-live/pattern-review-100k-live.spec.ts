@@ -27,6 +27,8 @@ test("100k-row Pattern Review performance: discover, verify, extract preview, ap
 
   started = Date.now();
   await page.getByRole("button", { name: /Clean native/i }).click();
+  // Pattern findings live in the (collapsed-by-default) Patterns disclosure.
+  await page.locator(".clean-disclosure summary").filter({ hasText: "Patterns" }).click();
   const findingButton = page.locator(".clean-issues .finding-list button").filter({ has: page.locator("strong", { hasText: /^invoice_id$/ }) }).first();
   await expect(findingButton).toBeVisible({ timeout: 150_000 }); // this is the initial bounded-sample discovery
   timings.sample_discovery_visible_ms = Date.now() - started;
@@ -62,13 +64,20 @@ test("100k-row Pattern Review performance: discover, verify, extract preview, ap
 
   started = Date.now();
   await page.getByRole("button", { name: "Apply reviewed change" }).click();
-  await expect(page.locator(".clean-preview header")).toContainText("revision 1", { timeout: 150_000 });
+  await expect(page.locator(".clean-dataset-header")).toContainText("revision 1", { timeout: 150_000 });
   timings.extraction_apply_ms = Date.now() - started;
 
   // Cancellation responsiveness: trigger a second verify, then cancel it immediately
   // and confirm the UI returns control (Cancel disappears) promptly rather than
-  // blocking on the in-flight request.
-  await findingButton.click();
+  // blocking on the in-flight request. invoice_id no longer exists as a column
+  // after the extraction above replaced it with invoice_id_part1/part2, so reuse
+  // the still-present amount (numeric unit) finding instead.
+  // Apply's refresh() transitions state to "loading" and back to "ready",
+  // which is an early-return in clean-workspace.tsx that swaps out the
+  // entire component tree - every <details> disclosure, Patterns included,
+  // remounts and collapses back to closed. Re-open it before clicking in.
+  await page.locator(".clean-disclosure summary").filter({ hasText: "Patterns" }).click();
+  await numericFinding.click();
   started = Date.now();
   await page.getByRole("button", { name: "Verify all rows" }).click();
   const cancelButton = page.getByRole("button", { name: "Cancel" });

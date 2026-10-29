@@ -237,6 +237,35 @@ def test_recipe_apply_runs_enabled_steps_in_order_and_skips_disabled_ones() -> N
     assert [item["operation"] for item in state["history"]] == ["drop_duplicates", "fill_missing"]
 
 
+def test_recipe_applied_revision_is_not_stale_in_the_cross_dataset_recency_listing() -> None:
+    """A real bug found verifying restart-recovery against the packaged app:
+    GET /overview/datasets (list_current, the same ordering restart-recovery,
+    SQL Lab's connection list, and AI Analyst all resolve "most recent"
+    through) showed revision 1 for a dataset whose own /state endpoint
+    correctly reported revision 3 - the recipe-apply path's direct SQL
+    inserts never set `sequence`, so list_current's coalesce(sequence, 0)
+    ranked an older, singly-applied revision above the newer recipe-applied
+    one for the very same dataset."""
+    client = TestClient(create_app())
+    dataset_id = _dataset(client)
+
+    client.post(f"/api/v1/clean/datasets/{dataset_id}/apply", json={"operation": "drop_duplicates"})
+    state_after_single_apply = client.get(f"/api/v1/clean/datasets/{dataset_id}/state").json()
+    assert state_after_single_apply["dataset"]["revision"] == 1
+
+    recipe = client.post("/api/v1/clean/recipes", json={
+        "name": "Recipe applied after a real single-operation revision",
+        "steps": [{"request": {"operation": "trim_whitespace", "column": "label"}, "enabled": True}],
+    }).json()
+    applied = client.post(f"/api/v1/clean/datasets/{dataset_id}/recipes/{recipe['recipe_id']}/apply")
+    assert applied.status_code == 200
+    assert applied.json()["dataset"]["revision"] == 2
+
+    listing = client.get("/api/v1/overview/datasets").json()
+    head = next(entry for entry in listing if entry["dataset_id"] == dataset_id)
+    assert head["revision"] == 2  # the real, current head - not the stale revision 1
+
+
 def test_recipe_apply_is_all_or_nothing_when_a_step_no_longer_matches_the_schema() -> None:
     client = TestClient(create_app())
     dataset_id = _dataset(client)

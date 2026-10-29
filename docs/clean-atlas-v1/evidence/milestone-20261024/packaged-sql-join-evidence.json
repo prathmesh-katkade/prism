@@ -1,0 +1,6 @@
+{
+  "query": {"connection_id": "localjoin:ds_86a40c9296ef46d3980cd4779b84e21d:ds_3945453388d647d093a55a611d840064", "sql": "SELECT data.customer_id, data.region, joined.country, joined.timezone FROM data INNER JOIN joined ON data.region = joined.region"},
+  "result_row_count": 4,
+  "independent_prediction": "4 matched rows (C1003 Bengaluru, C1006 Delhi x2, C1008 Chennai); 8 unmatched left (case/whitespace region variants + Kolkata); 2 unmatched right (Mumbai, Lagos)",
+  "join_diagnose_response":
+{"connection_id":"localjoin:ds_86a40c9296ef46d3980cd4779b84e21d:ds_3945453388d647d093a55a611d840064","sql_fingerprint":"79527c73fa37079c6cbdf80432e199826a797cae03c08665253f1112662004c5","joins":[{"join_index":0,"join_kind":"inner","left":{"table":"data","column":"region","total_rows":12,"distinct_keys":10,"null_keys":0,"duplicate_key_rows":2},"right":{"table":"joined","column":"region","total_rows":5,"distinct_keys":5,"null_keys":0,"duplicate_key_rows":0},"unmatched_left_rows":8,"unmatched_right_rows":2,"row_multiplication_risk":false}],"unsupported_notes":[]}}

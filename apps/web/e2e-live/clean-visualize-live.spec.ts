@@ -24,14 +24,22 @@ test("Clean detects an issue, previews it, applies it as a new revision Overview
   await expect(page.getByLabel("Central tabbed workspace").getByRole("heading", { name: "clean-live-2.csv" })).toBeVisible({ timeout: 10_000 });
 
   await page.getByRole("button", { name: /Clean native/i }).click();
-  await expect(page.getByRole("heading", { name: /found/ })).toBeVisible();
+  // The Issues count lives in a <details> summary badge, not a heading; the
+  // disclosure is collapsed by default and must be opened before its
+  // finding button is interactable.
+  const issuesSummary = page.locator(".clean-disclosure summary").filter({ hasText: "Issues" });
+  // This fixture has two real issues: 1 exact-duplicate row and 1 missing-value cell.
+  await expect(issuesSummary).toContainText("2");
+  await issuesSummary.click();
   await page.getByRole("button", { name: /Dataset/ }).click(); // the duplicate-rows issue has no column
   await expect(page.getByText(/affects/)).toBeVisible({ timeout: 10_000 });
 
   const applyButton = page.getByRole("button", { name: "Apply reviewed change" });
   await expect(applyButton).toBeEnabled();
   await applyButton.click();
-  await expect(page.locator(".clean-preview header")).toContainText("revision 1", { timeout: 10_000 });
+  // The dataset identity (row/column counts, revision) lives in its own
+  // full-width header above the three-pane layout, not inside .clean-preview.
+  await expect(page.locator(".clean-dataset-header")).toContainText("revision 1", { timeout: 10_000 });
 
   // Overview reflects the cleaned revision under the same object identity.
   await page.getByRole("button", { name: /Overview native/i }).click();
@@ -52,10 +60,12 @@ test("Clean detects an issue, previews it, applies it as a new revision Overview
   expect(resultsResponse.ok()).toBe(true);
   await expect(page.getByText("3 returned / 3 total rows")).toBeVisible({ timeout: 15_000 });
 
-  // Undo restores the original revision.
+  // Undo restores the original revision. Revision buttons live in the
+  // (collapsed-by-default) History disclosure.
   await page.getByRole("button", { name: /Clean native/i }).click();
+  await page.locator(".clean-disclosure > summary").filter({ hasText: "History" }).click();
   await page.getByRole("button", { name: "Revision 0 · original" }).click();
-  await expect(page.getByRole("heading", { name: /found/ })).toBeVisible({ timeout: 10_000 });
+  await expect(issuesSummary).toContainText("2", { timeout: 10_000 });
   await page.getByRole("button", { name: /Overview native/i }).click();
   await expect(page.getByText("4 rows · 2 columns")).toBeVisible({ timeout: 10_000 });
 });

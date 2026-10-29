@@ -1,0 +1,64 @@
+{
+  "viewport": {
+    "width": 3440,
+    "height": 1369
+  },
+  "devicePixelRatio": 1,
+  "documentScrollWidth": 3440,
+  "shell": {
+    "x": 0,
+    "y": 0,
+    "width": 3440,
+    "height": 1369,
+    "fontSize": "14px",
+    "lineHeight": "normal"
+  },
+  "workspace": {
+    "x": 780,
+    "y": 91,
+    "width": 2060,
+    "height": 1278,
+    "fontSize": "14px",
+    "lineHeight": "normal"
+  },
+  "recipe": {
+    "x": 780,
+    "y": 210,
+    "width": 360,
+    "height": 1159,
+    "fontSize": "14px",
+    "lineHeight": "normal"
+  },
+  "review": {
+    "x": 1141,
+    "y": 210,
+    "width": 1368,
+    "height": 1159,
+    "fontSize": "14px",
+    "lineHeight": "normal"
+  },
+  "inspector": {
+    "x": 2510,
+    "y": 102,
+    "width": 330,
+    "height": 1267,
+    "fontSize": "14px",
+    "lineHeight": "normal"
+  },
+  "title": {
+    "x": 802,
+    "y": 128.953125,
+    "width": 353.375,
+    "height": 37.5,
+    "fontSize": "30px",
+    "lineHeight": "37.5px"
+  },
+  "recipeTitle": {
+    "x": 798,
+    "y": 260,
+    "width": 166.25,
+    "height": 22.5,
+    "fontSize": "18px",
+    "lineHeight": "22.5px"
+  }
+}
