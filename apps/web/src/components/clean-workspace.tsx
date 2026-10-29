@@ -1101,7 +1101,8 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
       </ol>
       </details>
     </nav>
-    <section className="clean-preview" aria-label="Data and transformation preview" tabIndex={0}>
+    <section className="clean-preview" aria-label="Data and transformation preview">
+    <div className="clean-preview-scroll" tabIndex={0}>
       {preview ? <>
         <div className="clean-review-tabs" role="tablist" aria-label="Review transformation"><button role="tab" aria-selected={reviewView === "before"} onClick={() => setReviewView("before")}>Before</button><button role="tab" aria-selected={reviewView === "changes"} onClick={() => setReviewView("changes")}>Changes</button><button role="tab" aria-selected={reviewView === "after"} onClick={() => setReviewView("after")}>After</button></div>
         {reviewView === "before" ? <><p className="quiet-note">Source revision {preview.source_revision ?? clean.dataset.revision} · fingerprint {(preview.source_fingerprint ?? clean.dataset.source_fingerprint).slice(0, 12)}… · first {preview.before_sample.length} row(s)</p><SampleTable rows={preview.before_sample} /></> : null}
@@ -1173,6 +1174,7 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
         </div>
         <SampleTable rows={rows?.rows ?? []} />
       </>}
+    </div>
       {preview && pendingRequest ? <div className="clean-apply-bar"><span>Nothing changes until Apply. Review source revision {preview.source_revision ?? clean.dataset.revision} and the rows above.</span><button disabled={applying || !preview.review_token} onClick={() => void apply()}>{applying ? "Applying…" : "Apply reviewed change"}</button><button className="secondary" onClick={() => { previewRequestId.current += 1; setPreview(null); setPendingRequest(null); }}>Discard preview</button></div> : null}
     </section>
     <div className="clean-pane-separator is-recipe" role="separator" tabIndex={0} aria-label="Resize recipe panel" aria-orientation="vertical" aria-valuemin={270} aria-valuemax={440} aria-valuenow={recipePaneWidth ?? 340} onKeyDown={(event) => onPaneKeyDown("recipe", event)} onPointerDown={(event) => { resizingPane.current = "recipe"; event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={(event) => onPanePointerMove("recipe", event)} onPointerUp={(event) => { resizingPane.current = null; event.currentTarget.releasePointerCapture(event.pointerId); }} onPointerCancel={() => { resizingPane.current = null; }} />

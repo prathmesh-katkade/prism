@@ -656,11 +656,23 @@
    step inspector, matching the approved reference: the owner's review showed
    this previously stopped at the left recipe pane's own edge instead of
    continuing under it. */
-.clean-apply-bar { position:fixed;bottom:0;left:var(--rail-size,238px);right:315px;z-index:8;display:flex;align-items:center;justify-content:flex-end;gap:10px;margin:0;padding:14px 20px;background:var(--surface);border-top:1px solid var(--line);box-shadow:0 -4px 12px #0002; }
-/* The fixed review footer follows the centre pane even when the user resizes
-   either side pane and the 2700px composition is centred on a wide display. */
-.shell-body.has-local-inspector .clean-apply-bar { left:calc(180px + max(0px,calc(50vw - 1440px)) + var(--clean-recipe-width,clamp(340px,calc(25vw - 45px),480px)));right:calc(max(0px,calc(50vw - 1440px)) + var(--clean-inspector-width,clamp(315px,calc(22vw - 40px),430px))); }
-.shell-body.has-local-inspector .clean-preview:has(.clean-apply-bar) { padding-bottom:84px; }
+/* A normal, static grid row - the auto row of .clean-preview's
+   grid-template-rows:minmax(0,1fr) auto (see the three-pane rules above) -
+   not sticky or fixed within the scrollable review content above it. Two
+   earlier approaches tried in this same session both failed under direct
+   measurement at 1366x800 with a real 4-step draft: `position:fixed`
+   pinned the bar to a fixed viewport y-position that review content could
+   scroll underneath; `position:sticky;bottom:0` inside the SAME scrolling
+   box as the review content then pinned the bar to that box's visible
+   bottom edge as soon as its content overflowed, even at scrollTop 0,
+   before any scrolling happened - a 22px overlap with the affected-rows
+   table's own header. Because review content and this footer are now
+   separate grid rows rather than stacked in one scrolling box, the footer
+   always renders in its own reserved space below the content row: Apply
+   and Discard stay visible without scrolling at desktop sizes, and the
+   content row (.clean-preview-scroll) can scroll in full above it without
+   ever passing underneath. */
+.clean-apply-bar { display:flex;align-items:center;justify-content:flex-end;gap:10px;margin:12px -16px -16px;padding:14px 16px;background:var(--surface);border-top:1px solid var(--line); }
 .clean-apply-bar span { margin-right:auto;color:var(--muted);font-size:12px; }
 .clean-apply-bar button { min-height:42px;padding:9px 18px;border:1px solid var(--accent);border-radius:5px;background:linear-gradient(180deg,var(--accent-hover),var(--accent));color:#1C1A16;font:650 13px var(--sans);cursor:pointer;white-space:nowrap;box-shadow:inset 0 1px 0 rgba(255,255,255,.22); }
 .clean-apply-bar button:hover:not(:disabled) { background:linear-gradient(180deg,var(--accent-hover),var(--accent-hover)); }
@@ -669,8 +681,7 @@
 .clean-apply-bar button.secondary { background:transparent;border-color:var(--line);color:var(--text);box-shadow:none; }
 .clean-apply-bar button.secondary:hover { background:var(--surface-raised);border-color:var(--muted); }
 .clean-apply-bar button.secondary:active { background:var(--surface-muted); }
-@media (max-width:1100px) { .clean-apply-bar,.shell-body.has-local-inspector .clean-apply-bar { left:62px;right:0; } }
-@media (max-width:760px) { .clean-apply-bar,.shell-body.has-local-inspector .clean-apply-bar { left:54px;right:0;flex-wrap:wrap; }.clean-apply-bar span { width:100%; }.clean-impact-summary strong { font-size:19px; } }
+@media (max-width:760px) { .clean-apply-bar,.shell-body.has-local-inspector .clean-apply-bar { flex-wrap:wrap; }.clean-apply-bar span { width:100%; }.clean-impact-summary strong { font-size:19px; } }
 .shell-body.has-local-inspector .viz-svg { height:min(42vh,410px); }
 .viz-svg .viz-grid-line { stroke:var(--line);stroke-width:1; }
 .viz-svg .viz-category-label,.viz-svg .viz-value-label { fill:var(--text);font:12px var(--sans); }
@@ -768,7 +779,7 @@
    them. Grid's own default (stretch) makes each column fill the row with
    its own background instead; the inspector keeps its own align-self
    below so this doesn't disturb its sticky/max-height behavior. */
-.shell-body.has-local-inspector .clean-workspace.three-pane { position:relative;grid-template-columns:var(--clean-recipe-width,clamp(340px,25%,480px)) minmax(0,1fr) var(--clean-inspector-width,clamp(315px,22%,430px));grid-template-rows:78px auto; }
+.shell-body.has-local-inspector .clean-workspace.three-pane { position:relative;grid-template-columns:var(--clean-recipe-width,clamp(340px,25%,480px)) minmax(0,1fr) var(--clean-inspector-width,clamp(315px,22%,430px));grid-template-rows:78px minmax(0,1fr);height:calc(100vh - 91px); }
 @media (min-width:2400px) {
   .shell-body.has-local-inspector .clean-issues,.shell-body.has-local-inspector .clean-preview,.shell-body.has-local-inspector .clean-inspector { font-size:14px; }
   .shell-body.has-local-inspector .clean-workspace h2 { font-size:20px; }
@@ -782,9 +793,65 @@
 .clean-pane-separator.is-inspector { right:var(--clean-inspector-width,clamp(315px,22%,430px));transform:translateX(50%); }
 .clean-pane-separator:focus-visible { outline:2px solid var(--focus);outline-offset:-2px; }
 .clean-workspace.three-pane > .clean-dataset-header { grid-column:1 / 3; grid-row:1; }
-.clean-workspace.three-pane > .clean-issues { grid-row:2; }
-.clean-workspace.three-pane > .clean-preview { grid-row:2; }
-.clean-workspace.three-pane > .clean-inspector { grid-row:1 / 3; align-self:start;position:sticky;top:12px;height:calc(100vh - 102px);max-height:calc(100vh - 102px);overflow-y:auto; }
+/* All three columns now scroll independently, each bounded to its own grid
+   row's track height instead of growing with content. Before this, only
+   .clean-inspector (grid-row:1/3, no header above it) was bounded; giving
+   .clean-issues/.clean-preview the SAME height via a 100vh calc (rather than
+   the grid's own row sizing) was itself a second bug tried mid-session: those
+   two sit in grid-row:2, below the 78px .clean-dataset-header row that only
+   spans columns 1-2, so a height copied from the inspector's formula made
+   them ~79px too tall and pushed the whole page's scrollable height past the
+   viewport - confirmed via getBoundingClientRect at 1366x800: document
+   scrollHeight was 868 against an 800px viewport, i.e. the layout needed an
+   initial 68px scroll before anything settled into place, which is exactly
+   the kind of "looks right once you scroll" bug the brief called out.
+   Bounding the GRID CONTAINER itself (three-pane's height, not min-height,
+   above) and sizing row 2 as minmax(0,1fr) fixes this at the source: each
+   column's height now falls out of the grid's own row track instead of a
+   duplicated viewport formula, so the three-pane layout fits the viewport
+   exactly with no page-level scroll, while still allowing a given column's
+   own content to scroll internally when it's taller than its row.
+   Before this round, .clean-issues/.clean-preview had no bounded height at
+   all (grid-template-rows:78px auto), which forced the page itself to grow
+   with content - the root cause of two real bugs: a step's own left-rail
+   sections (Patterns/History) silently falling off the bottom of a
+   *different*-length page depending on how many draft steps existed, and
+   a then-viewport-fixed .clean-apply-bar sitting on top of (not above)
+   whatever review content happened to occupy the same fixed y-position at
+   the page's current scroll offset - confirmed via getBoundingClientRect
+   with a real 4-step draft: the affected-rows table started at y=722 while
+   the fixed bar covered y=723-800, hiding the table's own header and first
+   rows behind it. Bounding this column's own height stopped that overlap
+   from being page-wide; how the approval footer itself is kept from
+   overlapping review content *within* this column is covered where
+   .clean-preview's grid rows are defined, directly below. */
+.clean-workspace.three-pane > .clean-issues { grid-row:2;min-height:0;overflow-y:auto; }
+/* .clean-preview is a two-row grid, not a single scrolling flex column:
+   review content above (minmax(0,1fr) - takes whatever space is left) and
+   the approval footer below (auto - sized to its own content, always in
+   normal flow). An earlier pass in this session made the whole panel one
+   flex column and reused that same box's overflow:auto for scrolling; that
+   had two real problems, both found by direct measurement at 1366x800 with
+   a real 4-step draft: (1) flex items with overflow other than visible get
+   an *automatic minimum size of 0* per spec, so plain flex-shrink:1 let the
+   layout engine squeeze the mapping table down to 110px, well below its own
+   max-height, to make everything else fit - patched at the time with
+   flex-shrink:0 on each table, but that was a workaround for the container
+   being the wrong shape, not a fix of it; (2) a sticky bottom:0 footer
+   inside that same scrolling box pinned itself to the visible bottom edge
+   of the scrollport as soon as content overflowed it, even unscrolled,
+   covering the affected-rows table's own header by 22px.
+   Splitting review content and the footer into separate grid rows removes
+   both failure modes by construction: the scroll boundary (.clean-preview-
+   scroll, below) is a plain block, not a flex container, so none of its
+   children are subject to flex's shrink-to-zero behaviour - each table just
+   renders at its natural/max-height-bound size and the wrapper scrolls for
+   any excess; and the footer is a normal grid row with its own reserved
+   space, so it can never render on top of the row above it, scrolled or
+   not. */
+.clean-workspace.three-pane > .clean-preview { grid-row:2;min-height:0;overflow:hidden;display:grid;grid-template-rows:minmax(0,1fr) auto; }
+.clean-preview-scroll { min-height:0;overflow-y:auto; }
+.clean-workspace.three-pane > .clean-inspector { grid-row:1 / 3;min-height:0;overflow-y:auto; }
 /* A viewport media query here was the actual bug: at the window's own
    1366px default, the nav rail and padding already consume ~250-300px
    before .clean-workspace ever sees the remaining space, so the "is there
@@ -817,8 +884,35 @@
 .clean-preview-checks .is-amber { color:var(--amber); }
 @media (max-width:1300px) { .clean-header-actions { gap:7px; }.clean-dataset-header .atlas-launcher small { display:none; } }
 @container prism-workspace (max-width:950px) {
-  .shell-body.has-local-inspector .clean-workspace.three-pane { grid-template-columns:minmax(0,1fr);grid-template-rows:none; }
-  .clean-workspace.three-pane > .clean-dataset-header,.clean-workspace.three-pane > .clean-issues,.clean-workspace.three-pane > .clean-preview,.clean-workspace.three-pane > .clean-inspector { grid-column:1;grid-row:auto;position:static;min-width:0;height:auto;max-height:none;border-inline:0;border-top:1px solid var(--line); }
+  /* height:auto alone is not enough here: the desktop rule's fixed
+     height:calc(100vh - 91px) (see the three-pane rules above) stayed in
+     force until this reset, and a grid container's align-content defaults
+     to "stretch" - when a definite-height grid has implicit "auto" row
+     tracks (grid-template-rows:none below falls back to grid-auto-rows:auto
+     for all four stacked children) that need MORE space than the container,
+     stretch still divides the container's full fixed height evenly across
+     them instead of letting rows size to their own content. Confirmed via
+     getComputedStyle at 400x844: grid-template-rows resolved to four
+     specific pixel tracks (235/169/175/169px) summing to exactly the
+     container's 753px - not to each row's actual content height - which
+     squeezed .clean-issues and .clean-preview into small boxes with their
+     own forced internal scrollbars, the exact "desktop constraint clipping
+     the stacked layout" failure this media query exists to prevent.
+     align-content:start stops that redistribution so rows size to content
+     and the extra height simply overflows the box for the page to scroll,
+     instead of being clipped into cramped nested scroll regions. */
+  .shell-body.has-local-inspector .clean-workspace.three-pane { grid-template-columns:minmax(0,1fr);grid-template-rows:none;height:auto;align-content:start; }
+  .clean-workspace.three-pane > .clean-dataset-header,.clean-workspace.three-pane > .clean-issues,.clean-workspace.three-pane > .clean-preview,.clean-workspace.three-pane > .clean-inspector { grid-column:1;grid-row:auto;position:static;min-width:0;height:auto;max-height:none;display:block;border-inline:0;border-top:1px solid var(--line); }
+  /* .clean-preview's desktop grid-template-rows:minmax(0,1fr) auto needs an
+     explicit reset too, not just height:auto above: a 1fr row track still
+     tries to claim "available free space" first and only falls back to
+     content size once the container truly has none, so leaving display:grid
+     in place here risked the exact thing this rule exists to prevent -
+     desktop panel sizing bleeding into the stacked layout. display:block
+     lets .clean-preview-scroll and .clean-apply-bar stack like any other
+     two block children, each at its own natural height, and the page scrolls
+     for the whole stack rather than either one scrolling internally. */
+  .clean-preview-scroll { overflow:visible; }
   .clean-dataset-header { display:grid;grid-template-columns:minmax(0,1fr);align-items:start;gap:10px; }
   .clean-dataset-header h1 { white-space:normal;overflow-wrap:anywhere; }
   .clean-header-actions { justify-content:flex-start; }
@@ -942,7 +1036,31 @@
 .clean-impact-summary { padding:12px 0;margin:0 0 12px; }
 .clean-impact-summary strong { font-size:21px; }
 .clean-mapping-review th,.clean-mapping-review td { padding:9px 12px; }
-.clean-mapping-review.is-review { max-height:clamp(140px,calc(100vh - 760px),210px);overflow:auto; }
+/* The previous clamp(140px, calc(100vh - 760px), 210px) only ever produced
+   something above its own 140px floor once 100vh exceeded 900px - at every
+   realistic desktop height, including the 800px target, calc(100vh - 760px)
+   is negative and the clamp silently bottoms out at 140px regardless of how
+   much real room .clean-preview-scroll actually has. Now that the preview
+   panel's review content scrolls independently at a known, bounded height
+   (see .clean-preview-scroll in the three-pane rules above) rather than the
+   whole page, this can safely scale off vh without that same failure mode.
+   flex-shrink:0 was needed, and then removed, during this same session: an
+   earlier structure made .clean-preview-scroll's parent a flex column
+   reusing the overflow:auto box for the whole panel, and flexbox gives a
+   flex item with non-visible overflow an *automatic minimum size of 0* -
+   the default flex-shrink:1 squeezed this table to 110px, well below its
+   own max-height, to make everything else fit. Splitting the scrollable
+   content and the approval footer into separate grid rows (see above)
+   removed the flex container this table used to sit in, so that failure
+   mode no longer applies and flex-shrink is not needed here any more. */
+.clean-mapping-review.is-review { max-height:clamp(160px,30vh,280px);overflow:auto; }
+/* Scoped, not a global .quiet-note change: the shared base rule's 12px
+   top/bottom padding is sized for a standalone note, but here it is just the
+   one-line "Showing N of M affected rows" pager sitting between two already
+   bounded tables - at 1366x800 with a real 4-step draft, trimming this was
+   part of the difference between the affected-rows table starting below the
+   fold and starting inside it. */
+.clean-preview-scroll > .quiet-note { padding:4px 0; }
 .clean-mapping-review.is-review th { position:sticky;top:0;z-index:1; }
 .clean-mapping-review th { padding-block:8px; }
 .clean-mapping-review td,.clean-mapping-review td:nth-child(2) { padding-block:5px; }
