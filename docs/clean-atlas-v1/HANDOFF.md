@@ -3,7 +3,38 @@
 One durable file, updated at every checkpoint rather than left to scatter
 across phase docs. Read this first in any new session.
 
-## Current continuation — 2026-10-27
+## Current continuation — 2026-11-09
+
+Re-verified the 2026-10-27/29 fixes are still correct (no source changed
+this round) and closed out two native-automation blockers with a precise
+diagnosis instead of a vague "still blocked." Full detail in
+[`acceptance-20261109.md`](acceptance-20261109.md) — the two things most
+worth knowing before picking this up again:
+
+1. **The msedgedriver/Edge version mismatch is fixed, but was never the
+   whole blocker.** Edge auto-updates roughly every 1-2 weeks on this
+   machine (155 → 156 → 157 across three sessions); `msedgedriver.microsoft.com`
+   (not the `azureedge.net` alias used before) is reachable from this
+   environment and serves exact-version driver downloads directly. With
+   versions matched, `tauri-driver` correctly spawns a matching
+   `msedgedriver` child — but session creation still fails with "Chrome
+   instance exited": `app.exe` is a WebView2 host, not Chromium itself, and
+   doesn't translate incoming `--remote-debugging-port`/`--user-data-dir`
+   argv into WebView2's own browser-argument mechanism. That's a real
+   Tauri+WebView2+WebDriver integration gap, not a driver version problem —
+   don't re-spend time re-matching driver versions on a future session
+   that hits this; go straight to the "Chrome instance exited" root cause.
+2. **UI Automation's `Invoke()` pattern reproducibly blanks this app's
+   WebView2 render surface** (zero-size client rect, process stays alive)
+   on the very first interaction of a completely fresh launch — confirmed
+   across four independent instances this round, not resource exhaustion.
+   Real mouse-coordinate clicks (`SetCursorPos`/`mouse_event`) don't trigger
+   this, but need the window in the foreground to land reliably, which
+   wasn't available this round (a protected foreground session was
+   running). A future session with foreground access available should try
+   mouse-coordinate automation before UI Automation Invoke for this app.
+
+## Continuation — 2026-10-27
 
 Took over an interrupted session's own intentional uncommitted work (CSS/TSX
 already mid-edit; a single-job `npx tauri build --no-bundle` that had, in
