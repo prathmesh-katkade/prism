@@ -3,7 +3,51 @@
 One durable file, updated at every checkpoint rather than left to scatter
 across phase docs. Read this first in any new session.
 
-## Current continuation — 2026-11-09
+## Current continuation — 2026-11-13
+
+**First round since 2026-10-24 to land real application-code changes
+against the three documented visual gaps**, not another re-verification of
+unchanged source. Full detail in
+[`acceptance-20261113.md`](acceptance-20261113.md) — the things most worth
+knowing before picking this up again:
+
+1. **Left-panel overflow (Part A) is fixed, with a measured root cause.**
+   At the 4-step draft state, a `.clean-current-mapping` card (always
+   expanded, 197px) plus two separate redundant hint lines pushed
+   Patterns/History past the fold at 1586×992. Fixed by making that card a
+   `<details>` disclosure matching the panel's existing rhythm (collapsed
+   by default, nothing removed, reachable on expand) and merging the two
+   hint lines into one. Measured result: content height now exactly equals
+   the visible area at the reference size — all six entries visible with
+   zero scrolling, independent panel scroll still works once anything is
+   expanded or the recipe is viewed at a smaller size.
+2. **Atlas dock (Part B)**: added the one real, clearly-additive gap vs
+   reference 01 — a "Suggest next steps" quick-action row reusing the
+   existing real `ask()` call (no new endpoint, no fabricated state).
+   Deliberately did **not** add the reference's multi-stage status stepper
+   ("Profile inspected → Preview reviewed → ...") since no such state
+   machine exists in the real API — that would have been exactly the kind
+   of fabricated-workflow risk this project has been explicitly warned off
+   before.
+3. **Plan review (Part C)**: re-read in full against reference 03; already
+   correct. No source change needed. Two named gaps (a "Permissions" mode
+   card, an in-panel composer) remain out of scope for the same
+   no-fabrication reason as #2.
+4. **The 2026-11-09 "genuine Tauri+WebView2+WebDriver integration gap"
+   framing was too strong, and this round found the more precise picture**:
+   2026-10-27's own evidence (`native-clean-populated-webdriver-1366x800.png`)
+   proves this exact driver/app pairing *can* work. This round hit a
+   *different*, more specific error — `DevToolsActivePort file doesn't
+   exist`, not `Chrome instance exited` — after a genuine new version drift
+   (Edge moved to 157.0.4341.46, one patch past the 2026-11-09 driver) was
+   found and fixed. Matching versions exactly, and trying the standard
+   `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS` mitigation, did not restore it
+   within the 30-minute time-box. Whatever made 2026-10-27 work specifically
+   could not be recovered this round — treat this as still blocked, but on
+   a narrower, better-characterized problem than "fundamental gap,
+   won't investigate further."
+
+## Historical continuation — 2026-11-09
 
 Re-verified the 2026-10-27/29 fixes are still correct (no source changed
 this round) and closed out two native-automation blockers with a precise

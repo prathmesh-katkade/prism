@@ -34,6 +34,12 @@ import { apiUrl } from "../config/api";
 import { AtlasCharacter, type AtlasPose } from "./atlas-character";
 
 const STARTER_QUESTIONS = ["What should I review first?", "Explain the current step", "Suggest a cleanup for this column"];
+const NEXT_STEP_QUESTIONS = ["Explain this step", "Compare before and after", "Suggest what to clean up next"];
+const NEXT_STEP_INTENTS: Record<string, string> = {
+  "Explain this step": "Explain the current step",
+  "Compare before and after": "What changed between before and after for this step?",
+  "Suggest what to clean up next": "What should I clean up next?",
+};
 const HISTORY_LIMIT = 3;
 const STORED_TURNS_LIMIT = 20;
 
@@ -369,6 +375,10 @@ export function AtlasDockPanel({
         </li>;
       })}
     </ol> : null}
+    {turns.length && !pending ? <div className="atlas-dock-starters atlas-dock-next-steps">
+      <span className="eyebrow">Suggest next steps</span>
+      {NEXT_STEP_QUESTIONS.map((label) => <button key={label} type="button" className="secondary" disabled={!datasetId} onClick={() => void ask(NEXT_STEP_INTENTS[label]!)}>{label}</button>)}
+    </div> : null}
     <form className="atlas-dock-input" onSubmit={(event) => { event.preventDefault(); void ask(intent); }}>
       <label>Ask Atlas<textarea value={intent} onChange={(event) => setIntent(event.target.value)} maxLength={500} placeholder="e.g. Standardize region labels" disabled={Boolean(pending)} /></label>
       <button type="submit" className="btn-primary" disabled={!datasetId || Boolean(pending) || intent.trim().length < 3}>{pending ? "Checking local model…" : "Ask Atlas"}</button>

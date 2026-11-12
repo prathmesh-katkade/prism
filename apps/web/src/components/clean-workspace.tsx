@@ -985,7 +985,7 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
         </li> : null}
       </ol>
       {!clean.history.length && !draftSteps.length && !recipePreview && !(preview && pendingRequest) ? <p className="quiet-note">No steps yet. Select an issue, or start a manual operation below, to build this dataset's recipe.</p> : null}
-      {draftError ? <p role="alert" className="query-error">{draftError}</p> : draftSteps.length && draftPreview ? <p className="quiet-note clean-recipe-note">Downstream preview recomputed from revision {draftPreview.source_revision}. Projected health {draftPreview.projected_health.total}/100.</p> : null}
+      {draftError ? <p role="alert" className="query-error">{draftError}</p> : draftSteps.length ? <p className="quiet-note clean-recipe-note">{draftPreview ? `Downstream preview recomputed from revision ${draftPreview.source_revision}. Projected health ${draftPreview.projected_health.total}/100. ` : ""}Disable a step to preview downstream changes without removing it.</p> : null}
 
       <div className="clean-recipe-actions">
         <button className={manualMode ? "is-selected" : "secondary"} onClick={startManualOperation}>+ Add step</button>
@@ -996,7 +996,6 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
         <label className="clean-recipe-name">Recipe name<input aria-label="Recipe name" autoFocus value={recipeName} onChange={(event) => setRecipeName(event.target.value)} placeholder="e.g. Standard monthly cleanup" /></label>
         <div><button type="submit">Save named recipe</button><button type="button" className="secondary" onClick={() => { setShowRecipeSave(false); setRecipeError(null); }}>Cancel</button></div>
       </form> : null}
-      {draftSteps.length ? <p className="clean-recipe-tip">Disable a step to preview downstream changes without removing it.</p> : null}
 
       {manualOperation === "category_mapping" && manualMode && columnValues && !Object.keys(categoryMapping).length ? (() => {
         const groups = suggestCategoryGroups(columnValues.values);
@@ -1016,13 +1015,13 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
         </div>;
       })() : null}
 
-      {manualOperation === "category_mapping" && Object.keys(categoryMapping).length ? <div className="clean-current-mapping">
-        <span className="eyebrow">Current mapping</span>
+      {manualOperation === "category_mapping" && Object.keys(categoryMapping).length ? <details className="clean-disclosure clean-current-mapping">
+        <summary>Current mapping <span className="health-pill">{Object.keys(categoryMapping).length}{"→"}{new Set(Object.values(categoryMapping)).size}</span></summary>
         <p>{Object.keys(categoryMapping).length} source value{Object.keys(categoryMapping).length === 1 ? "" : "s"} mapped to {new Set(Object.values(categoryMapping)).size} target{new Set(Object.values(categoryMapping)).size === 1 ? "" : "s"}.</p>
         <ul>{Object.entries(categoryMapping).slice(0, 5).map(([source, target]) => <li key={source}><code>{source}</code><span aria-hidden="true">→</span><code>{target}</code></li>)}</ul>
         {Object.keys(categoryMapping).length > 5 ? <small>+{Object.keys(categoryMapping).length - 5} more</small> : null}
         <button type="button" className="secondary" onClick={() => { setManualMode(true); setSelectedIssue(null); setSelectedFinding(null); }}><Icon name="layers" className="clean-action-icon" />Review full mapping</button>
-      </div> : manualOperation === "category_mapping" && manualMode ? <div className="clean-current-mapping is-empty">
+      </details> : manualOperation === "category_mapping" && manualMode ? <div className="clean-current-mapping is-empty">
         <span className="eyebrow">Current mapping</span>
         <p>No values mapped yet. Select source values in the inspector and assign a target to build the mapping here.</p>
       </div> : null}
