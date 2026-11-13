@@ -3,11 +3,49 @@
 One durable file, updated at every checkpoint rather than left to scatter
 across phase docs. Read this first in any new session.
 
-## Current continuation — 2026-11-13
+## Current continuation — 2026-11-13 (round 2)
 
-**First round since 2026-10-24 to land real application-code changes
-against the three documented visual gaps**, not another re-verification of
-unchanged source. Full detail in
+Picked up the same day's round-1 work (below) with real native-interactive
+evidence instead of a landing-screen-only capture, a traced root cause for
+"Local model unavailable," and test coverage for the quick actions round 1
+added. Full detail in [`acceptance-20261113b.md`](acceptance-20261113b.md).
+Also corrects round 1's own misstatement below: **2026-10-27 and
+2026-10-29 both landed real application-code changes** (the `.secondary`
+`!important` root-cause fix and the grid-based approval-footer fix,
+respectively) — only the 2026-11-09 round made no source change, and round
+1's "first round since October 24" framing wrongly generalized that one
+fact. Most worth knowing before picking this up again:
+
+1. **Real native file upload achieved for the first time this project has
+   recorded**, via real OS-level keystrokes into the actual Windows "Open"
+   dialog the upload control invokes (a separate top-level window, not
+   reachable through the app's own WebView2 surface) — every prior round
+   back to 2026-10-27 lists this as a named, unachieved gap.
+2. **The full real four-step fixture was built and captured natively**
+   (Trim Whitespace applied, Category Mapping, ambiguous Convert Type,
+   Deduplicate Survivorship), confirming round 1's left-panel and
+   Atlas-dock fixes in the actual shipped executable, not just the browser
+   dev build. Plan review was also rendered and visually compared against
+   reference 03 directly, not read from TSX.
+3. **"Local model unavailable" has a traced, specific cause**:
+   `workspace_proposals.py`'s `PRISM_OLLAMA_MODEL` default is an empty
+   string (the only one of four call sites that doesn't default to
+   `llama3.2:3b`) — named, not fixed, since changing a model-selection
+   default is a model-binding change this engagement has consistently
+   ruled out making silently. With an explicit `qwen2.5:7b-instruct`
+   config in an isolated test sidecar, the model responds for real but is
+   correctly rejected by PRISM's own existing "contradicted the source
+   profile" safety guard (a known case, per that code's own comment) — not
+   a new bug.
+4. **`SetForegroundWindow` does not actually work from a background
+   process without the standard ALT-keypress workaround first** — early
+   clicks this round silently landed on an unrelated Chrome window before
+   this was caught and fixed. Worth remembering for any future native
+   automation attempt on this machine.
+
+## Historical continuation — 2026-11-13 (round 1)
+
+Full detail in
 [`acceptance-20261113.md`](acceptance-20261113.md) — the things most worth
 knowing before picking this up again:
 

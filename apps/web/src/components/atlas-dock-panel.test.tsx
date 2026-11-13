@@ -95,6 +95,49 @@ describe("Atlas Clean clarification", () => {
     expect(fetchMock.mock.calls.filter(([url]) => String(url).endsWith("/apply"))).toHaveLength(0);
   });
 
+  it("shows next-step quick actions after a turn completes, and each submits its own real intent", async () => {
+    const first = { kind: "clean", provider: "ollama", explanation: "Review blank regions first.", evidence: [] };
+    const second = { kind: "clean", provider: "ollama", explanation: "Before: BENGALURU. After: Bengaluru.", evidence: [] };
+    const fetchMock = vi.fn(async (_input: string | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as { intent: string };
+      const payload = fetchMock.mock.calls.length === 1 ? first : second;
+      expect(body.intent).toBe(fetchMock.mock.calls.length === 1 ? "What should I review first?" : "What changed between before and after for this step?");
+      return new Response(JSON.stringify(payload), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(panel());
+    expect(screen.queryByText("Suggest next steps")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "What should I review first?" }));
+    await waitFor(() => expect(screen.getByText(first.explanation)).toBeInTheDocument());
+    expect(screen.getByText("Suggest next steps")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Explain this step" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Suggest what to clean up next" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Compare before and after" }));
+    await waitFor(() => expect(screen.getByText(second.explanation)).toBeInTheDocument());
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("hides the next-step quick actions while a request is pending, and keeps conversation context across them", async () => {
+    let resolveSecond: ((value: Response) => void) | undefined;
+    const first = { kind: "clean", provider: "ollama", explanation: "Review blank regions first.", evidence: [] };
+    const fetchMock = vi.fn(async (_input: string | URL, init?: RequestInit) => {
+      if (fetchMock.mock.calls.length === 1) return new Response(JSON.stringify(first), { status: 200 });
+      const body = JSON.parse(String(init?.body)) as { history?: Array<{ intent: string }> };
+      // The follow-up must carry the prior turn as real context, not a blank slate.
+      expect(body.history).toEqual([{ intent: "What should I review first?", explanation: first.explanation }]);
+      return new Promise<Response>((resolve) => { resolveSecond = resolve; });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(panel());
+    fireEvent.click(screen.getByRole("button", { name: "What should I review first?" }));
+    await waitFor(() => expect(screen.getByText(first.explanation)).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Explain this step" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument());
+    expect(screen.queryByText("Suggest next steps")).not.toBeInTheDocument();
+    resolveSecond!(new Response(JSON.stringify({ kind: "clean", provider: "ollama", explanation: "The current step maps region spellings.", evidence: [] }), { status: 200 }));
+    await waitFor(() => expect(screen.getByText("Suggest next steps")).toBeInTheDocument());
+  });
+
   it("drops malformed nested stored responses and never renders their content", () => {
     window.localStorage.setItem("atlas-dock:ds_1", JSON.stringify([
       { id: "bad", intent: "dates", revision: 0, status: "done", response: { ...response, clarification: { question: "bad", choices: [{ label: "run", parameters: "not-an-object" }] } } },
