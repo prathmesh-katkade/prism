@@ -64,7 +64,17 @@ def _detect_equi_joins(sql: str, dialect_name: str) -> tuple[list[_DetectedJoin]
     notes: list[str] = []
     for index, join in enumerate(tree.find_all(exp.Join)):
         on = join.args.get("on")
-        kind = (join.kind or "inner").lower() or "inner"
+        # sqlglot splits a join's type across two separate attributes:
+        # `side` (LEFT/RIGHT/FULL, empty for an inner join) and `kind`
+        # (INNER/OUTER/CROSS). A LEFT JOIN has side="LEFT" and kind=""; using
+        # `join.kind` alone (the prior bug) always fell through to the
+        # "inner" default for it -- reporting an actual LEFT JOIN as an inner
+        # join, which also makes any "unmatched rows retained by INNER JOIN"
+        # message self-contradictory, since an inner join is exactly what
+        # does not retain unmatched rows. `side` takes priority when present
+        # (it names LEFT/RIGHT/FULL outer joins); FULL OUTER JOIN has both
+        # side="FULL" and kind="OUTER", where side is still the right answer.
+        kind = (join.side or join.kind or "inner").lower()
         if not (isinstance(on, exp.EQ) and isinstance(on.left, exp.Column) and isinstance(on.right, exp.Column)):
             notes.append(f"Join {index + 1}: only a single equality condition (table.column = table.column) is supported for diagnostics; this join's condition isn't in that form.")
             continue

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 from prism_api.main import create_app
-from prism_api.sql_lab_join_diagnostics import _quote
+from prism_api.sql_lab_join_diagnostics import _detect_equi_joins, _quote
 from prism_api_contracts import SqlDialect
 
 ORDERS_CSV = b"order_id,customer_id,amount\n1,c1,10\n2,c1,20\n3,c2,30\n4,c3,40\n"
@@ -96,6 +96,30 @@ def test_quote_uses_backticks_for_mysql_and_double_quotes_for_every_other_dialec
 def test_quote_escapes_an_embedded_quote_character_per_dialect() -> None:
     assert _quote("weird`col", SqlDialect.MYSQL) == "`weird``col`"
     assert _quote('weird"col', SqlDialect.DUCKDB) == '"weird""col"'
+
+
+def test_detect_equi_joins_reports_the_real_join_kind_not_a_blanket_inner_default() -> None:
+    """Regression test: sqlglot splits a join's type across two attributes --
+    `side` (LEFT/RIGHT/FULL) and `kind` (INNER/OUTER/CROSS) -- a LEFT JOIN has
+    side="LEFT" and kind="" (empty), so reading `kind` alone always fell
+    through to the "inner" default, misreporting every outer join as inner.
+    That also made the UI's "unmatched rows retained by INNER JOIN" message
+    self-contradictory, since an inner join is exactly what drops unmatched
+    rows rather than retaining them."""
+    cases = {
+        "SELECT * FROM a JOIN b ON a.id = b.id": "inner",
+        "SELECT * FROM a INNER JOIN b ON a.id = b.id": "inner",
+        "SELECT * FROM a LEFT JOIN b ON a.id = b.id": "left",
+        "SELECT * FROM a RIGHT JOIN b ON a.id = b.id": "right",
+        "SELECT * FROM a FULL JOIN b ON a.id = b.id": "full",
+        "SELECT * FROM a FULL OUTER JOIN b ON a.id = b.id": "full",
+        "SELECT * FROM a LEFT OUTER JOIN b ON a.id = b.id": "left",
+    }
+    for sql, expected_kind in cases.items():
+        joins, notes = _detect_equi_joins(sql, "mysql")
+        assert not notes, f"{sql!r} produced unsupported_notes: {notes}"
+        assert len(joins) == 1
+        assert joins[0].join_kind == expected_kind, f"{sql!r}: expected {expected_kind!r}, got {joins[0].join_kind!r}"
 
 
 def test_diagnose_joins_on_a_single_table_query_with_a_self_join() -> None:

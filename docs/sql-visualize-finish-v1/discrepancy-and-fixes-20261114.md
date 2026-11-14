@@ -1,8 +1,108 @@
 # SQL Lab + Visualize finish — discrepancy table and fixes (2026-11-14)
 
+## Continuation — 2026-11-14 (round 2)
+
+Picked up from the checkpoint below (`cef4ef6`) per explicit owner instruction
+to continue without restarting, inspect the `Cargo.toml` change before acting
+on it, re-request the two previously-denied approvals narrowly, check an
+identity-conflation edge case in the missing-dimension fix, and do an actual
+geometry/density comparison against the references rather than a source-code
+inventory.
+
+**`Cargo.toml`**: inspected byte-for-byte against `HEAD` (`git show
+HEAD:...Cargo.toml` diffed with CRLF stripped from both sides) — content is
+**identical**; the working-tree diff is a pure CRLF line-ending artifact the
+build tooling wrote to disk, not a real change. Left alone; nothing to commit.
+
+**The two approval blockers**: re-identified the port-8000 occupant first
+(`Get-CimInstance Win32_Process -Filter "ProcessId=16988"` — same PID, same
+executable path, same 06:21:47 creation time as before, ~9.5h uptime, so it is
+confirmed the *same* process, not a reused PID) and re-verified the Clean+Atlas
+landing state was unchanged (`origin/main` still `c9472ca`, merge-base still
+exact). Both actions were then re-requested narrowly through the same
+mechanism, each naming the prior denial:
+- **Terminating PID 16988**: denied again, identically, with the same binding
+  instruction not to pursue the outcome through any other mechanism. This
+  confirms the restriction sits below the conversational layer — explicit
+  owner instruction in chat does not clear it; only the owner's own Bash
+  permission settings (named in the denial itself) or the owner acting
+  directly can. **Native desktop live proof remains blocked for this reason
+  alone** — not a defect in this round's build.
+- **Fast-forwarding `main` to `a2a75f9`**: this one **succeeded**. `git merge
+  --ff-only origin/prism/clean-pattern-review-v1 && git push origin main` from
+  the clean `prism-track-a-main` worktree went through without denial.
+  **`main` is now landed at `a2a75f9` (`c9472ca..a2a75f9 main -> main`,
+  confirmed on the remote via a fresh `git fetch`).** CI on that exact SHA
+  (run `43584531056`) finished **all 5 jobs green**
+  (secret-scan/phase-4-live-e2e/legacy-regression/phase-1-python/phase-1-web)
+  — verified via `gh run view --json status,conclusion`, not inferred from an
+  earlier run. **Phase 1 is complete.**
+
+**Identity-conflation edge case** (a dataset with both a real null `region`
+and a literal `"(missing region)"` category): confirmed this was a real gap —
+the placeholder label could collide with real data, merging two different row
+sets under one display string and making drilldown ambiguous. Fixed narrowly:
+`_missing_dimension_label` now checks the actual column for a collision and
+appends a numeric disambiguator (`"(missing region) [2]"`) only when one
+exists, so the two stay distinct in aggregation and in drilldown (drilldown
+re-derives the same disambiguated text from the same filtered frame, so it
+never needs a new identity field on the wire). The same fix extends to
+small-multiples facets, which previously dropped rows with no facet value
+from every panel with no disclosure at all. Four new tests cover this exactly
+(`test_a_real_category_literally_named_like_the_placeholder_...`,
+`..._drilldown_on_the_real_colliding_category_...`,
+`..._drilldown_on_the_disambiguated_placeholder_...`,
+`..._small_multiples_give_rows_with_no_facet_value_their_own_panel`).
+
+**A second, unrelated real bug found while live-testing the join-evidence
+panel**: `sql_lab_join_diagnostics.py` reported every join as `"inner"`
+regardless of its actual kind, because sqlglot splits a join's type across
+two attributes (`side` for LEFT/RIGHT/FULL, `kind` for INNER/OUTER/CROSS) and
+the code only read `kind` — which is empty for a plain `LEFT JOIN`, falling
+through to the `"inner"` default. This wasn't just a labeling slip: it made
+the panel's own "unmatched rows retained by INNER JOIN" message
+self-contradictory, since an inner join is exactly what does *not* retain
+unmatched rows. Fixed by preferring `side` over `kind` over the `"inner"`
+default. Regression test
+`test_detect_equi_joins_reports_the_real_join_kind_not_a_blanket_inner_default`
+covers all seven join-keyword variants sqlglot can produce.
+
+**Geometry/density comparison, done properly this time** (re-reading both
+references at full size, not from memory of "the control exists"): see §6
+below for the per-element table. Two real presentation gaps were found and
+fixed in this round (join-evidence readability, chart leading-bar color) on
+top of the two correctness bugs above; one gap (the shared
+`--good`/`--danger` tokens being a softer variant of the palette's
+Success/Error hexes) is named and deliberately left alone, same reasoning as
+before — it is a global, cross-workspace token change outside this round's
+two-screen scope, not a SQL Lab/Visualize-specific fix.
+
+**Local-only false failure, not a regression**: a full-suite re-run hit
+`tests/api/test_phase8c_lineage_traversal.py::test_ancestors_never_cross_into_a_different_fingerprint_sharing_the_same_revision_number`
+failing with `Analytical object 'fp_child' is already registered.` Root
+cause: that test (and the module it exercises) uses the durable registry's
+*default* on-disk path (`.prism/runtime/analytical-history.sqlite`) whenever
+`PRISM_ANALYTICAL_HISTORY_DATABASE_URL` is unset, and this worktree had
+accumulated state in that file across many local pytest invocations run today
+without ever clearing it between runs. Deleting that local, gitignored,
+disposable file and re-running gave a clean pass. **This is a local
+environment-reuse artifact of running the same checkout repeatedly, not a
+code regression** — CI's ephemeral filesystem starts fresh every run and
+would never accumulate this state. Confirmed by running the single test
+alone (clean), the full suite with the stale file present (fails,
+reproducibly), and the full suite again right after deleting it (clean):
+**831 passed, 3 skipped**, final.
+
+Evidence for this round: `evidence-20261114/sql-lab-join-evidence-synthesis.jpg`,
+`evidence-20261114/visualize-leading-bar-highlight.jpg` (both captured live
+against the same disposable MySQL fixture as round 1, after restarting the
+dev API with every fix in this round applied).
+
+---
+
 Branch: `prism/sql-visualize-finish-v1`, based on `prism/clean-pattern-review-v1` @
-`a2a75f9` (content-identical to pending merged `main` — see
-`docs/clean-atlas-v1/landing-20261114.md` for the Phase 1 landing blocker).
+`a2a75f9` (now the actual `main` tip, landed in this round — see
+`docs/clean-atlas-v1/landing-20261114.md` for the full Phase 1 record).
 
 Per instruction: capture the current populated SQL Lab and Visualize screens against
 the approved references first, write the discrepancy table, then implement. This file
@@ -209,12 +309,78 @@ orphaned process) or explicitly authorize terminating PID 16988, then re-run
 `target/release/app.exe` from this worktree with the three env vars in
 `.prism/viz-finish-20261114/launch-native.ps1` set.
 
-## 6. What was not touched
+## 6. Geometry/density comparison (round 2) — per-element, not "control exists"
+
+Done by re-reading both reference PNGs at full resolution and comparing
+against live screenshots of the same disposable fixture at a matching window
+size, element by element:
+
+| Element | Reference | Current (round 1 end) | Verdict |
+|---|---|---|---|
+| SQL Lab data-source list | Cards with per-source Revision + row count | Plain `<select>`, label+dialect only, no revision/row count | Real gap, **not fixed**: a MySQL/external connector has no PRISM revision concept at all (only a promoted local CSV dataset does), so the reference's exact framing doesn't transfer 1:1 to the scenario this round's fixture uses. Naming it rather than fabricating a revision number for a live external table. |
+| SQL Lab toolbar buttons | Explicit icons (▶ play, 💾 save) | Text-only buttons | Named, not fixed — icon-only polish, lowest-value item found, deferred rather than touched under time pressure for a cosmetic-only change. |
+| **Join evidence panel** | Human-readable synthesis (relationship type, unique-keys, matched/unmatched with ✓/⚠, amber callout) *above* any raw numbers | Raw per-side cardinality only (rows/distinct/duplicate/null) with no synthesis | **Fixed this round**, see §7. |
+| Join evidence handoffs placement | Dedicated "Result handoffs" section in the right rail | Inline in the grid's own toolbar row | Named, not fixed — a defensible alternate placement (handoffs next to the data they act on), not a functional gap; moving it is a larger layout change than this round's fix budget covers. |
+| Visualize Fields panel | One flat field list, type-glyph coded (Ab/#/123/📅) | Split into DIMENSION/MEASURE group headers, plain bullet dot | Named, not fixed — a different, defensible grouping paradigm (maps directly to what you're about to pick for the active mark) rather than a regression; retrofitting the reference's exact glyph system is a broader Fields-panel redesign outside this round's two fixes. |
+| Visualize chart canvas | Bordered/panelled card around the chart | Marks float on the bare canvas background, no panel border | Named, not fixed — real, visible, but purely cosmetic framing; deferred alongside the toolbar-icon item above. |
+| **Chart bar coloring** | Leading category highlighted gold/brass, others a distinct blue | Every bar the same brass color (the `is-leading` CSS hook existed for horizontal_bar only and was a no-op duplicate of the default fill; vertical bar had no hook at all) | **Fixed this round**, see §7. |
+| Filter-chip rendering | Not independently verified | Not independently verified | No active filter was applied in either round's capture; this specific visual (pill shape, fill, border) was not compared and is not claimed as matching or non-matching. |
+| Palette tokens (Canvas/Panel/Raised/Brass/Selected-row) | Exact hexes | `prism.css` already defines the exact matching hex for all five | Match (unchanged from round 1's finding). |
+
+## 7. Round 2 fixes: join-evidence synthesis and value-based chart highlighting
+
+**Join evidence** (`query-studio.tsx`'s `JoinDiagnosticsPanel`): added a
+synthesized summary derived entirely from the existing real `JoinDiagnostic`
+fields — relationship type (`sideIsUnique` on each side → one-to-one /
+one-to-many / many-to-one / many-to-many), the matched side's own key
+uniqueness, a matched-count (`left.total_rows - unmatched_left_rows`, a real
+derived number, not a new field), status dots (green/amber), and an amber
+callout naming the actual join kind when any rows are unmatched. The raw
+per-side cardinality detail is kept, not removed — it now sits behind a "Key
+cardinality detail" disclosure instead of being the first and only thing
+shown, matching the reference's "synthesis first, detail available" ordering.
+Discovering this surfaced the join-kind bug in §"Continuation" above (the
+callout would have read "retained by INNER JOIN" for an actual LEFT JOIN,
+which is self-contradictory) — fixed alongside it.
+
+**Chart leading-bar highlight** (`visualize-workspace.tsx`'s `ChartCanvas` +
+`prism.css`): the highlight is now keyed on the data point's actual value
+(`point.value === Math.max(...data.map(d => d.value))`) rather than array
+index, so it stays correct under every `sort_by` option, not just the default
+value-descending one. Extended from horizontal_bar-only (where it existed but
+did nothing, per the table above) to the vertical bar mark too, explicitly
+excluded from histogram bins (a distribution has no single "leading" bin to
+single out). Reuses the existing `--blue` token (already used elsewhere for
+Clean's "reviewed" status chips) for the non-leading bars rather than
+inventing a new color, per instruction not to retint shared tokens casually
+and not to add a color without a reason tied to an existing, approved one.
+
+Both verified live end-to-end against the same disposable fixture: Join
+evidence now reads "left join / Many to one / Unique / 250 / 10" with the
+correct amber callout; the revenue-by-region chart now shows Bengaluru (the
+largest) in brass against the other three regions in blue. Screenshots:
+`evidence-20261114/sql-lab-join-evidence-synthesis.jpg`,
+`evidence-20261114/visualize-leading-bar-highlight.jpg`.
+
+Tests: `query-studio.test.tsx` gained
+`"synthesizes a human-readable relationship type and matched count..."` and
+`"omits the unmatched-rows callout entirely when a join's keys fully match"`
+(11 tests total, was 9); `visualize-workspace.test.tsx` gained
+`"highlights only the largest-value bar's own group, by value rather than
+array position, on both bar orientations"` and `"gives a histogram bin no
+leading-bar highlight..."` (15 tests total, was 13).
+
+## 8. What was not touched
 
 No change to Atlas orchestration, model bindings, promotion policy, cleaning
-semantics, or report correctness. No fabricated data, disabled-looking fake
-controls, or invented statistics — every number in every screenshot in this
-document came from a real query against the disposable fixture. No new
-dependency, framework, or abstraction was introduced; both fixes are narrow,
-in-place corrections to existing aggregation/quoting logic already present in
-`visualize.py` and `sql_lab_join_diagnostics.py`.
+semantics, or report correctness, in either round. No fabricated data,
+disabled-looking fake controls, or invented statistics — every number in
+every screenshot in this document came from a real query against the
+disposable fixture. No new dependency, framework, or abstraction was
+introduced. Round 1's two fixes were backend-only (`visualize.py`,
+`sql_lab_join_diagnostics.py`); round 2 added two narrow frontend
+presentation fixes (`query-studio.tsx`, `visualize-workspace.tsx`,
+`prism.css`) directly demonstrated by the reference comparison in §6, plus
+one more backend correctness fix (join-kind detection) found while verifying
+the first frontend fix live — none of the four are a new architecture or a
+global retint of shared tokens.
