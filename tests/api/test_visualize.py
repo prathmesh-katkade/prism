@@ -97,6 +97,129 @@ def test_render_caps_categories_and_warns_instead_of_silently_truncating() -> No
     assert response["warnings"]
 
 
+MISSING_DIMENSION_CSV = b"region,revenue\nNorth,10\nNorth,20\nSouth,30\n,40\n,50\n"
+
+
+def _missing_dimension_dataset(client: TestClient) -> str:
+    response = client.post("/api/v1/overview/datasets", files={"file": ("regional.csv", MISSING_DIMENSION_CSV, "text/csv")})
+    assert response.status_code == 201
+    return response.json()["dataset_id"]
+
+
+def test_render_keeps_rows_with_a_null_dimension_as_an_explicit_category_instead_of_dropping_them() -> None:
+    """Regression test: a LEFT JOIN result (or any source) can leave `dimension` null
+    on some rows (e.g. an unmatched join key). Those rows must stay visible under an
+    explicit placeholder category and the drop must be disclosed, not vanish from the
+    chart with no trace and no warning."""
+    client = TestClient(create_app())
+    dataset_id = _missing_dimension_dataset(client)
+    spec = {"mark": "bar", "intent": "comparison", "dimension": "region", "measure": "revenue", "aggregation": "sum", "max_categories": 20}
+    response = client.post(f"/api/v1/visualize/datasets/{dataset_id}/render", json=spec).json()
+    labels = {point["label"]: point["value"] for point in response["data"]}
+    assert labels == {"North": 30.0, "South": 30.0, "(missing region)": 90.0}
+    assert any("2 row(s) have no value for 'region'" in warning for warning in response["warnings"])
+
+
+def test_box_plot_also_keeps_a_null_dimension_group_instead_of_dropping_it() -> None:
+    client = TestClient(create_app())
+    dataset_id = _missing_dimension_dataset(client)
+    spec = {"mark": "box", "intent": "distribution", "dimension": "region", "measure": "revenue", "aggregation": "none", "max_categories": 20}
+    response = client.post(f"/api/v1/visualize/datasets/{dataset_id}/render", json=spec).json()
+    labels = {point["label"] for point in response["data"]}
+    assert "(missing region)" in labels
+    assert any("2 row(s) have no value for 'region'" in warning for warning in response["warnings"])
+
+
+def test_drilldown_resolves_the_missing_dimension_placeholder_back_to_its_real_null_rows() -> None:
+    client = TestClient(create_app())
+    dataset_id = _missing_dimension_dataset(client)
+    spec = {"mark": "bar", "intent": "comparison", "dimension": "region", "measure": "revenue", "aggregation": "sum", "max_categories": 20}
+    response = client.post(f"/api/v1/visualize/datasets/{dataset_id}/drilldown", json={"spec": spec, "dimension_value": "(missing region)"})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total_matching_rows"] == 2
+    assert all(row["region"] is None for row in body["rows"])
+    assert {row["revenue"] for row in body["rows"]} == {40, 50}
+
+
+def test_render_without_any_null_dimension_rows_never_mentions_the_placeholder() -> None:
+    """Confirms the fix is additive: a dataset with no nulls in `dimension` gets
+    no placeholder category and no spurious warning."""
+    client = TestClient(create_app())
+    dataset_id = _dataset(client)
+    spec = {"mark": "bar", "intent": "comparison", "dimension": "segment", "measure": "revenue", "aggregation": "sum", "max_categories": 20}
+    response = client.post(f"/api/v1/visualize/datasets/{dataset_id}/render", json=spec).json()
+    assert not any("missing" in warning for warning in response["warnings"])
+    assert not any(point["label"].startswith("(missing") for point in response["data"])
+
+
+COLLIDING_DIMENSION_CSV = (
+    b"region,revenue\nNorth,10\nNorth,20\nSouth,30\n"
+    b"(missing region),15\n(missing region),25\n,40\n,50\n"
+)
+
+
+def _colliding_dimension_dataset(client: TestClient) -> str:
+    response = client.post("/api/v1/overview/datasets", files={"file": ("regional.csv", COLLIDING_DIMENSION_CSV, "text/csv")})
+    assert response.status_code == 201
+    return response.json()["dataset_id"]
+
+
+def test_a_real_category_literally_named_like_the_placeholder_stays_distinct_from_actual_nulls() -> None:
+    """Regression test for identity conflation: if real data already contains the
+    literal string "(missing region)" as a genuine category (coincidence, or a
+    previous export of this same placeholder), the null-value placeholder must not
+    collide with it -- two different bars, two different totals, two different
+    sets of contributing rows."""
+    client = TestClient(create_app())
+    dataset_id = _colliding_dimension_dataset(client)
+    spec = {"mark": "bar", "intent": "comparison", "dimension": "region", "measure": "revenue", "aggregation": "sum", "max_categories": 20}
+    response = client.post(f"/api/v1/visualize/datasets/{dataset_id}/render", json=spec).json()
+    labels = {point["label"]: point["value"] for point in response["data"]}
+    assert labels == {"North": 30.0, "South": 30.0, "(missing region)": 40.0, "(missing region) [2]": 90.0}
+    assert any("2 row(s) have no value for 'region'" in warning and "(missing region) [2]" in warning for warning in response["warnings"])
+
+
+def test_drilldown_on_the_real_colliding_category_returns_its_own_rows_not_the_null_rows() -> None:
+    client = TestClient(create_app())
+    dataset_id = _colliding_dimension_dataset(client)
+    spec = {"mark": "bar", "intent": "comparison", "dimension": "region", "measure": "revenue", "aggregation": "sum", "max_categories": 20}
+    response = client.post(f"/api/v1/visualize/datasets/{dataset_id}/drilldown", json={"spec": spec, "dimension_value": "(missing region)"})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total_matching_rows"] == 2
+    assert all(row["region"] == "(missing region)" for row in body["rows"])
+    assert {row["revenue"] for row in body["rows"]} == {15, 25}
+
+
+def test_drilldown_on_the_disambiguated_placeholder_returns_the_real_null_rows() -> None:
+    client = TestClient(create_app())
+    dataset_id = _colliding_dimension_dataset(client)
+    spec = {"mark": "bar", "intent": "comparison", "dimension": "region", "measure": "revenue", "aggregation": "sum", "max_categories": 20}
+    response = client.post(f"/api/v1/visualize/datasets/{dataset_id}/drilldown", json={"spec": spec, "dimension_value": "(missing region) [2]"})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total_matching_rows"] == 2
+    assert all(row["region"] is None for row in body["rows"])
+    assert {row["revenue"] for row in body["rows"]} == {40, 50}
+
+
+FACET_WITH_MISSING_CSV = b"region,channel,revenue\nNorth,web,10\nNorth,store,20\nSouth,web,30\nSouth,,40\n"
+
+
+def test_small_multiples_give_rows_with_no_facet_value_their_own_panel() -> None:
+    client = TestClient(create_app())
+    response = client.post("/api/v1/overview/datasets", files={"file": ("f.csv", FACET_WITH_MISSING_CSV, "text/csv")})
+    assert response.status_code == 201
+    dataset_id = response.json()["dataset_id"]
+    spec = {"mark": "bar", "intent": "comparison", "dimension": "region", "measure": "revenue", "aggregation": "sum", "facet": "channel", "max_categories": 20}
+    result = client.post(f"/api/v1/visualize/datasets/{dataset_id}/render", json=spec).json()
+    facet_values = {facet["value"] for facet in result["facets"]}
+    assert facet_values == {"store", "web", "(missing channel)"}
+    missing_panel = next(facet for facet in result["facets"] if facet["value"] == "(missing channel)")
+    assert {point["label"]: point["value"] for point in missing_panel["data"]} == {"South": 40.0}
+
+
 def test_render_rejects_a_column_that_does_not_exist() -> None:
     client = TestClient(create_app())
     dataset_id = _dataset(client)

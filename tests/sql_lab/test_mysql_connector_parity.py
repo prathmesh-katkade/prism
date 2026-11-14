@@ -187,6 +187,30 @@ def test_mysql_connector_cancels_a_live_query(monkeypatch) -> None:  # type: ign
 
 
 @pytest.mark.skipif(not MYSQL_URL, reason="Phase 4 MySQL parity source is not configured")
+def test_mysql_connector_join_diagnostics_quote_identifiers_correctly(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """Regression test for join diagnostics issuing double-quoted identifiers
+    (`"sales"`) against a real MySQL connector: MySQL's default sql_mode treats
+    that as a string literal and the whole query fails with a syntax error, so
+    this only catches the bug against a genuine MySQL server, never DuckDB."""
+    assert MYSQL_URL is not None
+    monkeypatch.setenv("PRISM_PHASE4_MYSQL_URL", MYSQL_URL)
+    monkeypatch.setenv(
+        "PRISM_EXTERNAL_SQL_SOURCES_JSON",
+        '[{"id":"phase4","label":"Phase 4 MySQL","source_type":"mysql","url_env":"PRISM_PHASE4_MYSQL_URL"}]',
+    )
+    client = TestClient(create_app())
+    sql = "SELECT * FROM sales AS a JOIN sales AS b ON a.id = b.id"
+
+    response = client.post("/api/v1/sql-lab/joins/diagnose", json={"connection_id": "mysql:phase4", "sql": sql})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body["joins"]) == 1
+    assert body["joins"][0]["left"]["table"] == "sales"
+    assert body["joins"][0]["left"]["total_rows"] == 3
+
+
+@pytest.mark.skipif(not MYSQL_URL, reason="Phase 4 MySQL parity source is not configured")
 def test_mysql_connector_enforces_runtime_timeout(monkeypatch) -> None:  # type: ignore[no-untyped-def]
     assert MYSQL_URL is not None
     monkeypatch.setenv("PRISM_PHASE4_MYSQL_URL", MYSQL_URL)

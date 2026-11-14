@@ -214,6 +214,34 @@ describe("ChartCanvas", () => {
     expect(text).not.toMatch(/24000\.00|24,000\.00/); // not raw float formatting
   });
 
+  it("highlights only the largest-value bar's own group, by value rather than array position, on both bar orientations", () => {
+    // North is listed first but South has the larger value: an index-based
+    // "is-leading" check (the prior bug) would highlight North instead, which
+    // is a styling bug but also a silent misrepresentation of which category
+    // actually leads.
+    const data = [{ label: "North", value: 16000 }, { label: "South", value: 24000 }];
+    const barGroupClasses = (container: HTMLElement) =>
+      Array.from(container.querySelectorAll("rect"), (rect) => rect.parentElement?.getAttribute("class") ?? "");
+
+    const horizontal = render(<ChartCanvas mark="horizontal_bar" data={data} />);
+    const [northClassH, southClassH] = barGroupClasses(horizontal.container);
+    expect(southClassH).toContain("is-leading");
+    expect(northClassH).not.toContain("is-leading");
+    horizontal.unmount();
+
+    const vertical = render(<ChartCanvas mark="bar" data={data} />);
+    const [northClassV, southClassV] = barGroupClasses(vertical.container);
+    expect(southClassV).toContain("is-leading");
+    expect(northClassV).not.toContain("is-leading");
+  });
+
+  it("gives a histogram bin no leading-bar highlight even though bins are still bars", () => {
+    const data = [{ label: "0–10", value: 5, bin_start: 0, bin_end: 10 }, { label: "10–20", value: 9, bin_start: 10, bin_end: 20 }];
+    const { container } = render(<ChartCanvas mark="histogram" data={data} />);
+    const classes = Array.from(container.querySelectorAll("rect"), (rect) => rect.parentElement?.getAttribute("class") ?? "");
+    expect(classes.some((className) => className.includes("is-leading"))).toBe(false);
+  });
+
   it("anchors horizontal bars at an explicit axis start and clamps a value below it instead of going negative or vanishing", () => {
     const data = [{ label: "Above", value: 240 }, { label: "Below", value: 10 }];
     const { container } = render(<ChartCanvas mark="horizontal_bar" data={data} axisStart={100} />);
