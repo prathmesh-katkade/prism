@@ -98,6 +98,52 @@ Evidence for this round: `evidence-20261114/sql-lab-join-evidence-synthesis.jpg`
 against the same disposable MySQL fixture as round 1, after restarting the
 dev API with every fix in this round applied).
 
+**Final gate**: a draft PR (#19, not for merging) was opened solely to get
+CI running on this branch's own SHA, since CI here only triggers on
+`push: main` or `pull_request`. The first two runs each caught one real,
+unrelated-to-each-other regression this round's frontend changes introduced
+in pre-existing tests — both fixed, both re-verified, documented in
+`## Round 2, part 2` below. The run against the final SHA
+(`2120ead`, run `43588870396`) is **all 5 jobs green**:
+secret-scan/legacy-regression/phase-1-web/phase-1-python/phase-4-live-e2e,
+verified via `gh run view --json status,conclusion,jobs` after it reached
+`completed`, not inferred from an earlier or in-progress state.
+
+## Round 2, part 2: two CI-caught regressions, fixed
+
+Opening the draft PR to get real CI signal (rather than only local test
+runs) earned its keep immediately — it caught two things local runs alone
+had missed:
+
+1. **`atlas-sql-live.spec.ts`** asserted the Join evidence panel always
+   contains the literal text `"row(s) have no match"`. That was true under
+   the *old* unconditional summary sentence (rendered even at 0 unmatched on
+   both sides), but the new synthesis correctly hides the "unmatched rows
+   retained" callout when there's nothing unmatched to disclose — matching
+   the reference's own conditional banner, and the actual point of that
+   change. This specific test's join fully matches (3 of 3, already asserted
+   via Atlas's own evidence card earlier in the same test), so the assertion
+   was updated to check the synthesized summary that's always present
+   (`"Many to one"`, `"Unmatched data0"`) instead of text that's now
+   deliberately absent for a clean join. Verified locally against the
+   running dev stack before re-pushing: passes.
+
+2. While investigating, a **full-page screenshot snapshot test**
+   (`sql-lab-live.spec.ts`) also appeared to fail in a local run of the full
+   live-e2e suite — but this one was a false alarm, confirmed two ways: (a)
+   the actual CI run of the commit just before this fix (`a988d7a`) reported
+   `"1 failed, 23 passed"` — the snapshot test was already inside the 23 that
+   passed; (b) comparing the actual vs. expected screenshots directly showed
+   the real difference was an extra `MySQL` card in the "Connector
+   capabilities" section's "unavailable" list in the golden image, absent
+   from my local run — because *my own* dev API process (configured with a
+   disposable MySQL connector for this round's fixture testing) reports
+   MySQL as `ready`, not `unavailable`, shortening the page. Nothing to fix;
+   not re-touched.
+
+CI on the resulting final SHA (`2120ead`) is fully green — see the gate
+table above.
+
 ---
 
 Branch: `prism/sql-visualize-finish-v1`, based on `prism/clean-pattern-review-v1` @
