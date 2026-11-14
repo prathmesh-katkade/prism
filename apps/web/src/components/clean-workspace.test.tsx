@@ -221,6 +221,47 @@ describe("Clean workspace", () => {
     expect(within(steps[1] as HTMLElement).getByText("Review")).toBeInTheDocument();
   });
 
+  it("labels the single-step preview's projected health distinctly from the full draft recipe's, when the two legitimately differ", async () => {
+    // These represent genuinely different scopes - the health if only the
+    // selected step applied (92) versus the health across every enabled
+    // step in the draft recipe (93, since later steps recover more rows
+    // than this one alone would). Neither is stale; both must render with
+    // wording that says which scope they measure, not a bare "Projected
+    // health: N/100" that reads as a single, disagreeing number.
+    const stepAloneHealth = { ...health, total: 92 };
+    const fullRecipeHealth = { ...health, total: 93 };
+    const fetchMock = vi.fn(async (input: string | URL) => {
+      const path = String(input);
+      if (path.endsWith("/state")) return json({ dataset: dataset0, issues: [], history: [], health: stepAloneHealth });
+      if (path.includes("/rows")) return json(rowsPage);
+      if (path.includes("/profile")) return json({ columns: [{ name: "region", semantic_type: "text" }] });
+      if (path.includes("/recipes")) return json([]);
+      if (path.includes("/recipe-draft/preview")) return json({ source_revision: 0, source_fingerprint: dataset0.source_fingerprint, review_token: "draft_1", before_sample: [], after_sample: [], step_impacts: [3], projected_health: fullRecipeHealth });
+      if (path.endsWith("/preview")) return json({ operation: "trim_whitespace", review_token: "review_region", source_revision: 0, affected_rows: 3, changed_rows_total: 3, exception_rows_total: 0, affected_columns: ["region"], before_sample: [], after_sample: [], warnings: [], projected_health: stepAloneHealth });
+      return json({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<CleanWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText(/Rows 1–5 of 5/)).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "+ Add step" }));
+    fireEvent.change(screen.getByLabelText("Operation"), { target: { value: "trim_whitespace" } });
+    fireEvent.change(screen.getByLabelText("Column"), { target: { value: "region" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add step to draft" }));
+    await waitFor(() => expect(screen.getByText(/Projected health across the full draft recipe: 93\/100/)).toBeInTheDocument());
+
+    // Re-select the step itself to load its own single-step preview into
+    // the centre panel (the "REVIEW" state), the one place "for this step
+    // alone" renders.
+    fireEvent.click(screen.getByRole("button", { name: /trim whitespace/i }));
+    await waitFor(() => expect(screen.getByText(/Projected health for this step alone/)).toBeInTheDocument());
+    expect(screen.getByText(/Projected health for this step alone/).parentElement?.textContent).toContain("92/100");
+    // Both numbers remain visible together, each with its own scope label,
+    // rather than the full-recipe text disappearing once the single-step
+    // preview is shown.
+    expect(screen.getByText(/Projected health across the full draft recipe: 93\/100/)).toBeInTheDocument();
+  });
+
   it("survives a real restart: a finished Atlas turn reappears after remounting, and one still pending when the app closed comes back marked interrupted, not falsely still loading", async () => {
     let resolveSecond: ((value: Response) => void) | null = null;
     const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {

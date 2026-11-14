@@ -396,4 +396,49 @@ def test_model_timeout_retains_manual_path(monkeypatch: MonkeyPatch) -> None:
     dataset_id = _source(client)
     result = client.post("/api/v1/workspace-proposals", json={"kind": "sql", "dataset_id": dataset_id, "intent": "Count rows"})
     assert result.status_code == 200
-    assert result.json()["provider"] == "unavailable"
+    body = result.json()
+    assert body["provider"] == "unavailable"
+    # A timeout is a distinct cause from a rejected response - "did not
+    # respond" is an accurate next action (retry/allow more time), not
+    # "the response could not be used safely" (which reads as if a response
+    # existed and was inspected). The attempted model must still be named.
+    assert "did not respond within" in body["explanation"]
+    assert "PRISM_OLLAMA_TIMEOUT_SECONDS" in body["explanation"]
+    assert body["model"] == "test-local-model"
+
+
+def test_model_connection_failure_is_distinct_from_a_timeout_or_a_rejected_response(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setenv("PRISM_AI_PROVIDER", "ollama")
+
+    def unreachable(*_args: object, **_kwargs: object) -> httpx.Response:
+        raise httpx.ConnectError("Connection refused")
+
+    _mock_ollama(monkeypatch, unreachable)
+    client = TestClient(create_app())
+    dataset_id = _source(client)
+    result = client.post("/api/v1/workspace-proposals", json={"kind": "sql", "dataset_id": dataset_id, "intent": "Count rows"})
+    assert result.status_code == 200
+    body = result.json()
+    assert body["provider"] == "unavailable"
+    # "Start Ollama" is the accurate next action when nothing ever answered
+    # at all - distinct from a timeout (something was running, just slow)
+    # and from a rejected response (something answered, but unsafely).
+    assert "Start Ollama" in body["explanation"]
+    assert "did not respond within" not in body["explanation"]
+    assert "could not be used safely" not in body["explanation"]
+    # No model was ever confirmed to exist or run - nothing specific to name.
+    assert body["model"] is None
+
+
+def test_model_rejected_response_is_distinct_from_a_timeout_and_names_the_model(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setenv("PRISM_AI_PROVIDER", "ollama")
+    _mock_ollama(monkeypatch, lambda *_a, **_k: httpx.Response(200, content=b"not json", request=httpx.Request("POST", "http://127.0.0.1:11434/api/generate")))
+    client = TestClient(create_app())
+    dataset_id = _source(client)
+    result = client.post("/api/v1/workspace-proposals", json={"kind": "sql", "dataset_id": dataset_id, "intent": "Count rows"})
+    assert result.status_code == 200
+    body = result.json()
+    assert body["provider"] == "unavailable"
+    assert "could not be used safely" in body["explanation"]
+    assert "did not respond within" not in body["explanation"]
+    assert body["model"] == "test-local-model"

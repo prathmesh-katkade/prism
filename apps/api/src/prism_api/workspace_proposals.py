@@ -13,6 +13,7 @@ import json
 import logging
 import os
 import re
+from typing import cast
 
 import httpx
 import sqlglot
@@ -95,8 +96,13 @@ def _choose_installed_model(names: list[str]) -> str | None:
     return names[0]
 
 
-def _unavailable(request: WorkspaceProposalRequest, reason: str, evidence: list[str]) -> WorkspaceProposalResponse:
-    return WorkspaceProposalResponse(kind=request.kind, provider="unavailable", explanation=reason, evidence=evidence)
+def _unavailable(request: WorkspaceProposalRequest, reason: str, evidence: list[str], model: str | None = None) -> WorkspaceProposalResponse:
+    """`model` is the model that was actually attempted, when one was - e.g.
+    a timeout or a rejected response still identifies which real model ran,
+    rather than leaving every failure cause looking identical. Left `None`
+    only when no specific model was ever resolved (provider not configured,
+    or no model is installed at all)."""
+    return WorkspaceProposalResponse(kind=request.kind, provider="unavailable", explanation=reason, evidence=evidence, model=model)
 
 
 def _clarification_for(operation: CleanTransformationRequest, preview: CleanPreviewResponse) -> WorkspaceProposalClarification | None:
@@ -224,7 +230,7 @@ async def propose(request: WorkspaceProposalRequest, http_request: Request) -> W
                     generate_task.cancel()
                     with contextlib.suppress(asyncio.CancelledError, httpx.HTTPError):
                         await generate_task
-                    return _unavailable(request, "The analyst disconnected before the model responded.", evidence)
+                    return _unavailable(request, "The analyst disconnected before the model responded.", evidence, model=cast(str, payload["model"]))
                 await asyncio.sleep(0.05)
             response = await generate_task
         response.raise_for_status()
@@ -238,7 +244,7 @@ async def propose(request: WorkspaceProposalRequest, http_request: Request) -> W
         if any(column.missing_pct > 0 for column in profile.columns) and re.search(
             r"\b(?:no|zero)\s+missing\s+(?:values|data|cells)\b", explanation, re.IGNORECASE
         ):
-            return _unavailable(request, "The local model contradicted the source profile. Inspect the source evidence or retry.", evidence)
+            return _unavailable(request, "The local model contradicted the source profile. Inspect the source evidence or retry.", evidence, model=cast(str, payload["model"]))
         # The model call above can take seconds; a mutation applied while it was
         # "thinking" would otherwise go undetected by the single pre-call check
         # above, since the evidence shown to the model and returned to the
@@ -304,8 +310,24 @@ async def propose(request: WorkspaceProposalRequest, http_request: Request) -> W
     except httpx.HTTPStatusError as error:
         logger.warning("local_model_http_failure status=%s", error.response.status_code)
         if error.response.status_code == 404:
-            return _unavailable(request, "The selected local model is not installed in Ollama. Choose an installed model or use manual controls.", evidence)
-        return _unavailable(request, "The local model service could not complete this request. Retry or use manual controls.", evidence)
+            return _unavailable(request, f"The configured model ({payload['model']}) is not installed in Ollama. Choose an installed model or use manual controls.", evidence, model=cast(str, payload["model"]))
+        return _unavailable(request, "The local model service could not complete this request. Retry or use manual controls.", evidence, model=cast(str, payload["model"]))
+    except httpx.ConnectError:
+        logger.warning("local_model_unreachable")
+        # Distinct from a model that answered and was then rejected: nothing
+        # ran here at all, so "retry" is not an accurate next action - the
+        # service itself needs to be started first.
+        return _unavailable(request, "Could not reach the local Ollama service. Start Ollama, then retry, or use manual controls.", evidence)
+    except httpx.TimeoutException:
+        attempted_model = cast(str, payload["model"]) or None
+        logger.warning("local_model_timeout model=%s timeout_s=%s", attempted_model or "auto-discovery", timeout)
+        # Distinct from a response that was rejected by the evidence-
+        # contradiction guard or schema validation below: the model never
+        # answered in time (or Ollama itself never listed its installed
+        # models in time), so retrying or allowing more time is the
+        # accurate next action, not "inspect the response."
+        attempted = f"The local model ({attempted_model})" if attempted_model else "Ollama"
+        return _unavailable(request, f"{attempted} did not respond within {timeout:.0f}s. Retry, allow more time (PRISM_OLLAMA_TIMEOUT_SECONDS), or use manual controls.", evidence, model=attempted_model)
     except (httpx.HTTPError, ValueError, KeyError, TypeError, json.JSONDecodeError, ValidationError) as error:
         logger.warning("local_model_proposal_unusable reason=%s", type(error).__name__)
-        return _unavailable(request, "The local model response could not be used safely. Retry or use manual controls.", evidence)
+        return _unavailable(request, f"The local model ({payload['model']})'s response could not be used safely. Retry or use manual controls.", evidence, model=cast(str, payload["model"]))

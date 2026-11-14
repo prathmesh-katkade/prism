@@ -62,6 +62,27 @@ describe("Atlas Clean clarification", () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
   });
 
+  it("names the attempted model in an unavailable response, when the backend identifies one, instead of a bare generic message", async () => {
+    const timedOut = { kind: "clean", provider: "unavailable", model: "qwen2.5:7b-instruct",
+      explanation: "The local model (qwen2.5:7b-instruct) did not respond within 10s. Retry, allow more time (PRISM_OLLAMA_TIMEOUT_SECONDS), or use manual controls.", evidence: [] };
+    window.localStorage.clear();
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(timedOut), { status: 200 })));
+    render(panel());
+    fireEvent.click(screen.getByRole("button", { name: "What should I review first?" }));
+    await waitFor(() => expect(screen.getByText(timedOut.explanation)).toBeInTheDocument());
+    expect(screen.getByText("Local model unavailable (qwen2.5:7b-instruct)")).toBeInTheDocument();
+  });
+
+  it("falls back to a bare unavailable message when no specific model was ever identified", async () => {
+    const notConfigured = { kind: "clean", provider: "unavailable", explanation: "Local model proposals are unavailable; use the manual workspace controls.", evidence: [] };
+    window.localStorage.clear();
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(notConfigured), { status: 200 })));
+    render(panel());
+    fireEvent.click(screen.getByRole("button", { name: "What should I review first?" }));
+    await waitFor(() => expect(screen.getByText(notConfigured.explanation)).toBeInTheDocument());
+    expect(screen.getByText("Local model unavailable")).toBeInTheDocument();
+  });
+
   it("re-previews a typed date choice before review, without applying anything", async () => {
     const onReview = vi.fn();
     const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {

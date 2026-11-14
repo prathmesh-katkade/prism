@@ -3,7 +3,43 @@
 One durable file, updated at every checkpoint rather than left to scatter
 across phase docs. Read this first in any new session.
 
-## Current continuation — 2026-11-13 (round 2)
+## Current continuation — 2026-11-14
+
+Closed the four remaining issues from round 2's own close-out. Full detail
+in [`acceptance-20261114.md`](acceptance-20261114.md) - most worth knowing:
+
+1. **The 93-vs-92 health numbers in round 2's own evidence screenshot were
+   both correct** - one is the full draft recipe's projected health, the
+   other is the selected step's own isolated projection. Fixed by labelling
+   each scope in the text ("...across the full draft recipe" /
+   "...for this step alone"), not by changing either computed value.
+2. **"Local model unavailable" now distinguishes connection failure from
+   timeout from a rejected response**, each with an accurate next action
+   and (when known) the attempted model's name - previously a single
+   broad `except` collapsed all three into one generic message. The
+   `PRISM_OLLAMA_MODEL` empty-default itself was named but deliberately
+   NOT changed (a model-binding default, not this round's call to make).
+   Real, isolated testing found the DEFAULT auto-discovered model
+   (`qwen2.5:3b`) genuinely succeeds sometimes and is genuinely
+   contradiction-rejected other times on the same fixture, depending on
+   the question asked - reported exactly as observed.
+3. **The 23-failed live-e2e run from round 2 is now explained with log
+   evidence, not a restated hypothesis**: every one of the 21 failures
+   that captured a page snapshot shows the sidecar completely unreachable
+   ("Failed to fetch" / "STATUS UNKNOWN" on every endpoint) - a resource
+   problem from round 2's own concurrent testing, not a regression. A
+   clean, controlled re-run (nothing else running) passed 24/5, matching
+   CI exactly.
+4. **Final native evidence rebuilt and captured through the same real
+   native-interactive method** (including a sidecar binary rebuild, since
+   the backend changed this round and the desktop bundles it as a
+   PyInstaller `externalBin`, not run from source) - see
+   `evidence/milestone-20261114/` for the full four-step recipe, the
+   Atlas dock's real observed result, and the plan-review screen with the
+   ambiguous step genuinely excluded, all at reference size with both
+   health-scope labels now resolved.
+
+## Historical continuation — 2026-11-13 (round 2)
 
 Picked up the same day's round-1 work (below) with real native-interactive
 evidence instead of a landing-screen-only capture, a traced root cause for

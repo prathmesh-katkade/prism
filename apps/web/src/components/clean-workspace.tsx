@@ -985,7 +985,7 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
         </li> : null}
       </ol>
       {!clean.history.length && !draftSteps.length && !recipePreview && !(preview && pendingRequest) ? <p className="quiet-note">No steps yet. Select an issue, or start a manual operation below, to build this dataset's recipe.</p> : null}
-      {draftError ? <p role="alert" className="query-error">{draftError}</p> : draftSteps.length ? <p className="quiet-note clean-recipe-note">{draftPreview ? `Downstream preview recomputed from revision ${draftPreview.source_revision}. Projected health ${draftPreview.projected_health.total}/100. ` : ""}Disable a step to preview downstream changes without removing it.</p> : null}
+      {draftError ? <p role="alert" className="query-error">{draftError}</p> : draftSteps.length ? <p className="quiet-note clean-recipe-note">{draftPreview ? `Downstream preview recomputed from revision ${draftPreview.source_revision}. Projected health across the full draft recipe: ${draftPreview.projected_health.total}/100. ` : ""}Disable a step to preview downstream changes without removing it.</p> : null}
 
       <div className="clean-recipe-actions">
         <button className={manualMode ? "is-selected" : "secondary"} onClick={startManualOperation}>+ Add step</button>
@@ -1107,7 +1107,7 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
         {reviewView === "before" ? <><p className="quiet-note">Source revision {preview.source_revision ?? clean.dataset.revision} · fingerprint {(preview.source_fingerprint ?? clean.dataset.source_fingerprint).slice(0, 12)}… · first {preview.before_sample.length} row(s)</p><SampleTable rows={preview.before_sample} /></> : null}
         {reviewView === "after" ? <><p className="quiet-note">Projected result only. Nothing has been applied. First {preview.after_sample.length} row(s).</p><SampleTable rows={preview.after_sample} /></> : null}
         {reviewView === "changes" ? <>
-          <p className="clean-preview-summary">{preview.operation.replaceAll("_", " ")} affects <strong>{(preview.changed_rows_total ?? preview.affected_rows).toLocaleString()}</strong> row(s){(preview.affected_columns ?? []).length ? ` in ${(preview.affected_columns ?? []).join(", ")}` : ""}. Projected health <strong>{preview.projected_health.total}/100</strong> (currently {clean.health.total}/100).</p>
+          <p className="clean-preview-summary">{preview.operation.replaceAll("_", " ")} affects <strong>{(preview.changed_rows_total ?? preview.affected_rows).toLocaleString()}</strong> row(s){(preview.affected_columns ?? []).length ? ` in ${(preview.affected_columns ?? []).join(", ")}` : ""}. Projected health for this step alone <strong>{preview.projected_health.total}/100</strong> (currently {clean.health.total}/100).</p>
           <div className="clean-impact-summary"><div><strong>{(preview.changed_rows_total ?? preview.affected_rows).toLocaleString()}</strong><span>affected rows</span></div><div><strong>{Object.keys(pendingRequest?.category_mapping ?? {}).length.toLocaleString()}</strong><span>mapped labels</span></div><div><strong>{(preview.exception_rows_total ?? 0).toLocaleString()}</strong><span>{preview.operation === "category_mapping" && pendingRequest?.preserve_unmatched !== false ? "unmatched rows" : "exceptions"}</span></div></div>
           {preview.operation === "category_mapping" && pendingRequest ? renderMappingTable(columnValues?.values ?? Object.keys(pendingRequest.category_mapping ?? {}).map((value) => ({ value })), true) : null}
           {(preview.warnings ?? []).length ? <ul className="clean-warnings">{(preview.warnings ?? []).map((warning) => <li key={warning}>{warning}</li>)}</ul> : null}
@@ -1120,7 +1120,7 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
           }) : <p>No saved validation rules. Add one in the recipe pane and run it against the current dataset.</p>}</div> : null}
         </> : null}
       </> : recipePreview ? <>
-        <p className="clean-preview-summary">Recipe version {recipePreview.recipe_version} reviewed against revision {recipePreview.source_revision}. Projected health: <strong>{recipePreview.projected_health.total}/100</strong>.</p>
+        <p className="clean-preview-summary">Recipe version {recipePreview.recipe_version} reviewed against revision {recipePreview.source_revision}. Projected health across this recipe's included steps: <strong>{recipePreview.projected_health.total}/100</strong>.</p>
         <div className="clean-diff"><div><span className="eyebrow">BEFORE</span><SampleTable rows={recipePreview.before_sample} /></div><div><span className="eyebrow">AFTER</span><SampleTable rows={recipePreview.after_sample} /></div></div>
         <p className="quiet-note">No dataset changes until Apply reviewed recipe.</p>
       </> : manualMode && manualOperation === "category_mapping" ? <div className="clean-centre-editor">
@@ -1134,7 +1134,7 @@ export function CleanWorkspace({ datasetId, onSelectContext, onOpenWorkflow }: {
         <p className="quiet-note">Group rows that share the same value in every selected column; keep one row per group, chosen by the survivorship rule on the right.</p>
         <ul className="clean-value-list">{(profile?.columns ?? []).map((column) => <li key={column.name}><label><input type="checkbox" checked={survivorshipColumns.has(column.name)} onChange={() => toggleSurvivorshipColumn(column.name)} /> <span>{column.name}</span> <small>{column.semantic_type}</small></label></li>)}</ul>
       </div> : draftPreview ? <>
-        <p className="clean-preview-summary">Draft recipe recalculated against revision {draftPreview.source_revision}. Projected health: <strong>{draftPreview.projected_health.total}/100</strong>. Save the recipe and preview its version before Apply.</p>
+        <p className="clean-preview-summary">Draft recipe recalculated against revision {draftPreview.source_revision}. Projected health across the full draft recipe: <strong>{draftPreview.projected_health.total}/100</strong>. Save the recipe and preview its version before Apply.</p>
         <div className="clean-diff"><div><span className="eyebrow">BEFORE</span><SampleTable rows={draftPreview.before_sample} /></div><div><span className="eyebrow">AFTER</span><SampleTable rows={draftPreview.after_sample} /></div></div>
       </> : selectedFinding ? <>
         <p className="clean-preview-summary">
