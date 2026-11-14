@@ -98,14 +98,22 @@ def _run_diagnostic_sql(target: ConnectionTarget, sql: str) -> tuple[pd.DataFram
     return None, "The SQL connector is unavailable."
 
 
-def _quote(identifier: str) -> str:
+# MySQL rejects double-quoted identifiers unless the non-default ANSI_QUOTES
+# sql_mode is enabled (it treats `"x"` as a string literal and errors on the
+# surrounding SQL instead); every other dialect here accepts standard
+# double-quote identifier quoting. Without this, every join-diagnostic query
+# against a real MySQL connector fails outright.
+def _quote(identifier: str, dialect: SqlDialect) -> str:
+    if dialect == SqlDialect.MYSQL:
+        return "`" + identifier.replace("`", "``") + "`"
     return '"' + identifier.replace('"', '""') + '"'
 
 
 def _cardinality(target: ConnectionTarget, table: str, column: str) -> JoinKeyCardinality:
+    dialect = target.connection.dialect
     sql = (
-        f"SELECT COUNT(*) AS total_rows, COUNT(DISTINCT {_quote(column)}) AS distinct_keys, "
-        f"SUM(CASE WHEN {_quote(column)} IS NULL THEN 1 ELSE 0 END) AS null_keys FROM {_quote(table)}"
+        f"SELECT COUNT(*) AS total_rows, COUNT(DISTINCT {_quote(column, dialect)}) AS distinct_keys, "
+        f"SUM(CASE WHEN {_quote(column, dialect)} IS NULL THEN 1 ELSE 0 END) AS null_keys FROM {_quote(table, dialect)}"
     )
     result, error = _run_diagnostic_sql(target, sql)
     if error is not None or result is None or result.empty:
@@ -119,9 +127,10 @@ def _cardinality(target: ConnectionTarget, table: str, column: str) -> JoinKeyCa
 
 
 def _unmatched_count(target: ConnectionTarget, from_table: str, from_column: str, against_table: str, against_column: str) -> int:
+    dialect = target.connection.dialect
     sql = (
-        f"SELECT COUNT(*) AS unmatched FROM {_quote(from_table)} WHERE {_quote(from_column)} IS NOT NULL "
-        f"AND {_quote(from_column)} NOT IN (SELECT {_quote(against_column)} FROM {_quote(against_table)} WHERE {_quote(against_column)} IS NOT NULL)"
+        f"SELECT COUNT(*) AS unmatched FROM {_quote(from_table, dialect)} WHERE {_quote(from_column, dialect)} IS NOT NULL "
+        f"AND {_quote(from_column, dialect)} NOT IN (SELECT {_quote(against_column, dialect)} FROM {_quote(against_table, dialect)} WHERE {_quote(against_column, dialect)} IS NOT NULL)"
     )
     result, error = _run_diagnostic_sql(target, sql)
     if error is not None or result is None or result.empty:

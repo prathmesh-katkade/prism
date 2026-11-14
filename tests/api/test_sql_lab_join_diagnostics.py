@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 from prism_api.main import create_app
+from prism_api.sql_lab_join_diagnostics import _quote
+from prism_api_contracts import SqlDialect
 
 ORDERS_CSV = b"order_id,customer_id,amount\n1,c1,10\n2,c1,20\n3,c2,30\n4,c3,40\n"
 CUSTOMERS_CSV = b"customer_id,name\nc1,Alpha\nc1,Alpha Duplicate\nc2,Beta\nc4,Delta\n"
@@ -74,6 +76,26 @@ def test_diagnose_joins_rejects_an_unknown_connection() -> None:
     client = TestClient(create_app())
     response = client.post("/api/v1/sql-lab/joins/diagnose", json={"connection_id": "local:does_not_exist", "sql": "SELECT 1"})
     assert response.status_code == 404
+
+
+def test_quote_uses_backticks_for_mysql_and_double_quotes_for_every_other_dialect() -> None:
+    """MySQL rejects double-quoted identifiers unless the non-default ANSI_QUOTES
+    sql_mode is enabled -- it parses `"x"` as a string literal and raises a syntax
+    error on the SQL around it. Every other connected dialect here (DuckDB,
+    PostgreSQL, SQL Server with its default QUOTED_IDENTIFIER setting, SQLite)
+    accepts standard double-quote identifier quoting, so only MySQL needs its own
+    branch. Regression test for join diagnostics failing outright against every
+    real MySQL connection (caught via a live MySQL connector, not local DuckDB)."""
+    assert _quote("customer_id", SqlDialect.MYSQL) == "`customer_id`"
+    assert _quote("customer_id", SqlDialect.DUCKDB) == '"customer_id"'
+    assert _quote("customer_id", SqlDialect.POSTGRESQL) == '"customer_id"'
+    assert _quote("customer_id", SqlDialect.SQLSERVER) == '"customer_id"'
+    assert _quote("customer_id", SqlDialect.SQLITE) == '"customer_id"'
+
+
+def test_quote_escapes_an_embedded_quote_character_per_dialect() -> None:
+    assert _quote("weird`col", SqlDialect.MYSQL) == "`weird``col`"
+    assert _quote('weird"col', SqlDialect.DUCKDB) == '"weird""col"'
 
 
 def test_diagnose_joins_on_a_single_table_query_with_a_self_join() -> None:

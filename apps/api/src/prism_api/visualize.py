@@ -140,6 +140,10 @@ def suggest(dataset_id: str, intent: VizIntent | None = None, dimension: str | N
     return VisualizationSuggestion(spec=spec, rationale=rationale, alternatives=alternatives)
 
 
+def _missing_dimension_label(column: str) -> str:
+    return f"(missing {column})"
+
+
 def _aggregate(frame: pd.DataFrame, spec: VisualizationSpec) -> tuple[list[VisualizationDatum], bool, list[str]]:
     warnings: list[str] = []
     frame = _filtered_frame(frame, spec)
@@ -156,6 +160,8 @@ def _aggregate(frame: pd.DataFrame, spec: VisualizationSpec) -> tuple[list[Visua
         data = [VisualizationDatum(label=f"{interval.left:.2f}–{interval.right:.2f}", value=float(count), bin_start=float(interval.left), bin_end=float(interval.right)) for interval, count in table.items()]
         return data, False, warnings
     dimension = _require_column(frame, spec.dimension, "dimension")
+    missing_dimension_placeholder = _missing_dimension_label(dimension)
+    missing_dimension_count = int(frame[dimension].isna().sum())
     if spec.mark is VizMark.SCATTER:
         measure = _require_column(frame, spec.measure, "measure")
         if measure == dimension:
@@ -174,19 +180,26 @@ def _aggregate(frame: pd.DataFrame, spec: VisualizationSpec) -> tuple[list[Visua
     if spec.mark is VizMark.BOX:
         measure = _require_column(frame, spec.measure, "measure")
         numeric = pd.to_numeric(frame[measure], errors="coerce")
-        working = frame.assign(**{measure: numeric}).dropna(subset=[measure, dimension])
+        # Only `measure` nulls are dropped here -- a null `dimension` is kept and
+        # grouped under `missing_dimension_placeholder` below (dropna=False) rather
+        # than silently discarding those rows' evidence, matching the bar/line path.
+        working = frame.assign(**{measure: numeric}).dropna(subset=[measure])
         if working.empty:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"No numeric {measure!r} values are available to summarize per {dimension!r} group.")
+        missing_in_working = int(working[dimension].isna().sum())
+        if missing_in_working:
+            warnings.append(f"{missing_in_working} row(s) have no value for {dimension!r}; shown as {missing_dimension_placeholder!r} rather than being dropped.")
         boxes: list[tuple[str, float, BoxStats]] = []
-        for key, values in working.groupby(dimension, dropna=True)[measure]:
+        for key, values in working.groupby(dimension, dropna=False)[measure]:
             if values.empty:
                 continue
+            label = missing_dimension_placeholder if pd.isna(key) else str(key)
             q1, q2, q3 = (float(value) for value in values.quantile([0.25, 0.5, 0.75]))
             iqr = q3 - q1
             lower_fence, upper_fence = q1 - 1.5 * iqr, q3 + 1.5 * iqr
             within = values[(values >= lower_fence) & (values <= upper_fence)]
             outliers = sorted(float(value) for value in values[(values < lower_fence) | (values > upper_fence)])
-            boxes.append((str(key), q2, BoxStats(
+            boxes.append((label, q2, BoxStats(
                 q1=q1, median=q2, q3=q3,
                 whisker_low=float(within.min()) if not within.empty else q1,
                 whisker_high=float(within.max()) if not within.empty else q3,
@@ -204,7 +217,12 @@ def _aggregate(frame: pd.DataFrame, spec: VisualizationSpec) -> tuple[list[Visua
         by_label = {label: (label, median, box) for label, median, box in boxes}
         boxes = [by_label[label] for label in order]
         return [VisualizationDatum(label=label, value=median, box=box) for label, median, box in boxes], truncated, warnings
-    grouped = frame.groupby(dimension, dropna=True)
+    # dropna=False: a row whose dimension is null (e.g. an upstream LEFT JOIN
+    # left it unmatched) stays visible under `missing_dimension_placeholder`
+    # instead of being dropped from the chart with no trace -- the same
+    # honesty standard this module already applies to axis-start truncation
+    # and category-overload warnings elsewhere in this function.
+    grouped = frame.groupby(dimension, dropna=False)
     if spec.aggregation is VizAggregation.NONE and spec.measure is not None:
         raise HTTPException(status_code=422, detail="Grouped bar and line charts need count, sum, mean, or median aggregation.")
     if spec.aggregation is VizAggregation.COUNT or spec.measure is None:
@@ -212,7 +230,15 @@ def _aggregate(frame: pd.DataFrame, spec: VisualizationSpec) -> tuple[list[Visua
     else:
         measure = _require_column(frame, spec.measure, "measure")
         numeric = pd.to_numeric(frame[measure], errors="coerce")
-        series = getattr(frame.assign(**{measure: numeric}).groupby(dimension, dropna=True)[measure], spec.aggregation.value)()
+        series = getattr(frame.assign(**{measure: numeric}).groupby(dimension, dropna=False)[measure], spec.aggregation.value)()
+    if missing_dimension_count:
+        # Coerce the whole index to str (not just the missing entry) so a mixed
+        # native-dtype + placeholder-string index never reaches the sort_index()
+        # calls below (sort_index/_sorted_series run unconditionally for every
+        # non-histogram mark) -- comparing e.g. a Timestamp to a str there would
+        # raise, not just sort oddly.
+        series.index = [missing_dimension_placeholder if pd.isna(key) else str(key) for key in series.index]
+        warnings.append(f"{missing_dimension_count} row(s) have no value for {dimension!r}; shown as {missing_dimension_placeholder!r} rather than being dropped.")
     if spec.mark is VizMark.LINE:
         # A trend reads left-to-right in the dimension's own order (chronological for
         # a datetime axis); sorting by value instead -- as the ranking branch below
@@ -331,7 +357,13 @@ def drill_down(dataset_id: str, request: ChartDrillDownRequest) -> ChartDrillDow
         dimension = _require_column(frame, spec.dimension, "dimension")
         if request.dimension_value is None:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="dimension_value is required to drill into this mark.")
-        mask = frame[dimension].astype(str) == request.dimension_value
+        # A row charted under `_missing_dimension_label` has a real null in `dimension`,
+        # not the literal placeholder text -- .astype(str) would turn it into "nan" and
+        # never match, silently returning zero contributing rows for that bar/box.
+        if request.dimension_value == _missing_dimension_label(dimension):
+            mask = frame[dimension].isna()
+        else:
+            mask = frame[dimension].astype(str) == request.dimension_value
         filters_applied = {**spec.filters, dimension: request.dimension_value}
     matching = frame.loc[mask]
     total = len(matching)
