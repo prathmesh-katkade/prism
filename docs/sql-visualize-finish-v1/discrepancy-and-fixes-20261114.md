@@ -172,7 +172,44 @@ screens — changing a shared design token is a separate, deliberate design
 decision for the owner to make, not an implicit side effect of finishing these
 two screens. Named here rather than silently left alone or silently changed.
 
-## 5. What was not touched
+## 5. Native desktop verification — rebuilt successfully; live functional proof blocked
+
+The sidecar was rebuilt from this branch (`apps/api/build_sidecar.py`, PyInstaller
+`--onefile`, 212 MB, `x86_64-pc-windows-msvc`) and the Tauri desktop app was rebuilt
+from source against it (`npx tauri build`; the Rust compile and both bundles — MSI
+and NSIS — completed successfully; a later, unrelated updater-signing step then
+failed for lack of a `TAURI_SIGNING_PRIVATE_KEY`, which does not affect
+`target/release/app.exe` itself). This confirms both fixes compile and package
+cleanly into the real desktop binary.
+
+Launching that rebuilt `app.exe` to prove the fixes live in the native app is
+**blocked by a specific, already-encountered external constraint**: the desktop
+sidecar always binds `127.0.0.1:8000` (`sidecar.rs`'s `SIDECAR_ADDR` constant; no
+port override exists), and that port is already held by a `prism-api.exe` left
+running from earlier in this same long session (PID 16988) — a known, documented
+class of issue in this codebase's own `sidecar.rs` (PyInstaller's onefile
+bootloader can be reaped on Windows while its real child process, which is what's
+actually listening, survives as an orphan; see the long comment above `pub fn
+kill()` there). Freeing that port means terminating that specific process, which
+the harness's own safety classifier explicitly denied earlier this session with a
+binding instruction not to pursue the same outcome through any other mechanism or
+later turn — so launching the rebuilt app now would silently talk to that stale,
+pre-fix sidecar (serving its own unrelated leftover dataset) instead of proving
+anything about this round's changes, and was not a safe substitute for a real test.
+Confirmed and then cleaned up (stopped the newly-launched `app.exe`/sidecar pair
+this attempt spawned, since they weren't exercising the fix).
+
+**This is the specific external blocker Phase 3 ends on.** Everything else in this
+document stands as real, live-verified evidence of both fixes — the pytest suites
+(including a live-MySQL test actually executed, not skipped), `mypy`/`ruff`, and
+the full end-to-end browser-dev-server run against the real disposable MySQL
+fixture (§2–§3's screenshots) — none of that depends on the native desktop binary.
+To complete native verification, the owner can restart the machine (clearing the
+orphaned process) or explicitly authorize terminating PID 16988, then re-run
+`target/release/app.exe` from this worktree with the three env vars in
+`.prism/viz-finish-20261114/launch-native.ps1` set.
+
+## 6. What was not touched
 
 No change to Atlas orchestration, model bindings, promotion policy, cleaning
 semantics, or report correctness. No fabricated data, disabled-looking fake
