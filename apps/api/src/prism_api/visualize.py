@@ -140,8 +140,28 @@ def suggest(dataset_id: str, intent: VizIntent | None = None, dimension: str | N
     return VisualizationSuggestion(spec=spec, rationale=rationale, alternatives=alternatives)
 
 
-def _missing_dimension_label(column: str) -> str:
-    return f"(missing {column})"
+def _missing_dimension_label(frame: pd.DataFrame, column: str) -> str:
+    """A display label standing in for a null `column` value, guaranteed distinct
+    from every real (non-null) value already present in `frame[column]`.
+
+    Without this guarantee, a dataset whose real data happens to contain the
+    literal string "(missing <column>)" (coincidence, or a previous export of
+    this same placeholder) would collide with the placeholder: aggregation would
+    render two bars with identical text, and drilldown -- which currently
+    recognizes "is this the missing-value placeholder?" by nothing but string
+    equality against `dimension_value` -- could not tell which of the two the
+    click was for, silently returning the wrong bar's rows. Bumping a numeric
+    suffix until the text is unique keeps the fix to the label alone, no new
+    identity field on the wire contract.
+    """
+    base = f"(missing {column})"
+    real_values = frame[column].dropna().astype(str)
+    candidate = base
+    suffix = 2
+    while (real_values == candidate).any():
+        candidate = f"{base} [{suffix}]"
+        suffix += 1
+    return candidate
 
 
 def _aggregate(frame: pd.DataFrame, spec: VisualizationSpec) -> tuple[list[VisualizationDatum], bool, list[str]]:
@@ -160,7 +180,7 @@ def _aggregate(frame: pd.DataFrame, spec: VisualizationSpec) -> tuple[list[Visua
         data = [VisualizationDatum(label=f"{interval.left:.2f}–{interval.right:.2f}", value=float(count), bin_start=float(interval.left), bin_end=float(interval.right)) for interval, count in table.items()]
         return data, False, warnings
     dimension = _require_column(frame, spec.dimension, "dimension")
-    missing_dimension_placeholder = _missing_dimension_label(dimension)
+    missing_dimension_placeholder = _missing_dimension_label(frame, dimension)
     missing_dimension_count = int(frame[dimension].isna().sum())
     if spec.mark is VizMark.SCATTER:
         measure = _require_column(frame, spec.measure, "measure")
@@ -301,13 +321,22 @@ def _facets(frame: pd.DataFrame, spec: VisualizationSpec) -> tuple[list[Visualiz
         raise HTTPException(status_code=422, detail="Shared-scale small multiples currently support bar and line charts.")
     column = _require_column(frame, spec.facet, "facet")
     filtered = _filtered_frame(frame, spec)
-    values = sorted(str(value) for value in filtered[column].dropna().unique())
-    if not values:
+    missing_facet_count = int(filtered[column].isna().sum())
+    real_values = sorted(str(value) for value in filtered[column].dropna().unique())
+    # A row with no facet value gets its own panel (the same honesty standard
+    # applied to the main chart dimension above) instead of vanishing from
+    # every small-multiple panel with no trace. `_filtered_frame` already has
+    # an `expected is None` branch that filters to exactly the null rows --
+    # reused here rather than adding a second filtering mechanism.
+    missing_label = _missing_dimension_label(filtered, column) if missing_facet_count else None
+    all_values = real_values + ([missing_label] if missing_label else [])
+    if not all_values:
         raise HTTPException(status_code=422, detail=f"Facet {column!r} has no non-missing values after filtering.")
-    warnings = [f"Showing the first 6 of {len(values)} {column!r} panels; filter the source to inspect the others."] if len(values) > 6 else []
+    warnings = [f"Showing the first 6 of {len(all_values)} {column!r} panels; filter the source to inspect the others."] if len(all_values) > 6 else []
     facets: list[VisualizationFacet] = []
-    for value in values[:6]:
-        panel_spec = spec.model_copy(update={"facet": None, "filters": {**spec.filters, column: value}})
+    for value in all_values[:6]:
+        facet_filter: object = None if value == missing_label else value
+        panel_spec = spec.model_copy(update={"facet": None, "filters": {**spec.filters, column: facet_filter}})
         data, _, panel_warnings = _aggregate(frame, panel_spec)
         warnings.extend(f"{column}={value}: {warning}" for warning in panel_warnings)
         facets.append(VisualizationFacet(value=value, data=data))
@@ -360,7 +389,11 @@ def drill_down(dataset_id: str, request: ChartDrillDownRequest) -> ChartDrillDow
         # A row charted under `_missing_dimension_label` has a real null in `dimension`,
         # not the literal placeholder text -- .astype(str) would turn it into "nan" and
         # never match, silently returning zero contributing rows for that bar/box.
-        if request.dimension_value == _missing_dimension_label(dimension):
+        # Recomputed against this same filtered `frame` so it resolves to the exact
+        # same (possibly disambiguated) text `_aggregate` rendered for this spec --
+        # never confusing the placeholder with a real value that coincidentally
+        # matches the un-disambiguated base text.
+        if request.dimension_value == _missing_dimension_label(frame, dimension):
             mask = frame[dimension].isna()
         else:
             mask = frame[dimension].astype(str) == request.dimension_value

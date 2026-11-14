@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import type { AtlasSqlAction, AtlasSqlResponse, CteListResponse, CteMaterializeResponse, JoinDiagnosticsResponse, ResultComparisonResponse, SqlConnectionSummary, SqlPlanResponse, SqlResultPageResponse, SqlResultPromotionResponse, SqlRunResponse, SqlSchemaResponse, SqlSnippet } from "@prism/api-contracts";
+import type { AtlasSqlAction, AtlasSqlResponse, CteListResponse, CteMaterializeResponse, JoinDiagnostic, JoinDiagnosticsResponse, JoinKeyCardinality, ResultComparisonResponse, SqlConnectionSummary, SqlPlanResponse, SqlResultPageResponse, SqlResultPromotionResponse, SqlRunResponse, SqlSchemaResponse, SqlSnippet } from "@prism/api-contracts";
 import { apiUrl } from "../config/api";
 import type { InspectorObjectState } from "../state/shell-model";
 import { QueryEditor } from "./query-editor";
@@ -308,19 +308,47 @@ function DataGrid({ result, run, onSelectContext, onPage, onPromote, onUseAsEvid
 }
 
 function PlanPanel({ plan }: { plan: SqlPlanResponse | null }) { return <div className="plan-panel">{plan?.supported ? <pre>{plan.plan?.join("\n") ?? "No plan rows returned."}</pre> : <p>{plan?.warning ?? "Inspect a read-only query plan when the active connector supports EXPLAIN."}</p>}</div>; }
+/** A join side's key is "unique" when every non-null key value appears on at
+ * most one row -- exactly what `duplicate_key_rows === 0` already means in
+ * the real cardinality this panel computed. Named here so the relationship-
+ * type sentence below reads like a conclusion from real numbers, not a label
+ * invented independently of them. */
+function sideIsUnique(side: JoinKeyCardinality): boolean { return side.duplicate_key_rows === 0; }
+
+function relationshipType(join: JoinDiagnostic): string {
+  const left = sideIsUnique(join.left), right = sideIsUnique(join.right);
+  if (left && right) return "One to one";
+  if (left && !right) return "One to many";
+  if (!left && right) return "Many to one";
+  return "Many to many";
+}
+
 function JoinDiagnosticsPanel({ diagnostics, loading, error }: { diagnostics: JoinDiagnosticsResponse | null; loading: boolean; error: string | null }) {
   if (loading) return <div className="plan-panel"><p>Computing key cardinality and unmatched-key counts…</p></div>;
   if (error) return <div className="plan-panel"><p className="query-error" role="alert">{error}</p></div>;
   if (!diagnostics) return <div className="plan-panel"><p>Select "Inspect joins" to check key cardinality, unmatched keys, and row-multiplication risk for this query's joins.</p></div>;
   return <div className="join-diagnostics">
-    {(diagnostics.joins ?? []).length ? (diagnostics.joins ?? []).map((join) => <article key={join.join_index} className={join.row_multiplication_risk ? "join-diagnostic-card is-risky" : "join-diagnostic-card"}>
-      <header><strong>{join.join_kind} join</strong>{join.row_multiplication_risk ? <span className="migration-chip unavailable">row-multiplication risk</span> : null}</header>
+    {(diagnostics.joins ?? []).length ? (diagnostics.joins ?? []).map((join) => {
+      const matchedLeft = join.left.total_rows - join.unmatched_left_rows;
+      const hasUnmatched = join.unmatched_left_rows > 0 || join.unmatched_right_rows > 0;
+      return <article key={join.join_index} className={join.row_multiplication_risk ? "join-diagnostic-card is-risky" : "join-diagnostic-card"}>
+      <header><strong>{join.left.table} → {join.right.table}</strong>{join.row_multiplication_risk ? <span className="migration-chip unavailable">row-multiplication risk</span> : null}</header>
+      <dl className="join-diagnostic-summary">
+        <div><dt>Join type</dt><dd>{join.join_kind} join</dd></div>
+        <div><dt>Relationship type</dt><dd>{relationshipType(join)}</dd></div>
+        <div><dt>{join.right.table} keys</dt><dd>{sideIsUnique(join.right) ? "Unique" : "Not unique"}</dd></div>
+        <div><dt>Matched {join.left.table}</dt><dd><span className="join-status-dot" />{matchedLeft.toLocaleString()}</dd></div>
+        <div><dt>Unmatched {join.left.table}</dt><dd><span className={`join-status-dot ${join.unmatched_left_rows > 0 ? "is-warning" : ""}`} />{join.unmatched_left_rows.toLocaleString()}</dd></div>
+      </dl>
+      {hasUnmatched ? <p className="join-diagnostic-callout">Unmatched rows are retained by {join.join_kind === "left" || join.join_kind === "right" ? join.join_kind.toUpperCase() : join.join_kind} JOIN. {join.unmatched_left_rows.toLocaleString()} {join.left.table} row(s) have no match in {join.right.table}{join.unmatched_right_rows > 0 ? `; ${join.unmatched_right_rows.toLocaleString()} ${join.right.table} row(s) have no match in ${join.left.table}` : ""}.</p> : null}
+      <details className="join-diagnostic-raw"><summary>Key cardinality detail</summary>
       <div className="join-diagnostic-sides">
         <div><span className="eyebrow">{join.left.table}.{join.left.column}</span><dl><div><dt>Rows</dt><dd>{join.left.total_rows.toLocaleString()}</dd></div><div><dt>Distinct keys</dt><dd>{join.left.distinct_keys.toLocaleString()}</dd></div><div><dt>Duplicate-key rows</dt><dd>{join.left.duplicate_key_rows.toLocaleString()}</dd></div><div><dt>Null keys</dt><dd>{join.left.null_keys.toLocaleString()}</dd></div></dl></div>
         <div><span className="eyebrow">{join.right.table}.{join.right.column}</span><dl><div><dt>Rows</dt><dd>{join.right.total_rows.toLocaleString()}</dd></div><div><dt>Distinct keys</dt><dd>{join.right.distinct_keys.toLocaleString()}</dd></div><div><dt>Duplicate-key rows</dt><dd>{join.right.duplicate_key_rows.toLocaleString()}</dd></div><div><dt>Null keys</dt><dd>{join.right.null_keys.toLocaleString()}</dd></div></dl></div>
       </div>
-      <p className="quiet-note">{join.unmatched_left_rows.toLocaleString()} {join.left.table} row(s) have no match in {join.right.table}; {join.unmatched_right_rows.toLocaleString()} {join.right.table} row(s) have no match in {join.left.table}.</p>
-    </article>) : null}
+      </details>
+    </article>;
+    }) : null}
     {(diagnostics.unsupported_notes ?? []).length ? <ul className="clean-warnings">{(diagnostics.unsupported_notes ?? []).map((note) => <li key={note}>{note}</li>)}</ul> : null}
   </div>;
 }
