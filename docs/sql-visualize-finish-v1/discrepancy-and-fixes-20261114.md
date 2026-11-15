@@ -147,6 +147,16 @@ of the full suite passed clean at 162/162, and the file alone passes
 every time — not a regression). `tsc --noEmit` and `eslint` on every
 touched file: clean.
 
+**CI, final SHA**: pushed to the existing draft PR #19 (not a new PR, per
+instruction). CI run
+https://github.com/prathmesh-katkade/prism/actions/runs/43720957707 on
+commit `ce7dfc4` (PR #19's exact `headRefOid` at the time of this check,
+`mergeable=MERGEABLE`, `state=OPEN`) — **all 5 jobs green**: secret-scan,
+phase-1-web, legacy-regression, phase-1-python, phase-4-live-e2e. Verified
+via `gh run view 43720957707 --json status,conclusion` after it reached
+`completed`, matched against the PR's own `headRefOid`, not inferred from
+an earlier run.
+
 ## Continuation — 2026-11-14 (round 2)
 
 Picked up from the checkpoint below (`cef4ef6`) per explicit owner instruction
