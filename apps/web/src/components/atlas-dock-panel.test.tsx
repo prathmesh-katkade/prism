@@ -59,7 +59,16 @@ describe("Atlas Clean clarification", () => {
     expect(screen.getByText("Inspect source evidence and provenance")).toBeInTheDocument();
     expect(screen.getByText(unavailable.evidence[0]!).closest("details")).not.toHaveAttribute("open");
     fireEvent.click(screen.getByRole("button", { name: "Retry with local model" }));
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    // Waiting only on the fetch call count (the prior assertion here) let
+    // this test's own retry turn finish landing in `turns` state -- and
+    // its persistence effect writing to the real window.localStorage --
+    // *after* the test had already returned and this file's `afterEach`
+    // had cleared storage, leaking a stale turn into whichever test ran
+    // next. Waiting for the retry's own turn to actually render (a second
+    // copy of the explanation, since every turn stays visible in the
+    // conversation list) forces this test to wait for that full state
+    // update + persistence effect to settle before it ends.
+    await waitFor(() => expect(screen.getAllByText(unavailable.explanation)).toHaveLength(2));
   });
 
   it("names the attempted model in an unavailable response, when the backend identifies one, instead of a bare generic message", async () => {

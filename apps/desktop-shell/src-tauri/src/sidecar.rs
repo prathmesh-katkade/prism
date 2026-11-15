@@ -12,19 +12,24 @@ use tauri_plugin_shell::ShellExt;
 
 const READY_TIMEOUT: Duration = Duration::from_secs(20);
 
-/// Matches `PRISM_DESKTOP_DATA_DIR` below: unset by default (every normal
-/// packaged launch keeps binding 8000, unchanged), but overridable for a
-/// review/verification build that needs to run alongside something else
-/// already holding 8000 without touching it. Read fresh per call, not
-/// cached, for the same reason `PRISM_DESKTOP_DATA_DIR` is -- there's no
-/// cost to it and it keeps this and `spawn()`'s child-env value from ever
-/// silently drifting apart.
-fn sidecar_port() -> String {
-    std::env::var("PRISM_DESKTOP_SIDECAR_PORT").unwrap_or_else(|_| "8000".to_string())
-}
-
-fn sidecar_addr() -> String {
-    format!("127.0.0.1:{}", sidecar_port())
+/// Matches `PRISM_DESKTOP_DATA_DIR` above in intent: unset by default (every
+/// normal packaged launch keeps binding 8000, unchanged), but overridable
+/// for an isolated review/verification build that needs to run alongside
+/// something else already holding 8000 without touching it -- never a
+/// normal-startup dependency. An unparseable value fails loudly here with
+/// the exact bad value named, the same as `PRISM_DESKTOP_DATA_DIR`'s own
+/// "must be an absolute path" check just above it, rather than reaching
+/// `TcpStream::connect` with a malformed address and surfacing only as an
+/// unexplained 20-second readiness timeout.
+fn sidecar_port() -> Result<u16, String> {
+    match std::env::var("PRISM_DESKTOP_SIDECAR_PORT") {
+        Err(_) => Ok(8000),
+        Ok(value) => value.trim().parse::<u16>().map_err(|_| {
+            format!(
+                "PRISM_DESKTOP_SIDECAR_PORT={value:?} is not a valid port number (expected 1-65535)"
+            )
+        }),
+    }
 }
 
 #[derive(Default)]
@@ -51,6 +56,11 @@ pub struct SidecarState(pub Mutex<Option<tauri_plugin_shell::process::CommandChi
 /// silent one, and is worth fixing at the frontend's fetch-retry layer
 /// separately if it proves to matter in practice on real hardware.
 pub fn spawn(app: &AppHandle) -> tauri::Result<bool> {
+    // Validated first and once, before anything else: an invalid override
+    // should fail the whole launch immediately with a specific message, not
+    // surface many seconds later as an unexplained readiness timeout.
+    let port = sidecar_port().map_err(|e| tauri::Error::Anyhow(anyhow::anyhow!(e)))?;
+
     // Checked fresh on every launch (not cached/persisted) so starting or
     // stopping Ollama between runs is picked up automatically, per the
     // plan's own requirement -- see ollama.rs for why this is a real
@@ -109,7 +119,10 @@ pub fn spawn(app: &AppHandle) -> tauri::Result<bool> {
     }
     // desktop_entry.py reads this same name and binds it instead of 8000 --
     // see `sidecar_port()` above for why this exists and when it's unset.
-    command = command.env("PRISM_DESKTOP_SIDECAR_PORT", sidecar_port());
+    // Always set explicitly (not only when an override is present) so the
+    // child's own bound port and this process's own health check can never
+    // silently disagree about which one is in effect.
+    command = command.env("PRISM_DESKTOP_SIDECAR_PORT", port.to_string());
     let (mut rx, child) = command
         .spawn()
         .map_err(|e| tauri::Error::Anyhow(anyhow::anyhow!(e)))?;
@@ -134,12 +147,16 @@ pub fn spawn(app: &AppHandle) -> tauri::Result<bool> {
     });
 
     *app.state::<SidecarState>().0.lock().unwrap() = Some(child);
-    wait_until_ready();
+    wait_until_ready(port);
     Ok(ollama_ready)
 }
 
-fn wait_until_ready() {
-    let addr = sidecar_addr();
+/// Takes the exact port `spawn()` already validated and told the child to
+/// bind, rather than re-reading `PRISM_DESKTOP_SIDECAR_PORT` a second time --
+/// one validated value threaded through, so the health check and the
+/// child's own bind can never disagree about which port is in effect.
+fn wait_until_ready(port: u16) {
+    let addr = format!("127.0.0.1:{port}");
     let started = Instant::now();
     loop {
         if TcpStream::connect(&addr).is_ok() {

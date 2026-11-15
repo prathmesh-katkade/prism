@@ -160,6 +160,10 @@ describe("Visualize workspace", () => {
     vi.stubGlobal("fetch", fetchMock);
     render(<VisualizeWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
     await waitFor(() => expect(screen.getByRole("img", { name: /Bar chart with 2 categories/ })).toBeInTheDocument());
+    // Unfiltered: the dataset's own row count ("all 6 source rows", from the
+    // fixture's row_count: 6) is an honest claim here -- every source row
+    // really did feed this chart.
+    expect(screen.getByText("Sum of revenue · all 6 source rows")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "+ Add filter" }));
     fireEvent.change(screen.getByLabelText("Filter field"), { target: { value: "segment" } });
@@ -169,9 +173,17 @@ describe("Visualize workspace", () => {
     // screen now has one bar, not two, because the (mocked) server actually
     // excluded the "b" rows.
     await waitFor(() => expect(screen.getByRole("img", { name: /Bar chart with 1 categories/ })).toBeInTheDocument());
+    // Filtered: must not still say "all 6 source rows" -- that would claim
+    // the whole dataset fed a chart that's visibly missing a category. The
+    // dataset's row count is still the only number available (the render
+    // response carries no "rows after filtering" count), so it's shown
+    // honestly labeled as the source total, not as what this chart used.
+    expect(screen.getByText("Sum of revenue · 6 source rows (filtered)")).toBeInTheDocument();
+    expect(screen.queryByText(/all 6 source rows/)).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Remove filter segment equals a" }));
     await waitFor(() => expect(screen.getByRole("img", { name: /Bar chart with 2 categories/ })).toBeInTheDocument());
+    expect(screen.getByText("Sum of revenue · all 6 source rows")).toBeInTheDocument();
   });
 
   it("lists real saved views for this dataset and loads one back into the workspace on click", async () => {

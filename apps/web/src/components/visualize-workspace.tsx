@@ -42,15 +42,28 @@ function describeSpec(spec: VisualizationSpec): string {
 }
 
 /** The reference's "Sum of revenue · INR · all 260 orders" line: aggregation,
- * currency, and total row count the chart was computed from, all already-
- * real values (nothing here is estimated or invented) -- row count comes
- * from the same `profile.dataset.row_count` Overview itself displays, not a
- * new measurement. */
-function chartMetadataLine(spec: VisualizationSpec, totalRows: number): string {
+ * currency, and a row count, all already-real values (nothing here is
+ * estimated or invented) -- the count comes from the same
+ * `profile.dataset.row_count` Overview itself displays, not a new
+ * measurement.
+ *
+ * That count is the *source* dataset's total, not a count of rows that
+ * actually fed this specific chart -- the render response carries no
+ * "rows after filtering" number to show instead (adding one would be a new
+ * backend measurement, not a presentation fix). Saying "all N rows" is only
+ * true with no active filter; with one active, "all" would misrepresent a
+ * filtered chart as using the whole dataset. So: "all N source rows" only
+ * when `spec.filters` is empty, otherwise "N source rows (filtered)" --
+ * naming the number for what it actually is instead of overclaiming it. */
+function chartMetadataLine(spec: VisualizationSpec, sourceRowCount: number): string {
   const aggregationLabel = spec.aggregation === "none" ? null
     : spec.aggregation === "count" ? "Count of rows"
     : `${spec.aggregation.charAt(0).toUpperCase()}${spec.aggregation.slice(1)} of ${spec.measure ?? "value"}`;
-  return [aggregationLabel, spec.currency, `all ${totalRows.toLocaleString()} rows`].filter(Boolean).join(" · ");
+  const hasActiveFilter = Object.keys(spec.filters ?? {}).length > 0;
+  const rowCountLabel = hasActiveFilter
+    ? `${sourceRowCount.toLocaleString()} source rows (filtered)`
+    : `all ${sourceRowCount.toLocaleString()} source rows`;
+  return [aggregationLabel, spec.currency, rowCountLabel].filter(Boolean).join(" · ");
 }
 
 /** Phase 6B: intent → deterministic mark suggestion → server-aggregated data → renderer-agnostic spec. */

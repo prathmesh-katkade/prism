@@ -38,6 +38,18 @@ if __name__ == "__main__":
     # Matches sidecar.rs's own `sidecar_port()`: unset in every normal
     # packaged launch (still binds 8000), overridable only for a review
     # build that needs to run alongside something else already holding
-    # 8000 without touching it.
-    port = int(os.environ.get("PRISM_DESKTOP_SIDECAR_PORT", "8000"))
+    # 8000 without touching it. When Tauri spawns this binary, sidecar.rs
+    # has already validated the value and always sets it explicitly -- this
+    # check only matters for someone running the frozen binary directly,
+    # bypassing that validation, and exists so that case fails with a named
+    # bad value too, not a bare traceback three frames into uvicorn.
+    raw_port = os.environ.get("PRISM_DESKTOP_SIDECAR_PORT", "8000")
+    try:
+        port = int(raw_port)
+        if not (1 <= port <= 65535):
+            raise ValueError
+    except ValueError:
+        raise SystemExit(
+            f"PRISM_DESKTOP_SIDECAR_PORT={raw_port!r} is not a valid port number (expected 1-65535)"
+        ) from None
     uvicorn.run(app, host="127.0.0.1", port=port, log_level="info")

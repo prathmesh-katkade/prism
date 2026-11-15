@@ -1,5 +1,201 @@
 # SQL Lab + Visualize finish — discrepancy table and fixes (2026-11-14)
 
+## Continuation — 2026-11-15/16 (round 4)
+
+Picked up from `cba8687` per explicit owner instruction to finish native
+verification and prepare for acceptance, with new context: the port-8000
+occupant (PID 16988) and the single-instance-plugin conflict (PID 9096) are
+*not* assumed to be disposable test leftovers this round — PID 9096 in
+particular was launched by another agent for the owner's own inspection.
+The owner is being asked, outside this session, to close PRISM before this
+pass; this round treats that as still pending unless proven otherwise.
+
+### 1. State and build-configuration verification
+
+`HEAD`/`origin/prism/sql-visualize-finish-v1` both at `cba8687` before
+starting (matches the brief's recorded pushed HEAD exactly). `Cargo.toml`
+re-diffed against `HEAD` with CRLF stripped from both sides a third time —
+still byte-identical; still nothing to commit. CI re-checked fresh at
+`cba8687` (not inferred from the prior round's record): all 5 jobs
+`completed/success`.
+
+**`PRISM_DESKTOP_SIDECAR_PORT` review, against the explicit checklist**:
+- Default remains 8000 — unchanged, confirmed by re-reading both call sites.
+- **Invalid values fail clearly — this was genuinely missing and is now
+  fixed.** The prior round's `sidecar_port() -> String` did no validation at
+  all; an unparseable override (e.g. `PRISM_DESKTOP_SIDECAR_PORT=abc`) would
+  have reached `TcpStream::connect("127.0.0.1:abc")` and surfaced only as an
+  unexplained 20-second readiness timeout with the bad value buried in a
+  warning log, not a clear failure. `sidecar_port()` now returns
+  `Result<u16, String>`, validated with `.parse::<u16>()` (rejects
+  non-numeric values and values outside 1-65535), and `spawn()` checks it
+  *first*, before anything else, failing the whole launch immediately with
+  `PRISM_DESKTOP_SIDECAR_PORT="abc" is not a valid port number (expected
+  1-65535)` named explicitly. `desktop_entry.py` got the matching check for
+  the one path that bypasses Rust's validation entirely: someone running the
+  frozen binary directly.
+- **The child receives the intended port; readiness checks and the port
+  agree** — tightened further this round: `spawn()` now validates the port
+  exactly once and threads that single `u16` value both into the child's
+  env (`command.env("PRISM_DESKTOP_SIDECAR_PORT", port.to_string())`,
+  always set explicitly now, not only when an override is present) and into
+  `wait_until_ready(port)` as a parameter, instead of `wait_until_ready`
+  re-reading the env var a second time independently. Removes even the
+  theoretical possibility of the two ever disagreeing about which port is
+  in effect.
+- **Normal packaged startup does not depend on an isolated review port** —
+  true by construction: the env var is read with `unwrap_or` defaulting to
+  8000, so a normal launch that never sets it behaves exactly as before
+  this feature existed.
+- **No debug listener, weakened security, or signing bypass** — confirmed:
+  this only changes which port the *same* sidecar binds, nothing about
+  what it serves, CORS, or auth; no signing-related code was touched.
+- **No further runtime changes were made merely to route around the prior
+  process-termination rejection** — the fixes above are correctness
+  improvements to the feature on its own terms (a real missing-validation
+  gap, a real double-read-of-the-same-env-var looseness), not new attempts
+  to avoid needing the owner's action.
+
+`cargo check` confirmed the Rust changes compile before any rebuild. No
+Rust unit-test infrastructure exists anywhere in `apps/desktop-shell`
+(confirmed by searching for `#[test]`/`#[cfg(test)]`) — adding one just for
+this would be new test infrastructure, not a narrow fix, so this was
+verified by compilation + code review + the manual verification below
+instead, consistent with this codebase's existing convention of treating
+the desktop shell as glue code validated by real native runs, not unit
+tests.
+
+### 2. Chart metadata truthfulness — a real bug, now fixed
+
+Checked what the round-3 metadata line ("Sum of revenue · INR · all 260
+rows") actually says once a filter is active: **it kept saying "all 260
+rows" even when the chart only reflected a filtered subset** — exactly the
+honesty gap the brief flagged. `profile.dataset.row_count` is the *source*
+dataset's total; the `/render` response carries no "rows after filtering"
+count to show instead (adding one would be a new backend measurement, not
+a presentation fix, so none was added, per "use actual existing response
+counts; if unavailable, label the number as source rows"). Fixed by making
+the claim conditional on whether `spec.filters` is non-empty:
+- No active filter: `"all 260 source rows"` — true, the whole dataset fed
+  this chart.
+- An active filter: `"260 source rows (filtered)"` — the same number, but
+  now honestly labeled as the *source* total rather than implied as what
+  fed the visible chart, with "(filtered)" naming that a filter is active.
+
+New regression test extends the existing filter test (which already mocks
+distinct filtered/unfiltered render responses) to also assert the metadata
+text at all three states: unfiltered → filtered → filter removed. Confirms
+`"all 6 source rows"` is never shown while a filter is active
+(`expect(screen.queryByText(/all 6 source rows/)).not.toBeInTheDocument()`
+immediately after applying one).
+
+### 3. Native proof — still blocked; confirmed with a constructive, non-destructive check
+
+**No process-termination or closure mechanism was attempted this round,**
+per the explicit new instruction and the standing "Undermining Oversight"
+rejection from the previous round. Port 8000 was checked read-only
+(`netstat`) purely to confirm current state, not to act on it — still held
+by the same PID as before, unchanged across this entire round, re-checked
+again just before writing this up (after the date rolled over to
+2026-11-16): **still occupied**.
+
+Rather than stop there, two things were verified constructively:
+- **Sidecar rebuilt** with this round's port-validation fix (212 MB,
+  matching every prior build's size).
+- **Two Tauri builds attempted**, both succeeding in every respect except
+  the one blocked step:
+  1. Into the *default* `target/release` path, with *no* overrides (the
+     true "normal-default release candidate" the brief asks for) — this
+     is the build the owner should actually run once the old instance is
+     closed. It failed at the exact same step as before:
+     `failed to remove file ...target\release\app.exe: Access is denied`
+     — **this itself is useful confirmation that the file lock (and so
+     the old instance) is still present**, obtained without touching the
+     locked process at all, just by trying the real, intended build and
+     observing the OS's own error.
+  2. Into a separate path (`target-normal-default`, clearly named to
+     distinguish it from the round-3 `target-review` custom-port build),
+     with the *same* default configuration (no port override, no custom
+     `NEXT_PUBLIC_PRISM_API_URL`) — this succeeded fully (MSI + NSIS
+     bundles built; the final updater-signing step failed for lack of a
+     private key, same as every prior build, and is not a blocker per
+     instruction). **This is the actual normal-default-config
+     review build**, just living at a different path than
+     `target/release` purely because of the file lock — not a
+     configuration compromise.
+
+Launching either this build or round 3's custom-port build to prove the
+connected workflow live was not attempted, because the single-instance
+plugin conflict (not port 8000 itself) is what actually blocks a second
+launch, and that conflict is exactly the boundary this round's instructions
+draw around: **ask the owner, don't route around it.**
+
+**Executables ready, both isolated, awaiting the owner closing the old
+instance (or a restart)**:
+- Normal-default config (what the owner should use):
+  `apps/desktop-shell/src-tauri/apps/desktop-shell/src-tauri/target-normal-default/release/app.exe`
+- Isolated-port review build (round 3, for running *alongside* something
+  already on 8000, if ever needed again):
+  `apps/desktop-shell/src-tauri/apps/desktop-shell/src-tauri/target-review/release/app.exe`
+  with `.prism/viz-finish-20261114/launch-native-20261115.ps1`
+  (`PRISM_DESKTOP_SIDECAR_PORT=8020` + the disposable MySQL fixture).
+
+### 4. Final visual comparison
+
+Re-read both references at full resolution against the round-3 live
+screenshots. Confirms round 3 closed the two highest-value gaps (join
+evidence synthesis, chart leading-bar + framing + metadata). Two further
+differences were identified and are named here, deliberately not
+implemented, because fixing them would be new-feature work (the brief for
+this round explicitly rules that out), not a presentation fix for data
+already available:
+- The reference's results grid has a **summed "Total" footer row**
+  (260 orders · ₹520,000); nothing currently computes a footer aggregate
+  for an arbitrary SQL result set.
+- The reference's results header reads **"4 result rows · 260 source
+  orders"** — showing both the aggregated row count and how many source
+  rows fed it. SQL Lab's own result metadata only has the SQL engine's own
+  reported row count (4, for a `GROUP BY`), not a separate "rows before
+  aggregation" figure; computing one would mean a second query or an
+  `EXPLAIN`-based estimate, which is new capability, not a display fix.
+
+Both are honest gaps, not regressions: nothing currently shown misrepresents
+what it has become in the way the round-3 chart-metadata bug did. The
+Fields panel's reference glyphs (`Ab`/`#`/`123`/a calendar icon, each a
+literal text-style glyph) versus this implementation's stroke-icon style
+convey the same type information through a different visual idiom — judged
+a legitimate idiom difference, not a defect, and left alone per "no new
+palette or redesign."
+
+### 5. localStorage test leak — actually re-verified, not just re-run
+
+Per instruction not to treat an immediate successful rerun as proof: traced
+the actual mechanism this time instead. `atlas-dock-panel.tsx`'s
+`saveStoredTurns` effect (watching `[datasetId, turns]`) writes to the
+*real* `window.localStorage` on every turn-state change. The leaking test's
+own retry step only waited for `fetchMock` to have been called twice, not
+for the resulting state update to flow through React and that persistence
+effect to actually run — so on an unlucky scheduling, the write could land
+*after* the test returned and the file's `afterEach(() => localStorage.clear())`
+had already fired, leaking a stale turn into whichever test ran next.
+Fixed narrowly: the test now waits for its retry's own turn to actually
+render (`getAllByText(explanation)` reaching length 2 — every turn stays
+visible in the conversation list, so a completed retry means the same
+explanation text appears twice), which cannot be true until the full
+state-update-and-persist cycle has actually settled. Verified against five
+consecutive full-suite runs (not one): **162/162 passed every time** — a
+materially stronger check than the single rerun the prior round relied on.
+
+### 6. Final gates, round 4
+
+Full suite (not a targeted subset, since both backend fixes and the
+frontend fix needed re-verification): 831 passed / 3 skipped (backend,
+after clearing the same stale local `.prism/runtime/` file noted in rounds
+2-3 — still confirmed CI-irrelevant for the same reason). `mypy
+--follow-imports=skip ...`: clean. Frontend: 162 passed across 5
+consecutive full-suite runs for the localStorage-leak re-verification above,
+plus `tsc --noEmit`/`eslint` clean on every touched file.
+
 ## Continuation — 2026-11-15 (round 3)
 
 Picked up from `13b9fd9` per explicit owner instruction to finish the
