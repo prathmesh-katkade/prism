@@ -71,6 +71,10 @@ describe("Visualize workspace", () => {
     expect(screen.getByText(/truncated, not downloaded in full/)).toBeInTheDocument();
     expect(screen.getByText(/segment = a/)).toBeInTheDocument(); // active filter disclosed
     expect(onSelectContext).toHaveBeenCalledWith(expect.objectContaining({ metadata: expect.arrayContaining([expect.stringContaining("5 matching row(s)")]) }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Clear selection" }));
+    expect(screen.queryByText(/truncated, not downloaded in full/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/segment = a/)).not.toBeInTheDocument();
   });
 
   it("shows the error state with a retry control, never an indefinite loading spinner, when the initial load fails", async () => {
@@ -137,6 +141,37 @@ describe("Visualize workspace", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Remove filter segment equals a" }));
     await waitFor(() => expect(renderCalls.at(-1)?.filters).toEqual({}));
+  });
+
+  it("applying and removing a filter actually changes the rendered chart data, not just the request sent", async () => {
+    const unfiltered = { ...rendered, data: [{ label: "a", value: 30 }, { label: "b", value: 12 }] };
+    const filteredToA = { ...rendered, spec: { ...suggestion.spec, filters: { segment: "a" } }, data: [{ label: "a", value: 30 }] };
+    const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path.includes("/profile")) return json(profile);
+      if (path.includes("/suggest")) return json(suggestion);
+      if (path.endsWith("/reports/charts")) return json([]);
+      if (path.includes("/render")) {
+        const spec = JSON.parse(String(init?.body)) as VisualizationSpec;
+        return json(Object.keys(spec.filters ?? {}).length ? filteredToA : unfiltered);
+      }
+      return json({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<VisualizeWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
+    await waitFor(() => expect(screen.getByRole("img", { name: /Bar chart with 2 categories/ })).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "+ Add filter" }));
+    fireEvent.change(screen.getByLabelText("Filter field"), { target: { value: "segment" } });
+    fireEvent.change(screen.getByLabelText("Filter value"), { target: { value: "a" } });
+    fireEvent.click(screen.getByRole("button", { name: "Apply filter" }));
+    // Not just "a request with the right filter was sent" -- the chart on
+    // screen now has one bar, not two, because the (mocked) server actually
+    // excluded the "b" rows.
+    await waitFor(() => expect(screen.getByRole("img", { name: /Bar chart with 1 categories/ })).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove filter segment equals a" }));
+    await waitFor(() => expect(screen.getByRole("img", { name: /Bar chart with 2 categories/ })).toBeInTheDocument());
   });
 
   it("lists real saved views for this dataset and loads one back into the workspace on click", async () => {
@@ -233,6 +268,13 @@ describe("ChartCanvas", () => {
     const [northClassV, southClassV] = barGroupClasses(vertical.container);
     expect(southClassV).toContain("is-leading");
     expect(northClassV).not.toContain("is-leading");
+  });
+
+  it("highlights every tied-for-largest bar, not just one of them", () => {
+    const data = [{ label: "North", value: 20000 }, { label: "South", value: 20000 }, { label: "East", value: 8000 }];
+    const { container } = render(<ChartCanvas mark="bar" data={data} />);
+    const classes = Array.from(container.querySelectorAll("rect"), (rect) => rect.parentElement?.getAttribute("class") ?? "");
+    expect(classes.filter((className) => className.includes("is-leading"))).toHaveLength(2);
   });
 
   it("gives a histogram bin no leading-bar highlight even though bins are still bars", () => {

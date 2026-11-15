@@ -2,9 +2,10 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import type { AtlasSqlAction, AtlasSqlResponse, CteListResponse, CteMaterializeResponse, JoinDiagnostic, JoinDiagnosticsResponse, JoinKeyCardinality, ResultComparisonResponse, SqlConnectionSummary, SqlPlanResponse, SqlResultPageResponse, SqlResultPromotionResponse, SqlRunResponse, SqlSchemaResponse, SqlSnippet } from "@prism/api-contracts";
+import type { AtlasSqlAction, AtlasSqlResponse, CteListResponse, CteMaterializeResponse, JoinDiagnostic, JoinDiagnosticsResponse, JoinKeyCardinality, OverviewDataset, ResultComparisonResponse, SqlConnectionSummary, SqlPlanResponse, SqlResultPageResponse, SqlResultPromotionResponse, SqlRunResponse, SqlSchemaResponse, SqlSnippet } from "@prism/api-contracts";
 import { apiUrl } from "../config/api";
 import type { InspectorObjectState } from "../state/shell-model";
+import { Icon } from "./icons";
 import { QueryEditor } from "./query-editor";
 import { WorkspaceProposalPanel } from "./workspace-proposal-panel";
 
@@ -39,12 +40,24 @@ export function QueryStudio({ onSelectContext, initialSql, initialParameters, in
   const [comparisonLoading, setComparisonLoading] = useState(false);
   const [comparisonError, setComparisonError] = useState<string | null>(null);
   const [promotedDatasetId, setPromotedDatasetId] = useState<string | null>(null);
+  const [overviewDatasets, setOverviewDatasets] = useState<OverviewDataset[]>([]);
 
   useEffect(() => { if (initialSql) setSql(initialSql); }, [initialSql]);
   useEffect(() => { if (initialParameters) setParametersText(JSON.stringify(initialParameters)); }, [initialParameters]);
 
   const activeConnection = useMemo(() => connections.find((item) => item.connection_id === connectionId) ?? null, [connectionId, connections]);
   const readyConnections = useMemo(() => connections.filter((item) => item.status === "ready"), [connections]);
+  // Only a "local:<dataset_id>" connection maps onto one PRISM-tracked
+  // dataset with a real revision and measured row count; "localjoin:a:b"
+  // (two datasets) and every external connector (mysql/postgresql/
+  // sqlserver) have no single revision to show honestly, so they fall
+  // through to null and the metadata line names that explicitly instead of
+  // inventing a number for them.
+  const activeDatasetMetadata = useMemo(() => {
+    if (!activeConnection || activeConnection.source_type !== "local_dataset" || !activeConnection.connection_id.startsWith("local:")) return null;
+    const datasetId = activeConnection.connection_id.slice(6);
+    return overviewDatasets.find((dataset) => dataset.dataset_id === datasetId) ?? null;
+  }, [activeConnection, overviewDatasets]);
   const parsedParameters = useMemo(() => {
     try {
       const value: unknown = JSON.parse(parametersText);
@@ -72,6 +85,11 @@ export function QueryStudio({ onSelectContext, initialSql, initialParameters, in
         next.unshift(joined.connection);
       }
       setConnections(next); setSnippets(await loadJson<SqlSnippet[]>("/api/v1/sql-lab/snippets"));
+      // Local-dataset connections are the only ones with a real PRISM revision
+      // and measured row count (an external connector is a live, unversioned
+      // system) -- reusing Overview's own dataset list rather than inventing a
+      // second source of truth for the same numbers.
+      try { const overview = await loadJson<OverviewDataset[]>("/api/v1/overview/datasets"); setOverviewDatasets(Array.isArray(overview) ? overview : []); } catch { /* metadata is a display enhancement; the source list stays usable without it. */ }
       const first = initialConnectionId
         ? next.find((item) => item.status === "ready" && item.connection_id === initialConnectionId)
         : next.find((item) => item.status === "ready");
@@ -235,15 +253,23 @@ export function QueryStudio({ onSelectContext, initialSql, initialParameters, in
     <aside className="sql-source-pane" aria-label="SQL data sources and schema">
       <h2>Data sources</h2>
       <label>Active source<select aria-label="Source" value={connectionId} onChange={(event) => setConnectionId(event.target.value)}>{readyConnections.map((item) => <option key={item.connection_id} value={item.connection_id}>{item.label} · {item.dialect}</option>)}</select></label>
+      {activeConnection ? <div className="sql-source-meta">
+        <span className={`migration-chip ${activeConnection.status === "ready" ? "ready" : "unavailable"}`}>{activeConnection.status}</span>
+        {activeConnection.source_type === "local_dataset"
+          ? (activeDatasetMetadata
+            ? <small>Local dataset · revision {activeDatasetMetadata.revision} · {activeDatasetMetadata.row_count.toLocaleString()} rows</small>
+            : <small>Local dataset · {activeConnection.connection_id.startsWith("localjoin:") ? "two joined sources, no single revision" : "revision unavailable"}</small>)
+          : <small>External {activeConnection.dialect} source · not a PRISM-tracked revision · row count not measured</small>}
+      </div> : null}
       <SchemaPanel schema={schema} onInsert={(identifier) => setSql((current) => `${current}${current.endsWith(" ") || current.endsWith("\n") ? "" : " "}${identifier}`)} />
       <section className="sql-saved-queries"><h2>Saved queries</h2>{snippets.length ? snippets.map((snippet) => <button key={snippet.snippet_id} onClick={() => { setSql(snippet.sql); setParametersText(JSON.stringify(snippet.parameters ?? {}, null, 2)); }}>{snippet.name}</button>) : <p className="quiet-note">Saved queries appear here.</p>}</section>
     </aside>
     <div className="sql-main-pane">
-    <header className="query-heading"><div><span className="eyebrow">SQL LAB · QUERY STUDIO</span><h1>{snippets.find((snippet) => snippet.sql === sql)?.name ?? "Untitled query"}</h1><p>{activeConnection ? <><strong>{activeConnection.label}</strong> · <code>{activeConnection.dialect}</code> · read-only local source</> : "Select a source"}</p></div><div className="query-status"><span className={`migration-chip ${state === "degraded" ? "unavailable" : "ready"}`}>{run?.state ?? "ready"}</span><small>Ctrl/Cmd + Enter to run</small></div></header>
+    <header className="query-heading"><div><span className="eyebrow">SQL LAB · QUERY STUDIO</span><h1>{snippets.find((snippet) => snippet.sql === sql)?.name ?? "Untitled query"}</h1><p>{activeConnection ? <><strong>{activeConnection.label}</strong> · <code>{activeConnection.dialect}</code> · {activeConnection.source_type === "local_dataset" ? "read-only local source" : "read-only external source"}</> : "Select a source"}</p></div><div className="query-status"><span className={`migration-chip ${state === "degraded" ? "unavailable" : "ready"}`}>{run?.state ?? "ready"}</span><small>Ctrl/Cmd + Enter to run</small></div></header>
     <section className="query-toolbar" aria-label="Query actions">
-      <button onClick={() => void execute()} disabled={!activeConnection || state === "running"}>Run query <kbd>⌘ ↵</kbd></button>
+      <button onClick={() => void execute()} disabled={!activeConnection || state === "running"}><Icon name="play" width={14} height={14} /> Run query <kbd>⌘ ↵</kbd></button>
       {run && ["queued", "running"].includes(run.state) ? <button className="secondary" onClick={() => void cancelActiveRun()}>Cancel query</button> : null}
-      <button className="secondary" onClick={() => void saveSnippet()} disabled={!activeConnection}>Save query</button>
+      <button className="secondary" onClick={() => void saveSnippet()} disabled={!activeConnection}><Icon name="save" width={14} height={14} /> Save query</button>
       <details className="query-toolbar-more"><summary aria-label="More query tools">⋮</summary>
         <div className="query-toolbar-more-menu">
           <button className="secondary" onClick={() => setSql(formatSql(sql))} disabled={!activeConnection}>Format</button>
@@ -304,7 +330,9 @@ function DataGrid({ result, run, onSelectContext, onPage, onPromote, onUseAsEvid
   if (run.state !== "succeeded") return <div className="result-empty"><h2>{["queued", "running"].includes(run.state) ? "Query is running." : "Query did not return a result."}</h2><p>{run.error ?? run.warnings?.[0] ?? "Cancellation and timeout controls remain available while the query is active."}</p></div>;
   const gridTemplateColumns = `repeat(${Math.max(columns.length, 1)}, minmax(150px, 1fr))`;
   const copyPage = async () => { const header = columns.map((column) => column.name).join("\t"); const body = rows.map((row) => columns.map((column) => String(row[column.name] ?? "")).join("\t")).join("\n"); await navigator.clipboard.writeText(`${header}\n${body}`); };
-  return <div><div className="result-meta"><span>{(run.returned_row_count ?? 0).toLocaleString()} returned / {(run.row_count ?? 0).toLocaleString()} {run.truncated ? "observed" : "total"} rows</span><span>{run.duration_ms ?? 0} ms</span><span>{run.truncated ? "result capped server-side" : "complete result"}</span><label className="result-filter">Filter page<input aria-label="Filter current result page" value={filterText} onChange={(event) => setFilterText(event.target.value)} /></label><button className="result-action" onClick={() => void copyPage()}>Copy page</button><a className="result-action" href={apiUrl(`/api/v1/sql-lab/runs/${run.run_id}/export?format=csv`)}>Export CSV</a><button className="result-action" onClick={onPromote}>Create dataset</button>{onUseResultIn ? <button className="result-action" onClick={() => onUseResultIn("clean")}>Use in Clean</button> : null}{onUseResultIn ? <button className="result-action" onClick={() => onUseResultIn("visualize")}>Use in Visualize</button> : null}{onUseAsEvidence ? <button className="result-action" onClick={() => onUseAsEvidence(run.run_id)}>Use as AI evidence</button> : null}<button className="result-action" onClick={() => onSelectContext({ objectId: `result:${run.run_id}`, analyticalObjectId: `sql_${run.run_id}`, label: "SQL result set", type: "dataset", state: "ready", actions: [{ id: "explain-result-set", label: "Ask Atlas to explain result" }, { id: "convert-result", label: "Create PRISM dataset" }], metadata: [`${run.returned_row_count ?? 0} rows`, `Fingerprint ${run.provenance.result_fingerprint?.slice(0, 12) ?? "pending"}…`] })}>Inspect result</button></div><div className="sql-grid-virtual" role="grid" aria-label="Query results" aria-rowcount={run.returned_row_count ?? 0}><div className="sql-grid-head" role="row" style={{ gridTemplateColumns }}>{columns.map((column) => <button key={column.name} role="columnheader" aria-sort={sortColumn === column.name ? (sortDescending ? "descending" : "ascending") : "none"} onClick={() => { setSortDescending(sortColumn === column.name ? !sortDescending : false); setSortColumn(column.name); }}>{column.name}<small>{column.data_type}</small></button>)}</div><div className="sql-grid-body" ref={scrollRef} role="rowgroup"><div style={{ height: `${virtualRows.getTotalSize()}px`, position: "relative" }}>{virtualRows.getVirtualItems().map((virtualRow) => { const row = rows[virtualRow.index] ?? {}; const rowIndex = (result?.offset ?? 0) + virtualRow.index; return <div key={virtualRow.key} className="sql-grid-row" role="row" style={{ gridTemplateColumns, transform: `translateY(${virtualRow.start}px)` }}>{columns.map((column) => <button key={column.name} role="gridcell" onClick={() => onSelectContext({ objectId: `result:${run.run_id}:${rowIndex}:${column.name}`, label: `${column.name} result value`, type: "finding", state: "ready", actions: [{ id: "explain-result-cell", label: "Ask Atlas to explain selection" }, { id: "copy-result-cell", label: "Copy value" }], metadata: [String(row[column.name] ?? "—"), `Run ${run.run_id.slice(0, 12)}…`] })}>{row[column.name] === null ? "—" : String(row[column.name])}</button>)}</div>; })}</div></div></div><div className="result-pagination"><button className="secondary" onClick={() => onPage(Math.max(0, (result?.offset ?? 0) - 100))} disabled={!result?.offset}>Previous 100</button><span>Rows {(result?.offset ?? 0) + 1}–{(result?.offset ?? 0) + rows.length}</span><button className="secondary" onClick={() => onPage((result?.offset ?? 0) + 100)} disabled={(result?.offset ?? 0) + rows.length >= (run.returned_row_count ?? 0)}>Next 100</button></div></div>;
+  return <div><div className="result-meta"><span>{(run.returned_row_count ?? 0).toLocaleString()} returned / {(run.row_count ?? 0).toLocaleString()} {run.truncated ? "observed" : "total"} rows</span><span>{run.duration_ms ?? 0} ms</span><span>{run.truncated ? "result capped server-side" : "complete result"}</span><label className="result-filter">Filter page<input aria-label="Filter current result page" value={filterText} onChange={(event) => setFilterText(event.target.value)} /></label><button className="result-action" onClick={() => void copyPage()}>Copy page</button><a className="result-action" href={apiUrl(`/api/v1/sql-lab/runs/${run.run_id}/export?format=csv`)}>Export CSV</a></div>
+    <div className="result-handoffs" aria-label="Result handoffs"><span className="eyebrow">Result handoffs</span><div className="result-handoffs-row"><button className="result-action" onClick={onPromote}>Create dataset</button>{onUseResultIn ? <button className="result-action" onClick={() => onUseResultIn("clean")}>Use in Clean</button> : null}{onUseResultIn ? <button className="result-action" onClick={() => onUseResultIn("visualize")}>Use in Visualize</button> : null}{onUseAsEvidence ? <button className="result-action" onClick={() => onUseAsEvidence(run.run_id)}>Use as AI evidence</button> : null}<button className="result-action" onClick={() => onSelectContext({ objectId: `result:${run.run_id}`, analyticalObjectId: `sql_${run.run_id}`, label: "SQL result set", type: "dataset", state: "ready", actions: [{ id: "explain-result-set", label: "Ask Atlas to explain result" }, { id: "convert-result", label: "Create PRISM dataset" }], metadata: [`${run.returned_row_count ?? 0} rows`, `Fingerprint ${run.provenance.result_fingerprint?.slice(0, 12) ?? "pending"}…`] })}>Inspect result</button></div></div>
+    <div className="sql-grid-virtual" role="grid" aria-label="Query results" aria-rowcount={run.returned_row_count ?? 0}><div className="sql-grid-head" role="row" style={{ gridTemplateColumns }}>{columns.map((column) => <button key={column.name} role="columnheader" aria-sort={sortColumn === column.name ? (sortDescending ? "descending" : "ascending") : "none"} onClick={() => { setSortDescending(sortColumn === column.name ? !sortDescending : false); setSortColumn(column.name); }}>{column.name}<small>{column.data_type}</small></button>)}</div><div className="sql-grid-body" ref={scrollRef} role="rowgroup"><div style={{ height: `${virtualRows.getTotalSize()}px`, position: "relative" }}>{virtualRows.getVirtualItems().map((virtualRow) => { const row = rows[virtualRow.index] ?? {}; const rowIndex = (result?.offset ?? 0) + virtualRow.index; return <div key={virtualRow.key} className="sql-grid-row" role="row" style={{ gridTemplateColumns, transform: `translateY(${virtualRow.start}px)` }}>{columns.map((column) => <button key={column.name} role="gridcell" onClick={() => onSelectContext({ objectId: `result:${run.run_id}:${rowIndex}:${column.name}`, label: `${column.name} result value`, type: "finding", state: "ready", actions: [{ id: "explain-result-cell", label: "Ask Atlas to explain selection" }, { id: "copy-result-cell", label: "Copy value" }], metadata: [String(row[column.name] ?? "—"), `Run ${run.run_id.slice(0, 12)}…`] })}>{row[column.name] === null ? "—" : String(row[column.name])}</button>)}</div>; })}</div></div></div><div className="result-pagination"><button className="secondary" onClick={() => onPage(Math.max(0, (result?.offset ?? 0) - 100))} disabled={!result?.offset}>Previous 100</button><span>Rows {(result?.offset ?? 0) + 1}–{(result?.offset ?? 0) + rows.length}</span><button className="secondary" onClick={() => onPage((result?.offset ?? 0) + 100)} disabled={(result?.offset ?? 0) + rows.length >= (run.returned_row_count ?? 0)}>Next 100</button></div></div>;
 }
 
 function PlanPanel({ plan }: { plan: SqlPlanResponse | null }) { return <div className="plan-panel">{plan?.supported ? <pre>{plan.plan?.join("\n") ?? "No plan rows returned."}</pre> : <p>{plan?.warning ?? "Inspect a read-only query plan when the active connector supports EXPLAIN."}</p>}</div>; }

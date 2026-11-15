@@ -10,8 +10,22 @@ use tauri::{AppHandle, Manager};
 use tauri_plugin_shell::process::CommandEvent;
 use tauri_plugin_shell::ShellExt;
 
-const SIDECAR_ADDR: &str = "127.0.0.1:8000";
 const READY_TIMEOUT: Duration = Duration::from_secs(20);
+
+/// Matches `PRISM_DESKTOP_DATA_DIR` below: unset by default (every normal
+/// packaged launch keeps binding 8000, unchanged), but overridable for a
+/// review/verification build that needs to run alongside something else
+/// already holding 8000 without touching it. Read fresh per call, not
+/// cached, for the same reason `PRISM_DESKTOP_DATA_DIR` is -- there's no
+/// cost to it and it keeps this and `spawn()`'s child-env value from ever
+/// silently drifting apart.
+fn sidecar_port() -> String {
+    std::env::var("PRISM_DESKTOP_SIDECAR_PORT").unwrap_or_else(|_| "8000".to_string())
+}
+
+fn sidecar_addr() -> String {
+    format!("127.0.0.1:{}", sidecar_port())
+}
 
 #[derive(Default)]
 pub struct SidecarState(pub Mutex<Option<tauri_plugin_shell::process::CommandChild>>);
@@ -93,6 +107,9 @@ pub fn spawn(app: &AppHandle) -> tauri::Result<bool> {
         // defaults to the same deterministic path this falls back to.
         command = command.env("PRISM_AI_PROVIDER", "ollama");
     }
+    // desktop_entry.py reads this same name and binds it instead of 8000 --
+    // see `sidecar_port()` above for why this exists and when it's unset.
+    command = command.env("PRISM_DESKTOP_SIDECAR_PORT", sidecar_port());
     let (mut rx, child) = command
         .spawn()
         .map_err(|e| tauri::Error::Anyhow(anyhow::anyhow!(e)))?;
@@ -122,9 +139,10 @@ pub fn spawn(app: &AppHandle) -> tauri::Result<bool> {
 }
 
 fn wait_until_ready() {
+    let addr = sidecar_addr();
     let started = Instant::now();
     loop {
-        if TcpStream::connect(SIDECAR_ADDR).is_ok() {
+        if TcpStream::connect(&addr).is_ok() {
             log::info!(
                 "[prism-api] ready after {:.1}s",
                 started.elapsed().as_secs_f32()
@@ -133,7 +151,7 @@ fn wait_until_ready() {
         }
         if started.elapsed() >= READY_TIMEOUT {
             log::warn!(
-                "[prism-api] not accepting connections on {SIDECAR_ADDR} after {:.0}s, giving up waiting (app continues opening regardless)",
+                "[prism-api] not accepting connections on {addr} after {:.0}s, giving up waiting (app continues opening regardless)",
                 READY_TIMEOUT.as_secs_f32()
             );
             return;

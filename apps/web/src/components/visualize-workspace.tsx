@@ -6,6 +6,9 @@ import { apiUrl } from "../config/api";
 import { newestAnalyticalObjectId } from "./analytical-history";
 import type { InspectorObjectState } from "../state/shell-model";
 import { WorkspaceProposalPanel } from "./workspace-proposal-panel";
+import { Icon, type IconName } from "./icons";
+
+const FIELD_TYPE_ICON: Record<string, IconName> = { numeric: "type-number", datetime: "type-date", categorical: "type-text", text: "type-text", all_null: "alert" };
 
 type VizUiState = "empty" | "loading" | "ready" | "error";
 const MARKS: readonly VizMark[] = ["horizontal_bar", "bar", "line", "scatter", "histogram", "box"];
@@ -36,6 +39,18 @@ function describeSpec(spec: VisualizationSpec): string {
   const intent = spec.intent.charAt(0).toUpperCase() + spec.intent.slice(1);
   const subject = spec.dimension && spec.measure ? `${spec.measure} by ${spec.dimension}.` : (spec.dimension ?? spec.measure ?? "").concat(".");
   return `${intent} question → ${spec.mark.replaceAll("_", " ")} chart of ${subject}`;
+}
+
+/** The reference's "Sum of revenue · INR · all 260 orders" line: aggregation,
+ * currency, and total row count the chart was computed from, all already-
+ * real values (nothing here is estimated or invented) -- row count comes
+ * from the same `profile.dataset.row_count` Overview itself displays, not a
+ * new measurement. */
+function chartMetadataLine(spec: VisualizationSpec, totalRows: number): string {
+  const aggregationLabel = spec.aggregation === "none" ? null
+    : spec.aggregation === "count" ? "Count of rows"
+    : `${spec.aggregation.charAt(0).toUpperCase()}${spec.aggregation.slice(1)} of ${spec.measure ?? "value"}`;
+  return [aggregationLabel, spec.currency, `all ${totalRows.toLocaleString()} rows`].filter(Boolean).join(" · ");
 }
 
 /** Phase 6B: intent → deterministic mark suggestion → server-aggregated data → renderer-agnostic spec. */
@@ -185,14 +200,14 @@ export function VisualizeWorkspace({ datasetId, onSelectContext, onOpenWorkflow 
       <p className="quiet-note">Source: {profile.dataset.source_name} · revision {profile.dataset.revision}<br />{profile.dataset.row_count.toLocaleString()} rows · {profile.columns.length} fields</p>
       <input className="viz-field-search" aria-label="Search visualization fields" value={fieldSearch} onChange={(event) => setFieldSearch(event.target.value)} placeholder="Search fields…" />
       <p className="quiet-note">{spec.mark === "scatter" ? "X FIELD" : "DIMENSION"}</p>
-      <div className="finding-list">{dimensionCandidates.map((column) => <button key={column.name} className={column.name === spec.dimension ? "is-selected" : ""} onClick={() => updateSpec({ dimension: column.name })}><span className="finding-dot good" /><strong>{column.name}</strong><small>{column.semantic_type}</small></button>)}</div>
+      <div className="finding-list viz-field-list">{dimensionCandidates.map((column) => <button key={column.name} className={column.name === spec.dimension ? "is-selected" : ""} onClick={() => updateSpec({ dimension: column.name })}><Icon className="viz-field-type-icon" name={FIELD_TYPE_ICON[column.semantic_type] ?? "type-text"} width={15} height={15} /><strong>{column.name}</strong><small>{column.semantic_type}</small></button>)}</div>
       <p className="quiet-note">{spec.mark === "scatter" ? "Y FIELD" : "MEASURE"}</p>
-      <div className="finding-list">{measureCandidates.map((column) => <button key={column.name} className={column.name === spec.measure ? "is-selected" : ""} onClick={() => updateSpec({ measure: column.name })}><span className="finding-dot good" /><strong>{column.name}</strong><small>numeric</small></button>)}</div>
+      <div className="finding-list viz-field-list">{measureCandidates.map((column) => <button key={column.name} className={column.name === spec.measure ? "is-selected" : ""} onClick={() => updateSpec({ measure: column.name })}><Icon className="viz-field-type-icon" name="type-number" width={15} height={15} /><strong>{column.name}</strong><small>numeric</small></button>)}</div>
       <div className="section-title viz-saved-views-title"><h2>Saved views</h2><button type="button" className="secondary icon-button" aria-label="Save current chart as a new view" disabled={!data || saving} onClick={() => void saveChart()}>+</button></div>
       {savedViews.length ? <ul className="clean-recipe-list viz-saved-views">{savedViews.map((chart) => <li key={chart.chart_id}><button type="button" className={chart.spec === spec ? "is-selected" : ""} onClick={() => openSavedView(chart)}><strong>{chart.name}</strong><small>{chart.spec.mark.replaceAll("_", " ")} · revision {chart.dataset_revision}</small></button></li>)}</ul> : <p className="quiet-note">No saved views yet. Use the + above once this chart looks right.</p>}
     </nav>
     <section className="viz-canvas" aria-label="Visual canvas" tabIndex={0}>
-      <header><span className="eyebrow">{describeSpec(spec)}</span><h1>{spec.mark === "histogram" ? `Distribution of ${spec.measure ?? spec.dimension}` : spec.measure && spec.dimension ? `${spec.measure} by ${spec.dimension}` : spec.dimension ?? spec.measure}</h1></header>
+      <header><span className="eyebrow">{describeSpec(spec)}</span><h1>{spec.mark === "histogram" ? `Distribution of ${spec.measure ?? spec.dimension}` : spec.measure && spec.dimension ? `${spec.measure} by ${spec.dimension}` : spec.dimension ?? spec.measure}</h1><p className="viz-chart-metadata">{chartMetadataLine(spec, profile.dataset.row_count)}</p></header>
       {!spec.measure && profile.columns.some((column) => column.semantic_type === "numeric") ? <p className="viz-measure-choice" role="status">Showing row counts. Choose a meaningful measure in Chart settings to plot totals; identifier columns are never summed automatically.</p> : null}
       <div className="clean-review-tabs viz-view-tabs" role="tablist" aria-label="Visualization views"><button role="tab" aria-selected={chartView === "chart"} onClick={() => setChartView("chart")}>Chart</button><button role="tab" aria-selected={chartView === "data"} onClick={() => setChartView("data")}>Data</button><button role="tab" aria-selected={chartView === "small-multiples"} onClick={() => setChartView("small-multiples")}>Small multiples</button></div>
       <div className="viz-filter-chips" aria-label="Active chart filters">
@@ -251,7 +266,7 @@ export function VisualizeWorkspace({ datasetId, onSelectContext, onOpenWorkflow 
         <label>Reference line (optional)<input type="number" value={spec.reference_line ?? ""} onChange={(event) => { if (event.target.value === "") { const next = { ...spec }; delete next.reference_line; setSpec(next); } else updateSpec({ reference_line: Number(event.target.value) }); }} /></label>
         <label>Annotation (optional)<input value={spec.annotation ?? ""} onChange={(event) => updateSpec({ annotation: event.target.value })} /></label>
       </div>
-      <div className="inspector-actions"><span className="eyebrow">REPORT HANDOFF</span><button disabled={!data || saving} onClick={() => void saveChart()}>{saving ? "Saving…" : "Save chart"}</button><button className="secondary" onClick={() => onOpenWorkflow("reports")}>Open reports</button>{saveMessage ? <p role="status">{saveMessage}</p> : null}</div>
+      <div className="inspector-actions"><span className="eyebrow">REPORT HANDOFF</span><button disabled={!data || saving} onClick={() => void saveChart()}><Icon name="save" width={14} height={14} /> {saving ? "Saving…" : "Save chart"}</button><button className="secondary" onClick={() => onOpenWorkflow("reports")}><Icon name="bar-chart" width={14} height={14} /> Open reports</button>{saveMessage ? <p role="status">{saveMessage}</p> : null}</div>
       <div className="inspector-actions"><span className="eyebrow">ATLAS · EVIDENCE-AWARE</span><button onClick={() => void askAtlas("explain_chart")}>Explain this chart</button><button onClick={() => void askAtlas("identify_anomaly")}>Identify anomalies</button><button onClick={() => void askAtlas("propose_alternative")}>Trust check</button></div>
       {atlas ? <aside className="atlas-result" aria-live="polite"><span className="eyebrow">ATLAS · {atlas.action.replaceAll("_", " ")}</span><strong>{atlas.summary}</strong><small>{atlas.uncertainty}</small></aside> : null}
       {data ? <dl className="inspector-data"><div><dt>Source</dt><dd><code>{data.provenance.source_fingerprint.slice(0, 12)}…</code></dd></div><div><dt>Revision</dt><dd>{data.provenance.dataset_revision}</dd></div><div><dt>Points shown</dt><dd>{data.data.length}</dd></div></dl> : null}

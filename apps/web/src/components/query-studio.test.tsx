@@ -65,6 +65,42 @@ describe("Query Studio", () => {
     expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/api/v1/sql-lab/runs"), expect.objectContaining({ method: "POST" }));
   });
 
+  it("shows a local dataset's real revision and row count, reusing Overview's own dataset list rather than inventing numbers", async () => {
+    const overviewEntry = { dataset_id: "ds_sales", revision: 3, source_name: "sales.csv", source_fingerprint: connection.source_fingerprint, row_count: 12480, column_count: 4 };
+    vi.stubGlobal("fetch", vi.fn(async (input: string | URL) => {
+      const path = String(input);
+      const body = path.endsWith("/connections") ? [connection]
+        : path.endsWith("/snippets") ? []
+        : path.endsWith("/overview/datasets") ? [overviewEntry]
+        : path.includes("/schema") ? schema
+        : path.endsWith("/history") ? []
+        : {};
+      return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+    }));
+    render(<QueryStudio onSelectContext={vi.fn()} />);
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Untitled query" })).toBeInTheDocument());
+    expect(await screen.findByText("Local dataset · revision 3 · 12,480 rows")).toBeInTheDocument();
+  });
+
+  it("never fabricates a revision or row count for an external connector, naming it as external instead", async () => {
+    const mysqlConnection = { connection_id: "mysql:warehouse", label: "Orders (MySQL)", source_type: "mysql", dialect: "mysql", status: "ready", capabilities: [{ name: "query_execution", supported: true }], source_fingerprint: "e".repeat(64) };
+    const mysqlSchema = { connection: mysqlConnection, tables: [{ name: "orders", columns: [{ name: "id", data_type: "int", nullable: false, sample_count: 10 }] }], schema_fingerprint: "f".repeat(64) };
+    vi.stubGlobal("fetch", vi.fn(async (input: string | URL) => {
+      const path = String(input);
+      const body = path.endsWith("/connections") ? [mysqlConnection]
+        : path.endsWith("/snippets") ? []
+        : path.endsWith("/overview/datasets") ? []
+        : path.includes("/schema") ? mysqlSchema
+        : path.endsWith("/history") ? []
+        : {};
+      return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+    }));
+    render(<QueryStudio onSelectContext={vi.fn()} />);
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Untitled query" })).toBeInTheDocument());
+    expect(await screen.findByText("External mysql source · not a PRISM-tracked revision · row count not measured")).toBeInTheDocument();
+    expect(screen.getByText(/read-only external source/)).toBeInTheDocument();
+  });
+
   it("restores both the SQL and the saved parameters when a snippet is picked, not just the SQL", async () => {
     const snippet = { snippet_id: "snip_1", name: "Top segments", sql: "SELECT * FROM data WHERE segment = :segment", dialect: "duckdb", parameters: { segment: "b" }, created_at: "2026-08-28T00:00:00Z" };
     const fetchMock = vi.fn(async (input: string | URL) => {

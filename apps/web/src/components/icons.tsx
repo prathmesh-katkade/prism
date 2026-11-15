@@ -1,6 +1,6 @@
 import React, { type SVGProps } from "react";
 
-export type IconName = "command" | "grid" | "database" | "spark" | "panel" | "split" | "sun" | "moon" | "arrow" | "close" | "collapse" | "check" | "clock" | "layers" | "help" | "alert" | "link" | "mic-off" | "expand";
+export type IconName = "command" | "grid" | "database" | "spark" | "panel" | "split" | "sun" | "moon" | "arrow" | "close" | "collapse" | "check" | "clock" | "layers" | "help" | "alert" | "link" | "mic-off" | "expand" | "play" | "save" | "filter" | "bar-chart" | "type-text" | "type-number" | "type-date";
 
 const paths: Record<IconName, string> = {
   command: "M9 4 5 8l4 4M15 4l4 4-4 4M5 16h14",
@@ -21,7 +21,14 @@ const paths: Record<IconName, string> = {
   alert: "M12 3 2 20h20L12 3Zm0 6v5m0 3v.1",
   link: "M9 15l6-6M8.5 12.5 6 15a3 3 0 1 0 4.2 4.2l2.5-2.5M15.5 11.5 18 9a3 3 0 1 0-4.2-4.2l-2.5 2.5",
   "mic-off": "M9 9v3a3 3 0 0 0 4.6 2.5M15 9V6a3 3 0 0 0-5.9-.8M19 11a7 7 0 0 1-1.3 4M5 11a7 7 0 0 0 9.6 6.5M12 18v3M3 3l18 18",
-  expand: "M8 3H4v4M16 3h4v4M8 21H4v-4M16 21h4v-4"
+  expand: "M8 3H4v4M16 3h4v4M8 21H4v-4M16 21h4v-4",
+  play: "M7 5v14l11-7L7 5Z",
+  save: "M5 4h11l3 3v13H5V4Zm3 0v5h8V4M8 21v-6h8v6",
+  filter: "M4 5h16l-6 7.5V19l-4 2v-8.5L4 5Z",
+  "bar-chart": "M5 20V10m7 10V4m7 16v-7",
+  "type-text": "M5 6h14M9 6v12M15 6v12M7 18h4m4 0h4",
+  "type-number": "M9 4 7 20M17 4l-2 16M4 9h16M3 15h16",
+  "type-date": "M7 3v4M17 3v4M4 8h16M5 5h14v15H5V5Zm3 7h.01M12 12h.01M16 12h.01M8 16h.01M12 16h.01"
 };
 
 export function Icon({ name, ...props }: { name: IconName } & SVGProps<SVGSVGElement>) {
