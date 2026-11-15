@@ -6,6 +6,9 @@ import { apiUrl } from "../config/api";
 import { newestAnalyticalObjectId } from "./analytical-history";
 import type { InspectorObjectState } from "../state/shell-model";
 import { WorkspaceProposalPanel } from "./workspace-proposal-panel";
+import { Icon, type IconName } from "./icons";
+
+const FIELD_TYPE_ICON: Record<string, IconName> = { numeric: "type-number", datetime: "type-date", categorical: "type-text", text: "type-text", all_null: "alert" };
 
 type VizUiState = "empty" | "loading" | "ready" | "error";
 const MARKS: readonly VizMark[] = ["horizontal_bar", "bar", "line", "scatter", "histogram", "box"];
@@ -36,6 +39,31 @@ function describeSpec(spec: VisualizationSpec): string {
   const intent = spec.intent.charAt(0).toUpperCase() + spec.intent.slice(1);
   const subject = spec.dimension && spec.measure ? `${spec.measure} by ${spec.dimension}.` : (spec.dimension ?? spec.measure ?? "").concat(".");
   return `${intent} question → ${spec.mark.replaceAll("_", " ")} chart of ${subject}`;
+}
+
+/** The reference's "Sum of revenue · INR · all 260 orders" line: aggregation,
+ * currency, and a row count, all already-real values (nothing here is
+ * estimated or invented) -- the count comes from the same
+ * `profile.dataset.row_count` Overview itself displays, not a new
+ * measurement.
+ *
+ * That count is the *source* dataset's total, not a count of rows that
+ * actually fed this specific chart -- the render response carries no
+ * "rows after filtering" number to show instead (adding one would be a new
+ * backend measurement, not a presentation fix). Saying "all N rows" is only
+ * true with no active filter; with one active, "all" would misrepresent a
+ * filtered chart as using the whole dataset. So: "all N source rows" only
+ * when `spec.filters` is empty, otherwise "N source rows (filtered)" --
+ * naming the number for what it actually is instead of overclaiming it. */
+function chartMetadataLine(spec: VisualizationSpec, sourceRowCount: number): string {
+  const aggregationLabel = spec.aggregation === "none" ? null
+    : spec.aggregation === "count" ? "Count of rows"
+    : `${spec.aggregation.charAt(0).toUpperCase()}${spec.aggregation.slice(1)} of ${spec.measure ?? "value"}`;
+  const hasActiveFilter = Object.keys(spec.filters ?? {}).length > 0;
+  const rowCountLabel = hasActiveFilter
+    ? `${sourceRowCount.toLocaleString()} source rows (filtered)`
+    : `all ${sourceRowCount.toLocaleString()} source rows`;
+  return [aggregationLabel, spec.currency, rowCountLabel].filter(Boolean).join(" · ");
 }
 
 /** Phase 6B: intent → deterministic mark suggestion → server-aggregated data → renderer-agnostic spec. */
@@ -185,14 +213,14 @@ export function VisualizeWorkspace({ datasetId, onSelectContext, onOpenWorkflow 
       <p className="quiet-note">Source: {profile.dataset.source_name} · revision {profile.dataset.revision}<br />{profile.dataset.row_count.toLocaleString()} rows · {profile.columns.length} fields</p>
       <input className="viz-field-search" aria-label="Search visualization fields" value={fieldSearch} onChange={(event) => setFieldSearch(event.target.value)} placeholder="Search fields…" />
       <p className="quiet-note">{spec.mark === "scatter" ? "X FIELD" : "DIMENSION"}</p>
-      <div className="finding-list">{dimensionCandidates.map((column) => <button key={column.name} className={column.name === spec.dimension ? "is-selected" : ""} onClick={() => updateSpec({ dimension: column.name })}><span className="finding-dot good" /><strong>{column.name}</strong><small>{column.semantic_type}</small></button>)}</div>
+      <div className="finding-list viz-field-list">{dimensionCandidates.map((column) => <button key={column.name} className={column.name === spec.dimension ? "is-selected" : ""} onClick={() => updateSpec({ dimension: column.name })}><Icon className="viz-field-type-icon" name={FIELD_TYPE_ICON[column.semantic_type] ?? "type-text"} width={15} height={15} /><strong>{column.name}</strong><small>{column.semantic_type}</small></button>)}</div>
       <p className="quiet-note">{spec.mark === "scatter" ? "Y FIELD" : "MEASURE"}</p>
-      <div className="finding-list">{measureCandidates.map((column) => <button key={column.name} className={column.name === spec.measure ? "is-selected" : ""} onClick={() => updateSpec({ measure: column.name })}><span className="finding-dot good" /><strong>{column.name}</strong><small>numeric</small></button>)}</div>
+      <div className="finding-list viz-field-list">{measureCandidates.map((column) => <button key={column.name} className={column.name === spec.measure ? "is-selected" : ""} onClick={() => updateSpec({ measure: column.name })}><Icon className="viz-field-type-icon" name="type-number" width={15} height={15} /><strong>{column.name}</strong><small>numeric</small></button>)}</div>
       <div className="section-title viz-saved-views-title"><h2>Saved views</h2><button type="button" className="secondary icon-button" aria-label="Save current chart as a new view" disabled={!data || saving} onClick={() => void saveChart()}>+</button></div>
       {savedViews.length ? <ul className="clean-recipe-list viz-saved-views">{savedViews.map((chart) => <li key={chart.chart_id}><button type="button" className={chart.spec === spec ? "is-selected" : ""} onClick={() => openSavedView(chart)}><strong>{chart.name}</strong><small>{chart.spec.mark.replaceAll("_", " ")} · revision {chart.dataset_revision}</small></button></li>)}</ul> : <p className="quiet-note">No saved views yet. Use the + above once this chart looks right.</p>}
     </nav>
     <section className="viz-canvas" aria-label="Visual canvas" tabIndex={0}>
-      <header><span className="eyebrow">{describeSpec(spec)}</span><h1>{spec.mark === "histogram" ? `Distribution of ${spec.measure ?? spec.dimension}` : spec.measure && spec.dimension ? `${spec.measure} by ${spec.dimension}` : spec.dimension ?? spec.measure}</h1></header>
+      <header><span className="eyebrow">{describeSpec(spec)}</span><h1>{spec.mark === "histogram" ? `Distribution of ${spec.measure ?? spec.dimension}` : spec.measure && spec.dimension ? `${spec.measure} by ${spec.dimension}` : spec.dimension ?? spec.measure}</h1><p className="viz-chart-metadata">{chartMetadataLine(spec, profile.dataset.row_count)}</p></header>
       {!spec.measure && profile.columns.some((column) => column.semantic_type === "numeric") ? <p className="viz-measure-choice" role="status">Showing row counts. Choose a meaningful measure in Chart settings to plot totals; identifier columns are never summed automatically.</p> : null}
       <div className="clean-review-tabs viz-view-tabs" role="tablist" aria-label="Visualization views"><button role="tab" aria-selected={chartView === "chart"} onClick={() => setChartView("chart")}>Chart</button><button role="tab" aria-selected={chartView === "data"} onClick={() => setChartView("data")}>Data</button><button role="tab" aria-selected={chartView === "small-multiples"} onClick={() => setChartView("small-multiples")}>Small multiples</button></div>
       <div className="viz-filter-chips" aria-label="Active chart filters">
@@ -251,7 +279,7 @@ export function VisualizeWorkspace({ datasetId, onSelectContext, onOpenWorkflow 
         <label>Reference line (optional)<input type="number" value={spec.reference_line ?? ""} onChange={(event) => { if (event.target.value === "") { const next = { ...spec }; delete next.reference_line; setSpec(next); } else updateSpec({ reference_line: Number(event.target.value) }); }} /></label>
         <label>Annotation (optional)<input value={spec.annotation ?? ""} onChange={(event) => updateSpec({ annotation: event.target.value })} /></label>
       </div>
-      <div className="inspector-actions"><span className="eyebrow">REPORT HANDOFF</span><button disabled={!data || saving} onClick={() => void saveChart()}>{saving ? "Saving…" : "Save chart"}</button><button className="secondary" onClick={() => onOpenWorkflow("reports")}>Open reports</button>{saveMessage ? <p role="status">{saveMessage}</p> : null}</div>
+      <div className="inspector-actions"><span className="eyebrow">REPORT HANDOFF</span><button disabled={!data || saving} onClick={() => void saveChart()}><Icon name="save" width={14} height={14} /> {saving ? "Saving…" : "Save chart"}</button><button className="secondary" onClick={() => onOpenWorkflow("reports")}><Icon name="bar-chart" width={14} height={14} /> Open reports</button>{saveMessage ? <p role="status">{saveMessage}</p> : null}</div>
       <div className="inspector-actions"><span className="eyebrow">ATLAS · EVIDENCE-AWARE</span><button onClick={() => void askAtlas("explain_chart")}>Explain this chart</button><button onClick={() => void askAtlas("identify_anomaly")}>Identify anomalies</button><button onClick={() => void askAtlas("propose_alternative")}>Trust check</button></div>
       {atlas ? <aside className="atlas-result" aria-live="polite"><span className="eyebrow">ATLAS · {atlas.action.replaceAll("_", " ")}</span><strong>{atlas.summary}</strong><small>{atlas.uncertainty}</small></aside> : null}
       {data ? <dl className="inspector-data"><div><dt>Source</dt><dd><code>{data.provenance.source_fingerprint.slice(0, 12)}…</code></dd></div><div><dt>Revision</dt><dd>{data.provenance.dataset_revision}</dd></div><div><dt>Points shown</dt><dd>{data.data.length}</dd></div></dl> : null}
@@ -276,6 +304,12 @@ export function ChartCanvas({ mark, data, onSelectMark, referenceLine, scaleRang
   if (!data.length) return <p className="quiet-note">No data to chart.</p>;
   const width = 640, height = 280, padding = 32;
   const selectable = Boolean(onSelectMark);
+  // By value, not by array position: a category chart is usually shown sorted
+  // by value descending so index 0 is also the largest, but `sort_by` can
+  // reorder the same data by label instead -- checking the actual value keeps
+  // the "standout category" highlight honest regardless of display order, and
+  // highlights every tied-for-largest bar rather than an arbitrary single one.
+  const leadingValue = Math.max(...data.map((point) => point.value));
 
   if (mark === "scatter") {
     const xs = data.map((d) => d.x ?? 0);
@@ -339,7 +373,7 @@ export function ChartCanvas({ mark, data, onSelectMark, referenceLine, scaleRang
     return <svg role="img" aria-label={`Horizontal bar chart with ${data.length} categories`} viewBox={`0 0 ${width} ${height}`} className="viz-svg viz-horizontal-bars">
       {[min, min + span / 2, max].map((tick, index) => <g key={index}><line x1={scaleX(tick)} x2={scaleX(tick)} y1={top} y2={height - bottom} className="viz-grid-line" /><text x={scaleX(tick)} y={height - 10} textAnchor="middle" className="viz-tick-label">{format(tick)}</text></g>)}
       {referenceLine != null ? <line x1={scaleX(referenceLine)} x2={scaleX(referenceLine)} y1={top} y2={height - bottom} className="viz-reference-line"><title>Reference value {referenceLine}</title></line> : null}
-      {data.map((point, index) => { const centre = top + index * slot + slot / 2; const valueX = scaleX(point.value); const positive = valueX >= originX; return <g key={index} className={`${selectable ? "viz-mark-selectable" : ""} ${index === 0 ? "is-leading" : ""}`} tabIndex={selectable ? 0 : undefined} role={selectable ? "button" : undefined} aria-label={selectable ? `Inspect ${point.label}` : undefined} onClick={() => onSelectMark?.({ dimensionValue: point.label })} onKeyDown={(event) => { if (selectable && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); onSelectMark?.({ dimensionValue: point.label }); } }}><text x={left - 10} y={centre + 4} textAnchor="end" className="viz-category-label">{point.label.length > 18 ? `${point.label.slice(0, 17)}…` : point.label}</text><rect x={Math.min(valueX, originX)} y={centre - Math.min(22, slot * .4)} width={Math.max(1, Math.abs(valueX - originX))} height={Math.min(44, slot * .8)} /><text x={valueX + (positive ? 7 : -7)} y={centre + 4} textAnchor={positive ? "start" : "end"} className="viz-value-label">{format(point.value)}</text><title>{`${point.label}: ${point.value}`}</title></g>; })}
+      {data.map((point, index) => { const centre = top + index * slot + slot / 2; const valueX = scaleX(point.value); const positive = valueX >= originX; return <g key={index} className={`${selectable ? "viz-mark-selectable" : ""} ${point.value === leadingValue ? "is-leading" : ""}`} tabIndex={selectable ? 0 : undefined} role={selectable ? "button" : undefined} aria-label={selectable ? `Inspect ${point.label}` : undefined} onClick={() => onSelectMark?.({ dimensionValue: point.label })} onKeyDown={(event) => { if (selectable && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); onSelectMark?.({ dimensionValue: point.label }); } }}><text x={left - 10} y={centre + 4} textAnchor="end" className="viz-category-label">{point.label.length > 18 ? `${point.label.slice(0, 17)}…` : point.label}</text><rect x={Math.min(valueX, originX)} y={centre - Math.min(22, slot * .4)} width={Math.max(1, Math.abs(valueX - originX))} height={Math.min(44, slot * .8)} /><text x={valueX + (positive ? 7 : -7)} y={centre + 4} textAnchor={positive ? "start" : "end"} className="viz-value-label">{format(point.value)}</text><title>{`${point.label}: ${point.value}`}</title></g>; })}
     </svg>;
   }
   if (mark === "line") {
@@ -357,10 +391,11 @@ export function ChartCanvas({ mark, data, onSelectMark, referenceLine, scaleRang
   const zeroY = barScaleY(hasAxisStart ? min : 0);
   const formatBarValue = (value: number) => new Intl.NumberFormat(undefined, { maximumFractionDigits: currency ? 0 : 2, notation: Math.abs(value) >= 100000 ? "compact" : "standard", ...(currency ? { style: "currency" as const, currency } : {}) }).format(value);
   const labelStride = Math.ceil(data.length / 8);
-  return <svg role="img" aria-label={mark === "histogram" ? `Histogram with ${data.length} bins` : `Bar chart with ${data.length} categories`} viewBox={`0 0 ${width} ${height}`} className="viz-svg">
+  const isHistogram = mark === "histogram";
+  return <svg role="img" aria-label={isHistogram ? `Histogram with ${data.length} bins` : `Bar chart with ${data.length} categories`} viewBox={`0 0 ${width} ${height}`} className={`viz-svg${isHistogram ? "" : " viz-bars"}`}>
     {[min, min + span / 2, max].map((tick, index) => <g key={index}><line x1={barLeft} x2={width - barRight} y1={barScaleY(tick)} y2={barScaleY(tick)} className="viz-grid-line" /><text x={barLeft - 8} y={barScaleY(tick) + 4} textAnchor="end" className="viz-tick-label">{formatBarValue(tick)}</text></g>)}
     {referenceLine !== null && referenceLine !== undefined ? <line className="viz-reference-line" x1={barLeft} x2={width - barRight} y1={barScaleY(referenceLine)} y2={barScaleY(referenceLine)}><title>Reference value {referenceLine}</title></line> : null}
-    {data.map((point, index) => { const valueY = barScaleY(point.value); const y = Math.min(valueY, zeroY); const barHeight = Math.max(1, Math.abs(valueY - zeroY)); const x = barLeft + index * barWidth + 2; const selection = mark === "histogram" ? { binStart: point.bin_start ?? 0, binEnd: point.bin_end ?? 0 } : { dimensionValue: point.label }; return <g key={index} className={selectable ? "viz-mark-selectable" : undefined} tabIndex={selectable ? 0 : undefined} role={selectable ? "button" : undefined} aria-label={selectable ? `Inspect ${point.label}` : undefined} onClick={() => onSelectMark?.(selection)} onKeyDown={(event) => { if (selectable && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); onSelectMark?.(selection); } }}><rect x={x} y={y} width={Math.max(1, barWidth - 4)} height={barHeight} />{data.length <= 12 ? <text x={x + barWidth / 2 - 2} y={point.value >= 0 ? Math.max(12, y - 5) : Math.min(height - barBottom + 15, valueY + 14)} textAnchor="middle" className="viz-value-label">{formatBarValue(point.value)}</text> : null}{index % labelStride === 0 ? <text x={x + barWidth / 2 - 2} y={height - barBottom + 19} textAnchor="middle" className="viz-category-label">{point.label.length > 12 ? `${point.label.slice(0, 11)}…` : point.label}</text> : null}<title>{`${point.label}: ${point.value}`}</title></g>; })}
+    {data.map((point, index) => { const valueY = barScaleY(point.value); const y = Math.min(valueY, zeroY); const barHeight = Math.max(1, Math.abs(valueY - zeroY)); const x = barLeft + index * barWidth + 2; const selection = isHistogram ? { binStart: point.bin_start ?? 0, binEnd: point.bin_end ?? 0 } : { dimensionValue: point.label }; return <g key={index} className={`${selectable ? "viz-mark-selectable" : ""} ${!isHistogram && point.value === leadingValue ? "is-leading" : ""}`} tabIndex={selectable ? 0 : undefined} role={selectable ? "button" : undefined} aria-label={selectable ? `Inspect ${point.label}` : undefined} onClick={() => onSelectMark?.(selection)} onKeyDown={(event) => { if (selectable && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); onSelectMark?.(selection); } }}><rect x={x} y={y} width={Math.max(1, barWidth - 4)} height={barHeight} />{data.length <= 12 ? <text x={x + barWidth / 2 - 2} y={point.value >= 0 ? Math.max(12, y - 5) : Math.min(height - barBottom + 15, valueY + 14)} textAnchor="middle" className="viz-value-label">{formatBarValue(point.value)}</text> : null}{index % labelStride === 0 ? <text x={x + barWidth / 2 - 2} y={height - barBottom + 19} textAnchor="middle" className="viz-category-label">{point.label.length > 12 ? `${point.label.slice(0, 11)}…` : point.label}</text> : null}<title>{`${point.label}: ${point.value}`}</title></g>; })}
   </svg>;
 }
 

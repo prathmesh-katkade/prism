@@ -4,7 +4,8 @@ Not used by the normal `uvicorn prism_api.main:app` dev/staging path (see
 render.yaml) -- this exists only so PyInstaller has a single importable
 script to freeze, and so the frozen binary needs no arguments to behave
 correctly as a Tauri sidecar (Rust just spawns it and waits for
-127.0.0.1:8000 to answer; see src-tauri/src/sidecar.rs).
+127.0.0.1:<PRISM_DESKTOP_SIDECAR_PORT, default 8000> to answer; see
+src-tauri/src/sidecar.rs).
 
 PRISM_DEPLOYMENT_MODE defaults to "local" already (deployment_security.py)
 -- that's correct for a desktop sidecar and is left alone here. What a
@@ -34,4 +35,21 @@ import uvicorn  # noqa: E402
 from prism_api.main import app  # noqa: E402
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="127.0.0.1", port=8000, log_level="info")
+    # Matches sidecar.rs's own `sidecar_port()`: unset in every normal
+    # packaged launch (still binds 8000), overridable only for a review
+    # build that needs to run alongside something else already holding
+    # 8000 without touching it. When Tauri spawns this binary, sidecar.rs
+    # has already validated the value and always sets it explicitly -- this
+    # check only matters for someone running the frozen binary directly,
+    # bypassing that validation, and exists so that case fails with a named
+    # bad value too, not a bare traceback three frames into uvicorn.
+    raw_port = os.environ.get("PRISM_DESKTOP_SIDECAR_PORT", "8000")
+    try:
+        port = int(raw_port)
+        if not (1 <= port <= 65535):
+            raise ValueError
+    except ValueError:
+        raise SystemExit(
+            f"PRISM_DESKTOP_SIDECAR_PORT={raw_port!r} is not a valid port number (expected 1-65535)"
+        ) from None
+    uvicorn.run(app, host="127.0.0.1", port=port, log_level="info")

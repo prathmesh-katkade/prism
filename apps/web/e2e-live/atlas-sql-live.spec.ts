@@ -76,7 +76,12 @@ test("declared two-source join keeps the sales grain and opens its query in SQL 
   await expect(page.getByRole("grid", { name: "Query results" })).toBeVisible();
   await expect(page.getByRole("gridcell", { name: "west" })).toBeVisible();
   await expect(page.getByRole("gridcell", { name: "15" })).toBeVisible();
-  await expect(page.getByLabel("Join evidence")).toContainText("row(s) have no match", { timeout: 10_000 });
+  // This join fully matches (3 of 3, 0 excluded, asserted above from Atlas's own
+  // evidence card) -- the "unmatched rows retained" callout is conditional on
+  // there being anything unmatched to disclose, so it correctly does not render
+  // here. Assert on the synthesized summary that's always present instead.
+  await expect(page.getByLabel("Join evidence")).toContainText("Many to one", { timeout: 10_000 });
+  await expect(page.getByLabel("Join evidence")).toContainText("Unmatched data0");
   await page.setViewportSize({ width: 1586, height: 992 });
   await page.screenshot({ path: "docs/clean-pattern-review-v1/evidence/sql-join-dark-1586x992.png" });
   await page.getByRole("tab", { name: "Atlas" }).click();

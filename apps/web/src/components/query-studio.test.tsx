@@ -65,6 +65,42 @@ describe("Query Studio", () => {
     expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/api/v1/sql-lab/runs"), expect.objectContaining({ method: "POST" }));
   });
 
+  it("shows a local dataset's real revision and row count, reusing Overview's own dataset list rather than inventing numbers", async () => {
+    const overviewEntry = { dataset_id: "ds_sales", revision: 3, source_name: "sales.csv", source_fingerprint: connection.source_fingerprint, row_count: 12480, column_count: 4 };
+    vi.stubGlobal("fetch", vi.fn(async (input: string | URL) => {
+      const path = String(input);
+      const body = path.endsWith("/connections") ? [connection]
+        : path.endsWith("/snippets") ? []
+        : path.endsWith("/overview/datasets") ? [overviewEntry]
+        : path.includes("/schema") ? schema
+        : path.endsWith("/history") ? []
+        : {};
+      return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+    }));
+    render(<QueryStudio onSelectContext={vi.fn()} />);
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Untitled query" })).toBeInTheDocument());
+    expect(await screen.findByText("Local dataset · revision 3 · 12,480 rows")).toBeInTheDocument();
+  });
+
+  it("never fabricates a revision or row count for an external connector, naming it as external instead", async () => {
+    const mysqlConnection = { connection_id: "mysql:warehouse", label: "Orders (MySQL)", source_type: "mysql", dialect: "mysql", status: "ready", capabilities: [{ name: "query_execution", supported: true }], source_fingerprint: "e".repeat(64) };
+    const mysqlSchema = { connection: mysqlConnection, tables: [{ name: "orders", columns: [{ name: "id", data_type: "int", nullable: false, sample_count: 10 }] }], schema_fingerprint: "f".repeat(64) };
+    vi.stubGlobal("fetch", vi.fn(async (input: string | URL) => {
+      const path = String(input);
+      const body = path.endsWith("/connections") ? [mysqlConnection]
+        : path.endsWith("/snippets") ? []
+        : path.endsWith("/overview/datasets") ? []
+        : path.includes("/schema") ? mysqlSchema
+        : path.endsWith("/history") ? []
+        : {};
+      return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+    }));
+    render(<QueryStudio onSelectContext={vi.fn()} />);
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Untitled query" })).toBeInTheDocument());
+    expect(await screen.findByText("External mysql source · not a PRISM-tracked revision · row count not measured")).toBeInTheDocument();
+    expect(screen.getByText(/read-only external source/)).toBeInTheDocument();
+  });
+
   it("restores both the SQL and the saved parameters when a snippet is picked, not just the SQL", async () => {
     const snippet = { snippet_id: "snip_1", name: "Top segments", sql: "SELECT * FROM data WHERE segment = :segment", dialect: "duckdb", parameters: { segment: "b" }, created_at: "2026-08-28T00:00:00Z" };
     const fetchMock = vi.fn(async (input: string | URL) => {
@@ -116,6 +152,75 @@ describe("Query Studio", () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/joins/diagnose"), expect.objectContaining({ method: "POST" })));
     await waitFor(() => expect(screen.getByText("row-multiplication risk")).toBeInTheDocument());
     expect(screen.getByText(/1 data row\(s\) have no match in joined/)).toBeInTheDocument();
+  });
+
+  it("synthesizes a human-readable relationship type and matched count from the real cardinality, instead of leaving the reader to infer it from raw numbers", async () => {
+    const diagnostics = {
+      connection_id: connection.connection_id, sql_fingerprint: "f".repeat(64),
+      joins: [{
+        join_index: 0, join_kind: "left",
+        // orders (many rows per customer, not unique) -> customers (one row per customer, unique)
+        left: { table: "orders", column: "customer_id", total_rows: 260, distinct_keys: 7, null_keys: 0, duplicate_key_rows: 253 },
+        right: { table: "customers", column: "customer_id", total_rows: 6, distinct_keys: 6, null_keys: 0, duplicate_key_rows: 0 },
+        unmatched_left_rows: 10, unmatched_right_rows: 0, row_multiplication_risk: false,
+      }],
+      unsupported_notes: [],
+    };
+    const fetchMock = vi.fn(async (input: string | URL) => {
+      const path = String(input);
+      const body = path.endsWith("/connections") ? [connection]
+        : path.endsWith("/snippets") ? []
+        : path.includes("/schema") ? schema
+        : path.endsWith("/history") ? []
+        : path.endsWith("/joins/diagnose") ? diagnostics
+        : {};
+      return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<QueryStudio onSelectContext={vi.fn()} />);
+
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Untitled query" })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Inspect joins" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/joins/diagnose"), expect.objectContaining({ method: "POST" })));
+
+    expect(screen.getByText("orders → customers")).toBeInTheDocument();
+    expect(screen.getByText("Many to one")).toBeInTheDocument();
+    expect(screen.getByText("Unique")).toBeInTheDocument(); // customers keys
+    expect(screen.getByText("250")).toBeInTheDocument(); // matched = 260 total - 10 unmatched, not a raw field PRISM already had
+    expect(screen.getByText(/retained by LEFT JOIN/)).toBeInTheDocument();
+    // the raw per-side cardinality stays available (one "Distinct keys" row
+    // per side), just moved behind a "Key cardinality detail" disclosure
+    // instead of being the first thing shown.
+    expect(screen.getByText("Key cardinality detail")).toBeInTheDocument();
+    expect(screen.getAllByText("Distinct keys")).toHaveLength(2);
+  });
+
+  it("omits the unmatched-rows callout entirely when a join's keys fully match", async () => {
+    const diagnostics = {
+      connection_id: connection.connection_id, sql_fingerprint: "f".repeat(64),
+      joins: [{
+        join_index: 0, join_kind: "inner",
+        left: { table: "orders", column: "customer_id", total_rows: 6, distinct_keys: 6, null_keys: 0, duplicate_key_rows: 0 },
+        right: { table: "customers", column: "customer_id", total_rows: 6, distinct_keys: 6, null_keys: 0, duplicate_key_rows: 0 },
+        unmatched_left_rows: 0, unmatched_right_rows: 0, row_multiplication_risk: false,
+      }],
+      unsupported_notes: [],
+    };
+    vi.stubGlobal("fetch", vi.fn(async (input: string | URL) => {
+      const path = String(input);
+      const body = path.endsWith("/connections") ? [connection]
+        : path.endsWith("/snippets") ? []
+        : path.includes("/schema") ? schema
+        : path.endsWith("/history") ? []
+        : path.endsWith("/joins/diagnose") ? diagnostics
+        : {};
+      return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+    }));
+    render(<QueryStudio onSelectContext={vi.fn()} />);
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Untitled query" })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Inspect joins" }));
+    await waitFor(() => expect(screen.getByText("One to one")).toBeInTheDocument());
+    expect(screen.queryByText(/retained by/)).not.toBeInTheDocument();
   });
 
   it("keeps the primary toolbar to Run/Cancel/Save and reaches Format/Plan/Join checks/Find CTEs through a single disclosure", async () => {

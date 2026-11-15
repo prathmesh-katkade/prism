@@ -10,8 +10,27 @@ use tauri::{AppHandle, Manager};
 use tauri_plugin_shell::process::CommandEvent;
 use tauri_plugin_shell::ShellExt;
 
-const SIDECAR_ADDR: &str = "127.0.0.1:8000";
 const READY_TIMEOUT: Duration = Duration::from_secs(20);
+
+/// Matches `PRISM_DESKTOP_DATA_DIR` above in intent: unset by default (every
+/// normal packaged launch keeps binding 8000, unchanged), but overridable
+/// for an isolated review/verification build that needs to run alongside
+/// something else already holding 8000 without touching it -- never a
+/// normal-startup dependency. An unparseable value fails loudly here with
+/// the exact bad value named, the same as `PRISM_DESKTOP_DATA_DIR`'s own
+/// "must be an absolute path" check just above it, rather than reaching
+/// `TcpStream::connect` with a malformed address and surfacing only as an
+/// unexplained 20-second readiness timeout.
+fn sidecar_port() -> Result<u16, String> {
+    match std::env::var("PRISM_DESKTOP_SIDECAR_PORT") {
+        Err(_) => Ok(8000),
+        Ok(value) => value.trim().parse::<u16>().map_err(|_| {
+            format!(
+                "PRISM_DESKTOP_SIDECAR_PORT={value:?} is not a valid port number (expected 1-65535)"
+            )
+        }),
+    }
+}
 
 #[derive(Default)]
 pub struct SidecarState(pub Mutex<Option<tauri_plugin_shell::process::CommandChild>>);
@@ -37,6 +56,11 @@ pub struct SidecarState(pub Mutex<Option<tauri_plugin_shell::process::CommandChi
 /// silent one, and is worth fixing at the frontend's fetch-retry layer
 /// separately if it proves to matter in practice on real hardware.
 pub fn spawn(app: &AppHandle) -> tauri::Result<bool> {
+    // Validated first and once, before anything else: an invalid override
+    // should fail the whole launch immediately with a specific message, not
+    // surface many seconds later as an unexplained readiness timeout.
+    let port = sidecar_port().map_err(|e| tauri::Error::Anyhow(anyhow::anyhow!(e)))?;
+
     // Checked fresh on every launch (not cached/persisted) so starting or
     // stopping Ollama between runs is picked up automatically, per the
     // plan's own requirement -- see ollama.rs for why this is a real
@@ -93,6 +117,12 @@ pub fn spawn(app: &AppHandle) -> tauri::Result<bool> {
         // defaults to the same deterministic path this falls back to.
         command = command.env("PRISM_AI_PROVIDER", "ollama");
     }
+    // desktop_entry.py reads this same name and binds it instead of 8000 --
+    // see `sidecar_port()` above for why this exists and when it's unset.
+    // Always set explicitly (not only when an override is present) so the
+    // child's own bound port and this process's own health check can never
+    // silently disagree about which one is in effect.
+    command = command.env("PRISM_DESKTOP_SIDECAR_PORT", port.to_string());
     let (mut rx, child) = command
         .spawn()
         .map_err(|e| tauri::Error::Anyhow(anyhow::anyhow!(e)))?;
@@ -117,14 +147,19 @@ pub fn spawn(app: &AppHandle) -> tauri::Result<bool> {
     });
 
     *app.state::<SidecarState>().0.lock().unwrap() = Some(child);
-    wait_until_ready();
+    wait_until_ready(port);
     Ok(ollama_ready)
 }
 
-fn wait_until_ready() {
+/// Takes the exact port `spawn()` already validated and told the child to
+/// bind, rather than re-reading `PRISM_DESKTOP_SIDECAR_PORT` a second time --
+/// one validated value threaded through, so the health check and the
+/// child's own bind can never disagree about which port is in effect.
+fn wait_until_ready(port: u16) {
+    let addr = format!("127.0.0.1:{port}");
     let started = Instant::now();
     loop {
-        if TcpStream::connect(SIDECAR_ADDR).is_ok() {
+        if TcpStream::connect(&addr).is_ok() {
             log::info!(
                 "[prism-api] ready after {:.1}s",
                 started.elapsed().as_secs_f32()
@@ -133,7 +168,7 @@ fn wait_until_ready() {
         }
         if started.elapsed() >= READY_TIMEOUT {
             log::warn!(
-                "[prism-api] not accepting connections on {SIDECAR_ADDR} after {:.0}s, giving up waiting (app continues opening regardless)",
+                "[prism-api] not accepting connections on {addr} after {:.0}s, giving up waiting (app continues opening regardless)",
                 READY_TIMEOUT.as_secs_f32()
             );
             return;

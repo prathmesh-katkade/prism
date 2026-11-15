@@ -71,6 +71,10 @@ describe("Visualize workspace", () => {
     expect(screen.getByText(/truncated, not downloaded in full/)).toBeInTheDocument();
     expect(screen.getByText(/segment = a/)).toBeInTheDocument(); // active filter disclosed
     expect(onSelectContext).toHaveBeenCalledWith(expect.objectContaining({ metadata: expect.arrayContaining([expect.stringContaining("5 matching row(s)")]) }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Clear selection" }));
+    expect(screen.queryByText(/truncated, not downloaded in full/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/segment = a/)).not.toBeInTheDocument();
   });
 
   it("shows the error state with a retry control, never an indefinite loading spinner, when the initial load fails", async () => {
@@ -137,6 +141,49 @@ describe("Visualize workspace", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Remove filter segment equals a" }));
     await waitFor(() => expect(renderCalls.at(-1)?.filters).toEqual({}));
+  });
+
+  it("applying and removing a filter actually changes the rendered chart data, not just the request sent", async () => {
+    const unfiltered = { ...rendered, data: [{ label: "a", value: 30 }, { label: "b", value: 12 }] };
+    const filteredToA = { ...rendered, spec: { ...suggestion.spec, filters: { segment: "a" } }, data: [{ label: "a", value: 30 }] };
+    const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path.includes("/profile")) return json(profile);
+      if (path.includes("/suggest")) return json(suggestion);
+      if (path.endsWith("/reports/charts")) return json([]);
+      if (path.includes("/render")) {
+        const spec = JSON.parse(String(init?.body)) as VisualizationSpec;
+        return json(Object.keys(spec.filters ?? {}).length ? filteredToA : unfiltered);
+      }
+      return json({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<VisualizeWorkspace datasetId="ds_1" onSelectContext={vi.fn()} onOpenWorkflow={vi.fn()} />);
+    await waitFor(() => expect(screen.getByRole("img", { name: /Bar chart with 2 categories/ })).toBeInTheDocument());
+    // Unfiltered: the dataset's own row count ("all 6 source rows", from the
+    // fixture's row_count: 6) is an honest claim here -- every source row
+    // really did feed this chart.
+    expect(screen.getByText("Sum of revenue · all 6 source rows")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "+ Add filter" }));
+    fireEvent.change(screen.getByLabelText("Filter field"), { target: { value: "segment" } });
+    fireEvent.change(screen.getByLabelText("Filter value"), { target: { value: "a" } });
+    fireEvent.click(screen.getByRole("button", { name: "Apply filter" }));
+    // Not just "a request with the right filter was sent" -- the chart on
+    // screen now has one bar, not two, because the (mocked) server actually
+    // excluded the "b" rows.
+    await waitFor(() => expect(screen.getByRole("img", { name: /Bar chart with 1 categories/ })).toBeInTheDocument());
+    // Filtered: must not still say "all 6 source rows" -- that would claim
+    // the whole dataset fed a chart that's visibly missing a category. The
+    // dataset's row count is still the only number available (the render
+    // response carries no "rows after filtering" count), so it's shown
+    // honestly labeled as the source total, not as what this chart used.
+    expect(screen.getByText("Sum of revenue · 6 source rows (filtered)")).toBeInTheDocument();
+    expect(screen.queryByText(/all 6 source rows/)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove filter segment equals a" }));
+    await waitFor(() => expect(screen.getByRole("img", { name: /Bar chart with 2 categories/ })).toBeInTheDocument());
+    expect(screen.getByText("Sum of revenue · all 6 source rows")).toBeInTheDocument();
   });
 
   it("lists real saved views for this dataset and loads one back into the workspace on click", async () => {
@@ -212,6 +259,41 @@ describe("ChartCanvas", () => {
     const text = container.textContent ?? "";
     expect(text).toMatch(/₹/); // currency symbol shown
     expect(text).not.toMatch(/24000\.00|24,000\.00/); // not raw float formatting
+  });
+
+  it("highlights only the largest-value bar's own group, by value rather than array position, on both bar orientations", () => {
+    // North is listed first but South has the larger value: an index-based
+    // "is-leading" check (the prior bug) would highlight North instead, which
+    // is a styling bug but also a silent misrepresentation of which category
+    // actually leads.
+    const data = [{ label: "North", value: 16000 }, { label: "South", value: 24000 }];
+    const barGroupClasses = (container: HTMLElement) =>
+      Array.from(container.querySelectorAll("rect"), (rect) => rect.parentElement?.getAttribute("class") ?? "");
+
+    const horizontal = render(<ChartCanvas mark="horizontal_bar" data={data} />);
+    const [northClassH, southClassH] = barGroupClasses(horizontal.container);
+    expect(southClassH).toContain("is-leading");
+    expect(northClassH).not.toContain("is-leading");
+    horizontal.unmount();
+
+    const vertical = render(<ChartCanvas mark="bar" data={data} />);
+    const [northClassV, southClassV] = barGroupClasses(vertical.container);
+    expect(southClassV).toContain("is-leading");
+    expect(northClassV).not.toContain("is-leading");
+  });
+
+  it("highlights every tied-for-largest bar, not just one of them", () => {
+    const data = [{ label: "North", value: 20000 }, { label: "South", value: 20000 }, { label: "East", value: 8000 }];
+    const { container } = render(<ChartCanvas mark="bar" data={data} />);
+    const classes = Array.from(container.querySelectorAll("rect"), (rect) => rect.parentElement?.getAttribute("class") ?? "");
+    expect(classes.filter((className) => className.includes("is-leading"))).toHaveLength(2);
+  });
+
+  it("gives a histogram bin no leading-bar highlight even though bins are still bars", () => {
+    const data = [{ label: "0–10", value: 5, bin_start: 0, bin_end: 10 }, { label: "10–20", value: 9, bin_start: 10, bin_end: 20 }];
+    const { container } = render(<ChartCanvas mark="histogram" data={data} />);
+    const classes = Array.from(container.querySelectorAll("rect"), (rect) => rect.parentElement?.getAttribute("class") ?? "");
+    expect(classes.some((className) => className.includes("is-leading"))).toBe(false);
   });
 
   it("anchors horizontal bars at an explicit axis start and clamps a value below it instead of going negative or vanishing", () => {
