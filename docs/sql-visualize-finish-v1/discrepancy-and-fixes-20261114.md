@@ -186,15 +186,63 @@ state-update-and-persist cycle has actually settled. Verified against five
 consecutive full-suite runs (not one): **162/162 passed every time** — a
 materially stronger check than the single rerun the prior round relied on.
 
-### 6. Final gates, round 4
+### 6. Commit, push, and final gates, round 4
 
-Full suite (not a targeted subset, since both backend fixes and the
-frontend fix needed re-verification): 831 passed / 3 skipped (backend,
-after clearing the same stale local `.prism/runtime/` file noted in rounds
-2-3 — still confirmed CI-irrelevant for the same reason). `mypy
---follow-imports=skip ...`: clean. Frontend: 162 passed across 5
-consecutive full-suite runs for the localStorage-leak re-verification above,
-plus `tsc --noEmit`/`eslint` clean on every touched file.
+Committed the 5 code/test files as `5211c17` (`Cargo.toml` left unstaged —
+re-confirmed byte-identical to `HEAD` aside from CRLF, nothing to commit)
+and pushed to `prism/sql-visualize-finish-v1`. PR #19 picked it up as its
+new head automatically.
+
+**This round's sandbox had no Python tooling preinstalled** (a fresh
+container relative to the prior rounds' session — `ruff`/`mypy`/`pytest`
+and the full `apps/api/requirements.txt` + root `requirements.txt` set were
+simply absent). Rebuilt a `apps/api/.venv` (Python 3.11.9, matching
+`runtime.txt`) and reinstalled every pinned dependency plus the 5 local
+editable `packages/*/python` packages, then ran the *exact* commands CI
+runs, from the repo root, not approximations:
+- `ruff check apps/api/src packages tools/check_boundaries.py
+  tools/generate_typescript_contracts.py tools/check_secrets.py tests` —
+  **all checks passed**.
+- `mypy --follow-imports=skip --allow-subclassing-any
+  --allow-untyped-decorators --no-warn-return-any apps/api/src packages` —
+  **no issues found in 102 source files**.
+- `pytest tests/api tests/contracts tests/migration tests/overview
+  tests/sql_lab` — first attempt showed 2 failures
+  (`test_atlas_combined_sft_dataset.py::...synthetic_teacher_end_to_end`
+  and `test_phase8c_lineage_traversal.py::...sharing_the_same_revision_number`,
+  both `UNIQUE constraint failed` / "already registered" errors). Traced
+  to the exact same class of stale local state flagged in rounds 2-3:
+  `.prism/runtime/analytical-history.sqlite` (gitignored at
+  `.gitignore:33`, confirmed via `git check-ignore -v`, so genuinely
+  CI-irrelevant — a fresh checkout never has it) held leftover rows from
+  an earlier local run. Deleted both stale `.prism/runtime/*.sqlite` files
+  and reran: **793 passed, 8 skipped, 0 failed** — not treated as proof
+  from a lucky rerun, since the root cause (a local-only file CI never
+  sees) was identified and named before rerunning, not assumed.
+- `ruff check apps/api` alone (narrower scope than CI's, includes
+  `desktop_entry.py`) still shows the same single pre-existing `I001`
+  import-order finding noted earlier in this section — confirmed outside
+  CI's own lint scope (`apps/api/src`, not `apps/api/`), so it was never
+  part of what CI gates on, and is unrelated to this round's edits either
+  way.
+
+Frontend: full suite 162 passed (0 failed) in a single run, plus 5
+consecutive full-suite runs earlier for the localStorage-leak
+re-verification (section 5), plus `tsc --noEmit` and `eslint` clean on
+`visualize-workspace.tsx`, `visualize-workspace.test.tsx`, and
+`atlas-dock-panel.test.tsx` together in one combined pass.
+
+**CI on the actual pushed SHA** (not inferred from `cba8687` or `ce7dfc4` —
+a fresh run, this round's own): commit `5211c17134f56d6d92e09cbf46eb9d8c652d7cd6`,
+run [43747559574](https://github.com/prathmesh-katkade/prism/actions/runs/43747559574)
+on PR #19. All 5 jobs green: `legacy-regression` (pass, 1m1s),
+`phase-1-python` (pass, 5m4s), `phase-1-web` (pass, 53s), `phase-4-live-e2e`
+(pass, 7m42s), `secret-scan` (pass, 20s). Distinct from, and not a
+relabeling of, the previously recorded green runs at `ce7dfc4` or `cba8687`.
+
+Port 8000 re-checked read-only one final time after all of the above:
+still `LISTENING` on PID 16988, unchanged — the native-launch blocker
+remains exactly where it was throughout this round.
 
 ## Continuation — 2026-11-15 (round 3)
 
